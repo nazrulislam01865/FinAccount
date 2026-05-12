@@ -18,6 +18,8 @@ class RolePermissionSeeder extends Seeder
             'transaction-heads.view' => 'View Transaction Heads', 'transaction-heads.manage' => 'Manage Transaction Heads',
             'master-data.view' => 'View Master Data', 'master-data.manage' => 'Manage Master Data',
             'users.view' => 'View Users', 'users.manage' => 'Manage Users',
+            'ledger-mapping.view' => 'View Ledger Mapping',
+            'ledger-mapping.manage' => 'Manage Ledger Mapping',
         ];
 
         $permissionModels = [];

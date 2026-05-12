@@ -5,8 +5,12 @@ use App\Http\Controllers\Settings\UserRoleController;
 use App\Http\Controllers\Setup\CashBankAccountController;
 use App\Http\Controllers\Setup\ChartOfAccountController;
 use App\Http\Controllers\Setup\CompanyController;
+use App\Http\Controllers\Setup\LedgerMappingController;
+use App\Http\Controllers\Setup\OpeningBalanceController;
 use App\Http\Controllers\Setup\PartyController;
 use App\Http\Controllers\Setup\TransactionHeadController;
+use App\Http\Controllers\Setup\VoucherNumberingController;
+use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -14,6 +18,19 @@ Route::redirect('/', '/dashboard');
 Route::middleware(['auth'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
 
+    /*
+    |--------------------------------------------------------------------------
+    | Transaction Entry
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/transactions/create', [TransactionController::class, 'create'])
+        ->name('transactions.create');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Setup Pages
+    |--------------------------------------------------------------------------
+    */
     Route::prefix('setup')->name('setup.')->group(function () {
         Route::get('/company', [CompanyController::class, 'edit'])
             ->name('company');
@@ -29,11 +46,36 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/transaction-heads', [TransactionHeadController::class, 'index'])
             ->name('transaction-heads');
+
+        Route::get('/ledger-mapping', [LedgerMappingController::class, 'index'])
+            ->name('ledger-mapping');
+
+        Route::delete('/ledger-mapping/{ledger_mapping_rule}', [LedgerMappingController::class, 'destroy'])
+            ->name('ledger-mapping.destroy');
+
+        Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])
+            ->name('opening-balances');
+
+        Route::get('/voucher-numbering', [VoucherNumberingController::class, 'index'])
+            ->name('voucher-numbering');
+
+        Route::delete('/voucher-numbering/{voucher_numbering_rule}', [VoucherNumberingController::class, 'destroy'])
+            ->name('voucher-numbering.destroy');
     });
 
+    /*
+    |--------------------------------------------------------------------------
+    | Settings Pages
+    |--------------------------------------------------------------------------
+    */
     Route::view('/settings/users-roles', 'settings.users-roles')
         ->name('settings.users-roles');
 
+    /*
+    |--------------------------------------------------------------------------
+    | Dropdown APIs
+    |--------------------------------------------------------------------------
+    */
     Route::prefix('api/dropdowns')->name('api.dropdowns.')->group(function () {
         Route::get('/business-types', [DropdownController::class, 'businessTypes'])
             ->name('business-types');
@@ -74,6 +116,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/transaction-head-natures', [DropdownController::class, 'transactionHeadNatures'])
             ->name('transaction-head-natures');
 
+        Route::get('/party-ledger-effects', [DropdownController::class, 'partyLedgerEffects'])
+            ->name('party-ledger-effects');
+
         Route::get('/yes-no-options', [DropdownController::class, 'yesNoOptions'])
             ->name('yes-no-options');
 
@@ -84,6 +129,11 @@ Route::middleware(['auth'])->group(function () {
             ->name('settlement-types');
     });
 
+    /*
+    |--------------------------------------------------------------------------
+    | Setup APIs
+    |--------------------------------------------------------------------------
+    */
     Route::post('/api/company', [CompanyController::class, 'store'])
         ->name('api.company.store');
 
@@ -99,6 +149,37 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/transaction-heads', [TransactionHeadController::class, 'store'])
         ->name('api.transaction-heads.store');
 
+    Route::post('/api/ledger-mapping', [LedgerMappingController::class, 'store'])
+        ->name('api.ledger-mapping.store');
+
+    Route::match(['post', 'put'], '/api/ledger-mapping/{ledger_mapping_rule}', [LedgerMappingController::class, 'update'])
+        ->name('api.ledger-mapping.update');
+
+    Route::post('/api/opening-balances', [OpeningBalanceController::class, 'store'])
+        ->name('api.opening-balances.store');
+
+    Route::post('/api/voucher-numbering', [VoucherNumberingController::class, 'store'])
+        ->name('api.voucher-numbering.store');
+
+    Route::match(['post', 'put'], '/api/voucher-numbering/{voucher_numbering_rule}', [VoucherNumberingController::class, 'update'])
+        ->name('api.voucher-numbering.update');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Transaction APIs
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/api/transactions/preview', [TransactionController::class, 'preview'])
+        ->name('api.transactions.preview');
+
+    Route::post('/api/transactions', [TransactionController::class, 'store'])
+        ->name('api.transactions.store');
+
+    /*
+    |--------------------------------------------------------------------------
+    | User APIs
+    |--------------------------------------------------------------------------
+    */
     Route::post('/api/users', [UserRoleController::class, 'storeUser'])
         ->name('api.users.store');
 });

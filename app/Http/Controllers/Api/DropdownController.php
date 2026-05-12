@@ -14,6 +14,7 @@ use App\Models\TimeZone;
 use App\Models\TransactionHead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\LedgerMappingRule;
 
 class DropdownController extends Controller
 {
@@ -247,6 +248,16 @@ class DropdownController extends Controller
             'name' => $account->account_name,
             'display_name' => $account->display_name ?: $displayName,
         ];
+    }
+    public function partyLedgerEffects(): JsonResponse
+    {
+        return $this->ok(
+            collect(LedgerMappingRule::PARTY_EFFECTS)->map(fn ($effect) => [
+                'id' => $effect,
+                'name' => $effect,
+                'display_name' => $effect,
+            ])->values()
+        );
     }
 
     private function ok($data): JsonResponse

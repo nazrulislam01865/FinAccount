@@ -44,4 +44,13 @@ class Party extends Model
     {
         return $this->belongsTo(ChartOfAccount::class, 'linked_ledger_account_id');
     }
+    public function openingBalances()
+    {
+        return $this->hasMany(OpeningBalance::class);
+    }
+    public function vouchers()
+    {
+        return $this->hasMany(VoucherHeader::class);
+    }
 }
+

@@ -18,6 +18,8 @@ class RolePermissionSeeder extends Seeder
             'transaction-heads.view' => 'View Transaction Heads', 'transaction-heads.manage' => 'Manage Transaction Heads',
             'master-data.view' => 'View Master Data', 'master-data.manage' => 'Manage Master Data',
             'users.view' => 'View Users', 'users.manage' => 'Manage Users',
+            'opening-balances.view' => 'View Opening Balance Setup',
+            'opening-balances.manage' => 'Manage Opening Balance Setup',
         ];
 
         $permissionModels = [];

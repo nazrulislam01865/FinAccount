@@ -46,4 +46,12 @@ class TransactionHead extends Model
             'settlement_type_id'
         )->withTimestamps();
     }
+    public function ledgerMappingRules()
+    {
+        return $this->hasMany(LedgerMappingRule::class);
+    }
+    public function vouchers()
+    {
+        return $this->hasMany(VoucherHeader::class);
+    }
 }

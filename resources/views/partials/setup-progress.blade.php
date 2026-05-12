@@ -1,6 +1,6 @@
 @php
     $current = $current ?? 1;
-    $total = 5;
+    $total = 7;
     $percent = round(($current / $total) * 100);
     $steps = [
         1 => 'Company Setup',
@@ -8,6 +8,7 @@
         3 => 'Cash / Bank Setup',
         4 => 'Party / Person Setup',
         5 => 'Transaction Head Setup',
+        6 => 'Ledger Mapping',
     ];
 @endphp
 <div class="card progress-card">

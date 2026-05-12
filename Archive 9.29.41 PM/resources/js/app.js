@@ -53,6 +53,26 @@ window.AccountingUI = (() => {
     return item.display_name || item.name || item.title || item.bank_name || item.code || `#${item.id}`;
   }
 
+  function selectedValues(select) {
+    const raw = String(select.dataset.selected || select.value || '');
+
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed)) {
+        return parsed.map(String);
+      }
+    } catch (error) {
+      // Ignore JSON parse error and fallback to comma-separated values.
+    }
+
+    return raw.split(',').map((value) => value.trim()).filter(Boolean);
+  }
+
   async function loadSelect(select) {
     const url = select.dataset.dropdown;
 
@@ -62,14 +82,28 @@ window.AccountingUI = (() => {
 
     const placeholder = select.dataset.placeholder || 'Select';
     const template = select.dataset.label || 'name';
-    const selectedValue = String(select.dataset.selected || select.value || '');
+    const selected = selectedValues(select);
+    const isMultiple = select.multiple;
 
-    select.innerHTML = `<option value="">${placeholder}</option>`;
+    select.innerHTML = '';
+
+    if (!isMultiple) {
+      select.innerHTML = `<option value="">${placeholder}</option>`;
+    }
+
     select.disabled = true;
 
     try {
       const result = await getJson(url);
       const rows = Array.isArray(result.data) ? result.data : [];
+
+      if (isMultiple && rows.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No options found';
+        option.disabled = true;
+        select.appendChild(option);
+      }
 
       rows.forEach((item) => {
         const option = document.createElement('option');
@@ -77,7 +111,7 @@ window.AccountingUI = (() => {
         option.value = item.id;
         option.textContent = optionLabel(item, template);
 
-        if (String(item.id) === selectedValue) {
+        if (selected.includes(String(item.id))) {
           option.selected = true;
         }
 
@@ -198,6 +232,8 @@ window.AccountingUI = (() => {
         if (input) {
           input.value = JSON.stringify(values);
         }
+
+        box.dataset.selectedCount = String(values.length);
       };
 
       box.querySelectorAll('.select-chip').forEach((chip) => {
@@ -209,6 +245,43 @@ window.AccountingUI = (() => {
 
       sync();
     });
+  }
+
+  function validateCustomFields(form) {
+    const requiredMultiSelect = form.querySelector('[data-multi-select][data-required="true"]');
+
+    if (requiredMultiSelect) {
+      const selectedCount = Number(requiredMultiSelect.dataset.selectedCount || 0);
+
+      if (selectedCount <= 0) {
+        const firstChip = requiredMultiSelect.querySelector('.select-chip');
+
+        requiredMultiSelect.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+
+        if (firstChip) {
+          firstChip.focus?.();
+        }
+
+        showToast('Select at least one settlement type.');
+        return false;
+      }
+    }
+
+    if (form.matches('[data-accounting-rule-form]')) {
+      const debit = form.querySelector('[name="debit_account_id"]');
+      const credit = form.querySelector('[name="credit_account_id"]');
+
+      if (debit && credit && debit.value && credit.value && debit.value === credit.value) {
+        credit.focus();
+        showToast('Debit Account and Credit Account cannot be the same.');
+        return false;
+      }
+    }
+
+    return true;
   }
 
   function bindTableFilters(scope = document) {
@@ -293,16 +366,61 @@ window.AccountingUI = (() => {
     return Object.keys(errors)[0] || null;
   }
 
-  function clearInvalidField(form, fieldName) {
+  function normalizeFieldName(fieldName) {
+    return String(fieldName || '')
+      .replace(/\.\d+$/, '')
+      .replace(/\[\]$/, '');
+  }
+
+  function findField(form, fieldName) {
     if (!fieldName) {
+      return null;
+    }
+
+    const normalized = normalizeFieldName(fieldName);
+
+    return form.querySelector(`[name="${fieldName}"]`)
+      || form.querySelector(`[name="${normalized}"]`)
+      || form.querySelector(`[name="${normalized}[]"]`);
+  }
+
+  function focusCustomField(form, fieldName) {
+    const normalized = normalizeFieldName(fieldName);
+
+    if (normalized === 'settlement_type_ids' || normalized === 'allowed_settlement_types') {
+      const box = form.querySelector('[data-multi-select]');
+
+      if (box) {
+        box.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+
+        const firstChip = box.querySelector('.select-chip');
+
+        if (firstChip) {
+          firstChip.focus?.();
+        }
+
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function clearInvalidField(form, fieldName) {
+    if (focusCustomField(form, fieldName)) {
       return;
     }
 
-    const field = form.querySelector(`[name="${fieldName}"]`);
+    const field = findField(form, fieldName);
 
     if (!field) {
       return;
     }
+
+    const normalized = normalizeFieldName(fieldName);
 
     const clearableFields = [
       'account_code',
@@ -312,12 +430,15 @@ window.AccountingUI = (() => {
       'party_name',
       'mobile',
       'email',
+      'name',
+      'transaction_head_name',
     ];
 
-    if (clearableFields.includes(fieldName)) {
+    if (clearableFields.includes(normalized)) {
       field.value = '';
-      field.focus();
     }
+
+    field.focus();
   }
 
   function setSubmitting(form, isSubmitting) {
@@ -337,6 +458,10 @@ window.AccountingUI = (() => {
 
         if (!form.checkValidity()) {
           form.reportValidity();
+          return;
+        }
+
+        if (!validateCustomFields(form)) {
           return;
         }
 

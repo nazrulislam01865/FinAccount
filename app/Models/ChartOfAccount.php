@@ -52,4 +52,21 @@ class ChartOfAccount extends Model
     {
         return trim($this->account_code . ' - ' . $this->account_name);
     }
+    public function debitMappingRules()
+    {
+        return $this->hasMany(LedgerMappingRule::class, 'debit_account_id');
+    }
+
+    public function creditMappingRules()
+    {
+        return $this->hasMany(LedgerMappingRule::class, 'credit_account_id');
+    }
+    public function openingBalances()
+    {
+        return $this->hasMany(OpeningBalance::class, 'account_id');
+    }
+    public function voucherDetails()
+    {
+        return $this->hasMany(VoucherDetail::class, 'account_id');
+    }
 }
