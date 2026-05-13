@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Setup;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CompanyRequest;
 use App\Models\Company;
+use App\Models\FinancialYear;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
@@ -23,10 +24,7 @@ class CompanyController extends Controller
 
         $data['business_type_id'] = $data['business_type_id'] ?? null;
 
-        $data['journal_voucher_prefix'] = $data['journal_voucher_prefix'] ?: 'JV';
-        $data['payment_voucher_prefix'] = $data['payment_voucher_prefix'] ?: 'PV';
-        $data['receipt_voucher_prefix'] = $data['receipt_voucher_prefix'] ?: 'RV';
-        $data['enable_multi_branch'] = $data['enable_multi_branch'] ?? false;
+        // Voucher numbering is configured on its own PRD setup screen, not on Company Setup.
 
         if ($request->hasFile('logo')) {
             $data['logo_path'] = $request->file('logo')->store('company-logos', 'public');
@@ -42,6 +40,23 @@ class CompanyController extends Controller
             $data['updated_by'] = Auth::id();
             $company = Company::query()->create($data);
         }
+
+        // Keep the Financial Years master table aligned with Company Setup dates required by the PRD.
+        FinancialYear::query()->update(['is_active' => false]);
+        FinancialYear::query()->updateOrCreate(
+            [
+                'company_id' => $company->id,
+                'start_date' => $data['financial_year_start'],
+                'end_date' => $data['financial_year_end'],
+            ],
+            [
+                'name' => date('Y', strtotime($data['financial_year_start'])) . '-' . date('Y', strtotime($data['financial_year_end'])),
+                'is_active' => true,
+                'status' => 'Active',
+                'created_by' => Auth::id(),
+                'updated_by' => Auth::id(),
+            ]
+        );
 
         return response()->json([
             'success' => true,

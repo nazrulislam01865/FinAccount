@@ -30,6 +30,7 @@ class TransactionHeadRequest extends FormRequest
         }
 
         $this->merge([
+            'head_code' => $this->head_code ?: null,
             'default_party_type_id' => $this->default_party_type_id ?: null,
             'requires_party' => filter_var($this->input('requires_party', false), FILTER_VALIDATE_BOOLEAN),
             'requires_reference' => filter_var($this->input('requires_reference', false), FILTER_VALIDATE_BOOLEAN),
@@ -40,18 +41,30 @@ class TransactionHeadRequest extends FormRequest
 
     public function rules(): array
     {
+        $headId = $this->route('transaction_head')?->id;
+
         return [
+            'head_code' => [
+                'nullable',
+                'string',
+                'max:30',
+                Rule::unique('transaction_heads', 'head_code')
+                    ->whereNull('deleted_at')
+                    ->ignore($headId),
+            ],
+
             'name' => [
                 'required',
                 'string',
                 'max:255',
                 Rule::unique('transaction_heads', 'name')
-                    ->whereNull('deleted_at'),
+                    ->whereNull('deleted_at')
+                    ->ignore($headId),
             ],
 
             'nature' => [
                 'required',
-                Rule::in(['Payment', 'Receipt', 'Due', 'Advance', 'Adjustment']),
+                Rule::in(['Payment', 'Receipt', 'Due', 'Advance', 'Adjustment', 'Expense', 'Journal']),
             ],
 
             'default_party_type_id' => [
@@ -99,11 +112,13 @@ class TransactionHeadRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'head_code.unique' => 'This Transaction Head Code already exists. Please use another code.',
+
             'name.required' => 'Transaction Head Name is required.',
             'name.unique' => 'This Transaction Head Name already exists. Please use another name.',
 
             'nature.required' => 'Nature is required.',
-            'nature.in' => 'Nature must be Payment, Receipt, Due, Advance, or Adjustment.',
+            'nature.in' => 'Nature must be Payment, Receipt, Due, Advance, Adjustment, Expense, or Journal.',
 
             'default_party_type_id.exists' => 'Selected Default Party Type is invalid.',
 

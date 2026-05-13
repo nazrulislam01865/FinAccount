@@ -11,7 +11,7 @@ class SettlementTypeSeeder extends Seeder
     {
         foreach ([
             ['Cash', 'CASH'], ['Bank', 'BANK'], ['Due', 'DUE'],
-            ['Advance Paid', 'ADVANCE_PAID'], ['Advance Received', 'ADVANCE_RECEIVED'], ['Advance Adjustment', 'ADVANCE_ADJUSTMENT'],
+            ['Advance Paid', 'ADVANCE_PAID'], ['Advance Received', 'ADVANCE_RECEIVED'], ['Adjustment', 'ADJUSTMENT'],
         ] as $i => [$name, $code]) {
             SettlementType::updateOrCreate(['code' => $code], ['name' => $name, 'status' => 'Active', 'sort_order' => $i + 1]);
         }

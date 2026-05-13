@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\SettlementType;
+use App\Models\Party;
 use App\Models\TransactionHead;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -81,6 +82,19 @@ class TransactionEntryRequest extends FormRequest
         ];
     }
 
+    private function hasAvailablePartyForHead(TransactionHead $head): bool
+    {
+        if (!$head->default_party_type_id) {
+            return false;
+        }
+
+        return Party::query()
+            ->where('status', 'Active')
+            ->whereNull('deleted_at')
+            ->where('party_type_id', $head->default_party_type_id)
+            ->exists();
+    }
+
     public function after(): array
     {
         return [function (Validator $validator): void {
@@ -111,7 +125,7 @@ class TransactionEntryRequest extends FormRequest
                 );
             }
 
-            if ($head->requires_party && !$this->party_id) {
+            if ($head->requires_party && !$this->party_id && $this->hasAvailablePartyForHead($head)) {
                 $validator->errors()->add(
                     'party_id',
                     'Party / Person is required for this Transaction Head.'

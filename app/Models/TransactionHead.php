@@ -11,6 +11,7 @@ class TransactionHead extends Model
 
     protected $fillable = [
         'company_id',
+        'head_code',
         'name',
         'nature',
         'default_party_type_id',

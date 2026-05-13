@@ -5,10 +5,13 @@
 @section('content')
 <div class="page-title">
     <div>
+        <span class="page-label">Party / Person Setup</span>
         <h2>Party / Person Setup</h2>
         <p>Manage employees, suppliers, customers, drivers, tenants, owners, and other parties.</p>
     </div>
 </div>
+
+@include('partials.setup-progress', ['current' => 4])
 
 <div class="layout">
     <div class="left-stack">
@@ -42,7 +45,7 @@
             <button
                 class="btn-primary"
                 type="button"
-                data-toast="Ready to add a new party."
+                id="addPartyBtn"
             >
                 + Add Party
             </button>
@@ -57,7 +60,7 @@
                         <th>Party Type</th>
                         <th>Mobile</th>
                         <th>Email</th>
-                        <th>Linked Ledger / Opening Balance</th>
+                        <th>Linked Ledger / Balance</th>
                         <th>Status</th>
                         <th style="text-align:right">Actions</th>
                     </tr>
@@ -66,8 +69,16 @@
                 <tbody>
                     @forelse($parties as $party)
                         <tr
+                            data-id="{{ $party->id }}"
+                            data-name="{{ e($party->party_name) }}"
                             data-type="{{ $party->party_type_id }}"
+                            data-mobile="{{ $party->mobile }}"
+                            data-email="{{ $party->email }}"
+                            data-address="{{ e($party->address) }}"
+                            data-linked-ledger="{{ $party->linked_ledger_account_id }}"
+                            data-opening-balance="{{ number_format((float) $party->opening_balance, 2, '.', '') }}"
                             data-status="{{ $party->status }}"
+                            data-update-url="{{ url('/api/parties/' . $party->id) }}"
                         >
                             <td class="code">{{ $party->party_code }}</td>
 
@@ -91,9 +102,6 @@
                                 <strong>{{ $party->linkedLedger?->display_name ?? '—' }}</strong>
                                 <span class="hint">
                                     BDT {{ number_format((float) $party->opening_balance, 2) }}
-                                    @if($party->opening_balance_type)
-                                        {{ $party->opening_balance_type === 'Debit' ? 'Dr' : 'Cr' }}
-                                    @endif
                                 </span>
                             </td>
 
@@ -106,20 +114,26 @@
                             <td>
                                 <div class="action-cell">
                                     <button
-                                        class="icon-btn"
+                                        class="icon-btn edit-btn"
                                         type="button"
-                                        data-toast="Edit will be added later."
+                                        title="Edit"
                                     >
                                         ✎
                                     </button>
 
-                                    <button
-                                        class="icon-btn"
-                                        type="button"
-                                        data-toast="More actions will be added later."
+                                    <form
+                                        method="POST"
+                                        data-delete-form
+                                        action="{{ url('/setup/parties/' . $party->id) }}"
+                                        onsubmit="return confirm('Delete this party?')"
                                     >
-                                        ⋮
-                                    </button>
+                                        @csrf
+                                        @method('DELETE')
+
+                                        <button class="icon-btn delete-btn" type="submit" title="Delete">
+                                            🗑
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -151,9 +165,7 @@
     </div>
 
     <aside class="right-stack">
-        @include('partials.setup-progress', ['current' => 4])
-
-        <div class="card form-panel">
+<div class="card form-panel">
             <div class="panel-head">
                 <h3>Create / Edit Party</h3>
                 <span class="muted">×</span>
@@ -161,11 +173,15 @@
 
             <form
                 class="form-grid"
+                id="partyForm"
                 data-frontend-form
                 data-action="{{ route('api.parties.store') }}"
+                data-store-url="{{ route('api.parties.store') }}"
                 data-success="Party saved successfully."
             >
                 @csrf
+
+                <input type="hidden" name="_method" id="partyFormMethod" value="POST">
 
                 <div>
                     <label>Party Name <span class="required">*</span></label>
@@ -186,13 +202,7 @@
                     ></select>
                 </div>
 
-                <div>
-                    <label>Contact Person</label>
-                    <input
-                        name="contact_person"
-                        placeholder="Enter contact person name"
-                    >
-                </div>
+
 
                 <div class="two-col">
                     <div>
@@ -201,11 +211,10 @@
                             name="mobile"
                             type="text"
                             inputmode="tel"
-                            maxlength="15"
-                            pattern="^\+8801[0-9]{3}-[0-9]{6}$"
-                            placeholder="+8801XXX-XXXXXX"
+                            maxlength="50"
+                            placeholder="Enter mobile number"
                         >
-                        <div class="hint">Format: +8801XXX-XXXXXX</div>
+                        <div class="hint">Optional text field.</div>
                     </div>
 
                     <div>
@@ -229,6 +238,7 @@
                 <div>
                     <label>Opening Balance</label>
                     <div class="currency-row">
+                        <div class="prefix-box">BDT</div>
                         <input
                             name="opening_balance"
                             type="number"
@@ -236,13 +246,8 @@
                             step="0.01"
                             min="0"
                         >
-
-                        <select
-                            name="opening_balance_type"
-                            data-dropdown="/api/dropdowns/party-balance-types"
-                            data-placeholder="None"
-                        ></select>
                     </div>
+                    <div class="hint">Opening debit/credit balances can also be controlled from Opening Balance Setup.</div>
                 </div>
 
                 <div>
@@ -256,13 +261,7 @@
                     ></select>
                 </div>
 
-                <div>
-                    <label>Notes</label>
-                    <textarea
-                        name="notes"
-                        placeholder="Enter notes optional"
-                    ></textarea>
-                </div>
+
 
                 <div>
                     <label>Status <span class="required">*</span></label>
@@ -274,14 +273,14 @@
 
                 <div class="hint-box">
                     <strong>Backend note</strong>
-                    Party ID is generated automatically like P-00001. Party Type, Linked Ledger, and Debit/Credit options are loaded from backend.
+                    Party ID is generated automatically like P-00001. Party Type and Linked Ledger are loaded from backend master data.
                 </div>
 
                 <div class="form-actions">
                     <button
-                        type="reset"
+                        type="button"
                         class="btn-ghost"
-                        data-toast="Form cleared."
+                        id="cancelPartyBtn"
                     >
                         Cancel
                     </button>
@@ -294,4 +293,99 @@
         </div>
     </aside>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('partyForm');
+
+    if (!form) {
+        return;
+    }
+
+    const methodInput = document.getElementById('partyFormMethod');
+    const addButton = document.getElementById('addPartyBtn');
+    const cancelButton = document.getElementById('cancelPartyBtn');
+
+    const partyName = form.querySelector('[name="party_name"]');
+    const partyType = form.querySelector('[name="party_type_id"]');
+    const mobile = form.querySelector('[name="mobile"]');
+    const email = form.querySelector('[name="email"]');
+    const address = form.querySelector('[name="address"]');
+    const openingBalance = form.querySelector('[name="opening_balance"]');
+    const linkedLedger = form.querySelector('[name="linked_ledger_account_id"]');
+    const status = form.querySelector('[name="status"]');
+
+    function showToast(message) {
+        if (window.AccountingUI?.showToast) {
+            window.AccountingUI.showToast(message);
+            return;
+        }
+
+        alert(message);
+    }
+
+    function setDropdownValue(select, value) {
+        if (!select) {
+            return;
+        }
+
+        select.dataset.selected = value || '';
+        select.value = value || '';
+
+        if (select.dataset.dropdown && window.AccountingUI?.loadSelect) {
+            window.AccountingUI.loadSelect(select).then(() => {
+                select.value = value || '';
+            });
+        }
+    }
+
+    function resetForm() {
+        form.reset();
+        form.dataset.action = form.dataset.storeUrl;
+        methodInput.value = 'POST';
+
+        [partyType, linkedLedger].forEach((select) => {
+            if (select) {
+                select.dataset.selected = '';
+            }
+        });
+
+        openingBalance.value = '0.00';
+        partyName.focus();
+    }
+
+    function loadForEdit(row) {
+        form.dataset.action = row.dataset.updateUrl;
+        methodInput.value = 'PUT';
+
+        partyName.value = row.dataset.name || '';
+        mobile.value = row.dataset.mobile || '';
+        email.value = row.dataset.email || '';
+        address.value = row.dataset.address || '';
+        openingBalance.value = row.dataset.openingBalance || '0.00';
+        status.value = row.dataset.status || 'Active';
+
+        setDropdownValue(partyType, row.dataset.type || '');
+        setDropdownValue(linkedLedger, row.dataset.linkedLedger || '');
+
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('Party loaded for editing.');
+    }
+
+    document.querySelectorAll('#partyTable .edit-btn').forEach((button) => {
+        button.addEventListener('click', () => loadForEdit(button.closest('tr')));
+    });
+
+    addButton.addEventListener('click', () => {
+        resetForm();
+        showToast('Ready to add a new party.');
+    });
+
+    cancelButton.addEventListener('click', () => {
+        resetForm();
+        showToast('Form cleared.');
+    });
+});
+</script>
+
 @endsection

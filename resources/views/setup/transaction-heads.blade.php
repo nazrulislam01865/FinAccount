@@ -5,10 +5,13 @@
 @section('content')
 <div class="page-title">
     <div>
+        <span class="page-label">Transaction Head Setup</span>
         <h2>Transaction Head Setup</h2>
         <p>Define user-friendly transaction types for daily entries.</p>
     </div>
 </div>
+
+@include('partials.setup-progress', ['current' => 5])
 
 <div class="layout">
     <div class="left-stack">
@@ -45,7 +48,7 @@
                 </select>
             </div>
 
-            <button class="btn-primary" type="button" data-toast="Ready to add a transaction head.">
+            <button class="btn-primary" type="button" id="addHeadBtn">
                 + Add Transaction Head
             </button>
         </div>
@@ -68,9 +71,16 @@
                 <tbody>
                     @forelse($transactionHeads as $head)
                         <tr
+                            data-id="{{ $head->id }}"
+                            data-name="{{ e($head->name) }}"
                             data-nature="{{ $head->nature }}"
                             data-party="{{ $head->default_party_type_id }}"
+                            data-requires-party="{{ $head->requires_party ? 1 : 0 }}"
+                            data-requires-reference="{{ $head->requires_reference ? 1 : 0 }}"
+                            data-description="{{ e($head->description) }}"
+                            data-settlements='{{ $head->settlementTypes->pluck('name')->values()->toJson() }}'
                             data-status="{{ $head->status }}"
+                            data-update-url="{{ url('/api/transaction-heads/' . $head->id) }}"
                         >
                             <td class="strong">{{ $head->name }}</td>
 
@@ -100,8 +110,21 @@
 
                             <td>
                                 <div class="action-cell">
-                                    <button class="icon-btn" type="button" data-toast="Edit will be added later.">✎</button>
-                                    <button class="icon-btn" type="button" data-toast="More actions will be added later.">⋮</button>
+                                    <button class="icon-btn edit-btn" type="button" title="Edit">✎</button>
+
+                                    <form
+                                        method="POST"
+                                        data-delete-form
+                                        action="{{ url('/setup/transaction-heads/' . $head->id) }}"
+                                        onsubmit="return confirm('Delete this transaction head?')"
+                                    >
+                                        @csrf
+                                        @method('DELETE')
+
+                                        <button class="icon-btn delete-btn" type="submit" title="Delete">
+                                            🗑
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -130,9 +153,7 @@
     </div>
 
     <aside class="right-stack">
-        @include('partials.setup-progress', ['current' => 5])
-
-        <div class="card form-panel">
+<div class="card form-panel">
             <div class="panel-head">
                 <h3>Create / Edit Transaction Head</h3>
                 <span class="muted">×</span>
@@ -140,11 +161,15 @@
 
             <form
                 class="form-grid"
+                id="headForm"
                 data-frontend-form
                 data-action="{{ route('api.transaction-heads.store') }}"
+                data-store-url="{{ route('api.transaction-heads.store') }}"
                 data-success="Transaction head saved successfully."
             >
                 @csrf
+
+                <input type="hidden" name="_method" id="headFormMethod" value="POST">
 
                 <div>
                     <label>Transaction Head Name <span class="required">*</span></label>
@@ -178,13 +203,13 @@
                     <div class="switch-row">
                         <span class="switch-label">Requires Party <span class="required">*</span></span>
                         <input type="hidden" id="requiresParty" name="requires_party" value="1">
-                        <div class="switch on" data-input="requiresParty"></div>
+                        <div class="switch on" id="requiresPartySwitch" data-input="requiresParty"></div>
                     </div>
 
                     <div class="switch-row">
                         <span class="switch-label">Requires Reference</span>
                         <input type="hidden" id="requiresReference" name="requires_reference" value="0">
-                        <div class="switch" data-input="requiresReference"></div>
+                        <div class="switch" id="requiresReferenceSwitch" data-input="requiresReference"></div>
                     </div>
                 </div>
 
@@ -239,11 +264,145 @@
                 </div>
 
                 <div class="form-actions">
-                    <button type="reset" class="btn-ghost" data-toast="Form cleared.">Cancel</button>
+                    <button type="button" class="btn-ghost" id="cancelHeadBtn">Cancel</button>
                     <button type="submit" class="btn-primary">Save Head</button>
                 </div>
             </form>
         </div>
     </aside>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('headForm');
+
+    if (!form) {
+        return;
+    }
+
+    const methodInput = document.getElementById('headFormMethod');
+    const addButton = document.getElementById('addHeadBtn');
+    const cancelButton = document.getElementById('cancelHeadBtn');
+
+    const name = form.querySelector('[name="name"]');
+    const nature = form.querySelector('[name="nature"]');
+    const defaultPartyType = form.querySelector('[name="default_party_type_id"]');
+    const requiresPartyInput = document.getElementById('requiresParty');
+    const requiresPartySwitch = document.getElementById('requiresPartySwitch');
+    const requiresReferenceInput = document.getElementById('requiresReference');
+    const requiresReferenceSwitch = document.getElementById('requiresReferenceSwitch');
+    const description = form.querySelector('[name="description"]');
+    const status = form.querySelector('[name="status"]');
+    const settlementInput = document.getElementById('settlementTypes');
+    const settlementBox = form.querySelector('[data-multi-select]');
+
+    function showToast(message) {
+        if (window.AccountingUI?.showToast) {
+            window.AccountingUI.showToast(message);
+            return;
+        }
+
+        alert(message);
+    }
+
+    function setDropdownValue(select, value) {
+        if (!select) {
+            return;
+        }
+
+        select.dataset.selected = value || '';
+        select.value = value || '';
+
+        if (select.dataset.dropdown && window.AccountingUI?.loadSelect) {
+            window.AccountingUI.loadSelect(select).then(() => {
+                select.value = value || '';
+            });
+        }
+    }
+
+    function setSwitch(input, switchElement, value) {
+        const enabled = Number(value) === 1;
+
+        input.value = enabled ? '1' : '0';
+        switchElement.classList.toggle('on', enabled);
+    }
+
+    function syncSettlementTypes() {
+        const values = Array.from(settlementBox.querySelectorAll('.select-chip.selected'))
+            .map((chip) => chip.dataset.value || chip.textContent.trim());
+
+        settlementInput.value = JSON.stringify(values);
+        settlementBox.dataset.selectedCount = String(values.length);
+    }
+
+    function setSettlementTypes(values) {
+        settlementBox.querySelectorAll('.select-chip').forEach((chip) => {
+            const value = chip.dataset.value || chip.textContent.trim();
+            chip.classList.toggle('selected', values.includes(value));
+        });
+
+        syncSettlementTypes();
+    }
+
+    function resetForm() {
+        form.reset();
+        form.dataset.action = form.dataset.storeUrl;
+        methodInput.value = 'POST';
+
+        nature.dataset.selected = '';
+        defaultPartyType.dataset.selected = '';
+
+        setSwitch(requiresPartyInput, requiresPartySwitch, 1);
+        setSwitch(requiresReferenceInput, requiresReferenceSwitch, 0);
+        setSettlementTypes([]);
+
+        name.focus();
+    }
+
+    function loadForEdit(row) {
+        let settlements = [];
+
+        try {
+            settlements = JSON.parse(row.dataset.settlements || '[]');
+        } catch (error) {
+            settlements = [];
+        }
+
+        form.dataset.action = row.dataset.updateUrl;
+        methodInput.value = 'PUT';
+
+        name.value = row.dataset.name || '';
+        description.value = row.dataset.description || '';
+        status.value = row.dataset.status || 'Active';
+
+        setDropdownValue(nature, row.dataset.nature || '');
+        setDropdownValue(defaultPartyType, row.dataset.party || '');
+        setSwitch(requiresPartyInput, requiresPartySwitch, row.dataset.requiresParty || 0);
+        setSwitch(requiresReferenceInput, requiresReferenceSwitch, row.dataset.requiresReference || 0);
+        setSettlementTypes(settlements);
+
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('Transaction head loaded for editing.');
+    }
+
+    settlementBox.querySelectorAll('.select-chip').forEach((chip) => {
+        chip.addEventListener('click', syncSettlementTypes);
+    });
+
+    document.querySelectorAll('#headTable .edit-btn').forEach((button) => {
+        button.addEventListener('click', () => loadForEdit(button.closest('tr')));
+    });
+
+    addButton.addEventListener('click', () => {
+        resetForm();
+        showToast('Ready to add a transaction head.');
+    });
+
+    cancelButton.addEventListener('click', () => {
+        resetForm();
+        showToast('Form cleared.');
+    });
+});
+</script>
+
 @endsection

@@ -199,7 +199,9 @@ class TransactionPostingService
             'Increase Receivable' => $this->createDueMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Debit')['account_id'], 'Receivable', 'Increase', $amount),
             'Decrease Receivable' => $this->createDueMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Receivable', 'Decrease', $amount),
 
+            'Increase Asset',
             'Increase Advance Asset' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Debit')['account_id'], 'Paid', 'Increase', $amount),
+            'Decrease Asset',
             'Decrease Advance Asset' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Paid', 'Decrease', $amount),
 
             'Increase Advance Liability' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Received', 'Increase', $amount),

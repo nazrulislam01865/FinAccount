@@ -12,4 +12,10 @@ class Currency extends Model
     }
 
     protected $fillable = ['code', 'name', 'symbol', 'decimal_places', 'is_default', 'status', 'sort_order'];
+
+    protected $casts = [
+        'decimal_places' => 'integer',
+        'is_default' => 'boolean',
+        'sort_order' => 'integer',
+    ];
 }

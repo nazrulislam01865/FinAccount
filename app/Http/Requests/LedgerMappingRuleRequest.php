@@ -20,6 +20,7 @@ class LedgerMappingRuleRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
+            'rule_code' => $this->rule_code ?: null,
             'transaction_head_id' => $this->transaction_head_id ?: null,
             'settlement_type_id' => $this->settlement_type_id ?: null,
             'debit_account_id' => $this->debit_account_id ?: null,
@@ -33,6 +34,15 @@ class LedgerMappingRuleRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'rule_code' => [
+                'nullable',
+                'string',
+                'max:30',
+                Rule::unique('ledger_mapping_rules', 'rule_code')
+                    ->whereNull('deleted_at')
+                    ->ignore($this->route('ledger_mapping_rule')?->id),
+            ],
+
             'transaction_head_id' => [
                 'required',
                 'integer',
@@ -69,7 +79,7 @@ class LedgerMappingRuleRequest extends FormRequest
             ],
 
             'party_ledger_effect' => [
-                'required',
+                'nullable',
                 Rule::in(LedgerMappingRule::PARTY_EFFECTS),
             ],
 
@@ -108,6 +118,20 @@ class LedgerMappingRuleRequest extends FormRequest
 
             if (!$head || !$settlement || !$debit || !$credit) {
                 return;
+            }
+
+            if (!$debit->posting_allowed) {
+                $validator->errors()->add(
+                    'debit_account_id',
+                    'Debit Account must be a posting ledger account, not a group/control account.'
+                );
+            }
+
+            if (!$credit->posting_allowed) {
+                $validator->errors()->add(
+                    'credit_account_id',
+                    'Credit Account must be a posting ledger account, not a group/control account.'
+                );
             }
 
             if (!$head->settlementTypes->contains('id', $settlement->id)) {
@@ -193,6 +217,20 @@ class LedgerMappingRuleRequest extends FormRequest
                 'Decreasing receivable must credit an asset account.',
             ],
 
+            'Increase Asset' => [
+                $debitType,
+                'Asset',
+                'debit_account_id',
+                'Increasing an asset must debit an asset account.',
+            ],
+
+            'Decrease Asset' => [
+                $creditType,
+                'Asset',
+                'credit_account_id',
+                'Decreasing an asset must credit an asset account.',
+            ],
+
             'Increase Advance Asset' => [
                 $debitType,
                 'Asset',
@@ -236,6 +274,8 @@ class LedgerMappingRuleRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'rule_code.unique' => 'This Ledger Mapping Rule Code already exists. Please use another code.',
+
             'transaction_head_id.required' => 'Transaction Head is required.',
             'transaction_head_id.exists' => 'Selected Transaction Head is invalid or inactive.',
 
@@ -249,7 +289,6 @@ class LedgerMappingRuleRequest extends FormRequest
             'credit_account_id.different' => 'Debit Account and Credit Account cannot be the same.',
             'credit_account_id.exists' => 'Selected Credit Account is invalid or inactive.',
 
-            'party_ledger_effect.required' => 'Party Ledger Effect is required.',
             'party_ledger_effect.in' => 'Selected Party Ledger Effect is invalid.',
 
             'auto_post.required' => 'Auto Post is required.',

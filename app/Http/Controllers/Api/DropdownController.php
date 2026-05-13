@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountType;
 use App\Models\Bank;
 use App\Models\BusinessType;
+use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\Currency;
 use App\Models\PartyType;
@@ -15,6 +16,7 @@ use App\Models\TransactionHead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Models\LedgerMappingRule;
+use App\Models\Party;
 
 class DropdownController extends Controller
 {
@@ -149,6 +151,8 @@ class DropdownController extends Controller
             ['id' => 'Due', 'name' => 'Due', 'display_name' => 'Due'],
             ['id' => 'Advance', 'name' => 'Advance', 'display_name' => 'Advance'],
             ['id' => 'Adjustment', 'name' => 'Adjustment', 'display_name' => 'Adjustment'],
+            ['id' => 'Expense', 'name' => 'Expense', 'display_name' => 'Expense'],
+            ['id' => 'Journal', 'name' => 'Journal', 'display_name' => 'Journal'],
         ]);
     }
 
@@ -165,31 +169,128 @@ class DropdownController extends Controller
         return $this->ok(
             TransactionHead::query()
                 ->where('status', 'Active')
+                ->with(['settlementTypes' => fn ($query) => $query
+                    ->where('status', 'Active')
+                    ->orderBy('sort_order')
+                    ->orderBy('name')])
                 ->orderBy('name')
                 ->get()
-                ->map(fn ($item) => [
+                ->map(fn (TransactionHead $item) => [
                     'id' => $item->id,
                     'name' => $item->name,
                     'display_name' => $item->name,
                     'nature' => $item->nature,
-                    'requires_party' => $item->requires_party,
-                    'requires_reference' => $item->requires_reference,
+                    'default_party_type_id' => $item->default_party_type_id,
+                    'requires_party' => (bool) $item->requires_party,
+                    'requires_reference' => (bool) $item->requires_reference,
+                    'settlement_type_ids' => $item->settlementTypes
+                        ->pluck('id')
+                        ->map(fn ($id) => (int) $id)
+                        ->values(),
+                    'settlement_types' => $item->settlementTypes->map(fn (SettlementType $settlement) => [
+                        'id' => $settlement->id,
+                        'name' => $settlement->name,
+                        'code' => $settlement->code,
+                        'display_name' => $settlement->name,
+                    ])->values(),
                 ])
         );
     }
 
-    public function settlementTypes(): JsonResponse
+    public function settlementTypes(Request $request): JsonResponse
     {
-        return $this->ok(
-            SettlementType::query()
+        $query = SettlementType::query()
+            ->where('status', 'Active');
+
+        if ($request->filled('transaction_head_id')) {
+            $head = TransactionHead::query()
                 ->where('status', 'Active')
-                ->orderBy('sort_order')
+                ->whereKey($request->integer('transaction_head_id'))
+                ->first();
+
+            if (!$head) {
+                return $this->ok(collect());
+            }
+
+            $query->whereHas('transactionHeads', fn ($relation) => $relation
+                ->where('transaction_heads.id', $head->id)
+                ->where('transaction_heads.status', 'Active')
+                ->whereNull('transaction_heads.deleted_at'));
+
+            if ($request->boolean('mapped_only')) {
+                $mappedSettlementIds = LedgerMappingRule::query()
+                    ->where('transaction_head_id', $head->id)
+                    ->where('status', 'Active')
+                    ->whereNull('deleted_at')
+                    ->pluck('settlement_type_id');
+
+                $query->whereIn('id', $mappedSettlementIds);
+            }
+        }
+
+        return $this->ok(
+            $query->orderBy('sort_order')
                 ->orderBy('name')
                 ->get()
-                ->map(fn ($item) => [
+                ->map(fn (SettlementType $item) => [
                     'id' => $item->id,
                     'name' => $item->name,
+                    'code' => $item->code,
                     'display_name' => $item->name,
+                ])
+        );
+    }
+
+    public function cashBankAccounts(): JsonResponse
+    {
+        return $this->ok(
+            CashBankAccount::query()
+                ->where('status', 'Active')
+                ->with('linkedLedger')
+                ->orderBy('cash_bank_name')
+                ->get()
+                ->map(fn (CashBankAccount $account) => [
+                    'id' => $account->id,
+                    'cash_bank_code' => $account->cash_bank_code,
+                    'cash_bank_name' => $account->cash_bank_name,
+                    'name' => $account->cash_bank_name,
+                    'type' => $account->type,
+                    'linked_ledger_account_id' => $account->linked_ledger_account_id,
+                    'linked_ledger_name' => $account->linkedLedger?->display_name
+                        ?: trim(($account->linkedLedger?->account_code ? $account->linkedLedger->account_code . ' - ' : '') . ($account->linkedLedger?->account_name ?? '')),
+                    'display_name' => $account->cash_bank_name,
+                ])
+        );
+    }
+
+    public function parties(Request $request): JsonResponse
+    {
+        // Return parties created from Setup > Party / Person.
+        // The optional party_type_id filter lets transaction entry show only parties
+        // that match the selected Transaction Head's default party type.
+        $query = Party::query()
+            ->where('status', 'Active')
+            ->with(['partyType', 'linkedLedger']);
+
+        if ($request->filled('party_type_id')) {
+            $query->where('party_type_id', $request->integer('party_type_id'));
+        }
+
+        return $this->ok(
+            $query->orderBy('party_name')
+                ->get()
+                ->map(fn (Party $party) => [
+                    'id' => $party->id,
+                    'party_code' => $party->party_code,
+                    'party_name' => $party->party_name,
+                    'sub_type' => $party->sub_type,
+                    'default_ledger_nature' => $party->default_ledger_nature,
+                    'party_type_id' => $party->party_type_id,
+                    'party_type_name' => $party->partyType?->name,
+                    'linked_ledger_account_id' => $party->linked_ledger_account_id,
+                    'linked_ledger_name' => $party->linkedLedger?->display_name
+                        ?: trim(($party->linkedLedger?->account_code ? $party->linkedLedger->account_code . ' - ' : '') . ($party->linkedLedger?->account_name ?? '')),
+                    'display_name' => trim(($party->party_code ? $party->party_code . ' - ' : '') . $party->party_name),
                 ])
         );
     }
@@ -197,7 +298,8 @@ class DropdownController extends Controller
     public function parentAccounts(Request $request): JsonResponse
     {
         $query = ChartOfAccount::query()
-            ->where('status', 'Active');
+            ->where('status', 'Active')
+            ->with('accountType');
 
         if ($request->filled('account_type_id')) {
             $query->where('account_type_id', $request->integer('account_type_id'));
@@ -219,7 +321,9 @@ class DropdownController extends Controller
         return $this->ok(
             ChartOfAccount::query()
                 ->where('status', 'Active')
+                ->with('accountType')
                 ->where('is_cash_bank', true)
+                ->where('posting_allowed', true)
                 ->orderBy('account_code')
                 ->get()
                 ->map(fn ($account) => $this->formatAccount($account))
@@ -231,6 +335,8 @@ class DropdownController extends Controller
         return $this->ok(
             ChartOfAccount::query()
                 ->where('status', 'Active')
+                ->with('accountType')
+                ->where('posting_allowed', true)
                 ->orderBy('account_code')
                 ->get()
                 ->map(fn ($account) => $this->formatAccount($account))
@@ -245,6 +351,9 @@ class DropdownController extends Controller
             'id' => $account->id,
             'account_code' => $account->account_code,
             'account_name' => $account->account_name,
+            'account_level' => $account->account_level,
+            'normal_balance' => $account->normal_balance ?: $account->accountType?->normal_balance,
+            'posting_allowed' => (bool) $account->posting_allowed,
             'name' => $account->account_name,
             'display_name' => $account->display_name ?: $displayName,
         ];

@@ -5,14 +5,17 @@
 @section('content')
 <div class="page-title">
     <div>
+        <span class="page-label">Company Setup</span>
         <h2>Company Setup</h2>
-        <p>Configure company profile, financial year, currency, and voucher preferences.</p>
+        <p>Configure company profile, financial year, currency, and contact information.</p>
     </div>
 
     <button class="btn-outline" type="button" data-toast="Import company information will be connected later.">
         Import Company Info
     </button>
 </div>
+
+@include('partials.setup-progress', ['current' => 1])
 
 <div class="layout">
     <form
@@ -180,61 +183,6 @@
             </div>
         </div>
 
-        <div class="section">
-            <h3 class="section-title">Voucher Prefixes & Preferences</h3>
-
-            <div class="grid">
-                <div>
-                    <label>Journal Voucher Prefix</label>
-                    <input
-                        name="journal_voucher_prefix"
-                        value="{{ old('journal_voucher_prefix', $company->journal_voucher_prefix ?? 'JV') }}"
-                        placeholder="JV"
-                    >
-                    <div class="hint">Default: JV</div>
-                </div>
-
-                <div>
-                    <label>Payment Voucher Prefix</label>
-                    <input
-                        name="payment_voucher_prefix"
-                        value="{{ old('payment_voucher_prefix', $company->payment_voucher_prefix ?? 'PV') }}"
-                        placeholder="PV"
-                    >
-                    <div class="hint">Default: PV</div>
-                </div>
-
-                <div>
-                    <label>Receipt Voucher Prefix</label>
-                    <input
-                        name="receipt_voucher_prefix"
-                        value="{{ old('receipt_voucher_prefix', $company->receipt_voucher_prefix ?? 'RV') }}"
-                        placeholder="RV"
-                    >
-                    <div class="hint">Default: RV</div>
-                </div>
-            </div>
-
-            <div class="switch-row" style="margin-top:14px">
-                <div>
-                    <strong>Enable Multi-Branch</strong>
-                    <div class="hint">Allow transactions and reports by branch or location.</div>
-                </div>
-
-                <input
-                    type="hidden"
-                    id="enableMultiBranch"
-                    name="enable_multi_branch"
-                    value="{{ old('enable_multi_branch', $company->enable_multi_branch ?? 1) }}"
-                >
-
-                <div
-                    class="switch {{ old('enable_multi_branch', $company->enable_multi_branch ?? 1) ? 'on' : '' }}"
-                    data-input="enableMultiBranch"
-                    aria-label="Enable Multi Branch"
-                ></div>
-            </div>
-        </div>
 
         <div class="actions">
             <button class="btn-ghost" type="button" data-toast="Cancelled.">Cancel</button>
@@ -244,16 +192,14 @@
     </form>
 
     <aside class="right-stack">
-        @include('partials.setup-progress', ['current' => 1])
-
-        <div class="card info-card">
+<div class="card info-card">
             <h3>Why this setup matters</h3>
-            <p>These settings will be used in voucher creation, ledger posting, financial year filtering, and accounting reports.</p>
+            <p>These settings will be used in company identity, financial-year filtering, transaction entry, and accounting reports.</p>
         </div>
 
         <div class="card info-card">
             <h3>Dynamic Data</h3>
-            <p>Business Type, Currency, and Time Zone are loaded from backend master tables.</p>
+            <p>Business Types, Currencies, Settlement Types, Party Types, and Financial Years can be managed from Master Data. Time Zone is loaded from backend master tables.</p>
         </div>
     </aside>
 </div>

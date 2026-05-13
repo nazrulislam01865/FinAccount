@@ -25,11 +25,9 @@ class CompanySetupService
 
             $payload = Arr::only($data, [
                 'company_name', 'short_name', 'business_type_id', 'trade_license_no', 'tax_id_bin',
-                'currency_id', 'time_zone_id', 'financial_year_start', 'financial_year_end', 'address',
-                'contact_email', 'contact_phone', 'website', 'logo_path', 'enable_multi_branch',
-                'journal_voucher_prefix', 'payment_voucher_prefix', 'receipt_voucher_prefix'
+                'currency_id', 'time_zone_id', 'financial_year_start', 'financial_year_end', 'default_branch', 'address',
+                'contact_email', 'contact_phone', 'website', 'logo_path'
             ]);
-            $payload['enable_multi_branch'] = (bool)($payload['enable_multi_branch'] ?? false);
             $payload[$company ? 'updated_by' : 'created_by'] = $userId;
 
             $company = Company::updateOrCreate(['id' => $company?->id], $payload);

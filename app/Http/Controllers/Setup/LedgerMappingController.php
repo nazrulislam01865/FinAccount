@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Setup;
 
 use App\Http\Controllers\Controller;
+use Throwable;
+use Illuminate\Http\Request;
+use App\Services\Setup\EntityDeleteService;
+use App\Http\Controllers\Concerns\RespondsToDelete;
 use App\Http\Requests\LedgerMappingRuleRequest;
 use App\Models\ChartOfAccount;
 use App\Models\LedgerMappingRule;
@@ -15,6 +19,8 @@ use Illuminate\View\View;
 
 class LedgerMappingController extends Controller
 {
+    use RespondsToDelete;
+
     public function index(): View
     {
         $rules = LedgerMappingRule::query()
@@ -41,6 +47,7 @@ class LedgerMappingController extends Controller
 
         $accounts = ChartOfAccount::query()
             ->where('status', 'Active')
+            ->where('posting_allowed', true)
             ->with('accountType')
             ->orderBy('account_code')
             ->orderBy('account_name')
@@ -91,12 +98,26 @@ class LedgerMappingController extends Controller
         ]);
     }
 
-    public function destroy(LedgerMappingRule $ledgerMappingRule): RedirectResponse
-    {
-        $ledgerMappingRule->delete();
+    public function destroy(
+        Request $request,
+        LedgerMappingRule $ledgerMappingRule,
+        EntityDeleteService $deleteService
+    ): JsonResponse|RedirectResponse {
+        try {
+            $deleteService->deleteLedgerMappingRule($ledgerMappingRule);
+        } catch (Throwable $exception) {
+            return $this->deleteFailure(
+                $request,
+                'setup.ledger-mapping',
+                'This ledger mapping rule could not be deleted. Please try again or check related records.',
+                $exception
+            );
+        }
 
-        return redirect()
-            ->route('setup.ledger-mapping')
-            ->with('success', 'Ledger mapping rule deleted successfully.');
+        return $this->deleteSuccess(
+            $request,
+            'setup.ledger-mapping',
+            'Ledger mapping rule deleted successfully.'
+        );
     }
 }

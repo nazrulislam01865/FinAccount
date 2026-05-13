@@ -2,17 +2,67 @@
 
 @section('title', 'Ledger Mapping Setup | Accounting System')
 
+@push('styles')
+<style>
+    .ledger-mapping-page .table-wrap {
+        overflow-x: auto;
+    }
+
+    .ledger-mapping-page .panel-head {
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .ledger-mapping-page .panel-head h3 {
+        margin-bottom: 4px;
+    }
+
+    .ledger-side-note {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .ledger-mapping-page .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+    }
+
+    .ledger-mapping-page .actions .btn-primary {
+        grid-column: span 2;
+    }
+
+    @media (max-width: 880px) {
+        .ledger-mapping-page .actions {
+            grid-template-columns: 1fr;
+        }
+
+        .ledger-mapping-page .actions .btn-primary {
+            grid-column: span 1;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="page-title">
     <div>
+        <span class="page-label">Ledger Mapping</span>
         <h2>Ledger Mapping</h2>
         <p>Configure automatic debit and credit rules for each transaction.</p>
     </div>
 </div>
 
-<div class="layout">
+@include('partials.setup-progress', ['current' => 6])
+
+<div class="layout ledger-mapping-page">
     <div class="left-stack">
-        <div class="card toolbar">
+        <div class="card toolbar five">
             <div class="field search-field">
                 <span>⌕</span>
                 <input id="ruleSearch" type="text" placeholder="Search by transaction head...">
@@ -57,94 +107,97 @@
         </div>
 
         <div class="card table-card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Transaction Head</th>
-                        <th>Settlement Type</th>
-                        <th>Debit Account</th>
-                        <th>Credit Account</th>
-                        <th>Party Effect</th>
-                        <th>Auto Post</th>
-                        <th>Status</th>
-                        <th style="text-align:right">Actions</th>
-                    </tr>
-                </thead>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Transaction Head</th>
+                            <th>Settlement Type</th>
+                            <th>Debit Account</th>
+                            <th>Credit Account</th>
+                            <th>Party Effect</th>
+                            <th>Auto Post</th>
+                            <th>Status</th>
+                            <th style="text-align:right">Actions</th>
+                        </tr>
+                    </thead>
 
-                <tbody id="ruleTable">
-                    @forelse($rules as $rule)
-                        <tr
-                            data-id="{{ $rule->id }}"
-                            data-head="{{ $rule->transaction_head_id }}"
-                            data-settlement="{{ $rule->settlement_type_id }}"
-                            data-status="{{ $rule->status }}"
-                            data-debit="{{ $rule->debit_account_id }}"
-                            data-credit="{{ $rule->credit_account_id }}"
-                            data-effect="{{ $rule->party_ledger_effect }}"
-                            data-auto="{{ $rule->auto_post ? 1 : 0 }}"
-                            data-description="{{ e($rule->description) }}"
-                            data-update-url="{{ url('/api/ledger-mapping/' . $rule->id) }}"
-                        >
-                            <td class="rule-name">
-                                {{ $rule->transactionHead?->name ?? '—' }}
-                            </td>
+                    <tbody id="ruleTable">
+                        @forelse($rules as $rule)
+                            <tr
+                                data-id="{{ $rule->id }}"
+                                data-head="{{ $rule->transaction_head_id }}"
+                                data-settlement="{{ $rule->settlement_type_id }}"
+                                data-status="{{ $rule->status }}"
+                                data-debit="{{ $rule->debit_account_id }}"
+                                data-credit="{{ $rule->credit_account_id }}"
+                                data-effect="{{ $rule->party_ledger_effect }}"
+                                data-auto="{{ $rule->auto_post ? 1 : 0 }}"
+                                data-description="{{ e($rule->description) }}"
+                                data-update-url="{{ url('/api/ledger-mapping/' . $rule->id) }}"
+                            >
+                                <td class="rule-name">
+                                    {{ $rule->transactionHead?->name ?? '—' }}
+                                </td>
 
-                            <td>
-                                {{ $rule->settlementType?->name ?? '—' }}
-                            </td>
+                                <td>
+                                    {{ $rule->settlementType?->name ?? '—' }}
+                                </td>
 
-                            <td>
-                                {{ $rule->debitAccount?->display_name ?? $rule->debitAccount?->account_name ?? '—' }}
-                            </td>
+                                <td>
+                                    {{ $rule->debitAccount?->display_name ?? $rule->debitAccount?->account_name ?? '—' }}
+                                </td>
 
-                            <td>
-                                {{ $rule->creditAccount?->display_name ?? $rule->creditAccount?->account_name ?? '—' }}
-                            </td>
+                                <td>
+                                    {{ $rule->creditAccount?->display_name ?? $rule->creditAccount?->account_name ?? '—' }}
+                                </td>
 
-                            <td>
-                                {{ $rule->party_ledger_effect }}
-                            </td>
+                                <td>
+                                    {{ $rule->party_ledger_effect }}
+                                </td>
 
-                            <td>
-                                <span class="switch {{ $rule->auto_post ? 'on' : '' }}"></span>
-                            </td>
+                                <td>
+                                    <span class="switch {{ $rule->auto_post ? 'on' : '' }}"></span>
+                                </td>
 
-                            <td>
-                                <span class="badge {{ $rule->status === 'Active' ? 'badge-active' : 'badge-neutral' }}">
-                                    {{ $rule->status }}
-                                </span>
-                            </td>
+                                <td>
+                                    <span class="badge {{ $rule->status === 'Active' ? 'badge-active' : 'badge-neutral' }}">
+                                        {{ $rule->status }}
+                                    </span>
+                                </td>
 
-                            <td>
-                                <div class="action-cell">
-                                    <button class="icon-btn edit-btn" type="button" title="Edit">
-                                        ✎
-                                    </button>
-
-                                    <form
-                                        method="POST"
-                                        action="{{ url('/setup/ledger-mapping/' . $rule->id) }}"
-                                        onsubmit="return confirm('Delete this mapping rule?')"
-                                    >
-                                        @csrf
-                                        @method('DELETE')
-
-                                        <button class="icon-btn delete-btn" type="submit" title="Delete">
-                                            🗑
+                                <td>
+                                    <div class="action-cell">
+                                        <button class="icon-btn edit-btn" type="button" title="Edit">
+                                            ✎
                                         </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr data-empty="true">
-                            <td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">
-                                No ledger mapping rules found. Add your first mapping rule.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+
+                                        <form
+                                            method="POST"
+                                            data-delete-form
+                                            action="{{ url('/setup/ledger-mapping/' . $rule->id) }}"
+                                            onsubmit="return confirm('Delete this mapping rule?')"
+                                        >
+                                            @csrf
+                                            @method('DELETE')
+
+                                            <button class="icon-btn delete-btn" type="submit" title="Delete">
+                                                🗑
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr data-empty="true">
+                                <td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">
+                                    No ledger mapping rules found. Add your first mapping rule.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
 
             <div class="table-footer">
                 <span id="resultCount">
@@ -158,10 +211,17 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <div class="card form-panel">
+    <aside class="right-stack">
+        <div class="card form-panel ledger-form-card">
             <div class="panel-head">
-                <h3>Create / Edit Mapping Rule</h3>
+                <div>
+                    <h3>Create / Edit Mapping Rule</h3>
+                    <span class="ledger-side-note">Add or update debit and credit posting rules.</span>
+                </div>
+
+                <span class="badge badge-primary">Step 6</span>
             </div>
 
             <form
@@ -225,9 +285,9 @@
                     </select>
                 </div>
 
-                <div class="span-2">
-                    <label>Party Ledger Effect <span class="required">*</span></label>
-                    <select id="effect" name="party_ledger_effect" required>
+                <div>
+                    <label>Party Ledger Effect</label>
+                    <select id="effect" name="party_ledger_effect">
                         @foreach($partyEffects as $effect)
                             <option value="{{ $effect }}">
                                 {{ $effect }}
@@ -260,7 +320,7 @@
                     </select>
                 </div>
 
-                <div class="span-4">
+                <div>
                     <label>Description</label>
                     <textarea
                         id="description"
@@ -274,92 +334,20 @@
                     </div>
                 </div>
 
-                <div class="span-4 form-actions">
+                <div class="actions">
                     <button type="button" class="btn-ghost" id="cancelBtn">
                         Cancel
                     </button>
 
-                    <div>
-                        <button type="submit" class="btn-outline" id="saveBtn">
-                            Save
-                        </button>
+                    <button type="submit" class="btn-outline" id="saveBtn">
+                        Save
+                    </button>
 
-                        <button type="submit" class="btn-primary" id="saveNextBtn">
-                            Save & Next ›
-                        </button>
-                    </div>
+                    <button type="submit" class="btn-primary" id="saveNextBtn">
+                        Save & Next ›
+                    </button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <aside class="right-stack">
-        <div class="card progress-card">
-            <h3>Setup Progress</h3>
-
-            <div class="progress-main">
-                <div class="ring">
-                    <div class="ring-inner">
-                        5
-                        <span>of 6</span>
-                    </div>
-                </div>
-
-                <div class="percent">
-                    83%
-                    <span>Complete</span>
-                </div>
-            </div>
-
-            <div class="step-list">
-                <div class="step-row">
-                    <div class="nav-icon done-dot">✓</div>
-                    <div>
-                        <strong>Company Setup</strong>
-                        <small>Completed</small>
-                    </div>
-                </div>
-
-                <div class="step-row">
-                    <div class="nav-icon done-dot">✓</div>
-                    <div>
-                        <strong>Chart of Accounts</strong>
-                        <small>Completed</small>
-                    </div>
-                </div>
-
-                <div class="step-row">
-                    <div class="nav-icon done-dot">✓</div>
-                    <div>
-                        <strong>Party / Person Setup</strong>
-                        <small>Completed</small>
-                    </div>
-                </div>
-
-                <div class="step-row">
-                    <div class="nav-icon done-dot">✓</div>
-                    <div>
-                        <strong>Transaction Head Setup</strong>
-                        <small>Completed</small>
-                    </div>
-                </div>
-
-                <div class="step-row">
-                    <div class="nav-icon" style="background:var(--primary);color:#fff">5</div>
-                    <div>
-                        <strong>Ledger Mapping</strong>
-                        <small>In Progress</small>
-                    </div>
-                </div>
-
-                <div class="step-row">
-                    <div class="nav-icon">6</div>
-                    <div>
-                        <strong>Opening Balance Setup</strong>
-                        <small>Pending</small>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <div class="card helper-card">

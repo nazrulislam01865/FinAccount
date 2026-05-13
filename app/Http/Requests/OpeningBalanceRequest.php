@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Models\ChartOfAccount;
 use App\Models\Party;
-use App\Services\Accounting\FinancialYearService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -18,8 +17,7 @@ class OpeningBalanceRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $currentFinancialYear = app(FinancialYearService::class)
-            ->current($this->user()?->id);
+
 
         $items = collect($this->input('items', []))
             ->map(function ($item) {
@@ -35,7 +33,9 @@ class OpeningBalanceRequest extends FormRequest
             ->all();
 
         $this->merge([
-            'financial_year_id' => $currentFinancialYear?->id,
+            // Financial year is selected by the user per the PRD.
+            'financial_year_id' => $this->financial_year_id ?: null,
+            'balance_date' => $this->balance_date ?: null,
             'branch_location' => $this->branch_location ?: null,
             'status' => $this->status ?: 'Draft',
             'items' => $items,
@@ -54,6 +54,8 @@ class OpeningBalanceRequest extends FormRequest
                         ->whereNull('deleted_at')),
             ],
 
+            'balance_date' => ['nullable', 'date'],
+
             'branch_location' => ['nullable', 'string', 'max:150'],
 
             'status' => [
@@ -69,6 +71,7 @@ class OpeningBalanceRequest extends FormRequest
                 Rule::exists('chart_of_accounts', 'id')
                     ->where(fn ($query) => $query
                         ->where('status', 'Active')
+                        ->where('posting_allowed', true)
                         ->whereNull('deleted_at')),
             ],
 
@@ -147,7 +150,7 @@ class OpeningBalanceRequest extends FormRequest
                 }
 
                 $account = $accounts[$accountId] ?? null;
-                $normalBalance = $account?->accountType?->normal_balance;
+                $normalBalance = $account?->normal_balance ?: $account?->accountType?->normal_balance;
 
                 if ($normalBalance === 'Debit' && $credit > 0) {
                     $validator->errors()->add(

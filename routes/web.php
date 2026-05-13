@@ -6,6 +6,7 @@ use App\Http\Controllers\Setup\CashBankAccountController;
 use App\Http\Controllers\Setup\ChartOfAccountController;
 use App\Http\Controllers\Setup\CompanyController;
 use App\Http\Controllers\Setup\LedgerMappingController;
+use App\Http\Controllers\Setup\MasterDataController;
 use App\Http\Controllers\Setup\OpeningBalanceController;
 use App\Http\Controllers\Setup\PartyController;
 use App\Http\Controllers\Setup\TransactionHeadController;
@@ -35,17 +36,47 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/company', [CompanyController::class, 'edit'])
             ->name('company');
 
+        Route::get('/master-data', [MasterDataController::class, 'index'])
+            ->name('master-data');
+
+        Route::delete('/master-data/business-types/{business_type}', [MasterDataController::class, 'destroyBusinessType'])
+            ->name('master-data.business-types.destroy');
+
+        Route::delete('/master-data/currencies/{currency}', [MasterDataController::class, 'destroyCurrency'])
+            ->name('master-data.currencies.destroy');
+
+        Route::delete('/master-data/settlement-types/{settlement_type}', [MasterDataController::class, 'destroySettlementType'])
+            ->name('master-data.settlement-types.destroy');
+
+        Route::delete('/master-data/party-types/{party_type}', [MasterDataController::class, 'destroyPartyType'])
+            ->name('master-data.party-types.destroy');
+
+        Route::delete('/master-data/financial-years/{financial_year}', [MasterDataController::class, 'destroyFinancialYear'])
+            ->name('master-data.financial-years.destroy');
+
         Route::get('/chart-of-accounts', [ChartOfAccountController::class, 'index'])
             ->name('chart-of-accounts');
+
+        Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
+            ->name('chart-of-accounts.destroy');
 
         Route::get('/cash-bank-accounts', [CashBankAccountController::class, 'index'])
             ->name('cash-bank-accounts');
 
+        Route::delete('/cash-bank-accounts/{cash_bank_account}', [CashBankAccountController::class, 'destroy'])
+            ->name('cash-bank-accounts.destroy');
+
         Route::get('/parties', [PartyController::class, 'index'])
             ->name('parties');
 
+        Route::delete('/parties/{party}', [PartyController::class, 'destroy'])
+            ->name('parties.destroy');
+
         Route::get('/transaction-heads', [TransactionHeadController::class, 'index'])
             ->name('transaction-heads');
+
+        Route::delete('/transaction-heads/{transaction_head}', [TransactionHeadController::class, 'destroy'])
+            ->name('transaction-heads.destroy');
 
         Route::get('/ledger-mapping', [LedgerMappingController::class, 'index'])
             ->name('ledger-mapping');
@@ -68,8 +99,11 @@ Route::middleware(['auth'])->group(function () {
     | Settings Pages
     |--------------------------------------------------------------------------
     */
-    Route::view('/settings/users-roles', 'settings.users-roles')
+    Route::get('/settings/users-roles', [UserRoleController::class, 'index'])
         ->name('settings.users-roles');
+
+    Route::delete('/settings/users/{user}', [UserRoleController::class, 'destroyUser'])
+        ->name('settings.users.destroy');
 
     /*
     |--------------------------------------------------------------------------
@@ -104,6 +138,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/cash-bank-ledgers', [DropdownController::class, 'cashBankLedgers'])
             ->name('cash-bank-ledgers');
 
+        Route::get('/cash-bank-accounts', [DropdownController::class, 'cashBankAccounts'])
+            ->name('cash-bank-accounts');
+
         Route::get('/ledger-accounts', [DropdownController::class, 'ledgerAccounts'])
             ->name('ledger-accounts');
 
@@ -127,6 +164,10 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/settlement-types', [DropdownController::class, 'settlementTypes'])
             ->name('settlement-types');
+
+
+        Route::get('/parties', [DropdownController::class, 'parties'])
+            ->name('parties');
     });
 
     /*
@@ -137,17 +178,59 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/company', [CompanyController::class, 'store'])
         ->name('api.company.store');
 
+    Route::post('/api/master-data/business-types', [MasterDataController::class, 'storeBusinessType'])
+        ->name('api.master-data.business-types.store');
+
+    Route::match(['post', 'put'], '/api/master-data/business-types/{business_type}', [MasterDataController::class, 'updateBusinessType'])
+        ->name('api.master-data.business-types.update');
+
+    Route::post('/api/master-data/currencies', [MasterDataController::class, 'storeCurrency'])
+        ->name('api.master-data.currencies.store');
+
+    Route::match(['post', 'put'], '/api/master-data/currencies/{currency}', [MasterDataController::class, 'updateCurrency'])
+        ->name('api.master-data.currencies.update');
+
+    Route::post('/api/master-data/settlement-types', [MasterDataController::class, 'storeSettlementType'])
+        ->name('api.master-data.settlement-types.store');
+
+    Route::match(['post', 'put'], '/api/master-data/settlement-types/{settlement_type}', [MasterDataController::class, 'updateSettlementType'])
+        ->name('api.master-data.settlement-types.update');
+
+    Route::post('/api/master-data/party-types', [MasterDataController::class, 'storePartyType'])
+        ->name('api.master-data.party-types.store');
+
+    Route::match(['post', 'put'], '/api/master-data/party-types/{party_type}', [MasterDataController::class, 'updatePartyType'])
+        ->name('api.master-data.party-types.update');
+
+    Route::post('/api/master-data/financial-years', [MasterDataController::class, 'storeFinancialYear'])
+        ->name('api.master-data.financial-years.store');
+
+    Route::match(['post', 'put'], '/api/master-data/financial-years/{financial_year}', [MasterDataController::class, 'updateFinancialYear'])
+        ->name('api.master-data.financial-years.update');
+
     Route::post('/api/chart-of-accounts', [ChartOfAccountController::class, 'store'])
         ->name('api.chart-of-accounts.store');
+
+    Route::match(['post', 'put'], '/api/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'update'])
+        ->name('api.chart-of-accounts.update');
 
     Route::post('/api/cash-bank-accounts', [CashBankAccountController::class, 'store'])
         ->name('api.cash-bank-accounts.store');
 
+    Route::match(['post', 'put'], '/api/cash-bank-accounts/{cash_bank_account}', [CashBankAccountController::class, 'update'])
+        ->name('api.cash-bank-accounts.update');
+
     Route::post('/api/parties', [PartyController::class, 'store'])
         ->name('api.parties.store');
 
+    Route::match(['post', 'put'], '/api/parties/{party}', [PartyController::class, 'update'])
+        ->name('api.parties.update');
+
     Route::post('/api/transaction-heads', [TransactionHeadController::class, 'store'])
         ->name('api.transaction-heads.store');
+
+    Route::match(['post', 'put'], '/api/transaction-heads/{transaction_head}', [TransactionHeadController::class, 'update'])
+        ->name('api.transaction-heads.update');
 
     Route::post('/api/ledger-mapping', [LedgerMappingController::class, 'store'])
         ->name('api.ledger-mapping.store');
@@ -182,6 +265,9 @@ Route::middleware(['auth'])->group(function () {
     */
     Route::post('/api/users', [UserRoleController::class, 'storeUser'])
         ->name('api.users.store');
+
+    Route::match(['post', 'put'], '/api/users/{user}', [UserRoleController::class, 'updateUser'])
+        ->name('api.users.update');
 });
 
 require __DIR__.'/auth.php';

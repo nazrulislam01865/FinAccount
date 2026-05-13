@@ -41,6 +41,12 @@ class MappingResolverService
             ]);
         }
 
+        if (!$rule->debitAccount?->posting_allowed || !$rule->creditAccount?->posting_allowed) {
+            throw ValidationException::withMessages([
+                'ledger_mapping' => 'Invalid ledger mapping: Debit and Credit Accounts must both be posting ledger accounts.',
+            ]);
+        }
+
         return $rule;
     }
 
@@ -116,6 +122,8 @@ class MappingResolverService
             'account_code' => $account->account_code,
             'account_name' => $account->display_name ?? $account->account_name,
             'plain_account_name' => $account->account_name,
+            'account_level' => $account->account_level,
+            'posting_allowed' => (bool) $account->posting_allowed,
             'account_type' => $accountType,
             'normal_balance' => $normalBalance,
             'entry_type' => $entryType,
@@ -134,7 +142,7 @@ class MappingResolverService
 
     private function normalBalance(ChartOfAccount $account): string
     {
-        $normalBalance = $account->accountType?->normal_balance;
+        $normalBalance = $account->normal_balance ?: $account->accountType?->normal_balance;
 
         if (in_array($normalBalance, ['Debit', 'Credit'], true)) {
             return $normalBalance;

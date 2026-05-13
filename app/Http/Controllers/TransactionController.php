@@ -36,6 +36,9 @@ class TransactionController extends Controller
             ->orderBy('sort_order')
             ->get();
 
+        // Party / Person options must come from the Party setup screen.
+        // This keeps transaction entry aligned with the PRD field "Party / Person"
+        // and prevents static/demo party names from being used in real vouchers.
         $parties = Party::query()
             ->where('status', 'Active')
             ->with(['partyType', 'linkedLedger'])

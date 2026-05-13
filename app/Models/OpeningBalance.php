@@ -12,6 +12,7 @@ class OpeningBalance extends Model
     protected $fillable = [
         'company_id',
         'financial_year_id',
+        'balance_date',
         'branch_location',
         'account_id',
         'party_id',
@@ -26,6 +27,7 @@ class OpeningBalance extends Model
     protected $casts = [
         'debit_opening' => 'decimal:2',
         'credit_opening' => 'decimal:2',
+        'balance_date' => 'date',
     ];
 
     public function company()

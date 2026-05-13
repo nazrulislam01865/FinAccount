@@ -56,6 +56,10 @@ Route::middleware(['auth:sanctum'])->prefix('dropdowns')->name('api.dropdowns.')
     Route::get('/settlement-types', [DropdownController::class, 'settlementTypes'])
         ->name('settlement-types');
 
+
+    Route::get('/parties', [DropdownController::class, 'parties'])
+        ->name('parties');
+
     Route::get('/party-ledger-effects', [DropdownController::class, 'partyLedgerEffects'])
         ->name('party-ledger-effects');
 });

@@ -13,9 +13,12 @@ class ChartOfAccount extends Model
         'company_id',
         'account_code',
         'account_name',
+        'account_level',
         'account_type_id',
+        'normal_balance',
         'parent_id',
         'is_cash_bank',
+        'posting_allowed',
         'opening_balance',
         'description',
         'status',
@@ -25,6 +28,7 @@ class ChartOfAccount extends Model
 
     protected $casts = [
         'is_cash_bank' => 'boolean',
+        'posting_allowed' => 'boolean',
         'opening_balance' => 'decimal:2',
     ];
 

@@ -14,41 +14,7 @@
         </div>
     </div>
 
-    <div class="nav-title">Main Menu</div>
-
-    <a
-        href="{{ Route::has('transactions.create') ? route('transactions.create') : '#' }}"
-        class="nav-item {{ $isActive('transactions.create') }}"
-    >
-        <div class="nav-icon">＋</div>
-        <span>Add Transaction</span>
-    </a>
-
-    <a href="#" class="nav-item">
-        <div class="nav-icon">📄</div>
-        <span>Transaction List</span>
-    </a>
-
-    <a href="#" class="nav-item">
-        <div class="nav-icon">⏳</div>
-        <span>Due Management</span>
-    </a>
-
-    <a href="#" class="nav-item">
-        <div class="nav-icon">↗</div>
-        <span>Advance Entry</span>
-    </a>
-
-    <a href="#" class="nav-item">
-        <div class="nav-icon">📘</div>
-        <span>Ledger Report</span>
-    </a>
-
-    <a href="#" class="nav-item">
-        <div class="nav-icon">🏦</div>
-        <span>Cash / Bank Book</span>
-    </a>
-
+  
     <div class="nav-title">Setup</div>
 
     <a href="{{ route('setup.company') }}" class="nav-item {{ $isActive('setup.company') }}">
@@ -96,6 +62,46 @@
         <div class="nav-icon">8</div>
         <span>Voucher Numbering</span>
     </a>
+    <a href="{{ route('setup.master-data') }}" class="nav-item {{ $isActive('setup.master-data') }}">
+        <div class="nav-icon">M</div>
+        <span>Master Data</span>
+    </a>
+
+    <div class="nav-title">Main Menu</div>
+
+    <a
+        href="{{ Route::has('transactions.create') ? route('transactions.create') : '#' }}"
+        class="nav-item {{ $isActive('transactions.create') }}"
+    >
+        <div class="nav-icon">＋</div>
+        <span>Add Transaction</span>
+    </a>
+
+    <a href="#" class="nav-item">
+        <div class="nav-icon">📄</div>
+        <span>Transaction List</span>
+    </a>
+
+    <a href="#" class="nav-item">
+        <div class="nav-icon">⏳</div>
+        <span>Due Management</span>
+    </a>
+
+    <a href="#" class="nav-item">
+        <div class="nav-icon">↗</div>
+        <span>Advance Entry</span>
+    </a>
+
+    <a href="#" class="nav-item">
+        <div class="nav-icon">📘</div>
+        <span>Ledger Report</span>
+    </a>
+
+    <a href="#" class="nav-item">
+        <div class="nav-icon">🏦</div>
+        <span>Cash / Bank Book</span>
+    </a>
+
 
     <div class="nav-title">Settings</div>
 

@@ -32,6 +32,7 @@
 
 <div class="page-title">
     <div>
+        <span class="page-label">Voucher Numbering Setup</span>
         <h2>Voucher Numbering Setup</h2>
         <p>Configure automatic voucher numbers for payment, receipt, journal, transfer, and draft transactions.</p>
     </div>
@@ -46,6 +47,8 @@
         </button>
     </div>
 </div>
+
+@include('partials.setup-progress', ['current' => 8])
 
 <div class="layout">
     <div class="left-stack">
@@ -154,6 +157,7 @@
 
                                         <form
                                             method="POST"
+                                            data-delete-form
                                             action="{{ url('/setup/voucher-numbering/' . $rule->id) }}"
                                             onsubmit="return confirm('Delete this voucher numbering rule?')"
                                         >
@@ -193,64 +197,6 @@
     </div>
 
     <aside class="right-stack">
-        <div class="card side-card">
-            <div class="progress">
-                <div class="ring">
-                    <div class="ring-inner">
-                        8
-                        <small>of 8</small>
-                    </div>
-                </div>
-
-                <div>
-                    <h3 style="margin:0 0 6px">Setup Progress</h3>
-                    <strong style="font-size:24px;color:var(--primary)">100%</strong>
-                    <p style="margin:4px 0 0;color:var(--muted);font-size:13px">Complete</p>
-                </div>
-            </div>
-
-            <div class="setup-list">
-                <div class="setup-row">
-                    <span class="check">✓</span>
-                    <div>
-                        <strong>Company Setup</strong>
-                        <span>Completed</span>
-                    </div>
-                </div>
-
-                <div class="setup-row">
-                    <span class="check">✓</span>
-                    <div>
-                        <strong>Cash / Bank Setup</strong>
-                        <span>Completed</span>
-                    </div>
-                </div>
-
-                <div class="setup-row">
-                    <span class="check">✓</span>
-                    <div>
-                        <strong>Chart of Accounts</strong>
-                        <span>Completed</span>
-                    </div>
-                </div>
-
-                <div class="setup-row">
-                    <span class="check">✓</span>
-                    <div>
-                        <strong>Ledger Mapping</strong>
-                        <span>Completed</span>
-                    </div>
-                </div>
-
-                <div class="setup-row">
-                    <span class="check current">8</span>
-                    <div>
-                        <strong>Voucher Numbering</strong>
-                        <span>In Progress</span>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <div class="card form-card">
             <h3>Create / Edit Voucher Format</h3>

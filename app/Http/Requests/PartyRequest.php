@@ -18,21 +18,25 @@ class PartyRequest extends FormRequest
             'mobile' => $this->mobile ?: null,
             'email' => $this->email ?: null,
             'address' => $this->address ?: null,
+            'sub_type' => $this->sub_type ?: null,
+            'default_ledger_nature' => $this->default_ledger_nature ?: null,
             'opening_balance' => $this->opening_balance ?: 0,
-            'opening_balance_type' => $this->opening_balance_type ?: null,
-            'notes' => $this->notes ?: null,
+            // Notes and balance-side inputs were removed because they are not PRD fields.
         ]);
     }
 
     public function rules(): array
     {
+        $partyId = $this->route('party')?->id;
+
         return [
             'party_name' => [
                 'required',
                 'string',
                 'max:255',
                 Rule::unique('parties', 'party_name')
-                    ->whereNull('deleted_at'),
+                    ->whereNull('deleted_at')
+                    ->ignore($partyId),
             ],
 
             'party_type_id' => [
@@ -41,11 +45,19 @@ class PartyRequest extends FormRequest
                 'exists:party_types,id',
             ],
 
+            'sub_type' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
             'mobile' => [
                 'nullable',
-                'regex:/^\+8801\d{3}-\d{6}$/',
+                'string',
+                'max:50',
                 Rule::unique('parties', 'mobile')
-                    ->whereNull('deleted_at'),
+                    ->whereNull('deleted_at')
+                    ->ignore($partyId),
             ],
 
             'email' => [
@@ -53,7 +65,8 @@ class PartyRequest extends FormRequest
                 'email',
                 'max:255',
                 Rule::unique('parties', 'email')
-                    ->whereNull('deleted_at'),
+                    ->whereNull('deleted_at')
+                    ->ignore($partyId),
             ],
 
             'address' => [
@@ -66,7 +79,13 @@ class PartyRequest extends FormRequest
                 'required',
                 'integer',
                 Rule::exists('chart_of_accounts', 'id')
-                    ->where('status', 'Active'),
+                    ->where('status', 'Active')
+                    ->where('posting_allowed', true),
+            ],
+
+            'default_ledger_nature' => [
+                'nullable',
+                Rule::in(['Payable', 'Receivable', 'Advance Paid', 'Advance Received', 'No Effect']),
             ],
 
             'opening_balance' => [
@@ -75,16 +94,7 @@ class PartyRequest extends FormRequest
                 'min:0',
             ],
 
-            'opening_balance_type' => [
-                'nullable',
-                Rule::in(['Debit', 'Credit']),
-            ],
 
-            'notes' => [
-                'nullable',
-                'string',
-                'max:1000',
-            ],
 
             'status' => [
                 'required',
@@ -102,7 +112,7 @@ class PartyRequest extends FormRequest
             'party_type_id.required' => 'Party Type is required.',
             'party_type_id.exists' => 'Selected Party Type is invalid.',
 
-            'mobile.regex' => 'Mobile must be in this format: +8801XXX-XXXXXX.',
+            'mobile.max' => 'Mobile cannot exceed 50 characters.',
             'mobile.unique' => 'This Mobile number already exists. Please use another mobile number.',
 
             'email.email' => 'Please enter a valid email address.',
@@ -111,10 +121,10 @@ class PartyRequest extends FormRequest
             'linked_ledger_account_id.required' => 'Linked Ledger / Group is required.',
             'linked_ledger_account_id.exists' => 'Selected Linked Ledger / Group is invalid.',
 
+            'default_ledger_nature.in' => 'Default Ledger Nature must be Payable, Receivable, Advance Paid, Advance Received, or No Effect.',
+
             'opening_balance.numeric' => 'Opening Balance must be a valid number.',
             'opening_balance.min' => 'Opening Balance cannot be negative.',
-
-            'opening_balance_type.in' => 'Opening Balance Type must be Debit or Credit.',
 
             'status.required' => 'Status is required.',
             'status.in' => 'Status must be Active or Inactive.',

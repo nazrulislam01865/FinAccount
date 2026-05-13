@@ -15,7 +15,7 @@ class CompanyRequest extends FormRequest
     {
         $this->merge([
             'business_type_id' => $this->business_type_id ?: null,
-            'enable_multi_branch' => $this->boolean('enable_multi_branch'),
+            'default_branch' => $this->default_branch ?: null,
         ]);
     }
 
@@ -34,6 +34,7 @@ class CompanyRequest extends FormRequest
 
             'financial_year_start' => ['required', 'date'],
             'financial_year_end' => ['required', 'date', 'after:financial_year_start'],
+            'default_branch' => ['nullable', 'string', 'max:150'],
 
             'address' => ['nullable', 'string'],
             'contact_email' => ['nullable', 'email', 'max:255'],
@@ -42,11 +43,6 @@ class CompanyRequest extends FormRequest
 
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
 
-            'journal_voucher_prefix' => ['nullable', 'string', 'max:20'],
-            'payment_voucher_prefix' => ['nullable', 'string', 'max:20'],
-            'receipt_voucher_prefix' => ['nullable', 'string', 'max:20'],
-
-            'enable_multi_branch' => ['nullable', 'boolean'],
         ];
     }
 

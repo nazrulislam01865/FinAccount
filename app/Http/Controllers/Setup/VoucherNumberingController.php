@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Setup;
 
 use App\Http\Controllers\Controller;
+use Throwable;
+use Illuminate\Http\Request;
+use App\Services\Setup\EntityDeleteService;
+use App\Http\Controllers\Concerns\RespondsToDelete;
 use App\Http\Requests\VoucherNumberingRuleRequest;
 use App\Models\FinancialYear;
 use App\Models\VoucherNumberingRule;
@@ -13,6 +17,8 @@ use Illuminate\View\View;
 
 class VoucherNumberingController extends Controller
 {
+    use RespondsToDelete;
+
     public function index(): View
     {
         $financialYears = FinancialYear::query()
@@ -97,12 +103,26 @@ class VoucherNumberingController extends Controller
         ]);
     }
 
-    public function destroy(VoucherNumberingRule $voucherNumberingRule): RedirectResponse
-    {
-        $voucherNumberingRule->delete();
+    public function destroy(
+        Request $request,
+        VoucherNumberingRule $voucherNumberingRule,
+        EntityDeleteService $deleteService
+    ): JsonResponse|RedirectResponse {
+        try {
+            $deleteService->deleteVoucherNumberingRule($voucherNumberingRule);
+        } catch (Throwable $exception) {
+            return $this->deleteFailure(
+                $request,
+                'setup.voucher-numbering',
+                'This voucher numbering rule could not be deleted. Please try again or check related records.',
+                $exception
+            );
+        }
 
-        return redirect()
-            ->route('setup.voucher-numbering')
-            ->with('success', 'Voucher numbering rule deleted successfully.');
+        return $this->deleteSuccess(
+            $request,
+            'setup.voucher-numbering',
+            'Voucher numbering rule deleted successfully.'
+        );
     }
 }

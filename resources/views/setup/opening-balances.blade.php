@@ -12,15 +12,19 @@
             'credit_opening' => $balance->credit_opening,
             'remarks' => $balance->remarks,
         ])
-        : collect([
+        : $seedOpeningRows;
+
+    if ($rows->isEmpty()) {
+        $rows = collect([
             [
-                'account' => $accounts->first(),
+                'account' => null,
                 'party_id' => null,
                 'debit_opening' => 0,
                 'credit_opening' => 0,
                 'remarks' => null,
             ],
         ]);
+    }
 
     $accountPayload = $accounts->map(fn ($account) => [
         'id' => $account->id,
@@ -50,10 +54,13 @@
 
 <div class="page-title">
     <div>
+        <span class="page-label">Opening Balance Setup</span>
         <h2>Opening Balance Setup</h2>
-        <p>Enter initial balances before going live.</p>
+        <p>Rows are auto-loaded from active posting ledger accounts. Enter only the opening debit or credit amounts before going live.</p>
     </div>
 </div>
+
+@include('partials.setup-progress', ['current' => 7])
 
 <form
     id="openingBalanceForm"
@@ -71,17 +78,17 @@
             <div>
                 <label>Financial Year <span class="required">*</span></label>
 
-                <input
-                    type="hidden"
-                    name="financial_year_id"
-                    value="{{ $currentFinancialYear?->id }}"
-                >
-
-                <input
-                    type="text"
-                    value="{{ $currentFinancialYear?->display_name ?? 'Financial year not configured' }}"
-                    readonly
-                >
+                <select name="financial_year_id" id="financialYearId" required>
+                    <option value="">Select Financial Year</option>
+                    @foreach($financialYears as $financialYear)
+                        <option
+                            value="{{ $financialYear->id }}"
+                            @selected($currentFinancialYear?->id === $financialYear->id)
+                        >
+                            {{ $financialYear->name }} ({{ optional($financialYear->start_date)->format('d M Y') }} - {{ optional($financialYear->end_date)->format('d M Y') }})
+                        </option>
+                    @endforeach
+                </select>
             </div>
 
                 <div>
@@ -108,7 +115,7 @@
                 <div class="card-head">
                     <div>
                         <h3>Opening Balances</h3>
-                        <p>Enter opening debit or credit balances for each account.</p>
+                        <p>Active posting ledger accounts are shown automatically. Party rows are generated from linked Party / Person setup when available.</p>
                     </div>
 
                     <button class="btn-outline" id="downloadBtn" type="button">
@@ -229,7 +236,7 @@
                 </div>
 
                 <div class="add-row" id="addRowBtn">
-                    + Add New Row
+                    + Add Extra Row
                 </div>
 
                 <div class="total-strip">
@@ -273,73 +280,6 @@
         </div>
 
         <aside class="right-stack">
-            <div class="card progress-card">
-                <h3>Setup Progress</h3>
-
-                <div class="progress-main">
-                    <div class="ring">
-                        <div class="ring-inner">
-                            6
-                            <span>of 6</span>
-                        </div>
-                    </div>
-
-                    <div class="percent">
-                        100%
-                        <span>Complete</span>
-                    </div>
-                </div>
-
-                <div class="step-list">
-                    <div class="step-row">
-                        <div class="nav-icon done-dot">✓</div>
-                        <div>
-                            <strong>Company Setup</strong>
-                            <small>Completed</small>
-                        </div>
-                    </div>
-
-                    <div class="step-row">
-                        <div class="nav-icon done-dot">✓</div>
-                        <div>
-                            <strong>Chart of Accounts</strong>
-                            <small>Completed</small>
-                        </div>
-                    </div>
-
-                    <div class="step-row">
-                        <div class="nav-icon done-dot">✓</div>
-                        <div>
-                            <strong>Party / Person Setup</strong>
-                            <small>Completed</small>
-                        </div>
-                    </div>
-
-                    <div class="step-row">
-                        <div class="nav-icon done-dot">✓</div>
-                        <div>
-                            <strong>Transaction Head Setup</strong>
-                            <small>Completed</small>
-                        </div>
-                    </div>
-
-                    <div class="step-row">
-                        <div class="nav-icon done-dot">✓</div>
-                        <div>
-                            <strong>Ledger Mapping</strong>
-                            <small>Completed</small>
-                        </div>
-                    </div>
-
-                    <div class="step-row">
-                        <div class="nav-icon" style="background:var(--primary);color:#fff">6</div>
-                        <div>
-                            <strong>Opening Balance Setup</strong>
-                            <small>In Progress</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <div class="card summary-card">
                 <h3>Balance Summary</h3>
@@ -400,6 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusInput = document.getElementById('openingStatus');
 
     const branchLocation = document.getElementById('branchLocation');
+    const financialYear = document.getElementById('financialYearId');
 
     const saveDraftBtn = document.getElementById('saveDraftBtn');
     const finishBtn = document.getElementById('finishBtn');
@@ -465,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = linkedParties(accountId);
 
         if (rows.length === 0) {
-            return '<option value="">—</option>';
+            return '<option value="">Default / Not Applicable</option>';
         }
 
         return [
@@ -602,18 +543,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addRow() {
         const index = tbody.rows.length;
-        const firstAccount = accounts[0];
 
         const row = document.createElement('tr');
-        row.dataset.type = firstAccount?.account_type || 'Asset';
-        row.dataset.normalBalance = firstAccount?.normal_balance || 'Debit';
+        row.dataset.type = 'Asset';
+        row.dataset.normalBalance = 'Debit';
 
         row.innerHTML = `
             <td>${index + 1}</td>
-            <td><input class="code-input account-code" value="${firstAccount?.account_code || ''}" readonly></td>
-            <td><select class="account-select" name="items[${index}][account_id]" required>${accountOptions(firstAccount?.id || '')}</select></td>
-            <td><span class="badge account-type ${badgeClass(firstAccount?.account_type || 'Asset')}">${firstAccount?.account_type || 'Asset'}</span></td>
-            <td><select class="party-select" name="items[${index}][party_id]"></select></td>
+            <td><input class="code-input account-code" value="" readonly></td>
+            <td><select class="account-select" name="items[${index}][account_id]" required>${accountOptions('')}</select></td>
+            <td><span class="badge account-type ${badgeClass('Asset')}">Asset</span></td>
+            <td><select class="party-select" name="items[${index}][party_id]"><option value="">Default / Not Applicable</option></select></td>
             <td><input class="money-input debit" name="items[${index}][debit_opening]" value="0.00" inputmode="decimal"></td>
             <td><input class="money-input credit" name="items[${index}][credit_opening]" value="0.00" inputmode="decimal"></td>
             <td class="net-dr">0.00 Dr</td>
@@ -626,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateRowIndexes();
         recalc();
 
-        showToast('New opening balance row added.');
+        showToast('Extra opening balance row added.');
     }
 
     Array.from(tbody.rows).forEach((row) => {
@@ -670,8 +610,21 @@ document.addEventListener('DOMContentLoaded', () => {
         statusInput.value = 'Final';
     });
 
+    if (financialYear) {
+        financialYear.addEventListener('change', () => {
+            const params = new URLSearchParams(window.location.search);
+            params.set('financial_year_id', financialYear.value);
+            params.set('branch_location', branchLocation.value);
+            window.location.href = `${window.location.pathname}?${params.toString()}`;
+        });
+    }
+
     branchLocation.addEventListener('change', () => {
         const params = new URLSearchParams();
+
+        if (financialYear?.value) {
+            params.set('financial_year_id', financialYear.value);
+        }
 
         if (branchLocation.value) {
             params.set('branch_location', branchLocation.value);

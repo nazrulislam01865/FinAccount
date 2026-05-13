@@ -16,6 +16,7 @@ class Company extends Model
         'time_zone_id',
         'financial_year_start',
         'financial_year_end',
+        'default_branch',
         'address',
         'contact_email',
         'contact_phone',

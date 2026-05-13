@@ -11,13 +11,16 @@ class CashBankAccount extends Model
 
     protected $fillable = [
         'company_id',
+        'cash_bank_code',
         'cash_bank_name',
         'type',
         'linked_ledger_account_id',
         'bank_id',
+        'bank_name',
         'branch_name',
         'account_number',
         'opening_balance',
+        'usage_note',
         'status',
         'created_by',
         'updated_by',

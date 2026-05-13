@@ -5,10 +5,13 @@
 @section('content')
 <div class="page-title">
     <div>
+        <span class="page-label">Chart of Accounts</span>
         <h2>Chart of Accounts</h2>
         <p>Create and organize ledger accounts for the accounting system.</p>
     </div>
 </div>
+
+@include('partials.setup-progress', ['current' => 2])
 
 <div class="layout">
     <div class="left-stack">
@@ -43,7 +46,7 @@
             <button
                 class="btn-primary"
                 type="button"
-                data-toast="Use the form on the right to add a new account."
+                id="addAccountBtn"
             >
                 + Add New Account
             </button>
@@ -66,8 +69,15 @@
                 <tbody>
                     @forelse($accounts as $account)
                         <tr
+                            data-id="{{ $account->id }}"
+                            data-account-code="{{ $account->account_code }}"
+                            data-account-name="{{ e($account->account_name) }}"
                             data-type="{{ $account->account_type_id }}"
+                            data-parent="{{ $account->parent_id }}"
+                            data-is-cash-bank="{{ $account->is_cash_bank ? 1 : 0 }}"
+                            data-description="{{ e($account->description) }}"
                             data-status="{{ $account->status }}"
+                            data-update-url="{{ url('/api/chart-of-accounts/' . $account->id) }}"
                         >
                             <td class="code">{{ $account->account_code }}</td>
 
@@ -96,25 +106,31 @@
                             <td>
                                 <div class="action-cell">
                                     <button
-                                        class="icon-btn"
+                                        class="icon-btn edit-btn"
                                         type="button"
-                                        data-toast="Edit will be added later."
+                                        title="Edit"
                                     >
                                         ✎
                                     </button>
 
-                                    <button
-                                        class="icon-btn"
-                                        type="button"
-                                        data-toast="More actions will be added later."
+                                    <form
+                                        method="POST"
+                                        data-delete-form
+                                        action="{{ url('/setup/chart-of-accounts/' . $account->id) }}"
+                                        onsubmit="return confirm('Delete this account?')"
                                     >
-                                        ⋮
-                                    </button>
+                                        @csrf
+                                        @method('DELETE')
+
+                                        <button class="icon-btn delete-btn" type="submit" title="Delete">
+                                            🗑
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
                     @empty
-                        <tr>
+                        <tr data-empty="true">
                             <td colspan="7" class="muted" style="text-align:center;padding:24px">
                                 No chart of accounts found. Add your first account using the form on the right.
                             </td>
@@ -136,34 +152,34 @@
     </div>
 
     <aside class="right-stack">
-        @include('partials.setup-progress', ['current' => 2])
-
-        <div class="card form-panel">
+<div class="card form-panel">
             <div class="panel-head">
-                <h3>Create Account</h3>
+                <h3 id="accountFormTitle">Create Account</h3>
                 <span class="muted">Required fields marked *</span>
             </div>
 
             <form
                 class="form-grid"
+                id="accountForm"
                 data-frontend-form
                 data-action="{{ route('api.chart-of-accounts.store') }}"
+                data-store-url="{{ route('api.chart-of-accounts.store') }}"
                 data-success="Account saved successfully."
             >
                 @csrf
+
+                <input type="hidden" name="_method" id="accountFormMethod" value="POST">
 
                 <div>
                     <label>Account Code <span class="required">*</span></label>
                     <input
                             name="account_code"
-                            type="number"
-                            inputmode="numeric"
-                            min="1"
-                            step="1"
+                            type="text"
+                            maxlength="50"
                             placeholder="Example: 1000"
                             required
                     >
-                    <div class="hint">User input. Must be unique.</div>
+                    <div class="hint">Text code. Must be unique.</div>
                 </div>
 
                 <div>
@@ -199,19 +215,7 @@
                     <div class="hint">Optional. Loaded from existing accounts.</div>
                 </div>
 
-                <div>
-                    <label>Opening Balance</label>
-                    <div class="currency-row">
-                        <div class="prefix-box">BDT</div>
-                        <input
-                            name="opening_balance"
-                            type="number"
-                            value="0.00"
-                            step="0.01"
-                            min="0"
-                        >
-                    </div>
-                </div>
+
 
                 <div class="switch-row">
                     <span class="switch-label">Is Cash/Bank Account?</span>
@@ -223,7 +227,7 @@
                         value="0"
                     >
 
-                    <div class="switch" data-input="isCashBank"></div>
+                    <div class="switch" id="isCashBankSwitch" data-input="isCashBank"></div>
                 </div>
 
                 <div>
@@ -244,14 +248,14 @@
 
                 <div class="hint-box">
                     <strong>Backend validation</strong>
-                    Account Code, Account Name, Account Type, and Status are required. Account Code must be unique.
+                    Account Code, Account Name, Account Type, and Status are required. Opening balances are entered on the Opening Balance Setup page.
                 </div>
 
                 <div class="form-actions">
                     <button
-                        type="reset"
+                        type="button"
                         class="btn-ghost"
-                        data-toast="Form cleared."
+                        id="cancelAccountBtn"
                     >
                         Cancel
                     </button>
@@ -264,4 +268,108 @@
         </div>
     </aside>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('accountForm');
+
+    if (!form) {
+        return;
+    }
+
+    const title = document.getElementById('accountFormTitle');
+    const methodInput = document.getElementById('accountFormMethod');
+    const addButton = document.getElementById('addAccountBtn');
+    const cancelButton = document.getElementById('cancelAccountBtn');
+    const cashBankInput = document.getElementById('isCashBank');
+    const cashBankSwitch = document.getElementById('isCashBankSwitch');
+
+    const accountCode = form.querySelector('[name="account_code"]');
+    const accountName = form.querySelector('[name="account_name"]');
+    const accountType = form.querySelector('[name="account_type_id"]');
+    const parentAccount = form.querySelector('[name="parent_id"]');
+    const description = form.querySelector('[name="description"]');
+    const status = form.querySelector('[name="status"]');
+
+    function showToast(message) {
+        if (window.AccountingUI?.showToast) {
+            window.AccountingUI.showToast(message);
+            return;
+        }
+
+        alert(message);
+    }
+
+    function setDropdownValue(select, value) {
+        if (!select) {
+            return;
+        }
+
+        select.dataset.selected = value || '';
+        select.value = value || '';
+
+        if (select.dataset.dropdown && window.AccountingUI?.loadSelect) {
+            window.AccountingUI.loadSelect(select).then(() => {
+                select.value = value || '';
+            });
+        }
+    }
+
+    function setCashBankSwitch(value) {
+        const enabled = Number(value) === 1;
+
+        cashBankInput.value = enabled ? '1' : '0';
+        cashBankSwitch.classList.toggle('on', enabled);
+    }
+
+    function resetForm() {
+        form.reset();
+        form.dataset.action = form.dataset.storeUrl;
+        methodInput.value = 'POST';
+        title.textContent = 'Create Account';
+
+        accountType.dataset.selected = '';
+        parentAccount.dataset.selected = '';
+        parentAccount.dataset.excludeId = '';
+
+        setCashBankSwitch(0);
+        accountCode.focus();
+    }
+
+    function loadForEdit(row) {
+        form.dataset.action = row.dataset.updateUrl;
+        methodInput.value = 'PUT';
+        title.textContent = 'Edit Account';
+
+        accountCode.value = row.dataset.accountCode || '';
+        accountName.value = row.dataset.accountName || '';
+        description.value = row.dataset.description || '';
+        status.value = row.dataset.status || 'Active';
+
+        setCashBankSwitch(row.dataset.isCashBank || 0);
+        setDropdownValue(accountType, row.dataset.type || '');
+
+        parentAccount.dataset.excludeId = row.dataset.id || '';
+        setDropdownValue(parentAccount, row.dataset.parent || '');
+
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('Account loaded for editing.');
+    }
+
+    document.querySelectorAll('#accountsTable .edit-btn').forEach((button) => {
+        button.addEventListener('click', () => loadForEdit(button.closest('tr')));
+    });
+
+    addButton.addEventListener('click', () => {
+        resetForm();
+        showToast('Ready to add a new account.');
+    });
+
+    cancelButton.addEventListener('click', () => {
+        resetForm();
+        showToast('Form cleared.');
+    });
+});
+</script>
+
 @endsection

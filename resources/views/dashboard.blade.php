@@ -3,10 +3,13 @@
 @section('content')
 <div class="page-title">
     <div>
-        <h2>Sprint 1 Setup Dashboard</h2>
+        <span class="page-label">Dashboard</span>
+        <h2>Setup Dashboard</h2>
         <p>Complete master setup and foundation modules before starting accounting transactions.</p>
     </div>
 </div>
+
+@include('partials.setup-progress', ['current' => 1])
 
 <div class="stats-grid">
     <div class="card stat-card"><small>Setup Modules</small><strong>5</strong></div>
@@ -30,8 +33,7 @@
         </div>
     </div>
     <aside class="right-stack">
-        @include('partials.setup-progress', ['current' => 1])
-        <div class="card info-card">
+<div class="card info-card">
             <h3>Frontend Mode</h3>
             <p>These pages can render before the backend is ready. Dropdowns will show backend data when the API endpoints are created.</p>
         </div>

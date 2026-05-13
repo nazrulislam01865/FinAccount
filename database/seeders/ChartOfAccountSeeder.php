@@ -13,18 +13,44 @@ class ChartOfAccountSeeder extends Seeder
         $type = fn ($name) => AccountType::where('name', $name)->value('id');
 
         $accounts = [
-            ['1000', 'Cash', 'Asset', true], ['1010', 'Bank - Operating A/C', 'Asset', true],
-            ['1100', 'Accounts Receivable', 'Asset', false], ['1200', 'Advance to Supplier', 'Asset', false],
-            ['1300', 'Advance from Customer', 'Liability', false], ['2000', 'Accounts Payable', 'Liability', false],
-            ['2100', 'Salary Payable', 'Liability', false], ['3000', 'Salary Expense', 'Expense', false],
-            ['3010', 'Fuel Expense', 'Expense', false], ['3020', 'Vehicle Maintenance Expense', 'Expense', false],
-            ['4000', 'Rent Income', 'Income', false], ['5000', 'Owner Capital', 'Equity', false],
+            ['1000', 'Assets', 'Asset', 'Group', false, false],
+            ['1010', 'Cash in Hand', 'Asset', 'Ledger', true, true],
+            ['1020', 'BRAC Bank Current Account', 'Asset', 'Ledger', true, true],
+            ['1030', 'City Bank Current Account', 'Asset', 'Ledger', true, true],
+            ['1040', 'bKash Merchant Wallet', 'Asset', 'Ledger', true, true],
+            ['1100', 'Accounts Receivable', 'Asset', 'Ledger', false, true],
+            ['1200', 'Advance to Supplier / Employee', 'Asset', 'Ledger', false, true],
+            ['2000', 'Liabilities', 'Liability', 'Group', false, false],
+            ['2010', 'Accounts Payable', 'Liability', 'Ledger', false, true],
+            ['2020', 'Salary Payable', 'Liability', 'Ledger', false, true],
+            ['2030', 'Advance from Customer', 'Liability', 'Ledger', false, true],
+            ['3000', 'Equity', 'Equity', 'Group', false, false],
+            ['3010', 'Owner Capital', 'Equity', 'Ledger', false, true],
+            ['4000', 'Income', 'Income', 'Group', false, false],
+            ['4010', 'Vehicle Rent Income', 'Income', 'Ledger', false, true],
+            ['4020', 'Service Income', 'Income', 'Ledger', false, true],
+            ['5000', 'Expenses', 'Expense', 'Group', false, false],
+            ['5010', 'Salary Expense', 'Expense', 'Ledger', false, true],
+            ['5020', 'Fuel Expense', 'Expense', 'Ledger', false, true],
+            ['5030', 'Maintenance Expense', 'Expense', 'Ledger', false, true],
+            ['5040', 'Office Rent Expense', 'Expense', 'Ledger', false, true],
         ];
 
-        foreach ($accounts as [$code, $name, $typeName, $cashBank]) {
+        foreach ($accounts as [$code, $name, $typeName, $level, $cashBank, $postingAllowed]) {
+            $accountTypeId = $type($typeName);
+            $normalBalance = AccountType::whereKey($accountTypeId)->value('normal_balance');
+
             ChartOfAccount::updateOrCreate(
                 ['account_code' => $code],
-                ['account_name' => $name, 'account_type_id' => $type($typeName), 'is_cash_bank' => $cashBank, 'status' => 'Active']
+                [
+                    'account_name' => $name,
+                    'account_level' => $level,
+                    'account_type_id' => $accountTypeId,
+                    'normal_balance' => $normalBalance,
+                    'is_cash_bank' => $cashBank,
+                    'posting_allowed' => $postingAllowed,
+                    'status' => 'Active',
+                ]
             );
         }
     }

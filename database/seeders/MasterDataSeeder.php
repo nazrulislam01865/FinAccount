@@ -44,7 +44,7 @@ class MasterDataSeeder extends Seeder
         }
 
         foreach ([
-            ['Employee', 'EMP'], ['Supplier', 'SUP'], ['Customer', 'CUS'], ['Landlord', 'LANDLORD'],
+            ['Employee', 'EMP'], ['Supplier', 'SUP'], ['Customer', 'CUS'], ['Vendor', 'VENDOR'], ['Landlord', 'LANDLORD'],
             ['Driver', 'DRIVER'], ['Owner', 'OWNER'], ['Tenant', 'TENANT'], ['Other', 'OTHER'],
         ] as $i => [$name, $code]) {
             PartyType::updateOrCreate(['code' => $code], ['name' => $name, 'status' => 'Active', 'sort_order' => $i + 1]);

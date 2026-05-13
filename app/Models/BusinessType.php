@@ -12,4 +12,9 @@ class BusinessType extends Model
     }
 
     protected $fillable = ['name', 'code', 'description', 'is_default', 'status', 'sort_order'];
+
+    protected $casts = [
+        'is_default' => 'boolean',
+        'sort_order' => 'integer',
+    ];
 }

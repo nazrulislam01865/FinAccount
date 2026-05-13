@@ -3,6 +3,7 @@
 namespace App\Services\Setup;
 
 use App\Models\Company;
+use App\Models\FinancialYear;
 use App\Models\OpeningBalance;
 use Illuminate\Support\Facades\DB;
 
@@ -12,6 +13,8 @@ class OpeningBalanceService
     {
         DB::transaction(function () use ($data, $userId) {
             $company = Company::query()->first();
+            $financialYear = FinancialYear::query()->find($data['financial_year_id']);
+            $balanceDate = $data['balance_date'] ?? $financialYear?->start_date?->toDateString();
             $branchLocation = $data['branch_location'] ?? null;
 
             OpeningBalance::query()
@@ -36,6 +39,7 @@ class OpeningBalanceService
                 OpeningBalance::query()->create([
                     'company_id' => $company?->id,
                     'financial_year_id' => $data['financial_year_id'],
+                    'balance_date' => $balanceDate,
                     'branch_location' => $branchLocation,
                     'account_id' => $item['account_id'],
                     'party_id' => $item['party_id'] ?? null,

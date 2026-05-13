@@ -13,6 +13,7 @@
             <div class="brand-mark">▥</div>
             <div><h1>FinAcco</h1><p>Accounting System</p></div>
         </div>
+        <span class="page-label auth-page-label">Login</span>
         <h2 class="auth-title">Login</h2>
         <p class="auth-subtitle">Access your Sprint 1 accounting setup workspace.</p>
 

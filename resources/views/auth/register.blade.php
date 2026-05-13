@@ -13,6 +13,7 @@
             <div class="brand-mark">▥</div>
             <div><h1>FinAcco</h1><p>Accounting System</p></div>
         </div>
+        <span class="page-label auth-page-label">Create Account</span>
         <h2 class="auth-title">Create Account</h2>
         <form method="POST" action="{{ route('register') }}" class="auth-form">
             @csrf

@@ -20,11 +20,14 @@
         ])->values(),
     ])->values();
 
+    // Parties are loaded from Setup > Party / Person, not from static demo data.
+    // The JavaScript below uses party_type_id to filter parties by the selected Transaction Head.
     $partyPayload = $parties->map(fn ($party) => [
         'id' => $party->id,
         'party_name' => $party->party_name,
         'party_code' => $party->party_code,
         'party_type_id' => $party->party_type_id,
+        'party_type_name' => $party->partyType?->name,
         'linked_ledger_account_id' => $party->linked_ledger_account_id,
     ])->values();
 
@@ -40,6 +43,7 @@
 
 <div class="page-title">
     <div>
+        <span class="page-label">Daily Transaction Entry</span>
         <h2>Log Daily Transaction</h2>
         <p>Enter simple business information. The system will prepare debit and credit automatically.</p>
     </div>
@@ -83,6 +87,10 @@
             id="transactionForm"
             data-preview-url="{{ route('api.transactions.preview') }}"
             data-store-url="{{ route('api.transactions.store') }}"
+            data-heads-url="{{ route('api.dropdowns.transaction-heads') }}"
+            data-settlements-url="{{ route('api.dropdowns.settlement-types') }}"
+            data-parties-url="{{ route('api.dropdowns.parties') }}"
+            data-cash-bank-accounts-url="{{ route('api.dropdowns.cash-bank-accounts') }}"
         >
             @csrf
 
@@ -115,28 +123,17 @@
                 <div>
                     <label>Transaction Head <span class="required">*</span></label>
                     <select id="head" name="transaction_head_id" required>
-                        <option value="">Select Transaction Head</option>
-                        @foreach($transactionHeads as $transactionHead)
-                            <option value="{{ $transactionHead->id }}" @selected($firstHead?->id === $transactionHead->id)>
-                                {{ $transactionHead->name }}
-                            </option>
-                        @endforeach
+                        <option value="">Loading Transaction Heads...</option>
                     </select>
+                    <div class="hint">Loaded from Setup > Transaction Head.</div>
                 </div>
 
                 <div>
                     <label>Party / Person <span class="required" id="partyRequired">*</span></label>
                     <select id="party" name="party_id">
-                        <option value="">Select Party</option>
-                        @foreach($parties as $party)
-                            <option
-                                value="{{ $party->id }}"
-                                data-party-type="{{ $party->party_type_id }}"
-                            >
-                                {{ $party->party_code }} - {{ $party->party_name }}
-                            </option>
-                        @endforeach
+                        <option value="">Select saved Party / Person</option>
                     </select>
+                    <div class="hint">Loaded from Setup > Party / Person and filtered by the selected Transaction Head party type.</div>
                 </div>
 
                 <div class="money-wrap">
@@ -163,12 +160,7 @@
                 <div id="cashBankBox">
                     <label>Paid From / Received In <span class="required">*</span></label>
                     <select id="cashBank" name="cash_bank_account_id">
-                        <option value="">Select Cash / Bank</option>
-                        @foreach($cashBankAccounts as $cashBankAccount)
-                            <option value="{{ $cashBankAccount->id }}">
-                                {{ $cashBankAccount->cash_bank_name }}
-                            </option>
-                        @endforeach
+                        <option value="">Loading Cash / Bank...</option>
                     </select>
                     <div class="hint">Shown when settlement is Cash or Bank.</div>
                 </div>
@@ -307,9 +299,9 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const heads = @json($headPayload);
-    const parties = @json($partyPayload);
-    const cashBanks = @json($cashBankPayload);
+    const fallbackHeads = @json($headPayload);
+    const fallbackParties = @json($partyPayload);
+    const fallbackCashBanks = @json($cashBankPayload);
 
     const form = document.getElementById('transactionForm');
 
@@ -337,8 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const cashEffect = document.getElementById('cashEffect');
     const summaryStatus = document.getElementById('summaryStatus');
 
+    let heads = [];
     let previewTimer = null;
     let lastPreviewOk = false;
+    let isBooting = true;
 
     function csrf() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -366,6 +360,54 @@ document.addEventListener('DOMContentLoaded', () => {
         return stringValue === '' ? fallback : stringValue;
     }
 
+    function endpoint(baseUrl, params = {}) {
+        const query = new URLSearchParams();
+
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+                query.set(key, value);
+            }
+        });
+
+        return query.toString() ? `${baseUrl}?${query.toString()}` : baseUrl;
+    }
+
+    async function getRows(url) {
+        const response = await fetch(url, {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Dropdown request failed: ${url}`);
+        }
+
+        const result = await response.json();
+
+        return Array.isArray(result.data) ? result.data : [];
+    }
+
+    function normaliseHead(item) {
+        const settlements = item.settlement_types || item.settlements || [];
+
+        return {
+            id: item.id,
+            name: item.name || item.display_name,
+            nature: item.nature,
+            default_party_type_id: item.default_party_type_id || null,
+            requires_party: Boolean(Number(item.requires_party) || item.requires_party === true),
+            requires_reference: Boolean(Number(item.requires_reference) || item.requires_reference === true),
+            settlements: settlements.map((settlementItem) => ({
+                id: settlementItem.id,
+                name: settlementItem.name || settlementItem.display_name,
+                code: settlementItem.code || '',
+            })),
+        };
+    }
+
     function headById(id) {
         return heads.find((item) => String(item.id) === String(id));
     }
@@ -377,12 +419,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function isCashBankSettlement() {
         const option = selectedSettlement();
 
-        if (!option) {
+        if (!option || !option.value) {
             return false;
         }
 
-        return ['CASH', 'BANK'].includes(option.dataset.code || '')
-            || ['Cash', 'Bank'].includes(option.textContent.trim());
+        return ['CASH', 'BANK'].includes(String(option.dataset.code || '').toUpperCase())
+            || ['cash', 'bank'].includes(option.textContent.trim().toLowerCase());
     }
 
     function resetPreview(message = 'Select transaction information to generate preview.') {
@@ -406,58 +448,236 @@ document.addEventListener('DOMContentLoaded', () => {
         cashEffect.textContent = '—';
     }
 
-    function populateSettlementOptions() {
-        const selectedHead = headById(head.value);
+    function renderOptions(select, rows, placeholder, labelCallback, extraCallback = null) {
+        const previousValue = select.value;
 
-        settlement.innerHTML = '<option value="">Select Settlement</option>';
+        select.innerHTML = '';
+        select.appendChild(new Option(placeholder, ''));
+
+        rows.forEach((row) => {
+            const option = new Option(labelCallback(row), row.id);
+
+            if (extraCallback) {
+                extraCallback(option, row);
+            }
+
+            select.appendChild(option);
+        });
+
+        if (rows.some((row) => String(row.id) === String(previousValue))) {
+            select.value = previousValue;
+        }
+    }
+
+    async function loadTransactionHeads() {
+        head.disabled = true;
+        head.innerHTML = '<option value="">Loading Transaction Heads...</option>';
+
+        try {
+            heads = (await getRows(form.dataset.headsUrl)).map(normaliseHead);
+        } catch (error) {
+            console.error(error);
+            heads = fallbackHeads.map(normaliseHead);
+            showToast('Could not fetch Transaction Heads from API. Showing page-loaded data.');
+        }
+
+        renderOptions(head, heads, 'Select Transaction Head', (item) => item.name);
+        head.disabled = false;
+
+        if (!head.value && heads.length > 0) {
+            head.value = heads[0].id;
+        }
+
+        if (heads.length === 0) {
+            head.innerHTML = '<option value="">No active Transaction Heads found</option>';
+        }
+    }
+
+    function renderDefaultNotApplicableParty() {
+        party.innerHTML = '';
+
+        const option = new Option('Default / Not Applicable', '');
+        option.dataset.defaultNotApplicable = '1';
+
+        party.appendChild(option);
+        party.value = '';
+        party.disabled = false;
+    }
+
+    function hasDefaultNotApplicableParty() {
+        return party.options.length === 1
+            && party.options[0]?.dataset.defaultNotApplicable === '1';
+    }
+
+    async function loadParties() {
+        const selectedHead = headById(head.value);
+        const partyTypeId = selectedHead?.default_party_type_id || '';
+        const previousValue = party.value;
+
+        party.disabled = true;
+        party.innerHTML = '<option value="">Loading Party / Person...</option>';
+
+        if (!selectedHead || !partyTypeId) {
+            renderDefaultNotApplicableParty();
+            return;
+        }
+
+        try {
+            const rows = await getRows(endpoint(form.dataset.partiesUrl, {
+                party_type_id: partyTypeId,
+            }));
+
+            if (rows.length === 0) {
+                renderDefaultNotApplicableParty();
+                return;
+            }
+
+            renderOptions(
+                party,
+                rows,
+                'Select saved Party / Person',
+                (item) => item.display_name || [item.party_code, item.party_name].filter(Boolean).join(' - '),
+                (option, item) => {
+                    option.dataset.partyType = item.party_type_id || '';
+                    option.dataset.partyTypeName = item.party_type_name || '';
+                }
+            );
+        } catch (error) {
+            console.error(error);
+
+            const rows = fallbackParties.filter((item) => String(item.party_type_id) === String(partyTypeId));
+
+            if (rows.length === 0) {
+                renderDefaultNotApplicableParty();
+                return;
+            }
+
+            renderOptions(
+                party,
+                rows,
+                'Select saved Party / Person',
+                (item) => [item.party_code, item.party_name].filter(Boolean).join(' - '),
+                (option, item) => {
+                    option.dataset.partyType = item.party_type_id || '';
+                    option.dataset.partyTypeName = item.party_type_name || '';
+                }
+            );
+        }
+
+        if (Array.from(party.options).some((option) => option.value && option.value === previousValue)) {
+            party.value = previousValue;
+        }
+
+        party.disabled = false;
+    }
+
+    async function loadCashBankAccounts() {
+        cashBank.disabled = true;
+        cashBank.innerHTML = '<option value="">Loading Cash / Bank...</option>';
+
+        try {
+            const rows = await getRows(form.dataset.cashBankAccountsUrl);
+
+            renderOptions(
+                cashBank,
+                rows,
+                rows.length ? 'Select Cash / Bank' : 'No active Cash / Bank accounts found',
+                (item) => item.display_name || item.cash_bank_name || item.name,
+                (option, item) => {
+                    option.dataset.type = item.type || '';
+                    option.dataset.linkedLedgerAccountId = item.linked_ledger_account_id || '';
+                }
+            );
+        } catch (error) {
+            console.error(error);
+
+            renderOptions(
+                cashBank,
+                fallbackCashBanks,
+                fallbackCashBanks.length ? 'Select Cash / Bank' : 'No active Cash / Bank accounts found',
+                (item) => item.cash_bank_name || item.name,
+                (option, item) => {
+                    option.dataset.type = item.type || '';
+                    option.dataset.linkedLedgerAccountId = item.linked_ledger_account_id || '';
+                }
+            );
+        }
+
+        cashBank.disabled = false;
+    }
+
+    async function loadSettlementOptions() {
+        const selectedHead = headById(head.value);
+        const previousValue = settlement.value;
+
+        settlement.disabled = true;
+        settlement.innerHTML = '<option value="">Loading Settlement Types...</option>';
 
         if (!selectedHead) {
+            settlement.innerHTML = '<option value="">Select Transaction Head first</option>';
+            settlement.disabled = false;
             resetPreview();
             return;
         }
 
-        selectedHead.settlements.forEach((item) => {
-            const option = document.createElement('option');
-            option.value = item.id;
-            option.textContent = item.name;
-            option.dataset.code = item.code;
-            settlement.appendChild(option);
-        });
+        let rows = [];
 
-        if (selectedHead.settlements.length > 0) {
-            settlement.value = selectedHead.settlements[0].id;
+        try {
+            rows = await getRows(endpoint(form.dataset.settlementsUrl, {
+                transaction_head_id: selectedHead.id,
+            }));
+        } catch (error) {
+            console.error(error);
+            rows = [];
+            showToast('Could not fetch Settlement Types for the selected Transaction Head.');
         }
 
-        party.required = selectedHead.requires_party;
-        partyRequired.style.display = selectedHead.requires_party ? '' : 'none';
+        renderOptions(
+            settlement,
+            rows,
+            rows.length ? 'Select Settlement' : 'No Settlement Types assigned for this Transaction Head',
+            (item) => item.display_name || item.name,
+            (option, item) => {
+                option.dataset.code = item.code || '';
+            }
+        );
 
-        reference.required = selectedHead.requires_reference;
-        referenceHint.textContent = selectedHead.requires_reference
+        if (rows.some((row) => String(row.id) === String(previousValue))) {
+            settlement.value = previousValue;
+        } else if (rows.length === 1) {
+            settlement.value = rows[0].id;
+        } else if (rows.length > 1) {
+            settlement.value = '';
+        }
+
+        settlement.disabled = false;
+        toggleCashBank();
+    }
+
+    async function refreshForSelectedHead() {
+        const selectedHead = headById(head.value);
+
+        party.required = false;
+        partyRequired.style.display = 'none';
+
+        reference.required = Boolean(selectedHead?.requires_reference);
+        referenceHint.textContent = selectedHead?.requires_reference
             ? 'Reference is required for this transaction head.'
             : 'Optional unless transaction head requires it.';
 
-        filterParties();
+        await Promise.all([
+            loadSettlementOptions(),
+            loadParties(),
+        ]);
+
+        const partyMustBeSelected = Boolean(selectedHead?.requires_party) && !hasDefaultNotApplicableParty();
+        party.required = partyMustBeSelected;
+        partyRequired.style.display = partyMustBeSelected ? '' : 'none';
+
         toggleCashBank();
-        schedulePreview();
-    }
 
-    function filterParties() {
-        const selectedHead = headById(head.value);
-        const partyTypeId = selectedHead?.default_party_type_id;
-
-        Array.from(party.options).forEach((option) => {
-            if (!option.value) {
-                option.hidden = false;
-                return;
-            }
-
-            option.hidden = partyTypeId
-                ? String(option.dataset.partyType) !== String(partyTypeId)
-                : false;
-        });
-
-        if (party.selectedOptions[0]?.hidden) {
-            party.value = '';
+        if (!isBooting) {
+            schedulePreview();
         }
     }
 
@@ -479,7 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const selectedHead = headById(head.value);
 
-        if (selectedHead?.requires_party && !party.value) {
+        if (selectedHead?.requires_party && !party.value && !hasDefaultNotApplicableParty()) {
             return false;
         }
 
@@ -671,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function clearForm() {
+    async function clearForm() {
         form.reset();
         statusInput.value = 'Posted';
         summaryStatus.textContent = 'Draft';
@@ -680,18 +900,25 @@ document.addEventListener('DOMContentLoaded', () => {
         date.value = '{{ now()->toDateString() }}';
         amount.value = '10000';
 
-        populateSettlementOptions();
+        if (heads.length > 0) {
+            head.value = heads[0].id;
+        }
+
+        await refreshForSelectedHead();
         resetPreview('Complete required fields to generate ledger preview.');
 
         showToast('Form cleared.');
     }
 
-    [date, voucherType, head, party, amount, settlement, cashBank, reference, notes].forEach((input) => {
+    [date, voucherType, party, amount, settlement, cashBank, reference, notes].forEach((input) => {
         input.addEventListener('input', schedulePreview);
         input.addEventListener('change', schedulePreview);
     });
 
-    head.addEventListener('change', populateSettlementOptions);
+    head.addEventListener('change', () => {
+        refreshForSelectedHead();
+    });
+
     settlement.addEventListener('change', () => {
         toggleCashBank();
         schedulePreview();
@@ -706,14 +933,33 @@ document.addEventListener('DOMContentLoaded', () => {
         submitTransaction('Draft');
     });
 
-    document.getElementById('clearBtn').addEventListener('click', clearForm);
-    document.getElementById('newBtn').addEventListener('click', clearForm);
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        clearForm();
+    });
+
+    document.getElementById('newBtn').addEventListener('click', () => {
+        clearForm();
+    });
 
     document.querySelectorAll('[data-toast]').forEach((button) => {
         button.addEventListener('click', () => showToast(button.dataset.toast));
     });
 
-    populateSettlementOptions();
+    async function boot() {
+        resetPreview();
+
+        await Promise.all([
+            loadTransactionHeads(),
+            loadCashBankAccounts(),
+        ]);
+
+        await refreshForSelectedHead();
+
+        isBooting = false;
+        schedulePreview();
+    }
+
+    boot();
 });
 </script>
 @endpush

@@ -15,6 +15,8 @@ class LedgerMappingRule extends Model
         'Decrease Liability',
         'Increase Receivable',
         'Decrease Receivable',
+        'Increase Asset',
+        'Decrease Asset',
         'Increase Advance Asset',
         'Decrease Advance Asset',
         'Increase Advance Liability',
@@ -23,6 +25,7 @@ class LedgerMappingRule extends Model
 
     protected $fillable = [
         'company_id',
+        'rule_code',
         'transaction_head_id',
         'settlement_type_id',
         'debit_account_id',
