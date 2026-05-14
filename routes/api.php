@@ -12,15 +12,7 @@ Route::get('/health', fn () => response()->json([
 |--------------------------------------------------------------------------
 | Dropdown APIs
 |--------------------------------------------------------------------------
-| These APIs are used by frontend dynamic dropdowns.
-|
-| Example URLs:
-| /api/dropdowns/business-types
-| /api/dropdowns/currencies
-| /api/dropdowns/time-zones
-|
-| Because these routes are in api.php, Laravel automatically prefixes them
-| with /api.
+
 */
 Route::middleware(['auth:sanctum'])->prefix('dropdowns')->name('api.dropdowns.')->group(function () {
     Route::get('/business-types', [DropdownController::class, 'businessTypes'])
