@@ -1,61 +1,96 @@
 <?php
 
-namespace Database\Seeders;
+namespace App\Models;
 
-use App\Models\Company;
-use App\Models\FinancialYear;
-use App\Models\VoucherNumberingRule;
-use Illuminate\Database\Seeder;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class VoucherNumberingRuleSeeder extends Seeder
+class VoucherNumberingRule extends Model
 {
-    public function run(): void
+    use SoftDeletes;
+
+    public const VOUCHER_TYPES = [
+        'Opening Voucher',
+        'Payment Voucher',
+        'Receipt Voucher',
+        'Journal Voucher',
+        'Contra / Transfer Voucher',
+        'Draft Voucher',
+    ];
+
+    public const DEFAULT_PREFIXES = [
+        'Opening Voucher' => 'OP',
+        'Payment Voucher' => 'PV',
+        'Receipt Voucher' => 'RV',
+        'Journal Voucher' => 'JV',
+        'Contra / Transfer Voucher' => 'CV',
+        'Draft Voucher' => 'DR',
+    ];
+
+    protected $fillable = [
+        'company_id',
+        'financial_year_id',
+        'voucher_type',
+        'prefix',
+        'format_template',
+        'starting_number',
+        'number_length',
+        'last_number',
+        'reset_every_year',
+        'used_for',
+        'status',
+        'created_by',
+        'updated_by',
+    ];
+
+    protected $casts = [
+        'starting_number' => 'integer',
+        'number_length' => 'integer',
+        'last_number' => 'integer',
+        'reset_every_year' => 'boolean',
+    ];
+
+    public function company()
     {
-        $company = Company::query()->first();
+        return $this->belongsTo(Company::class);
+    }
 
-        if (!$company) {
-            return;
-        }
+    public function financialYear()
+    {
+        return $this->belongsTo(FinancialYear::class);
+    }
 
-        $financialYear = FinancialYear::query()
-            ->where('company_id', $company->id)
-            ->where('status', 'Active')
-            ->orderByDesc('is_active')
-            ->orderByDesc('start_date')
-            ->first();
+    public function getNextNumberAttribute(): int
+    {
+        return max((int) $this->starting_number, (int) $this->last_number + 1);
+    }
 
-        if (!$financialYear) {
-            return;
-        }
+    public function generate(int $number, ?CarbonInterface $voucherDate = null): string
+    {
+        $date = $voucherDate ?? now();
 
-        $rules = [
-            ['Payment Voucher', 'PV', 'PV-{YYYY}-{00000}', 'Cash/bank payments'],
-            ['Receipt Voucher', 'RV', 'RV-{YYYY}-{00000}', 'Cash/bank receipts'],
-            ['Journal Voucher', 'JV', 'JV-{YYYY}-{00000}', 'Due, adjustment, opening balance'],
-            ['Contra / Transfer Voucher', 'CV', 'CV-{YYYY}-{00000}', 'Cash to bank or bank to bank transfer'],
-            ['Draft Voucher', 'DR', 'DR-{YYYY}-{00000}', 'Unposted draft transactions'],
-        ];
+        $paddedNumber = str_pad(
+            (string) $number,
+            (int) $this->number_length,
+            '0',
+            STR_PAD_LEFT
+        );
 
-        foreach ($rules as [$type, $prefix, $format, $usedFor]) {
-            VoucherNumberingRule::query()->updateOrCreate(
-                [
-                    'company_id' => $company->id,
-                    'financial_year_id' => $financialYear->id,
-                    'voucher_type' => $type,
-                ],
-                [
-                    'prefix' => $prefix,
-                    'format_template' => $format,
-                    'starting_number' => 1,
-                    'number_length' => 5,
-                    'last_number' => 0,
-                    'reset_every_year' => true,
-                    'used_for' => $usedFor,
-                    'status' => 'Active',
-                    'created_by' => 1,
-                    'updated_by' => 1,
-                ]
-            );
-        }
+        return str_replace(
+            [
+                '{YYYY}',
+                '{YY}',
+                '{00000}',
+                '{NUMBER}',
+            ],
+            [
+                $date->format('Y'),
+                $date->format('y'),
+                $paddedNumber,
+                $paddedNumber,
+            ],
+            $this->format_template
+        );
     }
 }
