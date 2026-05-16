@@ -9,10 +9,10 @@
 <body>
 <div class="auth-shell">
     <div class="auth-card">
-        <div class="brand" style="border-bottom:0;padding:0;margin-bottom:20px;justify-content:center">
+        <a href="{{ url('/') }}" class="brand brand-home" style="border-bottom:0;padding:0;margin-bottom:20px;justify-content:center" aria-label="Go to home">
             <div class="brand-mark">▥</div>
             <div><h1>FinAcco</h1><p>Accounting System</p></div>
-        </div>
+        </a>
         <span class="page-label auth-page-label">Login</span>
         <h2 class="auth-title">Login</h2>
         <p class="auth-subtitle">Access your Sprint 1 accounting setup workspace.</p>

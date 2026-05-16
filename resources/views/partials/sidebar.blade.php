@@ -2,17 +2,17 @@
     use Illuminate\Support\Facades\Route;
 
     $routeName = request()->route()?->getName();
-    $isActive = fn ($name) => $routeName === $name ? 'active' : '';
+    $isActive = fn ($name) => ($routeName === $name || ($routeName === 'dashboard' && $name === 'setup.company')) ? 'active' : '';
 @endphp
 
-<aside class="sidebar">
-    <div class="brand">
+<aside class="sidebar" id="appSidebar">
+    <a href="{{ url('/') }}" class="brand brand-home" aria-label="Go to home">
         <div class="brand-mark">▥</div>
         <div>
             <h1>FinAcco</h1>
             <p>Accounting System</p>
         </div>
-    </div>
+    </a>
 
   
     <div class="nav-title">Setup</div>

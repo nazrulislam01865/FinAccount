@@ -1397,3 +1397,303 @@ select::-ms-expand {
 .switch-row.disabled .switch {
     cursor: not-allowed;
 }
+/* Sidebar menu toggle and clickable setup progress */
+.sidebar-backdrop {
+    display: none;
+}
+
+.app.sidebar-collapsed {
+    grid-template-columns: 90px 1fr;
+}
+
+.app.sidebar-collapsed .sidebar {
+    align-items: center;
+    padding: 18px 12px;
+}
+
+.app.sidebar-collapsed .brand {
+    padding: 0 0 20px;
+}
+
+.app.sidebar-collapsed .brand div:last-child,
+.app.sidebar-collapsed .nav-title,
+.app.sidebar-collapsed .nav-item span,
+.app.sidebar-collapsed .help-card {
+    display: none;
+}
+
+.app.sidebar-collapsed .nav-item {
+    width: 54px;
+    justify-content: center;
+    padding: 13px;
+}
+
+.app.sidebar-collapsed .nav-item.active {
+    box-shadow: none;
+}
+
+.menu-button:hover,
+.menu-button:focus-visible {
+    background: #f2f4f7;
+    outline: none;
+}
+
+.setup-progress-step {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, background .16s ease;
+}
+
+.setup-progress-step:hover,
+.setup-progress-step:focus-visible {
+    border-color: #93c5fd;
+    box-shadow: 0 10px 22px rgba(16, 24, 40, .08);
+    outline: none;
+    transform: translateY(-1px);
+}
+
+@media(max-width:880px) {
+    body.sidebar-open {
+        overflow: hidden;
+    }
+
+    .app.sidebar-collapsed,
+    .app.sidebar-open,
+    .app {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        display: flex;
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 40;
+        width: min(292px, calc(100vw - 48px));
+        height: 100vh;
+        transform: translateX(-105%);
+        transition: transform .2s ease;
+        box-shadow: 24px 0 60px rgba(15, 23, 42, .24);
+        align-items: stretch;
+        padding: 20px 16px;
+    }
+
+    .app.sidebar-open .sidebar {
+        transform: translateX(0);
+    }
+
+    .app.sidebar-open .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        background: rgba(15, 23, 42, .36);
+    }
+
+    .app.sidebar-open .brand div:last-child,
+    .app.sidebar-open .nav-title,
+    .app.sidebar-open .nav-item span {
+        display: block;
+    }
+
+    .app.sidebar-open .help-card {
+        display: flex;
+    }
+
+    .app.sidebar-open .nav-item {
+        width: auto;
+        justify-content: flex-start;
+    }
+}
+
+/* Clickable logo/title and stronger responsive behavior */
+.brand-home {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 14px;
+    transition: background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.brand-home:hover,
+.brand-home:focus-visible {
+    background: #f8fafc;
+    box-shadow: 0 10px 22px rgba(16, 24, 40, .06);
+    outline: none;
+}
+
+.brand-home:active {
+    transform: translateY(1px);
+}
+
+@media (min-width: 881px) and (max-width: 1080px) {
+    .app:not(.sidebar-collapsed) {
+        grid-template-columns: 260px 1fr;
+    }
+
+    .app:not(.sidebar-collapsed) .sidebar {
+        align-items: stretch;
+        padding: 20px 14px;
+    }
+
+    .app:not(.sidebar-collapsed) .brand {
+        padding: 0 8px 20px;
+    }
+
+    .app:not(.sidebar-collapsed) .brand div:last-child,
+    .app:not(.sidebar-collapsed) .nav-title,
+    .app:not(.sidebar-collapsed) .nav-item span {
+        display: block;
+    }
+
+    .app:not(.sidebar-collapsed) .help-card {
+        display: flex;
+    }
+
+    .app:not(.sidebar-collapsed) .nav-item {
+        width: auto;
+        justify-content: flex-start;
+        padding: 12px;
+    }
+
+    .app:not(.sidebar-collapsed) .nav-item.active {
+        box-shadow: inset 4px 0 0 var(--primary);
+    }
+
+    .topbar {
+        padding: 0 20px;
+        gap: 14px;
+    }
+
+    .global-search {
+        max-width: 420px;
+    }
+
+    .top-actions {
+        gap: 10px;
+    }
+}
+
+@media (max-width: 640px) {
+    .topbar {
+        height: auto;
+        min-height: 68px;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        gap: 10px;
+    }
+
+    .menu-button {
+        flex: 0 0 38px;
+    }
+
+    .global-search {
+        order: 3;
+        max-width: none;
+        flex: 1 0 100%;
+    }
+
+    .global-search input {
+        height: 40px;
+        font-size: 13px;
+    }
+
+    .global-search span {
+        top: 8px;
+    }
+
+    .top-actions {
+        margin-left: auto;
+        gap: 8px;
+    }
+
+    .top-actions .circle-icon:first-child {
+        display: none;
+    }
+
+    .circle-icon {
+        width: 34px;
+        height: 34px;
+    }
+
+    .avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 13px;
+    }
+
+    .top-actions .btn-ghost {
+        min-height: 34px !important;
+        padding: 7px 9px !important;
+        font-size: 12px;
+    }
+
+    .content {
+        padding: 20px 12px 32px;
+    }
+
+    .page-title h2 {
+        font-size: 24px;
+    }
+
+    .page-title p {
+        font-size: 13px;
+    }
+
+    .card {
+        border-radius: 14px;
+    }
+
+    .form-card,
+    .form-panel,
+    .helper-card,
+    .progress-card,
+    .summary-card,
+    .info-card {
+        padding: 16px;
+    }
+
+    .setup-progress-horizontal {
+        margin-bottom: 18px;
+        padding: 14px;
+    }
+
+    .setup-progress-head h3 {
+        font-size: 18px;
+    }
+
+    .setup-progress-step {
+        min-width: 150px;
+    }
+}
+
+@media (max-width: 420px) {
+    .sidebar {
+        width: min(292px, calc(100vw - 28px));
+    }
+
+    .topbar {
+        padding: 9px 10px;
+    }
+
+    .top-actions {
+        gap: 6px;
+    }
+
+    .top-actions .circle-icon:nth-child(2) {
+        display: none;
+    }
+
+    .content {
+        padding: 18px 10px 28px;
+    }
+
+    .setup-progress-steps {
+        grid-template-columns: repeat(8, minmax(145px, 1fr));
+    }
+}
+
+/* Keep auth logo title visible while sidebar brand collapses on small screens. */
+.auth-card .brand div:last-child {
+    display: block;
+}

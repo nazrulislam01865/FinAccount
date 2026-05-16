@@ -12,8 +12,9 @@
     @stack('styles')
 </head>
 <body>
-<div class="app">
+<div class="app" id="appShell">
     @include('partials.sidebar')
+    <div class="sidebar-backdrop" data-sidebar-close aria-hidden="true"></div>
 
     <main class="main">
         @include('partials.topbar')

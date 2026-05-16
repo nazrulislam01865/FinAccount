@@ -9,7 +9,6 @@
     </div>
 </div>
 
-@include('partials.setup-progress', ['current' => 1])
 
 <div class="stats-grid">
     <div class="card stat-card"><small>Setup Modules</small><strong>5</strong></div>

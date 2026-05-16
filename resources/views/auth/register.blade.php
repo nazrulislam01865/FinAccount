@@ -9,10 +9,10 @@
 <body>
 <div class="auth-shell">
     <div class="auth-card">
-        <div class="brand" style="border-bottom:0;padding:0;margin-bottom:20px;justify-content:center">
+        <a href="{{ url('/') }}" class="brand brand-home" style="border-bottom:0;padding:0;margin-bottom:20px;justify-content:center" aria-label="Go to home">
             <div class="brand-mark">▥</div>
             <div><h1>FinAcco</h1><p>Accounting System</p></div>
-        </div>
+        </a>
         <span class="page-label auth-page-label">Create Account</span>
         <h2 class="auth-title">Create Account</h2>
         <form method="POST" action="{{ route('register') }}" class="auth-form">

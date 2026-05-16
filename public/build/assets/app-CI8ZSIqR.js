@@ -7,3 +7,81 @@ var e=Object.defineProperty,t=(t,n)=>{let r={};for(var i in t)e(r,i,{get:t[i],en
 `),r=t===-1?-1:n.indexOf(`
 `,t+1),i=r===-1?``:n.slice(r+1);String(e.stack).endsWith(i)||(e.stack+=`
 `+n)}}catch{}}throw e}}_request(e,t){typeof e==`string`?(t||={},t.url=e):t=e||{},t=q(this.defaults,t);let{transitional:n,paramsSerializer:r,headers:i}=t;n!==void 0&&X.assertOptions(n,{silentJSONParsing:Z.transitional(Z.boolean),forcedJSONParsing:Z.transitional(Z.boolean),clarifyTimeoutError:Z.transitional(Z.boolean),legacyInterceptorReqResOrdering:Z.transitional(Z.boolean)},!1),r!=null&&(M.isFunction(r)?t.paramsSerializer={serialize:r}:X.assertOptions(r,{encode:Z.function,serialize:Z.function},!0)),t.allowAbsoluteUrls!==void 0||(this.defaults.allowAbsoluteUrls===void 0?t.allowAbsoluteUrls=!0:t.allowAbsoluteUrls=this.defaults.allowAbsoluteUrls),X.assertOptions(t,{baseUrl:Z.spelling(`baseURL`),withXsrfToken:Z.spelling(`withXSRFToken`)},!0),t.method=(t.method||this.defaults.method||`get`).toLowerCase();let a=i&&M.merge(i.common,i[t.method]);i&&M.forEach([`delete`,`get`,`head`,`post`,`put`,`patch`,`query`,`common`],e=>{delete i[e]}),t.headers=F.concat(a,i);let o=[],s=!0;this.interceptors.request.forEach(function(e){if(typeof e.runWhen==`function`&&e.runWhen(t)===!1)return;s&&=e.synchronous;let n=t.transitional||z;n&&n.legacyInterceptorReqResOrdering?o.unshift(e.fulfilled,e.rejected):o.push(e.fulfilled,e.rejected)});let c=[];this.interceptors.response.forEach(function(e){c.push(e.fulfilled,e.rejected)});let l,u=0,d;if(!s){let e=[Qt.bind(this),void 0];for(e.unshift(...o),e.push(...c),d=e.length,l=Promise.resolve(t);u<d;)l=l.then(e[u++],e[u++]);return l}d=o.length;let f=t;for(;u<d;){let e=o[u++],t=o[u++];try{f=e(f)}catch(e){t.call(this,e);break}}try{l=Qt.call(this,f)}catch(e){return Promise.reject(e)}for(u=0,d=c.length;u<d;)l=l.then(c[u++],c[u++]);return l}getUri(e){return e=q(this.defaults,e),rt(Dt(e.baseURL,e.url,e.allowAbsoluteUrls),e.params,e.paramsSerializer)}};M.forEach([`delete`,`get`,`head`,`options`],function(e){Q.prototype[e]=function(t,n){return this.request(q(n||{},{method:e,url:t,data:(n||{}).data}))}}),M.forEach([`post`,`put`,`patch`,`query`],function(e){function t(t){return function(n,r,i){return this.request(q(i||{},{method:e,headers:t?{"Content-Type":`multipart/form-data`}:{},url:n,data:r}))}}Q.prototype[e]=t(),e!==`query`&&(Q.prototype[e+`Form`]=t(!0))});var tn=class e{constructor(e){if(typeof e!=`function`)throw TypeError(`executor must be a function.`);let t;this.promise=new Promise(function(e){t=e});let n=this;this.promise.then(e=>{if(!n._listeners)return;let t=n._listeners.length;for(;t-- >0;)n._listeners[t](e);n._listeners=null}),this.promise.then=e=>{let t,r=new Promise(e=>{n.subscribe(e),t=e}).then(e);return r.cancel=function(){n.unsubscribe(t)},r},e(function(e,r,i){n.reason||(n.reason=new G(e,r,i),t(n.reason))})}throwIfRequested(){if(this.reason)throw this.reason}subscribe(e){if(this.reason){e(this.reason);return}this._listeners?this._listeners.push(e):this._listeners=[e]}unsubscribe(e){if(!this._listeners)return;let t=this._listeners.indexOf(e);t!==-1&&this._listeners.splice(t,1)}toAbortSignal(){let e=new AbortController,t=t=>{e.abort(t)};return this.subscribe(t),e.signal.unsubscribe=()=>this.unsubscribe(t),e.signal}static source(){let t;return{token:new e(function(e){t=e}),cancel:t}}};function nn(e){return function(t){return e.apply(null,t)}}function rn(e){return M.isObject(e)&&e.isAxiosError===!0}var an={Continue:100,SwitchingProtocols:101,Processing:102,EarlyHints:103,Ok:200,Created:201,Accepted:202,NonAuthoritativeInformation:203,NoContent:204,ResetContent:205,PartialContent:206,MultiStatus:207,AlreadyReported:208,ImUsed:226,MultipleChoices:300,MovedPermanently:301,Found:302,SeeOther:303,NotModified:304,UseProxy:305,Unused:306,TemporaryRedirect:307,PermanentRedirect:308,BadRequest:400,Unauthorized:401,PaymentRequired:402,Forbidden:403,NotFound:404,MethodNotAllowed:405,NotAcceptable:406,ProxyAuthenticationRequired:407,RequestTimeout:408,Conflict:409,Gone:410,LengthRequired:411,PreconditionFailed:412,PayloadTooLarge:413,UriTooLong:414,UnsupportedMediaType:415,RangeNotSatisfiable:416,ExpectationFailed:417,ImATeapot:418,MisdirectedRequest:421,UnprocessableEntity:422,Locked:423,FailedDependency:424,TooEarly:425,UpgradeRequired:426,PreconditionRequired:428,TooManyRequests:429,RequestHeaderFieldsTooLarge:431,UnavailableForLegalReasons:451,InternalServerError:500,NotImplemented:501,BadGateway:502,ServiceUnavailable:503,GatewayTimeout:504,HttpVersionNotSupported:505,VariantAlsoNegotiates:506,InsufficientStorage:507,LoopDetected:508,NotExtended:510,NetworkAuthenticationRequired:511,WebServerIsDown:521,ConnectionTimedOut:522,OriginIsUnreachable:523,TimeoutOccurred:524,SslHandshakeFailed:525,InvalidSslCertificate:526};Object.entries(an).forEach(([e,t])=>{an[t]=e});function on(e){let t=new Q(e),r=n(Q.prototype.request,t);return M.extend(r,Q.prototype,t,{allOwnKeys:!0}),M.extend(r,t,null,{allOwnKeys:!0}),r.create=function(t){return on(q(e,t))},r}var $=on(W);$.Axios=Q,$.CanceledError=G,$.CancelToken=tn,$.isCancel=gt,$.VERSION=Bt,$.toFormData=L,$.AxiosError=I,$.Cancel=$.CanceledError,$.all=function(e){return Promise.all(e)},$.spread=nn,$.isAxiosError=rn,$.mergeConfig=q,$.AxiosHeaders=F,$.formToJSON=e=>pt(M.isHTMLForm(e)?new FormData(e):e),$.getAdapter=Xt.getAdapter,$.HttpStatusCode=an,$.default=$,window.axios=$,window.axios.defaults.headers.common[`X-Requested-With`]=`XMLHttpRequest`,window.AccountingUI=(()=>{let e=()=>document.querySelector(`meta[name="csrf-token"]`)?.getAttribute(`content`)||``;function t(e=`Saved successfully.`){let t=document.getElementById(`toast`);if(!t){alert(e);return}t.textContent=e,t.classList.add(`show`),setTimeout(()=>t.classList.remove(`show`),2600)}async function n(e){let t=await fetch(e,{headers:{Accept:`application/json`,"X-Requested-With":`XMLHttpRequest`},credentials:`same-origin`});if(!t.ok)throw Error(`Request failed: ${e}`);return t.json()}function r(e,t){return t===`currency`?e.display_name||`${e.code||``} - ${e.name||``}`.trim():t===`timezone`?e.display_name||`${e.utc_offset||``} - ${e.name||``}`.trim():t===`account`?e.display_name||`${e.account_code||``} - ${e.account_name||e.name||``}`.trim():t===`bank`?e.display_name||(e.short_name?`${e.bank_name} (${e.short_name})`:e.bank_name):e.display_name||e.name||e.title||e.bank_name||e.code||`#${e.id}`}function i(e){let t=String(e.dataset.selected||e.value||``);if(!t)return[];try{let e=JSON.parse(t);if(Array.isArray(e))return e.map(String)}catch{}return t.split(`,`).map(e=>e.trim()).filter(Boolean)}async function a(e){let t=e.dataset.dropdown;if(!t)return;let a=e.dataset.placeholder||`Select`,o=e.dataset.label||`name`,s=i(e),c=e.multiple;e.innerHTML=``,c||(e.innerHTML=`<option value="">${a}</option>`),e.disabled=!0;try{let i=await n(t),a=Array.isArray(i.data)?i.data:[];if(c&&a.length===0){let t=document.createElement(`option`);t.value=``,t.textContent=`No options found`,t.disabled=!0,e.appendChild(t)}a.forEach(t=>{let n=document.createElement(`option`);n.value=t.id,n.textContent=r(t,o),s.includes(String(t.id))&&(n.selected=!0),e.appendChild(n)}),e.disabled=!1,e.dispatchEvent(new Event(`change`,{bubbles:!0}))}catch(t){console.error(t),e.innerHTML=`<option value="">Backend API not ready</option>`,e.disabled=!1}}function o(e=document){e.querySelectorAll(`select[data-dropdown]`).forEach(e=>{a(e)})}function s(){let e=document.querySelector(`[data-controls-parent-account]`),t=document.querySelector(`[data-parent-account-select]`);!e||!t||e.addEventListener(`change`,()=>{let n=t.dataset.baseUrl||`/api/dropdowns/parent-accounts`,r=t.dataset.excludeId||``,i=t.dataset.selected||``,o=new URLSearchParams;e.value&&o.set(`account_type_id`,e.value),r&&o.set(`exclude_id`,r),t.dataset.dropdown=o.toString()?`${n}?${o.toString()}`:n,t.dataset.selected=i,a(t)})}function c(){let e=document.getElementById(`cashBankType`),t=document.getElementById(`bankFields`),n=document.getElementById(`bankId`);if(!e||!t)return;let r=()=>{let r=e.value===`Bank`||e.value===`Mobile Banking`,i=e.value===`Bank`;t.classList.toggle(`hidden`,!r),n&&(n.required=i,r||(n.value=``)),t.querySelectorAll(`.bank-required`).forEach(e=>{e.style.display=i?``:`none`})};e.addEventListener(`change`,r),r()}function l(e=document){e.querySelectorAll(`.switch[data-input]`).forEach(e=>{let t=document.getElementById(e.dataset.input),n=()=>{t&&(t.value=e.classList.contains(`on`)?`1`:`0`)};e.addEventListener(`click`,()=>{e.classList.toggle(`on`),n()}),n()})}function u(e=document){e.querySelectorAll(`[data-multi-select]`).forEach(e=>{let t=document.getElementById(e.dataset.input),n=()=>{let n=Array.from(e.querySelectorAll(`.select-chip.selected`)).map(e=>e.dataset.value||e.textContent.trim());t&&(t.value=JSON.stringify(n)),e.dataset.selectedCount=String(n.length)};e.querySelectorAll(`.select-chip`).forEach(e=>{e.addEventListener(`click`,()=>{e.classList.toggle(`selected`),n()})}),n()})}function d(e){let n=e.querySelector(`[data-multi-select][data-required="true"]`);if(n&&Number(n.dataset.selectedCount||0)<=0){let e=n.querySelector(`.select-chip`);return n.scrollIntoView({behavior:`smooth`,block:`center`}),e&&e.focus?.(),t(`Select at least one settlement type.`),!1}return!0}function f(e=document){e.querySelectorAll(`[data-table-filter]`).forEach(e=>{let t=e.dataset.tableFilter,n=document.querySelector(t);if(!n)return;let r=e.querySelectorAll(`[data-filter-key]`),i=document.querySelector(e.dataset.countTarget||`#resultCount`),a=()=>{let e=0,t=n.querySelectorAll(`tbody tr`);t.forEach(n=>{if(n.dataset.empty===`true`){n.style.display=t.length===1?``:`none`;return}let i=!0;r.forEach(e=>{let t=e.dataset.filterKey,r=String(e.value||``).toLowerCase().trim();!r||r.startsWith(`all`)||(t===`text`?i&&=n.innerText.toLowerCase().includes(r):i&&=String(n.dataset[t]||``).toLowerCase()===r)}),n.style.display=i?``:`none`,i&&e++}),i&&(i.textContent=`Showing ${e} of ${t.length} entries`)};r.forEach(e=>{e.addEventListener(`input`,a),e.addEventListener(`change`,a)}),a()})}function p(e){if(!e||typeof e!=`object`)return null;let t=Object.values(e)[0];return Array.isArray(t)?t[0]:t||null}function m(e){return!e||typeof e!=`object`?null:Object.keys(e)[0]||null}function h(e){return String(e||``).replace(/\.\d+$/,``).replace(/\[\]$/,``)}function g(e,t){if(!t)return null;let n=h(t);return e.querySelector(`[name="${t}"]`)||e.querySelector(`[name="${n}"]`)||e.querySelector(`[name="${n}[]"]`)}function _(e,t){let n=h(t);if(n===`settlement_type_ids`||n===`allowed_settlement_types`){let t=e.querySelector(`[data-multi-select]`);if(t){t.scrollIntoView({behavior:`smooth`,block:`center`});let e=t.querySelector(`.select-chip`);return e&&e.focus?.(),!0}}return!1}function v(e,t){if(_(e,t))return;let n=g(e,t);if(!n)return;let r=h(t);[`account_code`,`account_name`,`cash_bank_name`,`account_number`,`party_name`,`mobile`,`email`,`name`,`transaction_head_name`].includes(r)&&(n.value=``),n.focus()}function y(e,t){e.querySelectorAll(`button[type="submit"]`).forEach(e=>{e.disabled=t,e.dataset.originalText=e.dataset.originalText||e.textContent,e.textContent=t?`Saving...`:e.dataset.originalText})}function b(n=document){n.querySelectorAll(`form[data-frontend-form]`).forEach(n=>{n.addEventListener(`submit`,async r=>{if(r.preventDefault(),!n.checkValidity()){n.reportValidity();return}if(!d(n))return;let i=n.dataset.action||n.getAttribute(`action`),a=n.dataset.method||n.getAttribute(`method`)||`POST`,o=n.dataset.success||`Saved successfully.`;if(!i||i===`#`){t(o);return}y(n,!0);try{let r=new FormData(n),s=await fetch(i,{method:a.toUpperCase(),headers:{Accept:`application/json`,"X-CSRF-TOKEN":e(),"X-Requested-With":`XMLHttpRequest`},credentials:`same-origin`,body:r}),c=await s.json().catch(()=>({}));if(!s.ok){let e=m(c.errors),r=p(c.errors)||c.message||`Please check validation errors.`;v(n,e),t(r),y(n,!1);return}t(c.message||o),c.redirect?setTimeout(()=>{window.location.href=c.redirect},700):y(n,!1)}catch(e){console.error(e),t(`Backend save API not ready yet. Frontend form is working.`),y(n,!1)}})})}function x(){document.querySelectorAll(`[data-toast]`).forEach(e=>{e.addEventListener(`click`,()=>{t(e.dataset.toast)})})}function S(){f(),s(),c(),l(),u(),b(),x(),o()}return document.addEventListener(`DOMContentLoaded`,S),{showToast:t,loadSelect:a,loadAllDropdowns:o,init:S}})();
+;(() => {
+  function bindSidebarNavigation() {
+    const app = document.getElementById('appShell') || document.querySelector('.app');
+    const sidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar');
+    const menuButton = document.querySelector('.menu-button');
+    const mobileQuery = window.matchMedia('(max-width: 880px)');
+
+    if (!app || !sidebar || !menuButton) {
+      return;
+    }
+
+    const isMobile = () => mobileQuery.matches;
+    const setExpandedState = () => {
+      const expanded = isMobile()
+        ? app.classList.contains('sidebar-open')
+        : !app.classList.contains('sidebar-collapsed');
+      menuButton.setAttribute('aria-expanded', String(expanded));
+    };
+    const closeMobileSidebar = () => {
+      app.classList.remove('sidebar-open');
+      document.body.classList.remove('sidebar-open');
+      setExpandedState();
+    };
+
+    if (localStorage.getItem('accounting-sidebar-collapsed') === '1' && !isMobile()) {
+      app.classList.add('sidebar-collapsed');
+    }
+
+    menuButton.addEventListener('click', () => {
+      if (isMobile()) {
+        const willOpen = !app.classList.contains('sidebar-open');
+        app.classList.toggle('sidebar-open', willOpen);
+        document.body.classList.toggle('sidebar-open', willOpen);
+      } else {
+        const willCollapse = !app.classList.contains('sidebar-collapsed');
+        app.classList.toggle('sidebar-collapsed', willCollapse);
+        localStorage.setItem('accounting-sidebar-collapsed', willCollapse ? '1' : '0');
+      }
+      setExpandedState();
+    });
+
+    document.querySelectorAll('[data-sidebar-close]').forEach((element) => {
+      element.addEventListener('click', closeMobileSidebar);
+    });
+
+    sidebar.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => {
+        if (isMobile()) {
+          closeMobileSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isMobile()) {
+        closeMobileSidebar();
+      }
+    });
+
+    if (typeof mobileQuery.addEventListener === 'function') {
+      mobileQuery.addEventListener('change', () => {
+        if (!isMobile()) {
+          app.classList.remove('sidebar-open');
+          document.body.classList.remove('sidebar-open');
+        }
+        setExpandedState();
+      });
+    }
+
+    setExpandedState();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindSidebarNavigation);
+  } else {
+    bindSidebarNavigation();
+  }
+})();

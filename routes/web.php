@@ -14,10 +14,10 @@ use App\Http\Controllers\Setup\VoucherNumberingController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/dashboard');
+Route::redirect('/', '/setup/company');
 
 Route::middleware(['auth'])->group(function () {
-    Route::view('/dashboard', 'dashboard')->name('dashboard');
+    Route::redirect('/dashboard', '/setup/company')->name('dashboard');
 
     /*
     |--------------------------------------------------------------------------

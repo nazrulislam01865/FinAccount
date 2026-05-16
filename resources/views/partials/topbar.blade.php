@@ -1,5 +1,5 @@
 <header class="topbar">
-    <button class="menu-button" type="button">☰</button>
+    <button class="menu-button" type="button" aria-label="Toggle sidebar menu" aria-controls="appSidebar" aria-expanded="true">☰</button>
     <div class="global-search">
         <span>⌕</span>
         <input type="text" placeholder="Search transactions, reports, ledgers...">
