@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers\Setup;
 
-use App\Http\Controllers\Controller;
-use Throwable;
-use Illuminate\Http\Request;
-use App\Services\Setup\EntityDeleteService;
 use App\Http\Controllers\Concerns\RespondsToDelete;
+use App\Http\Controllers\Controller;
 use App\Http\Requests\CashBankAccountRequest;
 use App\Models\CashBankAccount;
 use App\Services\Setup\CashBankAccountService;
+use App\Services\Setup\EntityDeleteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Throwable;
 
 class CashBankAccountController extends Controller
 {
@@ -21,7 +21,7 @@ class CashBankAccountController extends Controller
     public function index(): View
     {
         $accounts = CashBankAccount::query()
-            ->with(['linkedLedger', 'bank'])
+            ->with(['linkedLedger.accountType', 'bank'])
             ->orderBy('cash_bank_name')
             ->get();
 
@@ -42,7 +42,7 @@ class CashBankAccountController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cash / Bank account saved successfully.',
-            'data' => $account->load(['linkedLedger', 'bank']),
+            'data' => $account->load(['linkedLedger.accountType', 'bank']),
             'redirect' => route('setup.cash-bank-accounts'),
         ], 201);
     }
@@ -61,7 +61,7 @@ class CashBankAccountController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cash / Bank account updated successfully.',
-            'data' => $account,
+            'data' => $account->load(['linkedLedger.accountType', 'bank']),
             'redirect' => route('setup.cash-bank-accounts'),
         ]);
     }

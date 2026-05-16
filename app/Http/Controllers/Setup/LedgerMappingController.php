@@ -47,6 +47,7 @@ class LedgerMappingController extends Controller
 
         $accounts = ChartOfAccount::query()
             ->where('status', 'Active')
+            ->where('account_level', 'Ledger')
             ->where('posting_allowed', true)
             ->with('accountType')
             ->orderBy('account_code')

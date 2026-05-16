@@ -20,27 +20,31 @@ class LedgerMappingRuleRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'rule_code' => $this->rule_code ?: null,
+            'rule_code' => $this->blankToNull($this->rule_code),
             'transaction_head_id' => $this->transaction_head_id ?: null,
             'settlement_type_id' => $this->settlement_type_id ?: null,
             'debit_account_id' => $this->debit_account_id ?: null,
             'credit_account_id' => $this->credit_account_id ?: null,
-            'party_ledger_effect' => $this->party_ledger_effect ?: 'No Effect',
+            'party_ledger_effect' => $this->blankToNull($this->party_ledger_effect),
             'auto_post' => filter_var($this->input('auto_post', true), FILTER_VALIDATE_BOOLEAN),
-            'description' => $this->description ?: null,
+            'description' => $this->blankToNull($this->description),
+            'status' => $this->status ?: 'Active',
         ]);
     }
 
     public function rules(): array
     {
+        $ruleId = $this->route('ledger_mapping_rule')?->id;
+
         return [
             'rule_code' => [
                 'nullable',
                 'string',
                 'max:30',
+                'regex:/^[A-Za-z0-9.\-_]+$/',
                 Rule::unique('ledger_mapping_rules', 'rule_code')
                     ->whereNull('deleted_at')
-                    ->ignore($this->route('ledger_mapping_rule')?->id),
+                    ->ignore($ruleId),
             ],
 
             'transaction_head_id' => [
@@ -65,6 +69,8 @@ class LedgerMappingRuleRequest extends FormRequest
                 Rule::exists('chart_of_accounts', 'id')
                     ->where(fn ($query) => $query
                         ->where('status', 'Active')
+                        ->where('account_level', 'Ledger')
+                        ->where('posting_allowed', true)
                         ->whereNull('deleted_at')),
             ],
 
@@ -75,6 +81,8 @@ class LedgerMappingRuleRequest extends FormRequest
                 Rule::exists('chart_of_accounts', 'id')
                     ->where(fn ($query) => $query
                         ->where('status', 'Active')
+                        ->where('account_level', 'Ledger')
+                        ->where('posting_allowed', true)
                         ->whereNull('deleted_at')),
             ],
 
@@ -120,62 +128,155 @@ class LedgerMappingRuleRequest extends FormRequest
                 return;
             }
 
-            if (!$debit->posting_allowed) {
-                $validator->errors()->add(
-                    'debit_account_id',
-                    'Debit Account must be a posting ledger account, not a group/control account.'
-                );
-            }
-
-            if (!$credit->posting_allowed) {
-                $validator->errors()->add(
-                    'credit_account_id',
-                    'Credit Account must be a posting ledger account, not a group/control account.'
-                );
-            }
-
-            if (!$head->settlementTypes->contains('id', $settlement->id)) {
-                $validator->errors()->add(
-                    'settlement_type_id',
-                    'This settlement type is not allowed for the selected transaction head.'
-                );
-            }
-
-            $duplicate = LedgerMappingRule::query()
-                ->where('transaction_head_id', $head->id)
-                ->where('settlement_type_id', $settlement->id)
-                ->when(
-                    $this->route('ledger_mapping_rule'),
-                    fn ($query, $rule) => $query->where('id', '!=', $rule->id)
-                )
-                ->exists();
-
-            if ($duplicate) {
-                $validator->errors()->add(
-                    'settlement_type_id',
-                    'A mapping rule already exists for this transaction head and settlement type.'
-                );
-            }
-
-            $settlementName = strtolower($settlement->name);
-            $usesCashBank = $debit->is_cash_bank || $credit->is_cash_bank;
-
-            if (in_array($settlementName, ['cash', 'bank'], true) && !$usesCashBank) {
-                $validator->errors()->add(
-                    'debit_account_id',
-                    'Cash or Bank settlement must include a cash/bank ledger on either debit or credit side.'
-                );
-            }
-
-            if ($settlementName === 'due' && $usesCashBank) {
-                $validator->errors()->add(
-                    'settlement_type_id',
-                    'Due entry must not affect cash or bank. Use Cash or Bank settlement when paying or collecting a previous due.'
-                );
-            }
-
+            $this->validateHeadSettlementPair($validator, $head, $settlement);
+            $this->validateDuplicateMapping($validator, $head, $settlement);
+            $this->validatePostingAccount($validator, $debit, 'debit_account_id', 'Debit Account');
+            $this->validatePostingAccount($validator, $credit, 'credit_account_id', 'Credit Account');
+            $this->validateSettlementAccounting($validator, $head, $settlement, $debit, $credit);
             $this->validatePartyEffectAccounting($validator, $debit, $credit);
         }];
+    }
+
+    private function validateHeadSettlementPair(
+        Validator $validator,
+        TransactionHead $head,
+        SettlementType $settlement
+    ): void {
+        if (!$head->settlementTypes->contains('id', $settlement->id)) {
+            $validator->errors()->add(
+                'settlement_type_id',
+                'This settlement type is not allowed for the selected transaction head.'
+            );
+        }
+    }
+
+    private function validateDuplicateMapping(
+        Validator $validator,
+        TransactionHead $head,
+        SettlementType $settlement
+    ): void {
+        $rule = $this->route('ledger_mapping_rule');
+
+        $duplicate = LedgerMappingRule::query()
+            ->where('transaction_head_id', $head->id)
+            ->where('settlement_type_id', $settlement->id)
+            ->whereNull('deleted_at')
+            ->when($rule, fn ($query) => $query->whereKeyNot($rule->id))
+            ->exists();
+
+        if ($duplicate) {
+            $validator->errors()->add(
+                'settlement_type_id',
+                'A mapping rule already exists for this transaction head and settlement type.'
+            );
+        }
+    }
+
+    private function validatePostingAccount(
+        Validator $validator,
+        ChartOfAccount $account,
+        string $field,
+        string $label
+    ): void {
+        if ($account->status !== 'Active') {
+            $validator->errors()->add($field, "{$label} must be active.");
+        }
+
+        if ($account->account_level !== 'Ledger') {
+            $validator->errors()->add($field, "{$label} must be a Ledger account, not a Group account.");
+        }
+
+        if (!$account->posting_allowed) {
+            $validator->errors()->add($field, "{$label} must allow posting.");
+        }
+
+        if (!$account->accountType) {
+            $validator->errors()->add($field, "{$label} must have a valid Account Type.");
+        }
+    }
+
+    private function validateSettlementAccounting(
+        Validator $validator,
+        TransactionHead $head,
+        SettlementType $settlement,
+        ChartOfAccount $debit,
+        ChartOfAccount $credit
+    ): void {
+        $settlementKey = $this->settlementKey($settlement);
+        $cashBankCount = (int) $debit->is_cash_bank + (int) $credit->is_cash_bank;
+
+        if (in_array($settlementKey, ['cash', 'bank', 'advance_paid', 'advance_received'], true)) {
+            if ($cashBankCount !== 1) {
+                $validator->errors()->add(
+                    'settlement_type_id',
+                    'Cash, Bank, and advance money movements must include exactly one Cash/Bank ledger side.'
+                );
+            }
+
+            $expectedCashBankSide = $this->expectedCashBankSide($head, $settlementKey);
+
+            if ($expectedCashBankSide === 'Debit' && !$debit->is_cash_bank) {
+                $validator->errors()->add(
+                    'debit_account_id',
+                    'Receipt or advance received mappings must debit the Cash/Bank ledger.'
+                );
+            }
+
+            if ($expectedCashBankSide === 'Credit' && !$credit->is_cash_bank) {
+                $validator->errors()->add(
+                    'credit_account_id',
+                    'Payment or advance paid mappings must credit the Cash/Bank ledger.'
+                );
+            }
+        }
+
+        if (in_array($settlementKey, ['due', 'adjustment'], true) && $cashBankCount > 0) {
+            $validator->errors()->add(
+                'settlement_type_id',
+                'Due and adjustment mappings must not affect Cash/Bank directly.'
+            );
+        }
+
+        if ($settlementKey === 'due') {
+            $this->validateDueMappingShape($validator, $head, $debit, $credit);
+        }
+
+        if ($settlementKey === 'advance_paid') {
+            $this->validateAccountType($validator, $debit, 'debit_account_id', 'Asset', 'Advance paid must debit an asset account.');
+        }
+
+        if ($settlementKey === 'advance_received') {
+            $this->validateAccountType($validator, $credit, 'credit_account_id', 'Liability', 'Advance received must credit a liability account.');
+        }
+    }
+
+    private function validateDueMappingShape(
+        Validator $validator,
+        TransactionHead $head,
+        ChartOfAccount $debit,
+        ChartOfAccount $credit
+    ): void {
+        $headText = strtoupper($head->nature . ' ' . $head->name);
+
+        if (str_contains($headText, 'RECEIPT') || str_contains($headText, 'INCOME') || str_contains($headText, 'SALES')) {
+            $this->validateAccountType(
+                $validator,
+                $debit,
+                'debit_account_id',
+                'Asset',
+                'Due receivable mapping must debit an Asset account such as Accounts Receivable.'
+            );
+
+            return;
+        }
+
+        $this->validateAccountType(
+            $validator,
+            $credit,
+            'credit_account_id',
+            'Liability',
+            'Due payable mapping must credit a Liability account such as Accounts Payable.'
+        );
     }
 
     private function validatePartyEffectAccounting(
@@ -185,75 +286,67 @@ class LedgerMappingRuleRequest extends FormRequest
     ): void {
         $effect = $this->input('party_ledger_effect');
 
-        $debitType = $debit->accountType?->name;
-        $creditType = $credit->accountType?->name;
+        if (!$effect || $effect === 'No Effect') {
+            return;
+        }
 
         $expectations = [
             'Increase Liability' => [
-                $creditType,
+                $credit,
                 'Liability',
                 'credit_account_id',
                 'Increasing a payable/advance liability must credit a liability account.',
             ],
-
             'Decrease Liability' => [
-                $debitType,
+                $debit,
                 'Liability',
                 'debit_account_id',
                 'Decreasing a payable/advance liability must debit a liability account.',
             ],
-
             'Increase Receivable' => [
-                $debitType,
+                $debit,
                 'Asset',
                 'debit_account_id',
                 'Increasing receivable must debit an asset account.',
             ],
-
             'Decrease Receivable' => [
-                $creditType,
+                $credit,
                 'Asset',
                 'credit_account_id',
                 'Decreasing receivable must credit an asset account.',
             ],
-
             'Increase Asset' => [
-                $debitType,
+                $debit,
                 'Asset',
                 'debit_account_id',
-                'Increasing an asset must debit an asset account.',
+                'Increasing an advance asset must debit an asset account.',
             ],
-
             'Decrease Asset' => [
-                $creditType,
+                $credit,
                 'Asset',
                 'credit_account_id',
-                'Decreasing an asset must credit an asset account.',
+                'Decreasing an advance asset must credit an asset account.',
             ],
-
             'Increase Advance Asset' => [
-                $debitType,
+                $debit,
                 'Asset',
                 'debit_account_id',
                 'Advance paid must debit an asset account.',
             ],
-
             'Decrease Advance Asset' => [
-                $creditType,
+                $credit,
                 'Asset',
                 'credit_account_id',
                 'Advance paid adjustment must credit the advance asset account.',
             ],
-
             'Increase Advance Liability' => [
-                $creditType,
+                $credit,
                 'Liability',
                 'credit_account_id',
                 'Advance received must credit a liability account.',
             ],
-
             'Decrease Advance Liability' => [
-                $debitType,
+                $debit,
                 'Liability',
                 'debit_account_id',
                 'Advance received adjustment must debit the advance liability account.',
@@ -264,16 +357,76 @@ class LedgerMappingRuleRequest extends FormRequest
             return;
         }
 
-        [$actualType, $expectedType, $field, $message] = $expectations[$effect];
+        /** @var ChartOfAccount $account */
+        [$account, $expectedType, $field, $message] = $expectations[$effect];
+        $this->validateAccountType($validator, $account, $field, $expectedType, $message);
+    }
 
-        if ($actualType !== $expectedType) {
+    private function validateAccountType(
+        Validator $validator,
+        ChartOfAccount $account,
+        string $field,
+        string $expectedType,
+        string $message
+    ): void {
+        if ($account->accountType?->name !== $expectedType) {
             $validator->errors()->add($field, $message);
         }
+    }
+
+    private function settlementKey(SettlementType $settlement): string
+    {
+        $code = strtoupper((string) $settlement->code);
+        $name = strtoupper((string) $settlement->name);
+        $value = $code . ' ' . $name;
+
+        return match (true) {
+            str_contains($value, 'ADVANCE_PAID') || str_contains($value, 'ADVANCE PAID') => 'advance_paid',
+            str_contains($value, 'ADVANCE_RECEIVED') || str_contains($value, 'ADVANCE RECEIVED') => 'advance_received',
+            str_contains($value, 'CASH') => 'cash',
+            str_contains($value, 'BANK') => 'bank',
+            str_contains($value, 'DUE') => 'due',
+            str_contains($value, 'ADJUST') => 'adjustment',
+            default => 'other',
+        };
+    }
+
+    private function expectedCashBankSide(TransactionHead $head, string $settlementKey): string
+    {
+        if (in_array($settlementKey, ['advance_received'], true)) {
+            return 'Debit';
+        }
+
+        if (in_array($settlementKey, ['advance_paid'], true)) {
+            return 'Credit';
+        }
+
+        $headText = strtoupper($head->nature . ' ' . $head->name);
+
+        if (
+            str_contains($headText, 'RECEIPT')
+            || str_contains($headText, 'RECEIVED')
+            || str_contains($headText, 'COLLECTION')
+            || str_contains($headText, 'INCOME')
+            || str_contains($headText, 'CAPITAL')
+        ) {
+            return 'Debit';
+        }
+
+        return 'Credit';
+    }
+
+    private function blankToNull(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     public function messages(): array
     {
         return [
+            'rule_code.regex' => 'Rule Code may contain only letters, numbers, dots, hyphens, and underscores.',
             'rule_code.unique' => 'This Ledger Mapping Rule Code already exists. Please use another code.',
 
             'transaction_head_id.required' => 'Transaction Head is required.',
@@ -283,11 +436,11 @@ class LedgerMappingRuleRequest extends FormRequest
             'settlement_type_id.exists' => 'Selected Settlement Type is invalid or inactive.',
 
             'debit_account_id.required' => 'Debit Account is required.',
-            'debit_account_id.exists' => 'Selected Debit Account is invalid or inactive.',
+            'debit_account_id.exists' => 'Selected Debit Account must be an active posting Ledger account.',
 
             'credit_account_id.required' => 'Credit Account is required.',
             'credit_account_id.different' => 'Debit Account and Credit Account cannot be the same.',
-            'credit_account_id.exists' => 'Selected Credit Account is invalid or inactive.',
+            'credit_account_id.exists' => 'Selected Credit Account must be an active posting Ledger account.',
 
             'party_ledger_effect.in' => 'Selected Party Ledger Effect is invalid.',
 

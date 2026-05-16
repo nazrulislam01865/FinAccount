@@ -29,6 +29,7 @@ class VoucherNumberingRuleSeeder extends Seeder
         }
 
         $rules = [
+            ['Opening Voucher', 'OP', 'OP-{YYYY}-{00000}', 'Opening balance'],
             ['Payment Voucher', 'PV', 'PV-{YYYY}-{00000}', 'Cash/bank payments'],
             ['Receipt Voucher', 'RV', 'RV-{YYYY}-{00000}', 'Cash/bank receipts'],
             ['Journal Voucher', 'JV', 'JV-{YYYY}-{00000}', 'Due, adjustment, opening balance'],

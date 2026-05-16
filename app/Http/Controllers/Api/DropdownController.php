@@ -9,14 +9,14 @@ use App\Models\BusinessType;
 use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\Currency;
+use App\Models\LedgerMappingRule;
+use App\Models\Party;
 use App\Models\PartyType;
 use App\Models\SettlementType;
 use App\Models\TimeZone;
 use App\Models\TransactionHead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Models\LedgerMappingRule;
-use App\Models\Party;
 
 class DropdownController extends Controller
 {
@@ -95,12 +95,18 @@ class DropdownController extends Controller
         return $this->ok(
             PartyType::query()
                 ->where('status', 'Active')
+                ->with('defaultLedger.accountType')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get()
-                ->map(fn ($item) => [
+                ->map(fn (PartyType $item) => [
                     'id' => $item->id,
                     'name' => $item->name,
+                    'code' => $item->code,
+                    'default_ledger_account_id' => $item->default_ledger_account_id,
+                    'default_ledger_nature' => $this->inferPartyLedgerNature($item),
+                    'default_ledger_name' => $item->defaultLedger?->display_name,
+                    'default_ledger_account_type' => $item->defaultLedger?->accountType?->name,
                     'display_name' => $item->name,
                 ])
         );
@@ -246,7 +252,7 @@ class DropdownController extends Controller
         return $this->ok(
             CashBankAccount::query()
                 ->where('status', 'Active')
-                ->with('linkedLedger')
+                ->with(['linkedLedger.accountType', 'bank'])
                 ->orderBy('cash_bank_name')
                 ->get()
                 ->map(fn (CashBankAccount $account) => [
@@ -255,25 +261,41 @@ class DropdownController extends Controller
                     'cash_bank_name' => $account->cash_bank_name,
                     'name' => $account->cash_bank_name,
                     'type' => $account->type,
+
                     'linked_ledger_account_id' => $account->linked_ledger_account_id,
                     'linked_ledger_name' => $account->linkedLedger?->display_name
                         ?: trim(($account->linkedLedger?->account_code ? $account->linkedLedger->account_code . ' - ' : '') . ($account->linkedLedger?->account_name ?? '')),
-                    'display_name' => $account->cash_bank_name,
+                    'linked_ledger_account_type' => $account->linkedLedger?->accountType?->name,
+                    'linked_ledger_normal_balance' => $account->linkedLedger?->normal_balance
+                        ?: $account->linkedLedger?->accountType?->normal_balance,
+
+                    'bank_name' => $account->bank_name ?? $account->bank?->bank_name,
+                    'branch_name' => $account->branch_name,
+                    'account_number' => $account->account_number,
+                    'opening_balance' => $account->opening_balance,
+                    'usage_note' => $account->usage_note,
+
+                    'display_name' => trim(($account->cash_bank_code ? $account->cash_bank_code . ' - ' : '') . $account->cash_bank_name),
                 ])
         );
     }
 
     public function parties(Request $request): JsonResponse
     {
-        // Return parties created from Setup > Party / Person.
-        // The optional party_type_id filter lets transaction entry show only parties
-        // that match the selected Transaction Head's default party type.
         $query = Party::query()
             ->where('status', 'Active')
-            ->with(['partyType', 'linkedLedger']);
+            ->with(['partyType', 'linkedLedger.accountType']);
 
         if ($request->filled('party_type_id')) {
             $query->where('party_type_id', $request->integer('party_type_id'));
+        }
+
+        if ($request->filled('ledger_nature')) {
+            $query->where('default_ledger_nature', $request->string('ledger_nature'));
+        }
+
+        if ($request->filled('linked_ledger_account_id')) {
+            $query->where('linked_ledger_account_id', $request->integer('linked_ledger_account_id'));
         }
 
         return $this->ok(
@@ -285,11 +307,16 @@ class DropdownController extends Controller
                     'party_name' => $party->party_name,
                     'sub_type' => $party->sub_type,
                     'default_ledger_nature' => $party->default_ledger_nature,
+                    'opening_balance' => $party->opening_balance,
+                    'opening_balance_type' => $party->opening_balance_type,
                     'party_type_id' => $party->party_type_id,
                     'party_type_name' => $party->partyType?->name,
                     'linked_ledger_account_id' => $party->linked_ledger_account_id,
                     'linked_ledger_name' => $party->linkedLedger?->display_name
                         ?: trim(($party->linkedLedger?->account_code ? $party->linkedLedger->account_code . ' - ' : '') . ($party->linkedLedger?->account_name ?? '')),
+                    'linked_ledger_account_type' => $party->linkedLedger?->accountType?->name,
+                    'linked_ledger_normal_balance' => $party->linkedLedger?->normal_balance
+                        ?: $party->linkedLedger?->accountType?->normal_balance,
                     'display_name' => trim(($party->party_code ? $party->party_code . ' - ' : '') . $party->party_name),
                 ])
         );
@@ -299,6 +326,7 @@ class DropdownController extends Controller
     {
         $query = ChartOfAccount::query()
             ->where('status', 'Active')
+            ->where('account_level', 'Group')
             ->with('accountType');
 
         if ($request->filled('account_type_id')) {
@@ -306,40 +334,70 @@ class DropdownController extends Controller
         }
 
         if ($request->filled('exclude_id')) {
-            $query->where('id', '!=', $request->integer('exclude_id'));
+            $excludedIds = $this->descendantAccountIds($request->integer('exclude_id'));
+            $excludedIds[] = $request->integer('exclude_id');
+
+            $query->whereNotIn('id', array_unique($excludedIds));
         }
 
         return $this->ok(
             $query->orderBy('account_code')
                 ->get()
-                ->map(fn ($account) => $this->formatAccount($account))
+                ->map(fn (ChartOfAccount $account) => $this->formatAccount($account))
         );
     }
 
-    public function cashBankLedgers(): JsonResponse
+    public function cashBankLedgers(Request $request): JsonResponse
     {
+        $usedLedgerIds = CashBankAccount::query()
+            ->when($request->filled('exclude_cash_bank_account_id'), fn ($query) => $query
+                ->whereKeyNot($request->integer('exclude_cash_bank_account_id')))
+            ->pluck('linked_ledger_account_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         return $this->ok(
             ChartOfAccount::query()
                 ->where('status', 'Active')
-                ->with('accountType')
+                ->where('account_level', 'Ledger')
                 ->where('is_cash_bank', true)
                 ->where('posting_allowed', true)
+                ->whereNotIn('id', $usedLedgerIds)
+                ->whereHas('accountType', fn ($query) => $query
+                    ->where('name', 'Asset')
+                    ->where('normal_balance', 'Debit'))
+                ->with('accountType')
                 ->orderBy('account_code')
                 ->get()
-                ->map(fn ($account) => $this->formatAccount($account))
+                ->map(fn (ChartOfAccount $account) => $this->formatAccount($account))
         );
     }
 
-    public function ledgerAccounts(): JsonResponse
+    public function ledgerAccounts(Request $request): JsonResponse
     {
+        $partyType = $request->filled('party_type_id')
+            ? PartyType::query()->find($request->integer('party_type_id'))
+            : null;
+
+        $ledgerNature = $request->input('ledger_nature')
+            ?: ($partyType ? $this->inferPartyLedgerNature($partyType) : null);
+
+        $query = ChartOfAccount::query()
+            ->where('status', 'Active')
+            ->where('account_level', 'Ledger')
+            ->where('posting_allowed', true)
+            ->with('accountType');
+
+        if ($request->boolean('for_party') || $partyType || $ledgerNature) {
+            $query->where('is_cash_bank', false);
+            $this->applyPartyLedgerNatureFilter($query, $ledgerNature);
+        }
+
         return $this->ok(
-            ChartOfAccount::query()
-                ->where('status', 'Active')
-                ->with('accountType')
-                ->where('posting_allowed', true)
-                ->orderBy('account_code')
+            $query->orderBy('account_code')
                 ->get()
-                ->map(fn ($account) => $this->formatAccount($account))
+                ->map(fn (ChartOfAccount $account) => $this->formatAccount($account))
         );
     }
 
@@ -352,12 +410,86 @@ class DropdownController extends Controller
             'account_code' => $account->account_code,
             'account_name' => $account->account_name,
             'account_level' => $account->account_level,
+            'account_type_id' => $account->account_type_id,
+            'account_type' => $account->accountType?->name,
             'normal_balance' => $account->normal_balance ?: $account->accountType?->normal_balance,
             'posting_allowed' => (bool) $account->posting_allowed,
+            'is_cash_bank' => (bool) $account->is_cash_bank,
             'name' => $account->account_name,
             'display_name' => $account->display_name ?: $displayName,
         ];
     }
+
+    private function descendantAccountIds(int $accountId): array
+    {
+        $childrenByParent = ChartOfAccount::query()
+            ->whereNotNull('parent_id')
+            ->get(['id', 'parent_id'])
+            ->groupBy('parent_id');
+
+        $ids = [];
+        $stack = [$accountId];
+
+        while ($stack) {
+            $currentId = array_pop($stack);
+
+            foreach ($childrenByParent->get($currentId, collect()) as $child) {
+                $ids[] = (int) $child->id;
+                $stack[] = (int) $child->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    private function inferPartyLedgerNature(?PartyType $partyType): string
+    {
+        $code = strtoupper((string) $partyType?->code);
+        $name = strtoupper((string) $partyType?->name);
+        $value = $code . ' ' . $name;
+
+        if (str_contains($value, 'CUSTOMER') || str_contains($value, 'CUS') || str_contains($value, 'TENANT')) {
+            return 'Receivable';
+        }
+
+        if (
+            str_contains($value, 'SUPPLIER')
+            || str_contains($value, 'SUP')
+            || str_contains($value, 'VENDOR')
+            || str_contains($value, 'LANDLORD')
+        ) {
+            return 'Payable';
+        }
+
+        if (str_contains($value, 'EMPLOYEE') || str_contains($value, 'DRIVER')) {
+            return 'Payable';
+        }
+
+        if (str_contains($value, 'OWNER')) {
+            return 'No Effect';
+        }
+
+        return 'No Effect';
+    }
+
+    private function applyPartyLedgerNatureFilter($query, ?string $ledgerNature): void
+    {
+        match ($ledgerNature) {
+            'Receivable', 'Advance Paid' => $query->whereHas('accountType', fn ($relation) => $relation
+                ->where('name', 'Asset')
+                ->where('normal_balance', 'Debit')),
+
+            'Payable', 'Advance Received' => $query->whereHas('accountType', fn ($relation) => $relation
+                ->where('name', 'Liability')
+                ->where('normal_balance', 'Credit')),
+
+            'No Effect' => $query->whereHas('accountType', fn ($relation) => $relation
+                ->whereIn('name', ['Asset', 'Liability', 'Equity'])),
+
+            default => null,
+        };
+    }
+
     public function partyLedgerEffects(): JsonResponse
     {
         return $this->ok(

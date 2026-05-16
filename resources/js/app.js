@@ -73,6 +73,16 @@ window.AccountingUI = (() => {
     return raw.split(',').map((value) => value.trim()).filter(Boolean);
   }
 
+  function setOptionDataAttributes(option, item) {
+    Object.entries(item).forEach(([key, value]) => {
+      if (value === null || value === undefined || typeof value === 'object') {
+        return;
+      }
+
+      option.setAttribute(`data-${key.replace(/_/g, '-')}`, String(value));
+    });
+  }
+
   async function loadSelect(select) {
     const url = select.dataset.dropdown;
 
@@ -110,6 +120,8 @@ window.AccountingUI = (() => {
 
         option.value = item.id;
         option.textContent = optionLabel(item, template);
+
+        setOptionDataAttributes(option, item);
 
         if (selected.includes(String(item.id))) {
           option.selected = true;
@@ -208,10 +220,16 @@ window.AccountingUI = (() => {
       const sync = () => {
         if (input) {
           input.value = switchEl.classList.contains('on') ? '1' : '0';
+          input.dispatchEvent(new Event('change', { bubbles: true }));
         }
       };
 
       switchEl.addEventListener('click', () => {
+        if (switchEl.dataset.locked === 'true') {
+          sync();
+          return;
+        }
+
         switchEl.classList.toggle('on');
         sync();
       });

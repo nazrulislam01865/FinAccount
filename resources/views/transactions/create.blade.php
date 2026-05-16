@@ -20,8 +20,6 @@
         ])->values(),
     ])->values();
 
-    // Parties are loaded from Setup > Party / Person, not from static demo data.
-    // The JavaScript below uses party_type_id to filter parties by the selected Transaction Head.
     $partyPayload = $parties->map(fn ($party) => [
         'id' => $party->id,
         'party_name' => $party->party_name,
@@ -34,11 +32,10 @@
     $cashBankPayload = $cashBankAccounts->map(fn ($account) => [
         'id' => $account->id,
         'cash_bank_name' => $account->cash_bank_name,
+        'display_name' => $account->display_name ?? $account->cash_bank_name,
         'type' => $account->type,
         'linked_ledger_account_id' => $account->linked_ledger_account_id,
     ])->values();
-
-    $firstHead = $transactionHeads->first();
 @endphp
 
 <div class="page-title">
@@ -118,6 +115,7 @@
                             <option>{{ $voucherType }}</option>
                         @endforeach
                     </select>
+                    <div class="hint">Leave Auto Select unless accountant needs a specific voucher type.</div>
                 </div>
 
                 <div>
@@ -133,7 +131,7 @@
                     <select id="party" name="party_id">
                         <option value="">Select saved Party / Person</option>
                     </select>
-                    <div class="hint">Loaded from Setup > Party / Person and filtered by the selected Transaction Head party type.</div>
+                    <div class="hint">Shown when the selected Transaction Head requires party tracking.</div>
                 </div>
 
                 <div class="money-wrap">
@@ -155,14 +153,15 @@
                     <select id="settlement" name="settlement_type_id" required>
                         <option value="">Select Settlement</option>
                     </select>
+                    <div class="hint">Only settlement types with active accounting mapping are shown.</div>
                 </div>
 
                 <div id="cashBankBox">
-                    <label>Paid From / Received In <span class="required">*</span></label>
+                    <label><span id="cashBankLabel">Paid From / Received In</span> <span class="required">*</span></label>
                     <select id="cashBank" name="cash_bank_account_id">
                         <option value="">Loading Cash / Bank...</option>
                     </select>
-                    <div class="hint">Shown when settlement is Cash or Bank.</div>
+                    <div class="hint">Shown when the accounting rule affects cash/bank.</div>
                 </div>
 
                 <div>
@@ -314,6 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const settlement = document.getElementById('settlement');
     const cashBank = document.getElementById('cashBank');
     const cashBankBox = document.getElementById('cashBankBox');
+    const cashBankLabel = document.getElementById('cashBankLabel');
     const reference = document.getElementById('reference');
     const referenceHint = document.getElementById('referenceHint');
     const notes = document.getElementById('notes');
@@ -416,15 +416,44 @@ document.addEventListener('DOMContentLoaded', () => {
         return settlement.selectedOptions[0] || null;
     }
 
-    function isCashBankSettlement() {
+    function settlementText() {
         const option = selectedSettlement();
 
-        if (!option || !option.value) {
+        return `${option?.dataset.code || ''} ${option?.textContent || ''}`.toUpperCase();
+    }
+
+    function isCashBankSettlement() {
+        const value = settlementText();
+
+        if (!value.trim()) {
             return false;
         }
 
-        return ['CASH', 'BANK'].includes(String(option.dataset.code || '').toUpperCase())
-            || ['cash', 'bank'].includes(option.textContent.trim().toLowerCase());
+        return value.includes('CASH')
+            || value.includes('BANK')
+            || value.includes('ADVANCE_PAID')
+            || value.includes('ADVANCE PAID')
+            || value.includes('ADVANCE_RECEIVED')
+            || value.includes('ADVANCE RECEIVED');
+    }
+
+    function cashBankDirectionLabel() {
+        const selectedHead = headById(head.value);
+        const value = `${selectedHead?.nature || ''} ${selectedHead?.name || ''} ${settlementText()}`.toUpperCase();
+
+        if (
+            value.includes('RECEIPT')
+            || value.includes('RECEIVED')
+            || value.includes('COLLECTION')
+            || value.includes('INCOME')
+            || value.includes('CAPITAL')
+            || value.includes('ADVANCE_RECEIVED')
+            || value.includes('ADVANCE RECEIVED')
+        ) {
+            return 'Received In';
+        }
+
+        return 'Paid From';
     }
 
     function resetPreview(message = 'Select transaction information to generate preview.') {
@@ -509,6 +538,31 @@ document.addEventListener('DOMContentLoaded', () => {
             && party.options[0]?.dataset.defaultNotApplicable === '1';
     }
 
+    function renderPartyOptions(rows, previousValue = '') {
+        if (rows.length === 0) {
+            renderDefaultNotApplicableParty();
+            return;
+        }
+
+        renderOptions(
+            party,
+            rows,
+            'Select saved Party / Person',
+            (item) => item.display_name || [item.party_code, item.party_name].filter(Boolean).join(' - '),
+            (option, item) => {
+                option.dataset.partyType = item.party_type_id || '';
+                option.dataset.partyTypeName = item.party_type_name || '';
+                option.dataset.linkedLedgerAccountId = item.linked_ledger_account_id || '';
+            }
+        );
+
+        if (Array.from(party.options).some((option) => option.value && option.value === previousValue)) {
+            party.value = previousValue;
+        }
+
+        party.disabled = false;
+    }
+
     async function loadParties() {
         const selectedHead = headById(head.value);
         const partyTypeId = selectedHead?.default_party_type_id || '';
@@ -517,7 +571,12 @@ document.addEventListener('DOMContentLoaded', () => {
         party.disabled = true;
         party.innerHTML = '<option value="">Loading Party / Person...</option>';
 
-        if (!selectedHead || !partyTypeId) {
+        if (!selectedHead) {
+            renderDefaultNotApplicableParty();
+            return;
+        }
+
+        if (!partyTypeId && !selectedHead.requires_party) {
             renderDefaultNotApplicableParty();
             return;
         }
@@ -527,48 +586,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 party_type_id: partyTypeId,
             }));
 
-            if (rows.length === 0) {
-                renderDefaultNotApplicableParty();
-                return;
-            }
-
-            renderOptions(
-                party,
-                rows,
-                'Select saved Party / Person',
-                (item) => item.display_name || [item.party_code, item.party_name].filter(Boolean).join(' - '),
-                (option, item) => {
-                    option.dataset.partyType = item.party_type_id || '';
-                    option.dataset.partyTypeName = item.party_type_name || '';
-                }
-            );
+            renderPartyOptions(rows, previousValue);
         } catch (error) {
             console.error(error);
 
-            const rows = fallbackParties.filter((item) => String(item.party_type_id) === String(partyTypeId));
+            const rows = partyTypeId
+                ? fallbackParties.filter((item) => String(item.party_type_id) === String(partyTypeId))
+                : fallbackParties;
 
-            if (rows.length === 0) {
-                renderDefaultNotApplicableParty();
-                return;
-            }
-
-            renderOptions(
-                party,
-                rows,
-                'Select saved Party / Person',
-                (item) => [item.party_code, item.party_name].filter(Boolean).join(' - '),
-                (option, item) => {
-                    option.dataset.partyType = item.party_type_id || '';
-                    option.dataset.partyTypeName = item.party_type_name || '';
-                }
-            );
+            renderPartyOptions(rows, previousValue);
         }
-
-        if (Array.from(party.options).some((option) => option.value && option.value === previousValue)) {
-            party.value = previousValue;
-        }
-
-        party.disabled = false;
     }
 
     async function loadCashBankAccounts() {
@@ -595,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cashBank,
                 fallbackCashBanks,
                 fallbackCashBanks.length ? 'Select Cash / Bank' : 'No active Cash / Bank accounts found',
-                (item) => item.cash_bank_name || item.name,
+                (item) => item.display_name || item.cash_bank_name || item.name,
                 (option, item) => {
                     option.dataset.type = item.type || '';
                     option.dataset.linkedLedgerAccountId = item.linked_ledger_account_id || '';
@@ -625,17 +652,18 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             rows = await getRows(endpoint(form.dataset.settlementsUrl, {
                 transaction_head_id: selectedHead.id,
+                mapped_only: 1,
             }));
         } catch (error) {
             console.error(error);
             rows = [];
-            showToast('Could not fetch Settlement Types for the selected Transaction Head.');
+            showToast('Could not fetch mapped Settlement Types for the selected Transaction Head.');
         }
 
         renderOptions(
             settlement,
             rows,
-            rows.length ? 'Select Settlement' : 'No Settlement Types assigned for this Transaction Head',
+            rows.length ? 'Select Settlement' : 'No mapped Settlement Types found for this Transaction Head',
             (item) => item.display_name || item.name,
             (option, item) => {
                 option.dataset.code = item.code || '';
@@ -683,9 +711,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleCashBank() {
         const show = isCashBankSettlement();
+        const label = cashBankDirectionLabel();
 
         cashBankBox.classList.toggle('hidden', !show);
         cashBank.required = show;
+        cashBankLabel.textContent = label;
+
+        const hint = cashBankBox.querySelector('.hint');
+
+        if (hint) {
+            hint.textContent = show
+                ? `${label} is required for cash, bank, and advance money movement.`
+                : 'Hidden when the accounting rule does not affect cash/bank.';
+        }
 
         if (!show) {
             cashBank.value = '';
@@ -700,6 +738,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedHead = headById(head.value);
 
         if (selectedHead?.requires_party && !party.value && !hasDefaultNotApplicableParty()) {
+            return false;
+        }
+
+        if (selectedHead?.requires_reference && !reference.value.trim()) {
             return false;
         }
 
@@ -787,6 +829,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const accountName = text(entry.account_name);
             const accountType = text(entry.account_type, 'Account');
             const normalBalance = text(entry.normal_balance, side);
+            const sourceLabel = text(entry.source_label, 'Accounting Rule');
             const postingEffect = text(entry.posting_effect, normalBalance === side ? 'Increase' : 'Decrease');
 
             const effectClass = postingEffect === 'Increase'
@@ -808,6 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="ledger-account-rule">
                             ${side} BDT ${money(sideAmount)} → ${postingEffect} ${accountType}
+                            <br><small>Source: ${sourceLabel}</small>
                         </div>
                     </td>
 

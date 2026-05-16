@@ -1383,3 +1383,17 @@ select::-ms-expand {
         grid-template-columns: repeat(8, minmax(160px, 1fr));
     }
 }
+
+.readonly-field {
+    background: #f8fafc;
+    color: #475569;
+    cursor: not-allowed;
+}
+
+.switch-row.disabled {
+    opacity: 0.6;
+}
+
+.switch-row.disabled .switch {
+    cursor: not-allowed;
+}

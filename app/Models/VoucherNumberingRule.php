@@ -1,107 +1,61 @@
 <?php
 
-namespace App\Models;
+namespace Database\Seeders;
 
-use Carbon\CarbonInterface;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Company;
+use App\Models\FinancialYear;
+use App\Models\VoucherNumberingRule;
+use Illuminate\Database\Seeder;
 
-class VoucherNumberingRule extends Model
+class VoucherNumberingRuleSeeder extends Seeder
 {
-    use SoftDeletes;
-
-    /*
-     * These are only default suggestions.
-     * Users can create new voucher types as needed.
-     */
-    public const VOUCHER_TYPES = [
-        'Payment Voucher' => 'Cash/bank payments',
-        'Receipt Voucher' => 'Cash/bank receipts',
-        'Journal Voucher' => 'Due, adjustment, opening balance',
-        'Contra / Transfer Voucher' => 'Cash to bank or bank to bank transfer',
-        'Draft Voucher' => 'Unposted draft transactions',
-    ];
-
-    public const DEFAULT_PREFIXES = [
-        'Payment Voucher' => 'PV',
-        'Receipt Voucher' => 'RV',
-        'Journal Voucher' => 'JV',
-        'Contra / Transfer Voucher' => 'CV',
-        'Draft Voucher' => 'DR',
-    ];
-
-    protected $fillable = [
-        'company_id',
-        'financial_year_id',
-        'voucher_type',
-        'prefix',
-        'format_template',
-        'starting_number',
-        'number_length',
-        'last_number',
-        'reset_every_year',
-        'used_for',
-        'status',
-        'created_by',
-        'updated_by',
-    ];
-
-    protected $casts = [
-        'starting_number' => 'integer',
-        'number_length' => 'integer',
-        'last_number' => 'integer',
-        'reset_every_year' => 'boolean',
-    ];
-
-    public function company()
+    public function run(): void
     {
-        return $this->belongsTo(Company::class);
-    }
+        $company = Company::query()->first();
 
-    public function financialYear()
-    {
-        return $this->belongsTo(FinancialYear::class);
-    }
+        if (!$company) {
+            return;
+        }
 
-    public function getNextNumberAttribute(): int
-    {
-        return max($this->starting_number, $this->last_number + 1);
-    }
+        $financialYear = FinancialYear::query()
+            ->where('company_id', $company->id)
+            ->where('status', 'Active')
+            ->orderByDesc('is_active')
+            ->orderByDesc('start_date')
+            ->first();
 
-    public function getFirstVoucherNumberAttribute(): string
-    {
-        return $this->generate($this->starting_number);
-    }
+        if (!$financialYear) {
+            return;
+        }
 
-    public function getNextVoucherNumberAttribute(): string
-    {
-        return $this->generate($this->next_number);
-    }
+        $rules = [
+            ['Payment Voucher', 'PV', 'PV-{YYYY}-{00000}', 'Cash/bank payments'],
+            ['Receipt Voucher', 'RV', 'RV-{YYYY}-{00000}', 'Cash/bank receipts'],
+            ['Journal Voucher', 'JV', 'JV-{YYYY}-{00000}', 'Due, adjustment, opening balance'],
+            ['Contra / Transfer Voucher', 'CV', 'CV-{YYYY}-{00000}', 'Cash to bank or bank to bank transfer'],
+            ['Draft Voucher', 'DR', 'DR-{YYYY}-{00000}', 'Unposted draft transactions'],
+        ];
 
-    public function generate(?int $number = null, ?CarbonInterface $voucherDate = null): string
-    {
-        $number ??= $this->next_number;
-        $voucherDate ??= now();
-
-        $output = str_replace(
-            ['{YYYY}', '{YY}', '{MM}'],
-            [
-                $voucherDate->format('Y'),
-                $voucherDate->format('y'),
-                $voucherDate->format('m'),
-            ],
-            $this->format_template
-        );
-
-        return preg_replace_callback('/\{0+\}/', function ($matches) use ($number) {
-            $length = strlen($matches[0]) - 2;
-
-            return str_pad((string) $number, $length, '0', STR_PAD_LEFT);
-        }, $output);
-    }
-
-    public function scopeActive($query)
-    {
-        return $query->where('status', 'Active');
+        foreach ($rules as [$type, $prefix, $format, $usedFor]) {
+            VoucherNumberingRule::query()->updateOrCreate(
+                [
+                    'company_id' => $company->id,
+                    'financial_year_id' => $financialYear->id,
+                    'voucher_type' => $type,
+                ],
+                [
+                    'prefix' => $prefix,
+                    'format_template' => $format,
+                    'starting_number' => 1,
+                    'number_length' => 5,
+                    'last_number' => 0,
+                    'reset_every_year' => true,
+                    'used_for' => $usedFor,
+                    'status' => 'Active',
+                    'created_by' => 1,
+                    'updated_by' => 1,
+                ]
+            );
+        }
     }
 }

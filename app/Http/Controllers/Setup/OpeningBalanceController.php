@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\OpeningBalanceRequest;
 use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
+use App\Models\Company;
 use App\Models\FinancialYear;
 use App\Models\OpeningBalance;
 use App\Models\Party;
+use App\Models\VoucherHeader;
 use App\Services\Accounting\FinancialYearService;
 use App\Services\Setup\OpeningBalanceService;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +23,8 @@ class OpeningBalanceController extends Controller
         Request $request,
         FinancialYearService $financialYearService
     ): View {
+        $company = Company::query()->first();
+
         $financialYears = FinancialYear::query()
             ->where('status', 'Active')
             ->orderByDesc('is_active')
@@ -33,25 +37,17 @@ class OpeningBalanceController extends Controller
 
         $currentFinancialYear ??= $financialYears->first();
 
-        $branchLocation = $request->input('branch_location', 'Head Office (Dhaka)');
+        $branchLocation = $request->input('branch_location', $company?->default_branch ?: 'Head Office');
+        $balanceDate = $request->input('balance_date')
+            ?: $currentFinancialYear?->start_date?->toDateString();
 
         $accounts = ChartOfAccount::query()
             ->where('status', 'Active')
-            ->with('accountType')
+            ->where('account_level', 'Ledger')
             ->where('posting_allowed', true)
-            ->withCount(['children as active_children_count' => function ($query) {
-                $query->where('status', 'Active');
-            }])
+            ->with('accountType')
             ->orderBy('account_code')
             ->get();
-
-        $postingAccounts = $accounts
-            ->where('active_children_count', 0)
-            ->values();
-
-        if ($postingAccounts->isEmpty()) {
-            $postingAccounts = $accounts->values();
-        }
 
         $parties = Party::query()
             ->where('status', 'Active')
@@ -66,18 +62,37 @@ class OpeningBalanceController extends Controller
             ->pluck('opening_balance', 'linked_ledger_account_id');
 
         $openingBalances = collect();
+        $openingIsFinal = false;
+        $postedOpeningVoucher = null;
 
         if ($currentFinancialYear) {
             $openingBalances = OpeningBalance::query()
-                ->with(['account.accountType', 'party'])
+                ->with(['account.accountType', 'party.partyType'])
                 ->where('financial_year_id', $currentFinancialYear->id)
-                ->where('branch_location', $branchLocation)
+                ->where(function ($query) use ($branchLocation) {
+                    if ($branchLocation === null || $branchLocation === '') {
+                        $query->whereNull('branch_location');
+                    } else {
+                        $query->where('branch_location', $branchLocation);
+                    }
+                })
                 ->orderBy('id')
                 ->get();
+
+            $openingIsFinal = $openingBalances->contains(fn (OpeningBalance $balance) => $balance->status === 'Final');
+
+            $postedOpeningVoucher = VoucherHeader::query()
+                ->with(['details.account.accountType', 'details.party'])
+                ->where('financial_year_id', $currentFinancialYear->id)
+                ->where('voucher_type', 'Opening Voucher')
+                ->where('status', VoucherHeader::STATUS_POSTED)
+                ->where('reference', $branchLocation)
+                ->latest('id')
+                ->first();
         }
 
         $seedOpeningRows = $this->seedOpeningRows(
-            $postingAccounts,
+            $accounts,
             $parties,
             $cashBankOpeningBalances
         );
@@ -86,15 +101,44 @@ class OpeningBalanceController extends Controller
             'currentFinancialYear' => $currentFinancialYear,
             'financialYears' => $financialYears,
             'branchLocation' => $branchLocation,
-            'branches' => ['Head Office (Dhaka)', 'Chattogram Branch'],
-            'accounts' => $postingAccounts,
+            'balanceDate' => $balanceDate,
+            'branches' => array_values(array_unique(array_filter([
+                $company?->default_branch ?: 'Head Office',
+                'Head Office',
+            ]))),
+            'accounts' => $accounts,
             'parties' => $parties,
             'openingBalances' => $openingBalances,
+            'openingIsFinal' => $openingIsFinal,
+            'postedOpeningVoucher' => $postedOpeningVoucher,
             'seedOpeningRows' => $seedOpeningRows,
         ]);
     }
 
+    public function store(
+        OpeningBalanceRequest $request,
+        OpeningBalanceService $service
+    ): JsonResponse {
+        $result = $service->save(
+            $request->validated(),
+            $request->user()?->id
+        );
 
+        $isFinal = $request->input('status') === 'Final';
+        $voucherNumber = $result['voucher']?->voucher_number;
+
+        return response()->json([
+            'success' => true,
+            'message' => $isFinal
+                ? 'Opening balance posted successfully' . ($voucherNumber ? " as {$voucherNumber}." : '.')
+                : 'Opening balance draft saved.',
+            'data' => $result,
+            'redirect' => route('setup.opening-balances', [
+                'financial_year_id' => $request->input('financial_year_id'),
+                'branch_location' => $request->input('branch_location'),
+            ]),
+        ], 201);
+    }
 
     private function seedOpeningRows($accounts, $parties, $cashBankOpeningBalances)
     {
@@ -106,7 +150,11 @@ class OpeningBalanceController extends Controller
             if ($linkedParties->isNotEmpty()) {
                 return $linkedParties->map(function (Party $party) use ($account) {
                     $amount = $this->amount($party->opening_balance ?? 0);
-                    $side = $party->opening_balance_type ?: $account->normal_balance ?: $account->accountType?->normal_balance ?: 'Debit';
+                    $side = $party->opening_balance_type
+                        ?: $this->openingSideForParty($party, $account)
+                        ?: $account->normal_balance
+                        ?: $account->accountType?->normal_balance
+                        ?: 'Debit';
 
                     return [
                         'account' => $account,
@@ -131,29 +179,23 @@ class OpeningBalanceController extends Controller
         })->values();
     }
 
+    private function openingSideForParty(Party $party, ChartOfAccount $account): ?string
+    {
+        $nature = $party->default_ledger_nature;
+
+        if (in_array($nature, ['Receivable', 'Advance Paid'], true)) {
+            return 'Debit';
+        }
+
+        if (in_array($nature, ['Payable', 'Advance Received'], true)) {
+            return 'Credit';
+        }
+
+        return $account->normal_balance ?: $account->accountType?->normal_balance;
+    }
+
     private function amount(mixed $value): float
     {
         return round((float) str_replace(',', '', (string) $value), 2);
-    }
-
-
-    public function store(
-        OpeningBalanceRequest $request,
-        OpeningBalanceService $service
-    ): JsonResponse {
-        $service->save(
-            $request->validated(),
-            $request->user()?->id
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => $request->input('status') === 'Final'
-                ? 'Opening balance setup saved and completed.'
-                : 'Opening balance draft saved.',
-            'redirect' => route('setup.opening-balances', [
-                'branch_location' => $request->input('branch_location'),
-            ]),
-        ], 201);
     }
 }

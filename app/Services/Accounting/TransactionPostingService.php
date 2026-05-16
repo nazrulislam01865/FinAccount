@@ -37,25 +37,49 @@ class TransactionPostingService
             ]);
         }
 
-        $transactionHead = TransactionHead::query()->findOrFail($data['transaction_head_id']);
-        $settlementType = SettlementType::query()->findOrFail($data['settlement_type_id']);
+        $voucherDate = isset($data['voucher_date'])
+            ? Carbon::parse($data['voucher_date'])
+            : now();
 
-        $amount = round((float) $data['amount'], 2);
+        $this->validateVoucherDateInsideFinancialYear($voucherDate, $financialYear);
+
+        $transactionHead = TransactionHead::query()
+            ->where('status', 'Active')
+            ->findOrFail($data['transaction_head_id']);
+
+        $settlementType = SettlementType::query()
+            ->where('status', 'Active')
+            ->findOrFail($data['settlement_type_id']);
+
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+
+        if ($amount <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => 'Amount must be greater than zero.',
+            ]);
+        }
 
         $mapping = $this->mappingResolver->preview(
-            (int) $data['transaction_head_id'],
-            (int) $data['settlement_type_id'],
-            $amount,
-            $data['cash_bank_account_id'] ?? null
+            transactionHeadId: (int) $data['transaction_head_id'],
+            settlementTypeId: (int) $data['settlement_type_id'],
+            amount: $amount,
+            cashBankAccountId: $data['cash_bank_account_id'] ?? null,
+            partyId: $data['party_id'] ?? null
         );
 
         $entries = collect($mapping['entries']);
         $totalDebit = round((float) $entries->sum('debit'), 2);
         $totalCredit = round((float) $entries->sum('credit'), 2);
 
-        if ($totalDebit !== $totalCredit) {
+        if ($entries->count() < 2) {
             throw ValidationException::withMessages([
-                'ledger_preview' => 'Debit and Credit are not balanced. Posting is blocked.',
+                'ledger_preview' => 'At least two accounting lines are required for posting.',
+            ]);
+        }
+
+        if ($totalDebit <= 0 || $totalCredit <= 0 || $totalDebit !== $totalCredit) {
+            throw ValidationException::withMessages([
+                'ledger_preview' => 'Debit and Credit totals must be equal before posting.',
             ]);
         }
 
@@ -65,10 +89,6 @@ class TransactionPostingService
             $data['voucher_type'] ?? null,
             $draft
         );
-
-        $voucherDate = isset($data['voucher_date'])
-            ? Carbon::parse($data['voucher_date'])
-            : now();
 
         $voucherNumber = $this->voucherNumberGenerator->preview(
             $voucherType,
@@ -83,10 +103,11 @@ class TransactionPostingService
             'financial_year_name' => $financialYear->display_name,
             'voucher_type' => $voucherType,
             'voucher_number' => $voucherNumber,
+            'voucher_date' => $voucherDate->toDateString(),
             'transaction_head' => $transactionHead->name,
             'nature' => $transactionHead->nature,
             'settlement_type' => $settlementType->name,
-            'party_ledger_effect' => $mapping['rule']->party_ledger_effect,
+            'party_ledger_effect' => $mapping['party_ledger_effect'] ?? 'No Effect',
             'cash_bank_effect' => $cashBankEffect,
             'entries' => $mapping['entries'],
             'total_debit' => $totalDebit,
@@ -103,15 +124,29 @@ class TransactionPostingService
             $status = $data['status'] ?? VoucherHeader::STATUS_POSTED;
             $draft = $status === VoucherHeader::STATUS_DRAFT;
 
+            if (!in_array($status, [VoucherHeader::STATUS_DRAFT, VoucherHeader::STATUS_POSTED], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Transaction status must be Draft or Posted.',
+                ]);
+            }
+
             $preview = $this->preview($data, $userId, $draft);
 
             $financialYear = $this->financialYearService->current($userId);
+
+            if (!$financialYear) {
+                throw ValidationException::withMessages([
+                    'financial_year_id' => 'Current Financial Year is not configured.',
+                ]);
+            }
+
             $company = Company::query()->first();
+            $voucherDate = Carbon::parse($data['voucher_date']);
 
             $voucherNumber = $this->voucherNumberGenerator->reserve(
                 $preview['voucher_type'],
                 $financialYear,
-                Carbon::parse($data['voucher_date'])
+                $voucherDate
             );
 
             $voucher = VoucherHeader::query()->create([
@@ -119,12 +154,12 @@ class TransactionPostingService
                 'financial_year_id' => $financialYear->id,
                 'voucher_number' => $voucherNumber,
                 'voucher_type' => $preview['voucher_type'],
-                'voucher_date' => $data['voucher_date'],
+                'voucher_date' => $voucherDate->toDateString(),
                 'transaction_head_id' => $data['transaction_head_id'],
                 'settlement_type_id' => $data['settlement_type_id'],
                 'party_id' => $data['party_id'] ?? null,
                 'cash_bank_account_id' => $data['cash_bank_account_id'] ?? null,
-                'amount' => $data['amount'],
+                'amount' => round((float) $data['amount'], 2),
                 'total_debit' => $preview['total_debit'],
                 'total_credit' => $preview['total_credit'],
                 'party_ledger_effect' => $preview['party_ledger_effect'],
@@ -143,9 +178,9 @@ class TransactionPostingService
                     'account_id' => $entry['account_id'],
                     'party_id' => $data['party_id'] ?? null,
                     'entry_type' => $entry['entry_type'],
-                    'debit' => $entry['debit'],
-                    'credit' => $entry['credit'],
-                    'narration' => $data['reference'] ?? $preview['transaction_head'],
+                    'debit' => round((float) $entry['debit'], 2),
+                    'credit' => round((float) $entry['credit'], 2),
+                    'narration' => $this->lineNarration($entry, $data, $preview),
                 ]);
             }
 
@@ -162,17 +197,17 @@ class TransactionPostingService
                 'auditable_id' => $voucher->id,
                 'event' => $status === VoucherHeader::STATUS_POSTED ? 'posted' : 'draft_saved',
                 'old_values' => null,
-                'new_values' => $voucher->toArray(),
+                'new_values' => $voucher->load(['details.account.accountType'])->toArray(),
                 'user_id' => $userId,
                 'created_at' => now(),
             ]);
 
             return $voucher->fresh([
-                'details.account',
-                'party',
+                'details.account.accountType',
+                'party.partyType',
                 'transactionHead',
                 'settlementType',
-                'cashBankAccount',
+                'cashBankAccount.linkedLedger.accountType',
             ]);
         });
     }
@@ -188,24 +223,84 @@ class TransactionPostingService
             return;
         }
 
-        $effect = $preview['party_ledger_effect'];
+        $effect = $preview['party_ledger_effect'] ?? 'No Effect';
         $amount = round((float) $data['amount'], 2);
         $entries = collect($preview['entries']);
 
         match ($effect) {
-            'Increase Liability' => $this->createDueMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Payable', 'Increase', $amount),
-            'Decrease Liability' => $this->createDueMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Debit')['account_id'], 'Payable', 'Decrease', $amount),
+            'Increase Liability' => $this->createDueMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Credit')),
+                'Payable',
+                'Increase',
+                $amount
+            ),
 
-            'Increase Receivable' => $this->createDueMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Debit')['account_id'], 'Receivable', 'Increase', $amount),
-            'Decrease Receivable' => $this->createDueMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Receivable', 'Decrease', $amount),
+            'Decrease Liability' => $this->createDueMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Debit')),
+                'Payable',
+                'Decrease',
+                $amount
+            ),
+
+            'Increase Receivable' => $this->createDueMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Debit')),
+                'Receivable',
+                'Increase',
+                $amount
+            ),
+
+            'Decrease Receivable' => $this->createDueMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Credit')),
+                'Receivable',
+                'Decrease',
+                $amount
+            ),
 
             'Increase Asset',
-            'Increase Advance Asset' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Debit')['account_id'], 'Paid', 'Increase', $amount),
-            'Decrease Asset',
-            'Decrease Advance Asset' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Paid', 'Decrease', $amount),
+            'Increase Advance Asset' => $this->createAdvanceMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Debit')),
+                'Paid',
+                'Increase',
+                $amount
+            ),
 
-            'Increase Advance Liability' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Credit')['account_id'], 'Received', 'Increase', $amount),
-            'Decrease Advance Liability' => $this->createAdvanceMovement($voucher, $partyId, $entries->firstWhere('entry_type', 'Debit')['account_id'], 'Received', 'Decrease', $amount),
+            'Decrease Asset',
+            'Decrease Advance Asset' => $this->createAdvanceMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Credit')),
+                'Paid',
+                'Decrease',
+                $amount
+            ),
+
+            'Increase Advance Liability' => $this->createAdvanceMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Credit')),
+                'Received',
+                'Increase',
+                $amount
+            ),
+
+            'Decrease Advance Liability' => $this->createAdvanceMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($entries->firstWhere('entry_type', 'Debit')),
+                'Received',
+                'Decrease',
+                $amount
+            ),
 
             default => null,
         };
@@ -214,11 +309,15 @@ class TransactionPostingService
     private function createDueMovement(
         VoucherHeader $voucher,
         int $partyId,
-        int $accountId,
+        ?int $accountId,
         string $dueType,
         string $movement,
         float $amount
     ): void {
+        if (!$accountId) {
+            return;
+        }
+
         DueRegister::query()->create([
             'voucher_header_id' => $voucher->id,
             'party_id' => $partyId,
@@ -234,11 +333,15 @@ class TransactionPostingService
     private function createAdvanceMovement(
         VoucherHeader $voucher,
         int $partyId,
-        int $accountId,
+        ?int $accountId,
         string $advanceType,
         string $movement,
         float $amount
     ): void {
+        if (!$accountId) {
+            return;
+        }
+
         AdvanceRegister::query()->create([
             'voucher_header_id' => $voucher->id,
             'party_id' => $partyId,
@@ -293,5 +396,36 @@ class TransactionPostingService
         }
 
         return 'No Cash/Bank';
+    }
+
+    private function lineNarration(array $entry, array $data, array $preview): string
+    {
+        $parts = array_filter([
+            $data['reference'] ?? null,
+            $data['notes'] ?? null,
+            $preview['transaction_head'] ?? null,
+            $preview['settlement_type'] ?? null,
+            $entry['source_label'] ?? null,
+        ]);
+
+        return implode(' | ', array_unique($parts)) ?: 'Auto-posted transaction line';
+    }
+
+    private function accountIdFromEntry(?array $entry): ?int
+    {
+        if (!$entry || empty($entry['account_id'])) {
+            return null;
+        }
+
+        return (int) $entry['account_id'];
+    }
+
+    private function validateVoucherDateInsideFinancialYear(Carbon $voucherDate, $financialYear): void
+    {
+        if ($voucherDate->lt($financialYear->start_date) || $voucherDate->gt($financialYear->end_date)) {
+            throw ValidationException::withMessages([
+                'voucher_date' => 'Transaction date must be inside the current Financial Year.',
+            ]);
+        }
     }
 }

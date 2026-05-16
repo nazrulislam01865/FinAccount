@@ -11,15 +11,9 @@ class ChartOfAccountService
     public function create(array $data, ?int $userId = null): ChartOfAccount
     {
         $company = Company::query()->first();
+        $data = $this->prepareAccountingData($data);
 
         $data['company_id'] = $company?->id;
-        $data['parent_id'] = $data['parent_id'] ?? null;
-        $data['account_level'] = $data['account_level'] ?? 'Ledger';
-        $data['normal_balance'] = $data['normal_balance']
-            ?? $this->normalBalanceForType($data['account_type_id'] ?? null);
-        $data['posting_allowed'] = $data['account_level'] === 'Group' ? false : (bool) ($data['posting_allowed'] ?? true);
-        $data['is_cash_bank'] = (bool) ($data['is_cash_bank'] ?? false);
-        // Opening balances are stored through OpeningBalanceService, not Chart of Accounts.
         $data['created_by'] = $userId;
         $data['updated_by'] = $userId;
 
@@ -28,14 +22,7 @@ class ChartOfAccountService
 
     public function update(ChartOfAccount $account, array $data, ?int $userId = null): ChartOfAccount
     {
-        $data['parent_id'] = $data['parent_id'] ?? null;
-        $data['account_level'] = $data['account_level'] ?? 'Ledger';
-        $data['normal_balance'] = $data['normal_balance']
-            ?? $account->normal_balance
-            ?? $this->normalBalanceForType($data['account_type_id'] ?? null);
-        $data['posting_allowed'] = $data['account_level'] === 'Group' ? false : (bool) ($data['posting_allowed'] ?? true);
-        $data['is_cash_bank'] = (bool) ($data['is_cash_bank'] ?? false);
-        // Opening balances are stored through OpeningBalanceService, not Chart of Accounts.
+        $data = $this->prepareAccountingData($data);
         $data['updated_by'] = $userId;
 
         $account->update($data);
@@ -43,12 +30,32 @@ class ChartOfAccountService
         return $account->fresh(['accountType', 'parent']);
     }
 
-    private function normalBalanceForType(?int $accountTypeId): ?string
+    private function prepareAccountingData(array $data): array
     {
-        if (!$accountTypeId) {
-            return null;
-        }
+        $accountType = AccountType::query()->find($data['account_type_id'] ?? null);
+        $accountLevel = $data['account_level'] ?? 'Ledger';
+        $isGroup = $accountLevel === 'Group';
+        $isAssetType = $accountType?->name === 'Asset';
 
-        return AccountType::query()->whereKey($accountTypeId)->value('normal_balance');
+        $data['parent_id'] = $data['parent_id'] ?? null;
+        $data['account_level'] = $accountLevel;
+        $data['normal_balance'] = $accountType?->normal_balance
+            ?? $data['normal_balance']
+            ?? null;
+
+        // Parent/group accounts are headings only. They must never receive journal lines.
+        $data['posting_allowed'] = $isGroup
+            ? false
+            : (bool) ($data['posting_allowed'] ?? true);
+
+        // Cash/bank ledgers are always Asset + Ledger + posting accounts.
+        $data['is_cash_bank'] = !$isGroup
+            && $isAssetType
+            && (bool) $data['posting_allowed']
+            && (bool) ($data['is_cash_bank'] ?? false);
+
+        unset($data['opening_balance']);
+
+        return $data;
     }
 }

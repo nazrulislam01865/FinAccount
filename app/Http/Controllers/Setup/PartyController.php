@@ -21,7 +21,7 @@ class PartyController extends Controller
     public function index(): View
     {
         $parties = Party::query()
-            ->with(['partyType', 'linkedLedger'])
+            ->with(['partyType.defaultLedger.accountType', 'linkedLedger.accountType'])
             ->orderBy('party_code')
             ->get();
 
@@ -42,7 +42,7 @@ class PartyController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Party saved successfully.',
-            'data' => $party->load(['partyType', 'linkedLedger']),
+            'data' => $party->load(['partyType.defaultLedger.accountType', 'linkedLedger.accountType']),
             'redirect' => route('setup.parties'),
         ], 201);
     }
@@ -61,7 +61,7 @@ class PartyController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Party updated successfully.',
-            'data' => $party,
+            'data' => $party->load(['partyType.defaultLedger.accountType', 'linkedLedger.accountType']),
             'redirect' => route('setup.parties'),
         ]);
     }
