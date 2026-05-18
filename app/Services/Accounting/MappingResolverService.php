@@ -90,6 +90,7 @@ class MappingResolverService
         return [
             'rule' => $rule,
             'cash_bank_account' => $cashBankAccount,
+            'cash_bank_account_id' => $cashBankAccount?->id,
             'party' => $party,
             'party_ledger_effect' => $this->partyLedgerEffect($rule, $entries),
             'entries' => $entries,
@@ -155,27 +156,65 @@ class MappingResolverService
             return null;
         }
 
-        if (!$cashBankAccountId) {
-            throw ValidationException::withMessages([
-                'cash_bank_account_id' => $this->cashBankRequiredMessage($rule),
-            ]);
-        }
-
-        $cashBankAccount = CashBankAccount::query()
-            ->where('status', 'Active')
-            ->with('linkedLedger.accountType')
-            ->find($cashBankAccountId);
+        $cashBankAccount = $cashBankAccountId
+            ? $this->cashBankAccountById($cashBankAccountId)
+            : $this->cashBankAccountFromRule($rule);
 
         if (!$cashBankAccount || !$cashBankAccount->linkedLedger) {
             throw ValidationException::withMessages([
-                'cash_bank_account_id' => 'Selected Paid From / Received In account is invalid or inactive.',
+                'cash_bank_account_id' => $this->cashBankAutoResolveMessage($rule),
             ]);
         }
 
+        $this->validateCashBankAccount($cashBankAccount);
+
+        return $cashBankAccount;
+    }
+
+    private function cashBankAccountById(int $cashBankAccountId): ?CashBankAccount
+    {
+        return CashBankAccount::query()
+            ->where('status', 'Active')
+            ->with('linkedLedger.accountType')
+            ->find($cashBankAccountId);
+    }
+
+    private function cashBankAccountFromRule(LedgerMappingRule $rule): ?CashBankAccount
+    {
+        $cashBankLedgerId = $this->cashBankLedgerIdFromRule($rule);
+
+        if (!$cashBankLedgerId) {
+            return null;
+        }
+
+        return CashBankAccount::query()
+            ->where('status', 'Active')
+            ->where('linked_ledger_account_id', $cashBankLedgerId)
+            ->with('linkedLedger.accountType')
+            ->orderBy('id')
+            ->first();
+    }
+
+    private function cashBankLedgerIdFromRule(LedgerMappingRule $rule): ?int
+    {
+        if ($rule->debitAccount?->is_cash_bank) {
+            return (int) $rule->debit_account_id;
+        }
+
+        if ($rule->creditAccount?->is_cash_bank) {
+            return (int) $rule->credit_account_id;
+        }
+
+        return null;
+    }
+
+    private function validateCashBankAccount(CashBankAccount $cashBankAccount): void
+    {
         $ledger = $cashBankAccount->linkedLedger;
 
         if (
-            $ledger->status !== 'Active'
+            !$ledger
+            || $ledger->status !== 'Active'
             || $ledger->account_level !== 'Ledger'
             || !$ledger->posting_allowed
             || !$ledger->is_cash_bank
@@ -183,11 +222,9 @@ class MappingResolverService
             || $this->normalBalance($ledger) !== 'Debit'
         ) {
             throw ValidationException::withMessages([
-                'cash_bank_account_id' => 'Paid From / Received In must be an active Asset cash/bank posting ledger.',
+                'cash_bank_account_id' => 'Auto-selected Cash/Bank account must be an active Asset cash/bank posting ledger.',
             ]);
         }
-
-        return $cashBankAccount;
     }
 
     private function resolveSideAccount(
@@ -431,19 +468,15 @@ class MappingResolverService
             || in_array($this->settlementKey($rule), ['cash', 'bank', 'advance_paid', 'advance_received'], true);
     }
 
-    private function cashBankRequiredMessage(LedgerMappingRule $rule): string
+    private function cashBankAutoResolveMessage(LedgerMappingRule $rule): string
     {
         $key = $this->settlementKey($rule);
 
-        if (in_array($key, ['cash', 'bank', 'advance_paid'], true)) {
-            return 'Please select the account from which payment was made.';
+        if (in_array($key, ['cash', 'bank', 'advance_paid', 'advance_received'], true)) {
+            return 'Cash/Bank account is selected automatically from Ledger Mapping. Configure an active Cash/Bank Account linked to the cash/bank ledger used in this rule.';
         }
 
-        if ($key === 'advance_received') {
-            return 'Please select the account where money was received.';
-        }
-
-        return 'Paid From / Received In is required for this transaction.';
+        return 'Cash/Bank account could not be selected automatically from the active Ledger Mapping rule.';
     }
 
     private function settlementKey(LedgerMappingRule $rule): string

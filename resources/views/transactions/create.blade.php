@@ -29,13 +29,6 @@
         'linked_ledger_account_id' => $party->linked_ledger_account_id,
     ])->values();
 
-    $cashBankPayload = $cashBankAccounts->map(fn ($account) => [
-        'id' => $account->id,
-        'cash_bank_name' => $account->cash_bank_name,
-        'display_name' => $account->display_name ?? $account->cash_bank_name,
-        'type' => $account->type,
-        'linked_ledger_account_id' => $account->linked_ledger_account_id,
-    ])->values();
 @endphp
 
 <div class="page-title">
@@ -87,7 +80,6 @@
             data-heads-url="{{ route('api.dropdowns.transaction-heads') }}"
             data-settlements-url="{{ route('api.dropdowns.settlement-types') }}"
             data-parties-url="{{ route('api.dropdowns.parties') }}"
-            data-cash-bank-accounts-url="{{ route('api.dropdowns.cash-bank-accounts') }}"
         >
             @csrf
 
@@ -153,15 +145,7 @@
                     <select id="settlement" name="settlement_type_id" required>
                         <option value="">Select Settlement</option>
                     </select>
-                    <div class="hint">Only settlement types with active accounting mapping are shown.</div>
-                </div>
-
-                <div id="cashBankBox">
-                    <label><span id="cashBankLabel">Paid From / Received In</span> <span class="required">*</span></label>
-                    <select id="cashBank" name="cash_bank_account_id">
-                        <option value="">Loading Cash / Bank...</option>
-                    </select>
-                    <div class="hint">Shown when the accounting rule affects cash/bank.</div>
+                    <div class="hint" id="settlementHint">Only settlement types with active accounting mapping are shown. Cash/Bank ledger is selected automatically from Ledger Mapping.</div>
                 </div>
 
                 <div>
@@ -263,7 +247,7 @@
             <div class="tip-icon">💡</div>
             <div>
                 <strong>Simple rule</strong>
-                <p>User only selects transaction head, party, amount, and settlement type. Backend mapping creates the ledger entry.</p>
+                <p>User only selects transaction head, party, amount, and settlement type. Backend mapping creates the ledger entry and auto-selects the Cash/Bank ledger when needed.</p>
             </div>
         </div>
 
@@ -300,8 +284,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fallbackHeads = @json($headPayload);
     const fallbackParties = @json($partyPayload);
-    const fallbackCashBanks = @json($cashBankPayload);
-
     const form = document.getElementById('transactionForm');
 
     const date = document.getElementById('date');
@@ -311,9 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const partyRequired = document.getElementById('partyRequired');
     const amount = document.getElementById('amount');
     const settlement = document.getElementById('settlement');
-    const cashBank = document.getElementById('cashBank');
-    const cashBankBox = document.getElementById('cashBankBox');
-    const cashBankLabel = document.getElementById('cashBankLabel');
+    const settlementHint = document.getElementById('settlementHint');
     const reference = document.getElementById('reference');
     const referenceHint = document.getElementById('referenceHint');
     const notes = document.getElementById('notes');
@@ -450,10 +430,20 @@ document.addEventListener('DOMContentLoaded', () => {
             || value.includes('ADVANCE_RECEIVED')
             || value.includes('ADVANCE RECEIVED')
         ) {
-            return 'Received In';
+            return 'received in';
         }
 
-        return 'Paid From';
+        return 'paid from';
+    }
+
+    function updateSettlementHint() {
+        if (!settlementHint) {
+            return;
+        }
+
+        settlementHint.textContent = isCashBankSettlement()
+            ? `Cash/Bank account will be automatically ${cashBankDirectionLabel()} from the active Ledger Mapping rule.`
+            : 'Only settlement types with active accounting mapping are shown. No manual Cash/Bank selection is required.';
     }
 
     function resetPreview(message = 'Select transaction information to generate preview.') {
@@ -598,41 +588,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadCashBankAccounts() {
-        cashBank.disabled = true;
-        cashBank.innerHTML = '<option value="">Loading Cash / Bank...</option>';
-
-        try {
-            const rows = await getRows(form.dataset.cashBankAccountsUrl);
-
-            renderOptions(
-                cashBank,
-                rows,
-                rows.length ? 'Select Cash / Bank' : 'No active Cash / Bank accounts found',
-                (item) => item.display_name || item.cash_bank_name || item.name,
-                (option, item) => {
-                    option.dataset.type = item.type || '';
-                    option.dataset.linkedLedgerAccountId = item.linked_ledger_account_id || '';
-                }
-            );
-        } catch (error) {
-            console.error(error);
-
-            renderOptions(
-                cashBank,
-                fallbackCashBanks,
-                fallbackCashBanks.length ? 'Select Cash / Bank' : 'No active Cash / Bank accounts found',
-                (item) => item.display_name || item.cash_bank_name || item.name,
-                (option, item) => {
-                    option.dataset.type = item.type || '';
-                    option.dataset.linkedLedgerAccountId = item.linked_ledger_account_id || '';
-                }
-            );
-        }
-
-        cashBank.disabled = false;
-    }
-
     async function loadSettlementOptions() {
         const selectedHead = headById(head.value);
         const previousValue = settlement.value;
@@ -710,24 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function toggleCashBank() {
-        const show = isCashBankSettlement();
-        const label = cashBankDirectionLabel();
-
-        cashBankBox.classList.toggle('hidden', !show);
-        cashBank.required = show;
-        cashBankLabel.textContent = label;
-
-        const hint = cashBankBox.querySelector('.hint');
-
-        if (hint) {
-            hint.textContent = show
-                ? `${label} is required for cash, bank, and advance money movement.`
-                : 'Hidden when the accounting rule does not affect cash/bank.';
-        }
-
-        if (!show) {
-            cashBank.value = '';
-        }
+        updateSettlementHint();
     }
 
     function formReadyForPreview() {
@@ -745,9 +683,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        if (isCashBankSettlement() && !cashBank.value) {
-            return false;
-        }
 
         return true;
     }
@@ -954,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Form cleared.');
     }
 
-    [date, voucherType, party, amount, settlement, cashBank, reference, notes].forEach((input) => {
+    [date, voucherType, party, amount, settlement, reference, notes].forEach((input) => {
         input.addEventListener('input', schedulePreview);
         input.addEventListener('change', schedulePreview);
     });
@@ -992,10 +927,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function boot() {
         resetPreview();
 
-        await Promise.all([
-            loadTransactionHeads(),
-            loadCashBankAccounts(),
-        ]);
+        await loadTransactionHeads();
 
         await refreshForSelectedHead();
 

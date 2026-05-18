@@ -25,7 +25,7 @@ class TransactionEntryRequest extends FormRequest
         $this->merge([
             'voucher_type' => $this->voucher_type ?: 'Auto Select',
             'party_id' => $this->party_id ?: null,
-            'cash_bank_account_id' => $this->cash_bank_account_id ?: null,
+            'cash_bank_account_id' => null,
             'amount' => $this->money($this->amount),
             'status' => $this->status ?: 'Posted',
             'reference' => $this->blankToNull($this->reference),
@@ -64,14 +64,6 @@ class TransactionEntryRequest extends FormRequest
                         ->whereNull('deleted_at')),
             ],
 
-            'cash_bank_account_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('cash_bank_accounts', 'id')
-                    ->where(fn ($query) => $query
-                        ->where('status', 'Active')
-                        ->whereNull('deleted_at')),
-            ],
 
             'amount' => ['required', 'numeric', 'min:0.01'],
             'reference' => ['nullable', 'string', 'max:150'],
@@ -135,7 +127,6 @@ class TransactionEntryRequest extends FormRequest
             'settlement_type_id.required' => 'Settlement Type is required.',
             'settlement_type_id.exists' => 'Selected Settlement Type is invalid or inactive.',
             'party_id.exists' => 'Selected Party / Person is invalid or inactive.',
-            'cash_bank_account_id.exists' => 'Selected Paid From / Received In account is invalid or inactive.',
             'amount.required' => 'Amount is required.',
             'amount.numeric' => 'Amount must be a valid number.',
             'amount.min' => 'Amount must be greater than zero.',
@@ -242,30 +233,16 @@ class TransactionEntryRequest extends FormRequest
 
     private function validateCashBankRequirement(Validator $validator, LedgerMappingRule $mapping): void
     {
-        $requiresCashBank = $this->mappingRequiresCashBank($mapping);
-
-        if ($requiresCashBank && !$this->cash_bank_account_id) {
-            $validator->errors()->add(
-                'cash_bank_account_id',
-                $this->cashBankRequiredMessage($mapping)
-            );
-
+        if (!$this->mappingRequiresCashBank($mapping)) {
             return;
         }
 
-        if (!$this->cash_bank_account_id) {
-            return;
-        }
-
-        $cashBankAccount = CashBankAccount::query()
-            ->with('linkedLedger.accountType')
-            ->where('status', 'Active')
-            ->find($this->integer('cash_bank_account_id'));
+        $cashBankAccount = $this->autoCashBankAccountForMapping($mapping);
 
         if (!$cashBankAccount || !$cashBankAccount->linkedLedger) {
             $validator->errors()->add(
                 'cash_bank_account_id',
-                'Selected Paid From / Received In account is invalid or inactive.'
+                $this->cashBankAutoResolveMessage($mapping)
             );
 
             return;
@@ -284,16 +261,38 @@ class TransactionEntryRequest extends FormRequest
         ) {
             $validator->errors()->add(
                 'cash_bank_account_id',
-                'Paid From / Received In must be an active Asset cash/bank posting ledger.'
+                'Auto-selected Cash/Bank account must be an active Asset cash/bank posting ledger.'
             );
+        }
+    }
+
+    private function autoCashBankAccountForMapping(LedgerMappingRule $mapping): ?CashBankAccount
+    {
+        $cashBankLedgerId = $mapping->debitAccount?->is_cash_bank
+            ? $mapping->debit_account_id
+            : ($mapping->creditAccount?->is_cash_bank ? $mapping->credit_account_id : null);
+
+        if (!$cashBankLedgerId) {
+            return null;
         }
 
-        if (!$requiresCashBank) {
-            $validator->errors()->add(
-                'cash_bank_account_id',
-                'Paid From / Received In is not used for this transaction. Remove the cash/bank selection.'
-            );
+        return CashBankAccount::query()
+            ->with('linkedLedger.accountType')
+            ->where('status', 'Active')
+            ->where('linked_ledger_account_id', $cashBankLedgerId)
+            ->orderBy('id')
+            ->first();
+    }
+
+    private function cashBankAutoResolveMessage(LedgerMappingRule $mapping): string
+    {
+        $key = $this->settlementKey($mapping->settlementType);
+
+        if (in_array($key, ['cash', 'bank', 'advance_paid', 'advance_received'], true)) {
+            return 'Cash/Bank account is selected automatically from Ledger Mapping. Configure an active Cash/Bank Account linked to the cash/bank ledger used in this rule.';
         }
+
+        return 'Cash/Bank account could not be selected automatically from the active Ledger Mapping rule.';
     }
 
     private function mappingRule(TransactionHead $head, SettlementType $settlement): ?LedgerMappingRule
@@ -311,21 +310,6 @@ class TransactionEntryRequest extends FormRequest
         return (bool) $mapping->debitAccount?->is_cash_bank
             || (bool) $mapping->creditAccount?->is_cash_bank
             || in_array($this->settlementKey($mapping->settlementType), ['cash', 'bank', 'advance_paid', 'advance_received'], true);
-    }
-
-    private function cashBankRequiredMessage(LedgerMappingRule $mapping): string
-    {
-        $key = $this->settlementKey($mapping->settlementType);
-
-        if (in_array($key, ['cash', 'bank', 'advance_paid'], true)) {
-            return 'Please select the account from which payment was made.';
-        }
-
-        if ($key === 'advance_received') {
-            return 'Please select the account where money was received.';
-        }
-
-        return 'Paid From / Received In is required for this transaction.';
     }
 
     private function settlementKey(?SettlementType $settlement): string
