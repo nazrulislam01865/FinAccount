@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             event.preventDefault();
             event.stopImmediatePropagation();
 
-            invalidPartyRow.querySelector('.party-select').focus();
+            invalidPartyRow.querySelector('.party-select').focus({ preventScroll: true });
             showToast('Party / Sub-ledger is required for receivable, payable, and advance opening balances.');
             return false;
         }
@@ -816,7 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
             event.preventDefault();
             event.stopImmediatePropagation();
 
-            unavailablePartyRow.querySelector('.account-select').focus();
+            unavailablePartyRow.querySelector('.account-select').focus({ preventScroll: true });
             showToast('This ledger requires a linked party. Create or link the party first in Party / Person Setup.');
             return false;
         }

@@ -24,11 +24,61 @@ use Illuminate\View\View;
 class MasterDataController extends Controller
 {
     /**
-     * Show editable master data that previously only appeared as static or seeded dropdowns.
+     * Send the old Master Data URL to the first Master Data sub-page.
      */
-    public function index(): View
+    public function index(): RedirectResponse
     {
+        return redirect()->route('setup.master-data.business-types');
+    }
+
+    /**
+     * Show Business Types as a separate Master Data sub-page.
+     */
+    public function businessTypes(): View
+    {
+        return $this->masterDataView('business-types');
+    }
+
+    /**
+     * Show Currencies as a separate Master Data sub-page.
+     */
+    public function currencies(): View
+    {
+        return $this->masterDataView('currencies');
+    }
+
+    /**
+     * Show Settlement Types as a separate Master Data sub-page.
+     */
+    public function settlementTypes(): View
+    {
+        return $this->masterDataView('settlement-types');
+    }
+
+    /**
+     * Show Party Types as a separate Master Data sub-page.
+     */
+    public function partyTypes(): View
+    {
+        return $this->masterDataView('party-types');
+    }
+
+    /**
+     * Show Financial Years as a separate Master Data sub-page.
+     */
+    public function financialYears(): View
+    {
+        return $this->masterDataView('financial-years');
+    }
+
+    private function masterDataView(string $activePage): View
+    {
+        $tabs = $this->masterDataTabs();
+
         return view('setup.master-data', [
+            'activeMasterDataPage' => $activePage,
+            'activeMasterDataTab' => $tabs[$activePage],
+            'masterDataTabs' => $tabs,
             'businessTypes' => BusinessType::query()
                 ->orderByDesc('is_default')
                 ->orderBy('sort_order')
@@ -59,6 +109,42 @@ class MasterDataController extends Controller
         ]);
     }
 
+    private function masterDataTabs(): array
+    {
+        return [
+            'business-types' => [
+                'label' => 'Business Types',
+                'route' => 'setup.master-data.business-types',
+                'description' => 'Values used in Company Setup business type dropdown.',
+                'count' => BusinessType::query()->count(),
+            ],
+            'currencies' => [
+                'label' => 'Currencies',
+                'route' => 'setup.master-data.currencies',
+                'description' => 'Values used in Company Setup and transaction currency dropdowns.',
+                'count' => Currency::query()->count(),
+            ],
+            'settlement-types' => [
+                'label' => 'Settlement Types',
+                'route' => 'setup.master-data.settlement-types',
+                'description' => 'Values used in transaction heads, ledger mapping, and transactions.',
+                'count' => SettlementType::query()->count(),
+            ],
+            'party-types' => [
+                'label' => 'Party Types',
+                'route' => 'setup.master-data.party-types',
+                'description' => 'Values used in Party / Person Setup and transaction defaults.',
+                'count' => PartyType::query()->count(),
+            ],
+            'financial-years' => [
+                'label' => 'Financial Years',
+                'route' => 'setup.master-data.financial-years',
+                'description' => 'Values used in opening balance and voucher numbering setup.',
+                'count' => FinancialYear::query()->count(),
+            ],
+        ];
+    }
+
     /**
      * Create a business type used by Company Setup.
      */
@@ -66,7 +152,7 @@ class MasterDataController extends Controller
     {
         $businessType = $this->saveBusinessType(new BusinessType(), $request->validated());
 
-        return $this->saved('Business type saved successfully.', $businessType);
+        return $this->saved('Business type saved successfully.', $businessType, 'setup.master-data.business-types');
     }
 
     /**
@@ -78,7 +164,7 @@ class MasterDataController extends Controller
     ): JsonResponse {
         $businessType = $this->saveBusinessType($businessType, $request->validated());
 
-        return $this->saved('Business type updated successfully.', $businessType);
+        return $this->saved('Business type updated successfully.', $businessType, 'setup.master-data.business-types');
     }
 
     /**
@@ -87,12 +173,12 @@ class MasterDataController extends Controller
     public function destroyBusinessType(Request $request, BusinessType $businessType): JsonResponse|RedirectResponse
     {
         if (DB::table('companies')->where('business_type_id', $businessType->id)->exists()) {
-            return $this->blocked($request, 'This business type is used by Company Setup and cannot be deleted.');
+            return $this->blocked($request, 'This business type is used by Company Setup and cannot be deleted.', 'setup.master-data.business-types');
         }
 
         $businessType->delete();
 
-        return $this->deleted($request, 'Business type deleted successfully.');
+        return $this->deleted($request, 'Business type deleted successfully.', 'setup.master-data.business-types');
     }
 
     /**
@@ -102,7 +188,7 @@ class MasterDataController extends Controller
     {
         $currency = $this->saveCurrency(new Currency(), $request->validated());
 
-        return $this->saved('Currency saved successfully.', $currency);
+        return $this->saved('Currency saved successfully.', $currency, 'setup.master-data.currencies');
     }
 
     /**
@@ -114,7 +200,7 @@ class MasterDataController extends Controller
     ): JsonResponse {
         $currency = $this->saveCurrency($currency, $request->validated());
 
-        return $this->saved('Currency updated successfully.', $currency);
+        return $this->saved('Currency updated successfully.', $currency, 'setup.master-data.currencies');
     }
 
     /**
@@ -123,12 +209,12 @@ class MasterDataController extends Controller
     public function destroyCurrency(Request $request, Currency $currency): JsonResponse|RedirectResponse
     {
         if (DB::table('companies')->where('currency_id', $currency->id)->exists()) {
-            return $this->blocked($request, 'This currency is used by Company Setup and cannot be deleted.');
+            return $this->blocked($request, 'This currency is used by Company Setup and cannot be deleted.', 'setup.master-data.currencies');
         }
 
         $currency->delete();
 
-        return $this->deleted($request, 'Currency deleted successfully.');
+        return $this->deleted($request, 'Currency deleted successfully.', 'setup.master-data.currencies');
     }
 
     /**
@@ -138,7 +224,7 @@ class MasterDataController extends Controller
     {
         $settlementType = SettlementType::query()->create($request->validated());
 
-        return $this->saved('Settlement type saved successfully.', $settlementType);
+        return $this->saved('Settlement type saved successfully.', $settlementType, 'setup.master-data.settlement-types');
     }
 
     /**
@@ -150,7 +236,7 @@ class MasterDataController extends Controller
     ): JsonResponse {
         $settlementType->update($request->validated());
 
-        return $this->saved('Settlement type updated successfully.', $settlementType);
+        return $this->saved('Settlement type updated successfully.', $settlementType, 'setup.master-data.settlement-types');
     }
 
     /**
@@ -159,16 +245,16 @@ class MasterDataController extends Controller
     public function destroySettlementType(Request $request, SettlementType $settlementType): JsonResponse|RedirectResponse
     {
         if ($settlementType->transactionHeads()->exists()) {
-            return $this->blocked($request, 'This settlement type is used by transaction heads and cannot be deleted.');
+            return $this->blocked($request, 'This settlement type is used by transaction heads and cannot be deleted.', 'setup.master-data.settlement-types');
         }
 
         if (DB::table('ledger_mapping_rules')->where('settlement_type_id', $settlementType->id)->exists()) {
-            return $this->blocked($request, 'This settlement type is used by ledger mapping rules and cannot be deleted.');
+            return $this->blocked($request, 'This settlement type is used by ledger mapping rules and cannot be deleted.', 'setup.master-data.settlement-types');
         }
 
         $settlementType->delete();
 
-        return $this->deleted($request, 'Settlement type deleted successfully.');
+        return $this->deleted($request, 'Settlement type deleted successfully.', 'setup.master-data.settlement-types');
     }
 
     /**
@@ -178,7 +264,7 @@ class MasterDataController extends Controller
     {
         $partyType = PartyType::query()->create($request->validated());
 
-        return $this->saved('Party type saved successfully.', $partyType);
+        return $this->saved('Party type saved successfully.', $partyType, 'setup.master-data.party-types');
     }
 
     /**
@@ -188,7 +274,7 @@ class MasterDataController extends Controller
     {
         $partyType->update($request->validated());
 
-        return $this->saved('Party type updated successfully.', $partyType);
+        return $this->saved('Party type updated successfully.', $partyType, 'setup.master-data.party-types');
     }
 
     /**
@@ -197,16 +283,16 @@ class MasterDataController extends Controller
     public function destroyPartyType(Request $request, PartyType $partyType): JsonResponse|RedirectResponse
     {
         if (DB::table('parties')->where('party_type_id', $partyType->id)->exists()) {
-            return $this->blocked($request, 'This party type is used by parties and cannot be deleted.');
+            return $this->blocked($request, 'This party type is used by parties and cannot be deleted.', 'setup.master-data.party-types');
         }
 
         if (DB::table('transaction_heads')->where('default_party_type_id', $partyType->id)->exists()) {
-            return $this->blocked($request, 'This party type is used by transaction heads and cannot be deleted.');
+            return $this->blocked($request, 'This party type is used by transaction heads and cannot be deleted.', 'setup.master-data.party-types');
         }
 
         $partyType->delete();
 
-        return $this->deleted($request, 'Party type deleted successfully.');
+        return $this->deleted($request, 'Party type deleted successfully.', 'setup.master-data.party-types');
     }
 
     /**
@@ -216,7 +302,7 @@ class MasterDataController extends Controller
     {
         $financialYear = $this->saveFinancialYear(new FinancialYear(), $request->validated(), $request->user()?->id);
 
-        return $this->saved('Financial year saved successfully.', $financialYear);
+        return $this->saved('Financial year saved successfully.', $financialYear, 'setup.master-data.financial-years');
     }
 
     /**
@@ -228,7 +314,7 @@ class MasterDataController extends Controller
     ): JsonResponse {
         $financialYear = $this->saveFinancialYear($financialYear, $request->validated(), $request->user()?->id);
 
-        return $this->saved('Financial year updated successfully.', $financialYear);
+        return $this->saved('Financial year updated successfully.', $financialYear, 'setup.master-data.financial-years');
     }
 
     /**
@@ -237,16 +323,16 @@ class MasterDataController extends Controller
     public function destroyFinancialYear(Request $request, FinancialYear $financialYear): JsonResponse|RedirectResponse
     {
         if (DB::table('opening_balances')->where('financial_year_id', $financialYear->id)->exists()) {
-            return $this->blocked($request, 'This financial year is used by opening balances and cannot be deleted.');
+            return $this->blocked($request, 'This financial year is used by opening balances and cannot be deleted.', 'setup.master-data.financial-years');
         }
 
         if (DB::table('voucher_numbering_rules')->where('financial_year_id', $financialYear->id)->exists()) {
-            return $this->blocked($request, 'This financial year is used by voucher numbering and cannot be deleted.');
+            return $this->blocked($request, 'This financial year is used by voucher numbering and cannot be deleted.', 'setup.master-data.financial-years');
         }
 
         $financialYear->forceDelete();
 
-        return $this->deleted($request, 'Financial year deleted successfully.');
+        return $this->deleted($request, 'Financial year deleted successfully.', 'setup.master-data.financial-years');
     }
 
     /**
@@ -316,17 +402,17 @@ class MasterDataController extends Controller
         });
     }
 
-    private function saved(string $message, object $model): JsonResponse
+    private function saved(string $message, object $model, string $redirectRoute): JsonResponse
     {
         return response()->json([
             'success' => true,
             'message' => $message,
             'data' => $model,
-            'redirect' => route('setup.master-data'),
+            'redirect' => route($redirectRoute),
         ]);
     }
 
-    private function deleted(Request $request, string $message): JsonResponse|RedirectResponse
+    private function deleted(Request $request, string $message, string $redirectRoute = 'setup.master-data.business-types'): JsonResponse|RedirectResponse
     {
         if ($request->expectsJson()) {
             return response()->json([
@@ -335,10 +421,10 @@ class MasterDataController extends Controller
             ]);
         }
 
-        return redirect()->route('setup.master-data')->with('status', $message);
+        return redirect()->route($redirectRoute)->with('status', $message);
     }
 
-    private function blocked(Request $request, string $message): JsonResponse|RedirectResponse
+    private function blocked(Request $request, string $message, string $redirectRoute = 'setup.master-data.business-types'): JsonResponse|RedirectResponse
     {
         if ($request->expectsJson()) {
             return response()->json([
@@ -347,6 +433,6 @@ class MasterDataController extends Controller
             ], 409);
         }
 
-        return redirect()->route('setup.master-data')->withErrors(['delete' => $message]);
+        return redirect()->route($redirectRoute)->withErrors(['delete' => $message]);
     }
 }

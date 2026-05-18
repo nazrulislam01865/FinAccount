@@ -13,7 +13,7 @@
 
 @include('partials.setup-progress', ['current' => 5])
 
-<div class="layout">
+<div class="layout table-modal-layout">
     <div class="left-stack">
         <div class="card toolbar five" data-table-filter="#headTable" data-count-target="#resultCount">
             <div class="field search-field">
@@ -152,7 +152,7 @@
         </div>
     </div>
 
-    <aside class="right-stack">
+    <aside class="right-stack modal-source" style="display: none;">
 <div class="card form-panel">
             <div class="panel-head">
                 <h3>Create / Edit Transaction Head</h3>
@@ -356,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setSwitch(requiresReferenceInput, requiresReferenceSwitch, 0);
         setSettlementTypes([]);
 
-        name.focus();
+        name.focus({ preventScroll: true });
     }
 
     function loadForEdit(row) {
@@ -381,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setSwitch(requiresReferenceInput, requiresReferenceSwitch, row.dataset.requiresReference || 0);
         setSettlementTypes(settlements);
 
-        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
         showToast('Transaction head loaded for editing.');
     }
 

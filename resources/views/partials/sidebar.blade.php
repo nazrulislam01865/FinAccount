@@ -2,7 +2,23 @@
     use Illuminate\Support\Facades\Route;
 
     $routeName = request()->route()?->getName();
-    $isActive = fn ($name) => ($routeName === $name || ($routeName === 'dashboard' && $name === 'setup.company')) ? 'active' : '';
+    $isActive = function ($name) use ($routeName) {
+        if ($routeName === 'dashboard' && $name === 'setup.company') {
+            return 'active';
+        }
+
+        return ($routeName === $name || str_starts_with((string) $routeName, $name . '.')) ? 'active' : '';
+    };
+
+    $isMasterDataRoute = request()->routeIs('setup.master-data*');
+
+    $masterDataLinks = [
+        ['label' => 'Business Types', 'route' => 'setup.master-data.business-types'],
+        ['label' => 'Currencies', 'route' => 'setup.master-data.currencies'],
+        ['label' => 'Settlement Types', 'route' => 'setup.master-data.settlement-types'],
+        ['label' => 'Party Types', 'route' => 'setup.master-data.party-types'],
+        ['label' => 'Financial Years', 'route' => 'setup.master-data.financial-years'],
+    ];
 @endphp
 
 <aside class="sidebar" id="appSidebar">
@@ -62,10 +78,32 @@
         <div class="nav-icon">8</div>
         <span>Voucher Numbering</span>
     </a>
-    <a href="{{ route('setup.master-data') }}" class="nav-item {{ $isActive('setup.master-data') }}">
-        <div class="nav-icon">M</div>
-        <span>Master Data</span>
-    </a>
+    <details class="nav-group master-data-nav-group" {{ $isMasterDataRoute ? 'open' : '' }}>
+        <summary
+            class="nav-item nav-parent {{ $isActive('setup.master-data') }}"
+            data-sidebar-group-summary
+            aria-controls="masterDataSubmenu"
+        >
+            <div class="nav-icon">M</div>
+            <span>Master Data</span>
+            <span class="nav-arrow" aria-hidden="true">⌄</span>
+        </summary>
+
+        <div
+            class="nav-submenu {{ $isMasterDataRoute ? 'is-open' : '' }}"
+            id="masterDataSubmenu"
+            aria-label="Master Data Submenu"
+        >
+            @foreach($masterDataLinks as $masterLink)
+                <a
+                    href="{{ route($masterLink['route']) }}"
+                    class="nav-subitem {{ request()->routeIs($masterLink['route']) ? 'active' : '' }}"
+                >
+                    <span>{{ $masterLink['label'] }}</span>
+                </a>
+            @endforeach
+        </div>
+    </details>
 
     <div class="nav-title">Main Menu</div>
 

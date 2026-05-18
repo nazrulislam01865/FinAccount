@@ -29,7 +29,7 @@
 
 @include('partials.setup-progress', ['current' => 6])
 
-<div class="layout ledger-mapping-page">
+<div class="layout ledger-mapping-page table-modal-layout">
     <div class="left-stack">
         <div class="card toolbar five">
             <div class="field search-field">
@@ -148,9 +148,30 @@
                 </div>
             </div>
         </div>
+
+        <div class="table-info-grid ledger-info-grid">
+            <div class="card helper-card">
+                <h3>How Mapping Works</h3>
+                <p>Every Transaction Head + Settlement Type maps to one Debit account and one Credit account.</p>
+                <div class="flow">
+                    <div class="flow-row"><span class="flow-chip blue">Transaction Head</span><strong>+</strong><span class="flow-chip purple">Settlement Type</span></div>
+                    <div class="arrow">↓</div>
+                    <div class="flow-row"><span class="flow-chip green-chip">Debit Account</span><strong>/</strong><span class="flow-chip yellow">Credit Account</span></div>
+                </div>
+                <div class="example"><strong>Example</strong><br>Supplier Payment + Bank → Dr Accounts Payable / Cr Bank</div>
+            </div>
+
+            <div class="card why-card">
+                <div class="why-icon">💡</div>
+                <div>
+                    <h3>Accounting principle</h3>
+                    <p>Cash received debits Cash/Bank. Cash paid credits Cash/Bank. Due entries must not touch Cash/Bank.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <aside class="right-stack">
+    <aside class="right-stack modal-source" style="display: none;">
         <div class="card form-panel ledger-form-card">
             <div class="panel-head">
                 <div>
@@ -277,24 +298,6 @@
             </form>
         </div>
 
-        <div class="card helper-card">
-            <h3>How Mapping Works</h3>
-            <p>Every Transaction Head + Settlement Type maps to one Debit account and one Credit account.</p>
-            <div class="flow">
-                <div class="flow-row"><span class="flow-chip blue">Transaction Head</span><strong>+</strong><span class="flow-chip purple">Settlement Type</span></div>
-                <div class="arrow">↓</div>
-                <div class="flow-row"><span class="flow-chip green-chip">Debit Account</span><strong>/</strong><span class="flow-chip yellow">Credit Account</span></div>
-            </div>
-            <div class="example"><strong>Example</strong><br>Supplier Payment + Bank → Dr Accounts Payable / Cr Bank</div>
-        </div>
-
-        <div class="card why-card">
-            <div class="why-icon">💡</div>
-            <div>
-                <h3>Accounting principle</h3>
-                <p>Cash received debits Cash/Bank. Cash paid credits Cash/Bank. Due entries must not touch Cash/Bank.</p>
-            </div>
-        </div>
     </aside>
 </div>
 
@@ -539,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
         effect.value = '';
         updateCharCount();
         syncSmartGuidance();
-        head.focus();
+        head.focus({ preventScroll: true });
     }
 
     function loadForEdit(row) {
@@ -559,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCharCount();
         updatePreview();
 
-        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
         showToast('Mapping rule loaded for editing.');
     }
 
@@ -631,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dr.id && cr.id && dr.id === cr.id) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            credit.focus();
+            credit.focus({ preventScroll: true });
             showToast('Debit account and credit account cannot be same.');
             return;
         }

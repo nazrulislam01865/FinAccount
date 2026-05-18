@@ -41,18 +41,14 @@
         <button class="btn-outline" id="testAllBtn" type="button">
             Test All Formats
         </button>
-
-        <button class="btn-primary" id="addBtn" type="button">
-            + Add Voucher Type
-        </button>
     </div>
 </div>
 
 @include('partials.setup-progress', ['current' => 8])
 
-<div class="layout">
+<div class="layout table-modal-layout">
     <div class="left-stack">
-        <div class="card toolbar">
+        <div class="card toolbar voucher-numbering-toolbar">
             <div class="field search-field">
                 <label>Search</label>
                 <span>⌕</span>
@@ -80,6 +76,10 @@
 
             <button class="btn-outline" id="resetBtn" type="button">
                 Reset
+            </button>
+
+            <button class="btn-primary" id="addBtn" type="button">
+                + Add Voucher Type
             </button>
         </div>
 
@@ -194,9 +194,51 @@
                 </div>
             </div>
         </div>
+
+        <div class="table-info-grid voucher-info-grid">
+            <div class="card side-card">
+                <h3>Numbering Summary</h3>
+
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span>Active Formats</span>
+                        <strong id="activeCount">{{ $activeCount }}</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span>Current Year</span>
+                        <strong>{{ $currentYearValue }}</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span>Number Padding</span>
+                        <strong id="paddingSummary">5 Digits</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span>Duplicate Prefix</span>
+                        <strong class="badge {{ $duplicatePrefixIssue ? 'badge-warning' : 'badge-active' }}">
+                            {{ $duplicatePrefixIssue ? 'Issue Found' : 'No Issue' }}
+                        </strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card tip-card">
+                <div class="tip-icon">💡</div>
+
+                <div>
+                    <strong>Product rule</strong>
+                    <p>
+                        Voucher number should be generated only after saving or posting.
+                        Draft transactions can use DR numbers until they are posted.
+                    </p>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <aside class="right-stack">
+    <aside class="right-stack modal-source" style="display: none;">
 
         <div class="card form-card">
             <h3>Create / Edit Voucher Format</h3>
@@ -364,45 +406,6 @@
             </form>
         </div>
 
-        <div class="card side-card">
-            <h3>Numbering Summary</h3>
-
-            <div class="summary-list">
-                <div class="summary-row">
-                    <span>Active Formats</span>
-                    <strong id="activeCount">{{ $activeCount }}</strong>
-                </div>
-
-                <div class="summary-row">
-                    <span>Current Year</span>
-                    <strong>{{ $currentYearValue }}</strong>
-                </div>
-
-                <div class="summary-row">
-                    <span>Number Padding</span>
-                    <strong id="paddingSummary">5 Digits</strong>
-                </div>
-
-                <div class="summary-row">
-                    <span>Duplicate Prefix</span>
-                    <strong class="badge {{ $duplicatePrefixIssue ? 'badge-warning' : 'badge-active' }}">
-                        {{ $duplicatePrefixIssue ? 'Issue Found' : 'No Issue' }}
-                    </strong>
-                </div>
-            </div>
-        </div>
-
-        <div class="card tip-card">
-            <div class="tip-icon">💡</div>
-
-            <div>
-                <strong>Product rule</strong>
-                <p>
-                    Voucher number should be generated only after saving or posting.
-                    Draft transactions can use DR numbers until they are posted.
-                </p>
-            </div>
-        </div>
     </aside>
 </div>
 @endsection
@@ -601,10 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePreview();
 
         if (!silent) {
-            form.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-            });
+            window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
 
             showToast('Voucher format loaded for editing.');
         }
@@ -678,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusInput.value = 'Active';
 
         updatePreview();
-        voucherType.focus();
+        voucherType.focus({ preventScroll: true });
     }
 
     Array.from(tbody.querySelectorAll('.edit-btn')).forEach((button) => {
@@ -778,7 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!selectedType) {
             event.preventDefault();
-            voucherType.focus();
+            voucherType.focus({ preventScroll: true });
             showToast('Voucher Type is required.');
             return;
         }

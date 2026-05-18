@@ -12,7 +12,7 @@
 
     .master-section {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 330px;
+        grid-template-columns: minmax(0, 1fr);
         gap: 22px;
         align-items: start;
     }
@@ -47,25 +47,124 @@
         padding: 20px;
     }
 
+
+
+    .master-subnav {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+        overflow-x: auto;
+        padding: 14px;
+        margin-bottom: 18px;
+        scroll-snap-type: x proximity;
+    }
+
+    .master-subnav-link {
+        min-width: 190px;
+        flex: 1 0 190px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        color: #475467;
+        scroll-snap-align: start;
+        transition: .17s ease;
+    }
+
+    .master-subnav-link:hover {
+        border-color: #bfdbfe;
+        background: #f9fbff;
+        transform: translateY(-1px);
+    }
+
+    .master-subnav-link.active {
+        border-color: #bfdbfe;
+        background: var(--primary-soft);
+        color: var(--primary);
+        box-shadow: inset 4px 0 0 var(--primary);
+    }
+
+    .master-subnav-link strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 14px;
+    }
+
+    .master-subnav-link span {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .master-subnav-link.active span {
+        color: #1d4ed8;
+    }
+
+    .master-subnav-count {
+        flex: 0 0 auto;
+    }
+
     @media (max-width: 1320px) {
         .master-section {
             grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 880px) {
+        .master-subnav {
+            padding: 12px;
+        }
+
+        .master-subnav-link {
+            min-width: 210px;
+            flex-basis: 210px;
         }
     }
 </style>
 @endpush
 
 @section('content')
+@php
+    $activeMasterDataPage = $activeMasterDataPage ?? 'business-types';
+    $activeMasterDataTab = $activeMasterDataTab ?? ($masterDataTabs[$activeMasterDataPage] ?? [
+        'label' => 'Master Data',
+        'description' => 'Manage reusable dropdown data used across the setup pages.',
+    ]);
+@endphp
+
 <div class="page-title">
     <div>
         <span class="page-label">Master Data</span>
-        <h2>Master Data Setup</h2>
-        <p>Add or update business types, currencies, settlement types, party types, and financial years used across setup and transaction forms.</p>
+        <h2>{{ $activeMasterDataTab['label'] ?? 'Master Data Setup' }}</h2>
+        <p>{{ $activeMasterDataTab['description'] ?? 'Add or update reusable master data used across setup and transaction forms.' }}</p>
     </div>
 </div>
 
+@if(!empty($masterDataTabs))
+    <nav class="card master-subnav" aria-label="Master Data Sub Pages">
+        @foreach($masterDataTabs as $key => $tab)
+            <a
+                href="{{ route($tab['route']) }}"
+                class="master-subnav-link {{ $activeMasterDataPage === $key ? 'active' : '' }}"
+                @if($activeMasterDataPage === $key) aria-current="page" @endif
+            >
+                <div>
+                    <strong>{{ $tab['label'] }}</strong>
+                    <span>{{ $tab['description'] }}</span>
+                </div>
+                <span class="badge badge-primary master-subnav-count">{{ $tab['count'] }}</span>
+            </a>
+        @endforeach
+    </nav>
+@endif
+
 <div class="master-data-grid">
-    <section class="master-section" id="businessTypesSection">
+    @if($activeMasterDataPage === 'business-types')
+    <section class="master-section table-modal-layout" id="businessTypesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -135,7 +234,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel">
+        <aside class="card form-panel modal-source" style="display: none;">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Business Type</h3>
@@ -197,8 +296,10 @@
             </form>
         </aside>
     </section>
+    @endif
 
-    <section class="master-section" id="currenciesSection">
+    @if($activeMasterDataPage === 'currencies')
+    <section class="master-section table-modal-layout" id="currenciesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -271,7 +372,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel">
+        <aside class="card form-panel modal-source" style="display: none;">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Currency</h3>
@@ -338,8 +439,10 @@
             </form>
         </aside>
     </section>
+    @endif
 
-    <section class="master-section" id="settlementTypesSection">
+    @if($activeMasterDataPage === 'settlement-types')
+    <section class="master-section table-modal-layout" id="settlementTypesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -399,7 +502,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel">
+        <aside class="card form-panel modal-source" style="display: none;">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Settlement Type</h3>
@@ -449,8 +552,10 @@
             </form>
         </aside>
     </section>
+    @endif
 
-    <section class="master-section" id="partyTypesSection">
+    @if($activeMasterDataPage === 'party-types')
+    <section class="master-section table-modal-layout" id="partyTypesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -513,7 +618,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel">
+        <aside class="card form-panel modal-source" style="display: none;">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Party Type</h3>
@@ -572,8 +677,10 @@
             </form>
         </aside>
     </section>
+    @endif
 
-    <section class="master-section" id="financialYearsSection">
+    @if($activeMasterDataPage === 'financial-years')
+    <section class="master-section table-modal-layout" id="financialYearsSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -640,7 +747,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel">
+        <aside class="card form-panel modal-source" style="display: none;">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Financial Year</h3>
@@ -697,6 +804,7 @@
             </form>
         </aside>
     </section>
+    @endif
 </div>
 @endsection
 
@@ -735,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 switchInput.value = switchElement.classList.contains('on') ? '1' : '0';
             }
 
-            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
         });
     });
 

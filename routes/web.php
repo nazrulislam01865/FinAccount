@@ -39,6 +39,21 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/master-data', [MasterDataController::class, 'index'])
             ->name('master-data');
 
+        Route::get('/master-data/business-types', [MasterDataController::class, 'businessTypes'])
+            ->name('master-data.business-types');
+
+        Route::get('/master-data/currencies', [MasterDataController::class, 'currencies'])
+            ->name('master-data.currencies');
+
+        Route::get('/master-data/settlement-types', [MasterDataController::class, 'settlementTypes'])
+            ->name('master-data.settlement-types');
+
+        Route::get('/master-data/party-types', [MasterDataController::class, 'partyTypes'])
+            ->name('master-data.party-types');
+
+        Route::get('/master-data/financial-years', [MasterDataController::class, 'financialYears'])
+            ->name('master-data.financial-years');
+
         Route::delete('/master-data/business-types/{business_type}', [MasterDataController::class, 'destroyBusinessType'])
             ->name('master-data.business-types.destroy');
 

@@ -13,7 +13,7 @@
 
 @include('partials.setup-progress', ['current' => 4])
 
-<div class="layout">
+<div class="layout table-modal-layout">
     <div class="left-stack">
         <div class="card toolbar" data-table-filter="#partyTable" data-count-target="#resultCount">
             <div class="field search-field">
@@ -187,7 +187,7 @@
         </div>
     </div>
 
-    <aside class="right-stack">
+    <aside class="right-stack modal-source" style="display: none;">
         <div class="card form-panel">
             <div class="panel-head">
                 <h3 id="partyFormTitle">Create Party</h3>
@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
         status.value = 'Active';
 
         reloadLedgerOptions();
-        partyName.focus();
+        partyName.focus({ preventScroll: true });
     }
 
     function loadForEdit(row) {
@@ -506,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reloadLedgerOptions(row.dataset.linkedLedger || '');
         });
 
-        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
         showToast('Party loaded for editing.');
     }
 

@@ -1697,3 +1697,749 @@ select::-ms-expand {
 .auth-card .brand div:last-child {
     display: block;
 }
+
+/* Modal CRUD layout: tables stay full width; forms open only as centered popups. */
+/* Prevent the inline form from flashing during page navigation before JavaScript converts it into a modal. */
+.modal-source:not(.modal-form-stack),
+aside.right-stack:has(form[data-frontend-form]):not(.modal-form-stack),
+.master-section > aside.card.form-panel:has(form[data-frontend-form]):not(.modal-form-stack) {
+    display: none !important;
+}
+
+.modal-source.modal-form-stack,
+aside.right-stack.modal-form-stack:has(form[data-frontend-form]),
+.master-section > aside.modal-form-stack:has(form[data-frontend-form]) {
+    display: flex !important;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+/* Keep modal-enabled table pages full-width from first paint to prevent a layout flash below the setup progress bar. */
+.layout:has(> .modal-source),
+.master-section:has(> aside.modal-source),
+.table-modal-layout.layout,
+.layout.table-modal-layout,
+.master-section.table-modal-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.table-modal-layout .left-stack,
+.master-section.table-modal-layout > .card.table-card,
+.table-modal-layout .table-card {
+    min-width: 0;
+    width: 100%;
+}
+
+.modal-form-stack {
+    display: flex !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 80 !important;
+    padding: 22px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(15, 23, 42, .48) !important;
+    backdrop-filter: blur(22px) saturate(.9) brightness(.88);
+    -webkit-backdrop-filter: blur(22px) saturate(.9) brightness(.88);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .28s ease, visibility 0s linear .34s, background-color .28s ease;
+}
+
+.modal-form-stack::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 20% 18%, rgba(37, 99, 235, .18), transparent 32%),
+        radial-gradient(circle at 82% 82%, rgba(124, 58, 237, .16), transparent 34%);
+    opacity: .44;
+    transform: scale(1.035);
+    transition: transform .34s ease, opacity .28s ease;
+}
+
+.modal-form-stack.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+}
+
+.modal-form-stack.is-open::before {
+    transform: scale(1);
+}
+
+.modal-form-stack.is-closing {
+    pointer-events: none;
+}
+
+.modal-form-stack > .card,
+.modal-form-stack > .modal-card-shell {
+    position: relative;
+    z-index: 1;
+    width: min(760px, calc(100vw - 44px));
+    max-height: calc(100vh - 44px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    scroll-behavior: auto;
+    border-radius: 24px;
+    padding: 0 !important;
+    box-shadow: 0 34px 90px rgba(15, 23, 42, .34);
+    opacity: 0;
+    transform: translateY(28px) scale(.94);
+    transform-origin: center center;
+    transition:
+        opacity .26s ease,
+        transform .34s cubic-bezier(.18, .92, .28, 1.12);
+    will-change: opacity, transform;
+}
+
+.modal-form-stack.is-open > .card,
+.modal-form-stack.is-open > .modal-card-shell {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.modal-form-stack.is-closing > .card,
+.modal-form-stack.is-closing > .modal-card-shell {
+    opacity: 0;
+    transform: translateY(18px) scale(.96);
+}
+
+.modal-form-stack .panel-head {
+    position: relative;
+    top: auto;
+    z-index: 3;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 18px 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
+    isolation: isolate;
+}
+
+.modal-form-stack .modal-scroll-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scroll-behavior: auto;
+    padding: 20px;
+    background: #fff;
+}
+
+.modal-form-stack .modal-scroll-body > form:first-child,
+.modal-form-stack .modal-scroll-body > .form-grid:first-child {
+    margin-top: 0;
+}
+
+.modal-close-btn {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: #475467;
+    font-size: 22px;
+    line-height: 1;
+    transition: transform .18s ease, background-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.modal-close-btn:hover,
+.modal-close-btn:focus-visible {
+    background: #f2f4f7;
+    color: #101828;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .10);
+    transform: rotate(90deg) scale(1.04);
+    outline: none;
+}
+
+.master-card-head .master-head-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.master-section.table-modal-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.master-section.table-modal-layout > .modal-form-stack {
+    position: fixed !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-form-stack,
+    .modal-form-stack::before,
+    .modal-form-stack > .card,
+    .modal-form-stack > .modal-card-shell,
+    .modal-close-btn {
+        transition: none !important;
+    }
+}
+
+/* Opening balance table view mode: visible table is read-only; row editing happens in popup. */
+#openingBalanceForm .layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+#openingBalanceForm .right-stack {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#balanceTable .ob-hidden-control {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    min-height: 0 !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    border: 0 !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+}
+
+.ob-view-value {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    color: #344054;
+    font-weight: 650;
+    white-space: normal;
+}
+
+.ob-view-muted {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.opening-row-modal .two-col,
+.opening-row-modal .form-actions {
+    width: 100%;
+}
+
+.opening-row-modal .form-actions {
+    margin-top: 6px;
+}
+
+@media(max-width:1320px) {
+    #openingBalanceForm .right-stack {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media(max-width:880px) {
+    .modal-form-stack {
+        justify-content: center !important;
+        padding: 10px !important;
+    }
+
+    .modal-form-stack > .card,
+    .modal-form-stack > .modal-card-shell {
+        width: 100%;
+        max-height: calc(100vh - 20px);
+        border-radius: 18px;
+    }
+
+    .modal-form-stack .panel-head {
+        border-radius: 18px 18px 0 0;
+        padding: 16px;
+    }
+
+    .modal-form-stack .modal-scroll-body {
+        padding: 16px;
+    }
+
+    .toolbar,
+    .toolbar.five,
+    .opening-toolbar,
+    .voucher-toolbar {
+        grid-template-columns: 1fr !important;
+    }
+
+    #openingBalanceForm .right-stack {
+        grid-template-columns: 1fr;
+    }
+
+    .table-footer {
+        display: grid;
+        gap: 12px;
+    }
+}
+
+@media(max-width:640px) {
+    .modal-form-stack .two-col,
+    .modal-form-stack .currency-row {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-form-stack .form-actions,
+    .modal-form-stack .actions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .modal-form-stack .form-actions button,
+    .modal-form-stack .actions button {
+        width: 100%;
+    }
+}
+
+/* Keep supplemental setup information below the read-only table instead of inside modal popups. */
+.table-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: stretch;
+}
+
+.table-info-grid > .card {
+    height: 100%;
+}
+
+.table-info-grid .helper-card,
+.table-info-grid .side-card,
+.table-info-grid .tip-card,
+.table-info-grid .why-card {
+    padding: 20px;
+}
+
+.ledger-info-grid .flow {
+    display: grid;
+    place-items: center;
+    gap: 14px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 18px 0;
+    margin: 14px 0;
+}
+
+.ledger-info-grid .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ledger-info-grid .arrow {
+    color: #667085;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.why-card {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 14px;
+    align-items: start;
+    background: linear-gradient(135deg, #fff, #f8fbff);
+}
+
+.why-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 23px;
+}
+
+.why-card h3 {
+    margin: 0 0 8px;
+    font-size: 17px;
+}
+
+.why-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.voucher-numbering-toolbar {
+    grid-template-columns: minmax(240px, 1fr) minmax(170px, 210px) minmax(140px, 160px) 110px 190px;
+}
+
+.voucher-numbering-toolbar #resetBtn,
+.voucher-numbering-toolbar #addBtn {
+    width: 100%;
+}
+
+@media (max-width: 1320px) {
+    .voucher-numbering-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .voucher-numbering-toolbar .search-field {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 880px) {
+    .table-info-grid,
+    .voucher-numbering-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .voucher-numbering-toolbar .search-field {
+        grid-column: auto;
+    }
+
+    .why-card,
+    .tip-card {
+        grid-template-columns: 42px 1fr;
+    }
+}
+
+/* Master Data sidebar submenu */
+.nav-submenu {
+    display: grid;
+    gap: 5px;
+    margin: -1px 0 8px 50px;
+    padding: 0 0 4px 12px;
+    border-left: 1px solid var(--line);
+}
+
+.nav-subitem {
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: #667085;
+    font-size: 12px;
+    font-weight: 800;
+    border: 1px solid transparent;
+}
+
+.nav-subitem:hover {
+    background: #f9fafb;
+    color: var(--primary);
+}
+
+.nav-subitem.active {
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-color: #dbeafe;
+}
+
+@media (max-width: 1080px) {
+    .nav-submenu {
+        display: none;
+    }
+}
+
+/* Collapsible Master Data submenu and stable sidebar scrolling */
+.nav-parent {
+    width: 100%;
+    border: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nav-parent .nav-arrow {
+    margin-left: auto;
+    font-size: 14px;
+    color: #98a2b3;
+    transition: transform .18s ease, color .18s ease;
+}
+
+.nav-parent[aria-expanded="true"] .nav-arrow {
+    transform: rotate(180deg);
+    color: var(--primary);
+}
+
+.nav-submenu {
+    display: none;
+    overflow: hidden;
+}
+
+.nav-submenu.is-open {
+    display: grid;
+    animation: sidebarSubmenuIn .16s ease both;
+}
+
+.app.sidebar-collapsed .nav-parent .nav-arrow,
+.app.sidebar-collapsed .nav-submenu {
+    display: none !important;
+}
+
+@keyframes sidebarSubmenuIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 1080px) {
+    .nav-submenu.is-open {
+        display: grid;
+    }
+}
+
+@media (max-width: 880px) {
+    .app.sidebar-open .nav-parent .nav-arrow {
+        display: inline-flex;
+    }
+
+    .app.sidebar-open .nav-submenu.is-open {
+        display: grid;
+    }
+}
+
+.nav-parent {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 13px;
+    padding: 13px;
+    margin-bottom: 7px;
+    min-height: auto;
+    border-radius: 13px;
+    background: transparent;
+    color: #475467;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.nav-parent:hover {
+    background: #f9fafb;
+}
+
+.nav-parent.active {
+    color: var(--primary);
+}
+
+/* Reliable native Master Data sidebar group */
+.nav-group {
+    margin: 0 0 7px;
+}
+
+.nav-group > summary.nav-item {
+    list-style: none;
+}
+
+.nav-group > summary.nav-item::-webkit-details-marker {
+    display: none;
+}
+
+.nav-group > summary.nav-parent {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 13px;
+    width: 100%;
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav-group:not([open]) > .nav-submenu {
+    display: none !important;
+}
+
+.nav-group[open] > .nav-submenu {
+    display: grid !important;
+    animation: sidebarSubmenuIn .16s ease both;
+}
+
+.nav-group[open] > summary.nav-parent .nav-arrow {
+    transform: rotate(180deg);
+    color: var(--primary);
+}
+
+.app.sidebar-collapsed .nav-group > .nav-submenu,
+.app.sidebar-collapsed .nav-group > summary.nav-parent .nav-arrow {
+    display: none !important;
+}
+
+.app.sidebar-collapsed .nav-group > summary.nav-parent {
+    justify-content: center;
+}
+
+@media (max-width: 880px) {
+    .app.sidebar-open .nav-group > summary.nav-parent .nav-arrow {
+        display: inline-flex !important;
+    }
+}
+
+/* Prevent sidebar flash/jump during page navigation and first paint. */
+body.sidebar-booting .app,
+body.sidebar-booting .sidebar,
+body.sidebar-booting .sidebar-backdrop,
+body.sidebar-booting .nav-submenu,
+body.sidebar-navigating .app,
+body.sidebar-navigating .sidebar,
+body.sidebar-navigating .sidebar-backdrop,
+body.sidebar-navigating .nav-submenu {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+}
+
+body.sidebar-booting .nav-group[open] > .nav-submenu {
+    animation: none !important;
+}
+
+body.sidebar-navigating .sidebar-backdrop {
+    display: none !important;
+}
+
+.sidebar {
+    overscroll-behavior: contain;
+    scroll-behavior: auto;
+}
+
+/* Keep collapsed sidebar dimensions available before JavaScript fully initializes. */
+#appShell.sidebar-collapsed {
+    grid-template-columns: 90px 1fr;
+}
+
+#appShell.sidebar-collapsed .sidebar {
+    align-items: center;
+    padding: 18px 12px;
+}
+
+#appShell.sidebar-collapsed .brand {
+    padding: 0 0 20px;
+}
+
+#appShell.sidebar-collapsed .brand div:last-child,
+#appShell.sidebar-collapsed .nav-title,
+#appShell.sidebar-collapsed .nav-item span,
+#appShell.sidebar-collapsed .help-card,
+#appShell.sidebar-collapsed .nav-group > .nav-submenu,
+#appShell.sidebar-collapsed .nav-group > summary.nav-parent .nav-arrow {
+    display: none !important;
+}
+
+#appShell.sidebar-collapsed .nav-item,
+#appShell.sidebar-collapsed .nav-group > summary.nav-parent {
+    width: 54px;
+    justify-content: center;
+    padding: 13px;
+}
+
+#appShell.sidebar-collapsed .nav-item.active {
+    box-shadow: none;
+}
+
+/* Company Setup view-only state */
+.company-setup-form {
+    position: relative;
+}
+
+.company-fields {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.company-fields:disabled {
+    opacity: 1;
+}
+
+.company-fields:disabled input,
+.company-fields:disabled select,
+.company-fields:disabled textarea {
+    color: #344054;
+    background-color: #f8fafc;
+    border-color: #eaecf0;
+    box-shadow: none;
+    cursor: default;
+    resize: none;
+}
+
+.company-fields:disabled select {
+    background-color: #f8fafc;
+}
+
+.company-fields:disabled input::placeholder,
+.company-fields:disabled textarea::placeholder {
+    color: #98a2b3;
+}
+
+.company-view-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+    padding: 16px 18px;
+    border: 1px solid #bfdbfe;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #eff6ff, #f8fbff);
+}
+
+.company-view-banner strong {
+    display: block;
+    color: var(--primary);
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.company-view-banner span {
+    display: block;
+    color: #475467;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.company-view-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    margin-top: 22px;
+}
+
+.company-form-actions[hidden],
+.company-view-actions[hidden],
+.company-view-banner[hidden],
+[data-company-edit-trigger][hidden] {
+    display: none !important;
+}
+
+.company-setup-form.is-company-readonly .required {
+    color: #98a2b3;
+}
+
+.company-setup-form.is-company-readonly input[type="file"] {
+    padding-top: 11px;
+}
+
+@media(max-width:880px) {
+    .company-view-banner,
+    .company-view-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        justify-items: stretch;
+    }
+
+    .company-view-banner button,
+    .company-view-actions button {
+        width: 100%;
+    }
+}

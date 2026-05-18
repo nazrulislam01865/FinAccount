@@ -7,13 +7,47 @@
 
     <title>@yield('title', 'Accounting System')</title>
 
+    <style>
+        .modal-source:not(.modal-form-stack) { display: none !important; }
+        .layout.table-modal-layout, .master-section.table-modal-layout { grid-template-columns: minmax(0, 1fr) !important; }
+    </style>
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     @stack('styles')
 </head>
-<body>
+<body class="sidebar-booting">
 <div class="app" id="appShell">
+    <script>
+        (function () {
+            try {
+                var app = document.getElementById('appShell');
+                var isMobile = window.matchMedia('(max-width: 880px)').matches;
+                var isCollapsed = localStorage.getItem('accounting-sidebar-collapsed') === '1';
+
+                if (app && isCollapsed && !isMobile) {
+                    app.classList.add('sidebar-collapsed');
+                }
+            } catch (error) {
+                // Keep the default sidebar state if storage is unavailable.
+            }
+        })();
+    </script>
     @include('partials.sidebar')
+    <script>
+        (function () {
+            try {
+                var sidebar = document.getElementById('appSidebar');
+                var savedScrollTop = Number(sessionStorage.getItem('accounting-sidebar-scroll-top') || 0);
+
+                if (sidebar && Number.isFinite(savedScrollTop) && savedScrollTop > 0) {
+                    sidebar.scrollTop = savedScrollTop;
+                }
+            } catch (error) {
+                // Ignore storage access issues.
+            }
+        })();
+    </script>
     <div class="sidebar-backdrop" data-sidebar-close aria-hidden="true"></div>
 
     <main class="main">
