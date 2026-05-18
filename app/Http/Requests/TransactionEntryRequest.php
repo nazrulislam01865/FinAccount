@@ -23,7 +23,6 @@ class TransactionEntryRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'voucher_type' => $this->voucher_type ?: 'Auto Select',
             'party_id' => $this->party_id ?: null,
             'cash_bank_account_id' => null,
             'amount' => $this->money($this->amount),
@@ -37,8 +36,6 @@ class TransactionEntryRequest extends FormRequest
     {
         return [
             'voucher_date' => ['required', 'date'],
-            'voucher_type' => ['nullable', 'string', 'max:100'],
-
             'transaction_head_id' => [
                 'required',
                 'integer',

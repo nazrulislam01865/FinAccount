@@ -13,7 +13,7 @@
 
 @include('partials.setup-progress', ['current' => 2])
 
-<div class="layout table-modal-layout">
+<div class="layout">
     <div class="left-stack">
         <div class="card toolbar" data-table-filter="#accountsTable" data-count-target="#resultCount">
             <div class="field search-field">
@@ -175,7 +175,7 @@
         </div>
     </div>
 
-    <aside class="right-stack modal-source" style="display: none;">
+    <aside class="right-stack">
         <div class="card form-panel">
             <div class="panel-head">
                 <h3 id="accountFormTitle">Create Account</h3>
@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         syncSmartFields();
 
-        accountCode.focus({ preventScroll: true });
+        accountCode.focus();
     }
 
     function loadForEdit(row) {
@@ -500,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         syncSmartFields();
 
-        window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast('Account loaded for editing.');
     }
 

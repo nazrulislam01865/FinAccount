@@ -154,7 +154,7 @@
         </div>
     </div>
 
-    <aside class="right-stack modal-source">
+    <aside class="right-stack">
         <div class="card form-panel">
             <div class="panel-head">
                 <h3 id="userFormTitle">Create / Edit User</h3>
@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         title.textContent = 'Create / Edit User';
         passwordInput.required = true;
         passwordRequired.style.display = '';
-        name.focus({ preventScroll: true });
+        name.focus();
     }
 
     function loadForEdit(row) {
@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         passwordInput.required = false;
         passwordRequired.style.display = 'none';
 
-        window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast('User loaded for editing.');
     }
 

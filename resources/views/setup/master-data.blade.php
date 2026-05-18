@@ -12,7 +12,7 @@
 
     .master-section {
         display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 330px;
         gap: 22px;
         align-items: start;
     }
@@ -164,7 +164,7 @@
 
 <div class="master-data-grid">
     @if($activeMasterDataPage === 'business-types')
-    <section class="master-section table-modal-layout" id="businessTypesSection">
+    <section class="master-section" id="businessTypesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -234,7 +234,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel modal-source" style="display: none;">
+        <aside class="card form-panel">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Business Type</h3>
@@ -299,7 +299,7 @@
     @endif
 
     @if($activeMasterDataPage === 'currencies')
-    <section class="master-section table-modal-layout" id="currenciesSection">
+    <section class="master-section" id="currenciesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -372,7 +372,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel modal-source" style="display: none;">
+        <aside class="card form-panel">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Currency</h3>
@@ -442,7 +442,7 @@
     @endif
 
     @if($activeMasterDataPage === 'settlement-types')
-    <section class="master-section table-modal-layout" id="settlementTypesSection">
+    <section class="master-section" id="settlementTypesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -502,7 +502,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel modal-source" style="display: none;">
+        <aside class="card form-panel">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Settlement Type</h3>
@@ -555,7 +555,7 @@
     @endif
 
     @if($activeMasterDataPage === 'party-types')
-    <section class="master-section table-modal-layout" id="partyTypesSection">
+    <section class="master-section" id="partyTypesSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -618,7 +618,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel modal-source" style="display: none;">
+        <aside class="card form-panel">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Party Type</h3>
@@ -680,7 +680,7 @@
     @endif
 
     @if($activeMasterDataPage === 'financial-years')
-    <section class="master-section table-modal-layout" id="financialYearsSection">
+    <section class="master-section" id="financialYearsSection">
         <div class="card table-card">
             <div class="master-card-head">
                 <div>
@@ -747,7 +747,7 @@
             </div>
         </div>
 
-        <aside class="card form-panel modal-source" style="display: none;">
+        <aside class="card form-panel">
             <div class="panel-head">
                 <div>
                     <h3>Add / Edit Financial Year</h3>
@@ -843,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 switchInput.value = switchElement.classList.contains('on') ? '1' : '0';
             }
 
-            window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
+            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
     });
 

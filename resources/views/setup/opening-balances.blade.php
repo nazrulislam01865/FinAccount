@@ -4,7 +4,9 @@
 
 @section('content')
 @php
-    $rows = $openingBalances->isNotEmpty()
+    $hasSavedOpeningRows = $openingBalances->isNotEmpty();
+
+    $rows = $hasSavedOpeningRows
         ? $openingBalances->map(fn ($balance) => [
             'account' => $balance->account,
             'party_id' => $balance->party_id,
@@ -13,18 +15,6 @@
             'remarks' => $balance->remarks,
         ])
         : $seedOpeningRows;
-
-    if ($rows->isEmpty()) {
-        $rows = collect([
-            [
-                'account' => null,
-                'party_id' => null,
-                'debit_opening' => 0,
-                'credit_opening' => 0,
-                'remarks' => null,
-            ],
-        ]);
-    }
 
     $accountPayload = $accounts->map(fn ($account) => [
         'id' => $account->id,
@@ -57,6 +47,30 @@
             'Equity', 'Income' => 'badge-equity',
             default => 'badge-neutral',
         };
+    };
+
+    $accountLabel = function ($account) {
+        if (!$account) {
+            return '—';
+        }
+
+        return $account->display_name ?: trim($account->account_code . ' - ' . $account->account_name);
+    };
+
+    $partyLookup = $parties->keyBy('id');
+
+    $partyLabel = function ($partyId) use ($partyLookup) {
+        if (!$partyId) {
+            return '—';
+        }
+
+        $party = $partyLookup->get((int) $partyId);
+
+        if (!$party) {
+            return '—';
+        }
+
+        return trim(($party->party_code ? $party->party_code . ' - ' : '') . $party->party_name);
     };
 @endphp
 
@@ -154,7 +168,7 @@
                     <div>
                         <h3>Opening Balances</h3>
                         <p>
-                            Use only posting ledger accounts. Receivable, payable, and advance balances require Party / Sub-ledger.
+                            Saved rows are view-only. Click <strong>+ Add New Row</strong> to enter another opening balance line.
                         </p>
                     </div>
 
@@ -186,45 +200,36 @@
                         </thead>
 
                         <tbody id="balanceTable">
-                            @foreach($rows as $index => $row)
+                            @forelse($rows as $index => $row)
                                 @php
                                     $account = $row['account'];
                                     $type = $account?->accountType?->name ?? 'Asset';
                                     $normalBalance = $account?->normal_balance ?: $account?->accountType?->normal_balance ?: 'Debit';
+                                    $debit = (float) ($row['debit_opening'] ?? 0);
+                                    $credit = (float) ($row['credit_opening'] ?? 0);
+                                    $net = $debit - $credit;
                                 @endphp
 
                                 <tr
+                                    class="opening-view-row"
+                                    data-mode="view"
                                     data-type="{{ $type }}"
                                     data-normal-balance="{{ $normalBalance }}"
                                 >
                                     <td>{{ $index + 1 }}</td>
 
                                     <td>
+                                        <span class="view-only-value code-display">{{ $account?->account_code ?: '—' }}</span>
                                         <input
-                                            class="code-input account-code"
-                                            value="{{ $account?->account_code }}"
-                                            readonly
+                                            type="hidden"
+                                            class="item-account"
+                                            name="items[{{ $index }}][account_id]"
+                                            value="{{ $account?->id }}"
                                         >
                                     </td>
 
                                     <td>
-                                        <select
-                                            class="account-select"
-                                            name="items[{{ $index }}][account_id]"
-                                            required
-                                            @disabled($openingIsFinal)
-                                        >
-                                            <option value="">Select Account</option>
-
-                                            @foreach($accounts as $optionAccount)
-                                                <option
-                                                    value="{{ $optionAccount->id }}"
-                                                    @selected($account?->id === $optionAccount->id)
-                                                >
-                                                    {{ $optionAccount->display_name ?: trim($optionAccount->account_code . ' - ' . $optionAccount->account_name) }}
-                                                </option>
-                                            @endforeach
-                                        </select>
+                                        <span class="view-only-value account-display">{{ $accountLabel($account) }}</span>
                                     </td>
 
                                     <td>
@@ -234,57 +239,56 @@
                                     </td>
 
                                     <td>
-                                        <select
-                                            class="party-select"
+                                        <span class="view-only-value party-display">{{ $partyLabel($row['party_id']) }}</span>
+                                        <input
+                                            type="hidden"
+                                            class="item-party"
                                             name="items[{{ $index }}][party_id]"
-                                            @disabled($openingIsFinal)
+                                            value="{{ $row['party_id'] }}"
                                         >
-                                            <option value="">—</option>
-
-                                            @foreach($parties as $party)
-                                                <option
-                                                    value="{{ $party->id }}"
-                                                    data-linked-account="{{ $party->linked_ledger_account_id }}"
-                                                    @selected((int) $row['party_id'] === (int) $party->id)
-                                                >
-                                                    {{ $party->party_code ? $party->party_code . ' - ' : '' }}{{ $party->party_name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
                                     </td>
 
-                                    <td>
+                                    <td class="amount-cell">
+                                        <span class="view-only-value">{{ number_format($debit, 2) }}</span>
                                         <input
+                                            type="hidden"
                                             class="money-input debit"
                                             name="items[{{ $index }}][debit_opening]"
-                                            value="{{ number_format((float) $row['debit_opening'], 2, '.', '') }}"
-                                            inputmode="decimal"
-                                            @readonly($normalBalance === 'Credit' || $openingIsFinal)
+                                            value="{{ number_format($debit, 2, '.', '') }}"
                                         >
                                     </td>
 
-                                    <td>
+                                    <td class="amount-cell">
+                                        <span class="view-only-value">{{ number_format($credit, 2) }}</span>
                                         <input
+                                            type="hidden"
                                             class="money-input credit"
                                             name="items[{{ $index }}][credit_opening]"
-                                            value="{{ number_format((float) $row['credit_opening'], 2, '.', '') }}"
-                                            inputmode="decimal"
-                                            @readonly($normalBalance === 'Debit' || $openingIsFinal)
+                                            value="{{ number_format($credit, 2, '.', '') }}"
                                         >
                                     </td>
 
-                                    <td class="net-dr">0.00 Dr</td>
+                                    <td class="{{ $net >= 0 ? 'net-dr' : 'net-cr' }} net-balance">
+                                        {{ number_format(abs($net), 2) }} {{ $net >= 0 ? 'Dr' : 'Cr' }}
+                                    </td>
 
                                     <td>
+                                        <span class="view-only-value remarks-display">{{ $row['remarks'] ?: '—' }}</span>
                                         <input
-                                            class="remarks-input"
+                                            type="hidden"
+                                            class="item-remarks"
                                             name="items[{{ $index }}][remarks]"
                                             value="{{ $row['remarks'] }}"
-                                            @readonly($openingIsFinal)
                                         >
                                     </td>
                                 </tr>
-                            @endforeach
+                            @empty
+                                <tr data-empty="true">
+                                    <td colspan="9" class="opening-empty">
+                                        No opening balance rows yet. Click <strong>+ Add New Row</strong> to enter an opening balance.
+                                    </td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
@@ -295,7 +299,7 @@
                     type="button"
                     @disabled($openingIsFinal)
                 >
-                    + Add Extra Row
+                    + Add New Row
                 </button>
 
                 <div class="total-strip">
@@ -396,12 +400,55 @@
 </form>
 @endsection
 
+@push('styles')
+<style>
+    .opening-view-row {
+        background: #fff;
+    }
+
+    .opening-edit-row {
+        background: #f8fbff;
+        box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .view-only-value {
+        display: inline-block;
+        color: var(--text);
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    .code-display {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+        white-space: nowrap;
+    }
+
+    .account-display,
+    .party-display,
+    .remarks-display {
+        max-width: 240px;
+        overflow-wrap: anywhere;
+    }
+
+    .amount-cell {
+        text-align: right;
+    }
+
+    .opening-empty {
+        padding: 28px 16px !important;
+        color: var(--muted);
+        text-align: center;
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const accounts = @json($accountPayload);
     const parties = @json($partyPayload);
     const openingIsFinal = @json($openingIsFinal);
+    const hasSavedOpeningRows = @json($hasSavedOpeningRows);
 
     const tbody = document.getElementById('balanceTable');
     const form = document.getElementById('openingBalanceForm');
@@ -510,15 +557,51 @@ document.addEventListener('DOMContentLoaded', () => {
         ].join('');
     }
 
+    function isDataRow(row) {
+        return row && row.dataset.empty !== 'true';
+    }
+
+    function isEditableRow(row) {
+        return isDataRow(row) && row.dataset.mode === 'edit';
+    }
+
+    function dataRows() {
+        return Array.from(tbody.rows).filter(isDataRow);
+    }
+
+    function field(row, selector) {
+        return row.querySelector(selector);
+    }
+
     function updateRowIndexes() {
-        Array.from(tbody.rows).forEach((row, index) => {
+        dataRows().forEach((row, index) => {
             row.children[0].textContent = String(index + 1);
 
-            row.querySelector('.account-select').name = `items[${index}][account_id]`;
-            row.querySelector('.party-select').name = `items[${index}][party_id]`;
-            row.querySelector('.debit').name = `items[${index}][debit_opening]`;
-            row.querySelector('.credit').name = `items[${index}][credit_opening]`;
-            row.querySelector('.remarks-input').name = `items[${index}][remarks]`;
+            const account = field(row, '.item-account') || field(row, '.account-select');
+            const party = field(row, '.item-party') || field(row, '.party-select');
+            const debit = field(row, '.debit');
+            const credit = field(row, '.credit');
+            const remarks = field(row, '.item-remarks') || field(row, '.remarks-input');
+
+            if (account) {
+                account.name = `items[${index}][account_id]`;
+            }
+
+            if (party) {
+                party.name = `items[${index}][party_id]`;
+            }
+
+            if (debit) {
+                debit.name = `items[${index}][debit_opening]`;
+            }
+
+            if (credit) {
+                credit.name = `items[${index}][credit_opening]`;
+            }
+
+            if (remarks) {
+                remarks.name = `items[${index}][remarks]`;
+            }
         });
     }
 
@@ -527,7 +610,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const credit = row.querySelector('.credit');
         const normalBalance = account?.normal_balance || 'Debit';
 
+        if (!debit || !credit) {
+            return;
+        }
+
         row.dataset.normalBalance = normalBalance;
+
+        debit.readOnly = false;
+        credit.readOnly = false;
 
         if (normalBalance === 'Debit') {
             credit.value = '0.00';
@@ -541,7 +631,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateAccountInfo(row, keepParty = false) {
+        if (!isEditableRow(row)) {
+            return;
+        }
+
         const accountSelect = row.querySelector('.account-select');
+        const partySelect = row.querySelector('.party-select');
+
+        if (!accountSelect || !partySelect) {
+            return;
+        }
+
         const account = accountById(accountSelect.value);
 
         row.querySelector('.account-code').value = account?.account_code || '';
@@ -555,7 +655,6 @@ document.addEventListener('DOMContentLoaded', () => {
         row.dataset.type = type;
         row.dataset.normalBalance = account?.normal_balance || 'Debit';
 
-        const partySelect = row.querySelector('.party-select');
         const oldParty = keepParty ? partySelect.value : '';
         const requiresParty = accountRequiresParty(account);
         const availableParties = linkedParties(account?.id || '');
@@ -573,17 +672,24 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalDebit = 0;
         let totalCredit = 0;
 
-        Array.from(tbody.rows).forEach((row) => {
-            const debit = parseMoney(row.querySelector('.debit').value);
-            const credit = parseMoney(row.querySelector('.credit').value);
+        dataRows().forEach((row) => {
+            const debitInput = row.querySelector('.debit');
+            const creditInput = row.querySelector('.credit');
+
+            if (!debitInput || !creditInput) {
+                return;
+            }
+
+            const debit = parseMoney(debitInput.value);
+            const credit = parseMoney(creditInput.value);
 
             totalDebit += debit;
             totalCredit += credit;
 
             const net = debit - credit;
-            const netCell = row.children[7];
+            const netCell = row.querySelector('.net-balance') || row.children[7];
 
-            netCell.className = net >= 0 ? 'net-dr' : 'net-cr';
+            netCell.className = `${net >= 0 ? 'net-dr' : 'net-cr'} net-balance`;
             netCell.textContent = `${money(Math.abs(net))}${net >= 0 ? ' Dr' : ' Cr'}`;
         });
 
@@ -613,7 +719,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function bindRow(row) {
-        row.querySelector('.account-select').addEventListener('change', () => {
+        if (!isEditableRow(row)) {
+            return;
+        }
+
+        row.querySelector('.account-select')?.addEventListener('change', () => {
             updateAccountInfo(row, false);
         });
 
@@ -648,22 +758,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const index = tbody.rows.length;
+        tbody.querySelectorAll('[data-empty="true"]').forEach((emptyRow) => emptyRow.remove());
+
+        const index = dataRows().length;
 
         const row = document.createElement('tr');
+        row.className = 'opening-edit-row';
+        row.dataset.mode = 'edit';
         row.dataset.type = 'Asset';
         row.dataset.normalBalance = 'Debit';
 
         row.innerHTML = `
             <td>${index + 1}</td>
             <td><input class="code-input account-code" value="" readonly></td>
-            <td><select class="account-select" name="items[${index}][account_id]" required>${accountOptions(accountId)}</select></td>
+            <td><select class="item-account account-select" name="items[${index}][account_id]" required>${accountOptions(accountId)}</select></td>
             <td><span class="badge account-type ${badgeClass('Asset')}">Asset</span></td>
-            <td><select class="party-select" name="items[${index}][party_id]"><option value="">Default / Not Applicable</option></select></td>
+            <td><select class="item-party party-select" name="items[${index}][party_id]"><option value="">Default / Not Applicable</option></select></td>
             <td><input class="money-input debit" name="items[${index}][debit_opening]" value="${Number(debit).toFixed(2)}" inputmode="decimal"></td>
             <td><input class="money-input credit" name="items[${index}][credit_opening]" value="${Number(credit).toFixed(2)}" inputmode="decimal"></td>
-            <td class="net-dr">0.00 Dr</td>
-            <td><input class="remarks-input" name="items[${index}][remarks]" value="${escapeHtml(remarks)}"></td>
+            <td class="net-dr net-balance">0.00 Dr</td>
+            <td><input class="item-remarks remarks-input" name="items[${index}][remarks]" value="${escapeHtml(remarks)}"></td>
         `;
 
         tbody.appendChild(row);
@@ -746,6 +860,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (hasSavedOpeningRows) {
+            showToast('Saved opening balance rows are view-only. Use Add New Row to append another line.');
+            return;
+        }
+
         tbody.innerHTML = '';
 
         sample.forEach((item) => {
@@ -776,11 +895,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        const rows = Array.from(tbody.rows);
+        const rows = dataRows();
 
         const hasAmount = rows.some((row) => {
-            return parseMoney(row.querySelector('.debit').value) > 0
-                || parseMoney(row.querySelector('.credit').value) > 0;
+            const debit = row.querySelector('.debit');
+            const credit = row.querySelector('.credit');
+
+            return parseMoney(debit?.value) > 0
+                || parseMoney(credit?.value) > 0;
         });
 
         if (!hasAmount) {
@@ -794,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const invalidPartyRow = rows.find((row) => {
             const party = row.querySelector('.party-select');
 
-            return party.dataset.partyRequired === 'true' && !party.value;
+            return party && party.dataset.partyRequired === 'true' && !party.value;
         });
 
         if (invalidPartyRow) {
@@ -809,7 +931,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const unavailablePartyRow = rows.find((row) => {
             const party = row.querySelector('.party-select');
 
-            return party.dataset.partyRequired === 'true' && party.disabled;
+            return party && party.dataset.partyRequired === 'true' && party.disabled;
         });
 
         if (unavailablePartyRow) {
@@ -835,14 +957,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
 
-    Array.from(tbody.rows).forEach((row) => {
-        bindRow(row);
-        updateAccountInfo(row, true);
+    dataRows().forEach((row) => {
+        if (isEditableRow(row)) {
+            bindRow(row);
+            updateAccountInfo(row, true);
+        }
     });
+
+    updateRowIndexes();
 
     document.getElementById('addRowBtn')?.addEventListener('click', () => {
         addRow();
-        showToast('Extra opening balance row added.');
+        showToast('New opening balance row added.');
     });
 
     document.getElementById('loadSampleBtn')?.addEventListener('click', loadPrdSample);

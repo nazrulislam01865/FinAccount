@@ -84,10 +84,11 @@ class TransactionPostingService
         }
 
         $voucherType = $this->voucherTypeService->resolve(
-            $transactionHead,
-            $settlementType,
-            $data['voucher_type'] ?? null,
-            $draft
+            transactionHead: $transactionHead,
+            settlementType: $settlementType,
+            mappingRule: $mapping['rule'] ?? null,
+            entries: $mapping['entries'] ?? [],
+            draft: $draft
         );
 
         $voucherNumber = $this->voucherNumberGenerator->preview(

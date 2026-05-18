@@ -29,7 +29,7 @@
 
 @include('partials.setup-progress', ['current' => 6])
 
-<div class="layout ledger-mapping-page table-modal-layout">
+<div class="layout ledger-mapping-page">
     <div class="left-stack">
         <div class="card toolbar five">
             <div class="field search-field">
@@ -171,7 +171,7 @@
         </div>
     </div>
 
-    <aside class="right-stack modal-source" style="display: none;">
+    <aside class="right-stack">
         <div class="card form-panel ledger-form-card">
             <div class="panel-head">
                 <div>
@@ -542,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
         effect.value = '';
         updateCharCount();
         syncSmartGuidance();
-        head.focus({ preventScroll: true });
+        head.focus();
     }
 
     function loadForEdit(row) {
@@ -562,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCharCount();
         updatePreview();
 
-        window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast('Mapping rule loaded for editing.');
     }
 
@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dr.id && cr.id && dr.id === cr.id) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            credit.focus({ preventScroll: true });
+            credit.focus();
             showToast('Debit account and credit account cannot be same.');
             return;
         }

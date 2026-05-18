@@ -46,7 +46,7 @@
 
 @include('partials.setup-progress', ['current' => 8])
 
-<div class="layout table-modal-layout">
+<div class="layout">
     <div class="left-stack">
         <div class="card toolbar voucher-numbering-toolbar">
             <div class="field search-field">
@@ -238,7 +238,7 @@
         </div>
     </div>
 
-    <aside class="right-stack modal-source" style="display: none;">
+    <aside class="right-stack">
 
         <div class="card form-card">
             <h3>Create / Edit Voucher Format</h3>
@@ -604,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePreview();
 
         if (!silent) {
-            window.AccountingModalUI?.resetScroll?.(form.closest('.modal-form-stack'));
+            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             showToast('Voucher format loaded for editing.');
         }
@@ -678,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusInput.value = 'Active';
 
         updatePreview();
-        voucherType.focus({ preventScroll: true });
+        voucherType.focus();
     }
 
     Array.from(tbody.querySelectorAll('.edit-btn')).forEach((button) => {
@@ -778,7 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!selectedType) {
             event.preventDefault();
-            voucherType.focus({ preventScroll: true });
+            voucherType.focus();
             showToast('Voucher Type is required.');
             return;
         }

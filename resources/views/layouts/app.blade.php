@@ -7,10 +7,6 @@
 
     <title>@yield('title', 'Accounting System')</title>
 
-    <style>
-        .modal-source:not(.modal-form-stack) { display: none !important; }
-        .layout.table-modal-layout, .master-section.table-modal-layout { grid-template-columns: minmax(0, 1fr) !important; }
-    </style>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 

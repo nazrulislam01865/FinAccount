@@ -100,17 +100,6 @@
                 </div>
 
                 <div>
-                    <label>Voucher Type</label>
-                    <select id="voucherType" name="voucher_type">
-                        <option>Auto Select</option>
-                        @foreach($voucherTypes as $voucherType)
-                            <option>{{ $voucherType }}</option>
-                        @endforeach
-                    </select>
-                    <div class="hint">Leave Auto Select unless accountant needs a specific voucher type.</div>
-                </div>
-
-                <div>
                     <label>Transaction Head <span class="required">*</span></label>
                     <select id="head" name="transaction_head_id" required>
                         <option value="">Loading Transaction Heads...</option>
@@ -222,6 +211,11 @@
                 </div>
 
                 <div class="summary-row">
+                    <span>Voucher Type</span>
+                    <strong id="voucherTypeSummary">—</strong>
+                </div>
+
+                <div class="summary-row">
                     <span>Nature</span>
                     <strong id="nature">—</strong>
                 </div>
@@ -287,7 +281,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('transactionForm');
 
     const date = document.getElementById('date');
-    const voucherType = document.getElementById('voucherType');
     const head = document.getElementById('head');
     const party = document.getElementById('party');
     const partyRequired = document.getElementById('partyRequired');
@@ -304,6 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const validationBox = document.getElementById('validationBox');
 
     const voucherNo = document.getElementById('voucherNo');
+    const voucherTypeSummary = document.getElementById('voucherTypeSummary');
     const nature = document.getElementById('nature');
     const partyEffect = document.getElementById('partyEffect');
     const cashEffect = document.getElementById('cashEffect');
@@ -462,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         validationBox.textContent = message;
 
         voucherNo.textContent = '—';
+        voucherTypeSummary.textContent = '—';
         nature.textContent = '—';
         partyEffect.textContent = '—';
         cashEffect.textContent = '—';
@@ -814,6 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
             : 'Debit and credit are not balanced. Posting blocked.';
 
         voucherNo.textContent = data.voucher_number;
+        voucherTypeSummary.textContent = data.voucher_type || 'Auto Detected';
         nature.textContent = data.nature;
         partyEffect.textContent = data.party_ledger_effect;
         cashEffect.textContent = data.cash_bank_effect;
@@ -889,7 +885,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Form cleared.');
     }
 
-    [date, voucherType, party, amount, settlement, reference, notes].forEach((input) => {
+    [date, party, amount, settlement, reference, notes].forEach((input) => {
         input.addEventListener('input', schedulePreview);
         input.addEventListener('change', schedulePreview);
     });

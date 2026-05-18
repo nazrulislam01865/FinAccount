@@ -10,7 +10,6 @@ use App\Models\SettlementType;
 use App\Models\TransactionHead;
 use App\Models\VoucherDetail;
 use App\Models\VoucherHeader;
-use App\Models\VoucherNumberingRule;
 use App\Services\Accounting\FinancialYearService;
 use App\Services\Accounting\TransactionPostingService;
 use Illuminate\Http\JsonResponse;
@@ -50,14 +49,6 @@ class TransactionController extends Controller
             ->with('linkedLedger')
             ->orderBy('cash_bank_name')
             ->get();
-
-        $voucherTypes = VoucherNumberingRule::query()
-            ->where('status', 'Active')
-            ->when($currentFinancialYear, fn ($query) => $query->where('financial_year_id', $currentFinancialYear->id))
-            ->orderBy('voucher_type')
-            ->pluck('voucher_type')
-            ->unique()
-            ->values();
 
         $today = now()->toDateString();
 
@@ -101,7 +92,6 @@ class TransactionController extends Controller
             'settlementTypes' => $settlementTypes,
             'parties' => $parties,
             'cashBankAccounts' => $cashBankAccounts,
-            'voucherTypes' => $voucherTypes,
             'todayCashIn' => $todayCashIn,
             'todayCashOut' => $todayCashOut,
             'duePayable' => $duePayable,
