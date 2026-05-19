@@ -18,7 +18,7 @@ class TransactionEntryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->hasAnyPermission('transactions.create|transactions.manage');
+        return (bool) $this->user()?->hasAnyPermission(['transactions.create', 'transactions.draft']);
     }
 
     protected function prepareForValidation(): void
@@ -132,11 +132,11 @@ class TransactionEntryRequest extends FormRequest
     private function permissionForVoucherType(?string $voucherType): ?string
     {
         return match ($voucherType) {
-            'Payment Voucher' => 'payments.create',
-            'Receipt Voucher' => 'receipts.create',
-            'Journal Voucher' => 'journals.manage',
-            'Contra / Transfer Voucher' => 'payments.create',
-            'Draft Voucher' => 'transactions.create',
+            'Payment Voucher' => 'transactions.payment.create',
+            'Receipt Voucher' => 'transactions.receipt.create',
+            'Journal Voucher' => 'transactions.journal.create',
+            'Contra / Transfer Voucher' => 'transactions.payment.create',
+            'Draft Voucher' => 'transactions.draft',
             default => null,
         };
     }

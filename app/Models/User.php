@@ -79,9 +79,9 @@ class User extends Authenticatable
             ->exists();
     }
 
-    public function hasAnyPermission(array $permissions): bool
+    public function hasAnyPermission(string|array|null $permissions): bool
     {
-        $permissions = array_values(array_filter(array_map('trim', $permissions)));
+        $permissions = $this->normalizePermissions($permissions);
 
         if ($permissions === []) {
             return true;
@@ -94,6 +94,32 @@ class User extends Authenticatable
         return $this->activeRoles()
             ->whereHas('permissions', fn ($query) => $query->whereIn('name', $permissions))
             ->exists();
+    }
+
+    private function normalizePermissions(string|array|null $permissions): array
+    {
+        if ($permissions === null) {
+            return [];
+        }
+
+        $items = is_array($permissions) ? $permissions : [$permissions];
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if ($item === null) {
+                continue;
+            }
+
+            foreach (preg_split('/[|,]/', (string) $item) ?: [] as $permission) {
+                $permission = trim($permission);
+
+                if ($permission !== '') {
+                    $normalized[] = $permission;
+                }
+            }
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     public function canViewRoute(?string $routeName): bool
