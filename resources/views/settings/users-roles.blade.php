@@ -9,19 +9,104 @@
 @endphp
 
 <style>
-    .role-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-    .role-card { border:1px solid var(--line); border-radius:14px; padding:12px; background:#fff; cursor:pointer; display:grid; gap:8px; }
-    .role-card:hover { border-color:#bfdbfe; background:#f8fbff; }
-    .role-card input { width:auto; min-height:auto; }
-    .role-card.is-disabled { cursor:not-allowed; opacity:.55; background:#f9fafb; }
-    .role-card-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .role-card-title { display:flex; align-items:center; gap:8px; font-weight:850; color:#1d2939; }
-    .role-card p { margin:0; color:var(--muted); font-size:12px; line-height:1.45; }
+    .role-list {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        max-height: 430px;
+        overflow-y: auto;
+        padding: 2px 4px 2px 0;
+    }
+
+    .role-option {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: start;
+        width: 100%;
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 13px 14px;
+        background: #fff;
+        cursor: pointer;
+        transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+
+    .role-option:hover {
+        border-color: #bfdbfe;
+        background: #f8fbff;
+    }
+
+    .role-option input {
+        width: 20px;
+        height: 20px;
+        min-height: 20px;
+        margin: 2px 0 0;
+        padding: 0;
+        cursor: pointer;
+        accent-color: var(--primary);
+    }
+
+    .role-option-body {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .role-option-title {
+        color: #1d2939;
+        font-size: 14px;
+        font-weight: 850;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    .role-option-desc {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    .role-option-level {
+        justify-self: end;
+        align-self: start;
+    }
+
+    .role-option.is-selected {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+        box-shadow: inset 0 0 0 1px #bfdbfe;
+    }
+
+    .role-option.is-disabled {
+        cursor: not-allowed;
+        opacity: .62;
+        background: #f9fafb;
+    }
+
+    .role-option.is-disabled input {
+        cursor: not-allowed;
+    }
+
     .role-summary { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .matrix-scroll { overflow-x:auto; }
     .matrix-scroll table th, .matrix-scroll table td { white-space:nowrap; }
     .blocked-note { color:#b42318; font-size:12px; font-weight:750; }
-    @media (max-width: 880px) { .role-grid { grid-template-columns:1fr; } }
+
+    @media (max-width: 520px) {
+        .role-option {
+            grid-template-columns: 24px minmax(0, 1fr);
+        }
+
+        .role-option-level {
+            grid-column: 2;
+            justify-self: start;
+            margin-top: 2px;
+        }
+    }
 </style>
 
 <div class="page-title">
@@ -252,31 +337,31 @@
 
                     <div>
                         <label>Assign Role <span class="required">*</span></label>
-                        <div class="role-grid" id="roleGrid">
+                        <div class="role-list" id="roleGrid">
                             @foreach($roles as $role)
                                 @php
                                     $canAssign = isset($assignableLookup[(int) $role->id]);
                                 @endphp
-                                <label class="role-card {{ $canAssign ? '' : 'is-disabled' }}">
-                                    <div class="role-card-top">
-                                        <span class="role-card-title">
-                                            <input
-                                                type="checkbox"
-                                                name="role_ids[]"
-                                                value="{{ $role->id }}"
-                                                data-role-checkbox
-                                                data-role-name="{{ $role->name }}"
-                                                data-role-level="{{ $role->level }}"
-                                                {{ $canAssign ? '' : 'disabled' }}
-                                            >
-                                            {{ $role->name }}
-                                        </span>
-                                        <span class="badge {{ $role->isSuperAdmin() ? 'badge-danger' : 'badge-neutral' }}">Level {{ $role->level }}</span>
-                                    </div>
-                                    <p>{{ $role->description }}</p>
-                                    @if(!$canAssign)
-                                        <span class="blocked-note">Cannot assign from your current role level.</span>
-                                    @endif
+                                <label class="role-option {{ $canAssign ? '' : 'is-disabled' }}" data-role-option>
+                                    <input
+                                        type="checkbox"
+                                        name="role_ids[]"
+                                        value="{{ $role->id }}"
+                                        data-role-checkbox
+                                        data-role-name="{{ $role->name }}"
+                                        data-role-level="{{ $role->level }}"
+                                        {{ $canAssign ? '' : 'disabled' }}
+                                    >
+
+                                    <span class="role-option-body">
+                                        <span class="role-option-title">{{ $role->name }}</span>
+                                        <span class="role-option-desc">{{ $role->description }}</span>
+                                        @if(!$canAssign)
+                                            <span class="blocked-note">Cannot assign from your current role level.</span>
+                                        @endif
+                                    </span>
+
+                                    <span class="badge role-option-level {{ $role->isSuperAdmin() ? 'badge-danger' : 'badge-neutral' }}">Level {{ $role->level }}</span>
                                 </label>
                             @endforeach
                         </div>
@@ -345,6 +430,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const selected = roleCheckboxes
             .filter((checkbox) => checkbox.checked)
             .map((checkbox) => `${checkbox.dataset.roleName} (L${checkbox.dataset.roleLevel})`);
+
+        roleCheckboxes.forEach((checkbox) => {
+            checkbox.closest('[data-role-option]')?.classList.toggle('is-selected', checkbox.checked);
+        });
 
         rolePreview.textContent = selected.length ? `Selected: ${selected.join(', ')}` : 'Select at least one role.';
     }
