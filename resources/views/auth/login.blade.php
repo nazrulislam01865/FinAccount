@@ -38,7 +38,7 @@
         </form>
         <div class="auth-links">
             <a href="{{ route('password.request') }}">Forgot password?</a>
-            <a href="{{ route('register') }}">Create account</a>
+            <span>New users are created by Super Admin/Admin only.</span>
         </div>
     </div>
 </div>

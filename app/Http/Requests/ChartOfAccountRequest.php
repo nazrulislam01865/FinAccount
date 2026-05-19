@@ -12,7 +12,7 @@ class ChartOfAccountRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('chart-of-accounts.manage');
     }
 
     protected function prepareForValidation(): void

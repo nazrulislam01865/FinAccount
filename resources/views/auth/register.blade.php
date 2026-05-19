@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register | Accounting System</title>
+    <title>Registration Disabled | Accounting System</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>
@@ -13,17 +13,10 @@
             <div class="brand-mark">▥</div>
             <div><h1>FinAcco</h1><p>Accounting System</p></div>
         </a>
-        <span class="page-label auth-page-label">Create Account</span>
-        <h2 class="auth-title">Create Account</h2>
-        <form method="POST" action="{{ route('register') }}" class="auth-form">
-            @csrf
-            <div><label>Name</label><input name="name" value="{{ old('name') }}" required>@error('name')<div class="field-error">{{ $message }}</div>@enderror</div>
-            <div><label>Email</label><input type="email" name="email" value="{{ old('email') }}" required>@error('email')<div class="field-error">{{ $message }}</div>@enderror</div>
-            <div><label>Password</label><input type="password" name="password" required>@error('password')<div class="field-error">{{ $message }}</div>@enderror</div>
-            <div><label>Confirm Password</label><input type="password" name="password_confirmation" required></div>
-            <button class="btn-primary" type="submit" style="width:100%">Register</button>
-        </form>
-        <div class="auth-links"><a href="{{ route('login') }}">Already registered? Login</a></div>
+        <span class="page-label auth-page-label">Registration Disabled</span>
+        <h2 class="auth-title">Account creation is admin controlled</h2>
+        <p class="auth-subtitle">Public signup is disabled. A Super Admin or Admin must create users from the Users & Roles page.</p>
+        <a href="{{ route('login') }}" class="btn-primary" style="width:100%;display:inline-flex;justify-content:center;text-decoration:none">Go to Login</a>
     </div>
 </div>
 </body>

@@ -168,7 +168,7 @@
                     <div>
                         <h3>Opening Balances</h3>
                         <p>
-                            Saved rows are view-only. Click <strong>+ Add New Row</strong> to enter another opening balance line.
+                            Draft rows are view-only until you click <strong>Edit</strong>. Click <strong>+ Add New Row</strong> to enter another opening balance line.
                         </p>
                     </div>
 
@@ -196,6 +196,7 @@
                                 <th>Credit Opening<br>(BDT)</th>
                                 <th>Net Balance<br>(BDT)</th>
                                 <th>Remarks</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
 
@@ -281,10 +282,21 @@
                                             value="{{ $row['remarks'] }}"
                                         >
                                     </td>
+
+                                    <td class="action-cell">
+                                        <button
+                                            class="icon-btn edit-opening-row"
+                                            type="button"
+                                            title="Edit opening balance row"
+                                            @disabled($openingIsFinal)
+                                        >
+                                            ✎
+                                        </button>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr data-empty="true">
-                                    <td colspan="9" class="opening-empty">
+                                    <td colspan="10" class="opening-empty">
                                         No opening balance rows yet. Click <strong>+ Add New Row</strong> to enter an opening balance.
                                     </td>
                                 </tr>
@@ -439,6 +451,15 @@
         color: var(--muted);
         text-align: center;
     }
+
+    .action-cell {
+        white-space: nowrap;
+        text-align: center;
+    }
+
+    .action-cell .icon-btn + .icon-btn {
+        margin-left: 4px;
+    }
 </style>
 @endpush
 
@@ -555,6 +576,167 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `<option value="${party.id}" data-linked-account="${party.linked_ledger_account_id}" ${selected}>${escapeHtml(label)}</option>`;
             }),
         ].join('');
+    }
+
+    function partyLabelById(partyId) {
+        if (!partyId) {
+            return '—';
+        }
+
+        const party = parties.find((row) => String(row.id) === String(partyId));
+
+        if (!party) {
+            return '—';
+        }
+
+        return `${party.party_code ? party.party_code + ' - ' : ''}${party.party_name}`;
+    }
+
+    function rowData(row) {
+        const account = row.querySelector('.item-account') || row.querySelector('.account-select');
+        const party = row.querySelector('.item-party') || row.querySelector('.party-select');
+        const debit = row.querySelector('.debit');
+        const credit = row.querySelector('.credit');
+        const remarks = row.querySelector('.item-remarks') || row.querySelector('.remarks-input');
+
+        return {
+            account_id: account?.value || '',
+            party_id: party?.value || '',
+            debit_opening: parseMoney(debit?.value).toFixed(2),
+            credit_opening: parseMoney(credit?.value).toFixed(2),
+            remarks: remarks?.value || '',
+        };
+    }
+
+    function editableRowHtml(row, data) {
+        const index = Math.max(0, dataRows().indexOf(row));
+
+        return `
+            <td>${index + 1}</td>
+            <td><input class="code-input account-code" value="" readonly></td>
+            <td><select class="item-account account-select" name="items[${index}][account_id]" required>${accountOptions(data.account_id)}</select></td>
+            <td><span class="badge account-type ${badgeClass('Asset')}">Asset</span></td>
+            <td><select class="item-party party-select" name="items[${index}][party_id]"><option value="">Default / Not Applicable</option></select></td>
+            <td><input class="money-input debit" name="items[${index}][debit_opening]" value="${parseMoney(data.debit_opening).toFixed(2)}" inputmode="decimal"></td>
+            <td><input class="money-input credit" name="items[${index}][credit_opening]" value="${parseMoney(data.credit_opening).toFixed(2)}" inputmode="decimal"></td>
+            <td class="net-dr net-balance">0.00 Dr</td>
+            <td><input class="item-remarks remarks-input" name="items[${index}][remarks]" value="${escapeHtml(data.remarks)}"></td>
+            <td class="action-cell">
+                <button class="icon-btn done-opening-row" type="button" title="Keep row changes">✓</button>
+                <button class="icon-btn cancel-opening-row" type="button" title="Cancel row edit">↺</button>
+            </td>
+        `;
+    }
+
+    function viewRowHtml(row, data) {
+        const account = accountById(data.account_id);
+        const type = account?.account_type || 'Asset';
+        const normalBalance = account?.normal_balance || 'Debit';
+        const debit = parseMoney(data.debit_opening);
+        const credit = parseMoney(data.credit_opening);
+        const net = debit - credit;
+        const index = Math.max(0, dataRows().indexOf(row));
+
+        row.dataset.type = type;
+        row.dataset.normalBalance = normalBalance;
+
+        return `
+            <td>${index + 1}</td>
+            <td>
+                <span class="view-only-value code-display">${escapeHtml(account?.account_code || '—')}</span>
+                <input type="hidden" class="item-account" name="items[${index}][account_id]" value="${escapeHtml(data.account_id)}">
+            </td>
+            <td>
+                <span class="view-only-value account-display">${escapeHtml(account?.display_name || '—')}</span>
+            </td>
+            <td>
+                <span class="badge account-type ${badgeClass(type)}">${escapeHtml(type)}</span>
+            </td>
+            <td>
+                <span class="view-only-value party-display">${escapeHtml(partyLabelById(data.party_id))}</span>
+                <input type="hidden" class="item-party" name="items[${index}][party_id]" value="${escapeHtml(data.party_id)}">
+            </td>
+            <td class="amount-cell">
+                <span class="view-only-value">${money(debit)}</span>
+                <input type="hidden" class="money-input debit" name="items[${index}][debit_opening]" value="${debit.toFixed(2)}">
+            </td>
+            <td class="amount-cell">
+                <span class="view-only-value">${money(credit)}</span>
+                <input type="hidden" class="money-input credit" name="items[${index}][credit_opening]" value="${credit.toFixed(2)}">
+            </td>
+            <td class="${net >= 0 ? 'net-dr' : 'net-cr'} net-balance">${money(Math.abs(net))} ${net >= 0 ? 'Dr' : 'Cr'}</td>
+            <td>
+                <span class="view-only-value remarks-display">${data.remarks ? escapeHtml(data.remarks) : '—'}</span>
+                <input type="hidden" class="item-remarks" name="items[${index}][remarks]" value="${escapeHtml(data.remarks)}">
+            </td>
+            <td class="action-cell">
+                <button class="icon-btn edit-opening-row" type="button" title="Edit opening balance row" ${openingIsFinal ? 'disabled' : ''}>✎</button>
+            </td>
+        `;
+    }
+
+    function makeRowEditable(row, data, keepOriginal = false) {
+        if (openingIsFinal) {
+            showToast('Opening balance is finalized and cannot be edited.');
+            return;
+        }
+
+        if (keepOriginal) {
+            row.dataset.originalRow = JSON.stringify(data);
+        } else {
+            delete row.dataset.originalRow;
+        }
+
+        row.className = 'opening-edit-row';
+        row.dataset.mode = 'edit';
+        row.innerHTML = editableRowHtml(row, data);
+
+        bindRow(row);
+        updateAccountInfo(row, true);
+
+        const partySelect = row.querySelector('.party-select');
+
+        if (partySelect && data.party_id) {
+            partySelect.value = data.party_id;
+        }
+
+        const debit = row.querySelector('.debit');
+        const credit = row.querySelector('.credit');
+
+        if (debit) {
+            debit.value = parseMoney(data.debit_opening).toFixed(2);
+        }
+
+        if (credit) {
+            credit.value = parseMoney(data.credit_opening).toFixed(2);
+        }
+
+        updateRowIndexes();
+        recalc();
+    }
+
+    function makeRowViewOnly(row, data) {
+        row.className = 'opening-view-row';
+        row.dataset.mode = 'view';
+        row.innerHTML = viewRowHtml(row, data);
+        delete row.dataset.originalRow;
+
+        updateRowIndexes();
+        recalc();
+    }
+
+    function ensureEmptyRow() {
+        if (dataRows().length > 0) {
+            return;
+        }
+
+        tbody.innerHTML = `
+            <tr data-empty="true">
+                <td colspan="10" class="opening-empty">
+                    No opening balance rows yet. Click <strong>+ Add New Row</strong> to enter an opening balance.
+                </td>
+            </tr>
+        `;
     }
 
     function isDataRow(row) {
@@ -760,38 +942,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('[data-empty="true"]').forEach((emptyRow) => emptyRow.remove());
 
-        const index = dataRows().length;
-
         const row = document.createElement('tr');
-        row.className = 'opening-edit-row';
-        row.dataset.mode = 'edit';
-        row.dataset.type = 'Asset';
-        row.dataset.normalBalance = 'Debit';
-
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td><input class="code-input account-code" value="" readonly></td>
-            <td><select class="item-account account-select" name="items[${index}][account_id]" required>${accountOptions(accountId)}</select></td>
-            <td><span class="badge account-type ${badgeClass('Asset')}">Asset</span></td>
-            <td><select class="item-party party-select" name="items[${index}][party_id]"><option value="">Default / Not Applicable</option></select></td>
-            <td><input class="money-input debit" name="items[${index}][debit_opening]" value="${Number(debit).toFixed(2)}" inputmode="decimal"></td>
-            <td><input class="money-input credit" name="items[${index}][credit_opening]" value="${Number(credit).toFixed(2)}" inputmode="decimal"></td>
-            <td class="net-dr net-balance">0.00 Dr</td>
-            <td><input class="item-remarks remarks-input" name="items[${index}][remarks]" value="${escapeHtml(remarks)}"></td>
-        `;
 
         tbody.appendChild(row);
-        bindRow(row);
-        updateAccountInfo(row, false);
 
-        const partySelect = row.querySelector('.party-select');
-
-        if (partyId) {
-            partySelect.value = partyId;
-        }
-
-        updateRowIndexes();
-        recalc();
+        makeRowEditable(row, {
+            account_id: accountId,
+            party_id: partyId,
+            debit_opening: debit,
+            credit_opening: credit,
+            remarks,
+        });
 
         return row;
     }
@@ -956,6 +1117,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return true;
     }
+
+    tbody.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+
+        if (!button) {
+            return;
+        }
+
+        const row = button.closest('tr');
+
+        if (!isDataRow(row)) {
+            return;
+        }
+
+        if (button.classList.contains('edit-opening-row')) {
+            makeRowEditable(row, rowData(row), true);
+            showToast('Opening balance row loaded for editing. Click Save Draft to update.');
+            return;
+        }
+
+        if (button.classList.contains('done-opening-row')) {
+            makeRowViewOnly(row, rowData(row));
+            showToast('Row changes kept. Click Save Draft to update opening balance.');
+            return;
+        }
+
+        if (button.classList.contains('cancel-opening-row')) {
+            const original = row.dataset.originalRow
+                ? JSON.parse(row.dataset.originalRow)
+                : null;
+
+            if (original) {
+                makeRowViewOnly(row, original);
+                showToast('Row edit cancelled.');
+            } else {
+                row.remove();
+                ensureEmptyRow();
+                updateRowIndexes();
+                recalc();
+                showToast('New opening balance row removed.');
+            }
+        }
+    });
 
     dataRows().forEach((row) => {
         if (isEditableRow(row)) {

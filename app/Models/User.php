@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class User extends Authenticatable
 {
@@ -27,15 +28,179 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class)->withTimestamps();
     }
 
-    public function hasRole(string $role): bool
+    public function activeRoles()
     {
-        return $this->roles()->where('name', $role)->exists();
+        return $this->roles()->where('status', 'Active');
     }
 
-    public function hasPermission(string $permission): bool
+    public function hasRole(string $role): bool
     {
-        return $this->roles()
+        return $this->activeRoles()->where('name', $role)->exists();
+    }
+
+    public function hasAnyRole(array $roles): bool
+    {
+        return $this->activeRoles()->whereIn('name', $roles)->exists();
+    }
+
+    public function isActive(): bool
+    {
+        return ($this->status ?? 'Active') === 'Active';
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->activeRoles()
+            ->where(fn ($query) => $query->where('name', 'Super Admin')->orWhere('level', 1))
+            ->exists();
+    }
+
+    public function roleLevel(): int
+    {
+        return (int) ($this->activeRoles()->min('level') ?? 999);
+    }
+
+    public function hasPermission(?string $permission): bool
+    {
+        if (!$permission) {
+            return true;
+        }
+
+        if (str_contains($permission, '|')) {
+            return $this->hasAnyPermission(explode('|', $permission));
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->activeRoles()
             ->whereHas('permissions', fn ($query) => $query->where('name', $permission))
             ->exists();
+    }
+
+    public function hasAnyPermission(array $permissions): bool
+    {
+        $permissions = array_values(array_filter(array_map('trim', $permissions)));
+
+        if ($permissions === []) {
+            return true;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->activeRoles()
+            ->whereHas('permissions', fn ($query) => $query->whereIn('name', $permissions))
+            ->exists();
+    }
+
+    public function canViewRoute(?string $routeName): bool
+    {
+        $permissions = $this->viewPermissionsForRoute($routeName);
+
+        return $permissions === [] || $this->hasAnyPermission($permissions);
+    }
+
+    public function viewPermissionForRoute(?string $routeName): ?string
+    {
+        return $this->viewPermissionsForRoute($routeName)[0] ?? null;
+    }
+
+    public function viewPermissionsForRoute(?string $routeName): array
+    {
+        if (!$routeName) {
+            return [];
+        }
+
+        $routePermissions = config('access.route_permissions', []);
+
+        if (isset($routePermissions[$routeName])) {
+            return (array) $routePermissions[$routeName];
+        }
+
+        foreach ($routePermissions as $prefix => $permissions) {
+            if (str_starts_with($routeName, $prefix . '.')) {
+                return (array) $permissions;
+            }
+        }
+
+        return [];
+    }
+
+    public function managePermissionForRoute(?string $routeName): ?string
+    {
+        if (!$routeName) {
+            return null;
+        }
+
+        $managePermissions = config('access.manage_permissions', []);
+
+        if (isset($managePermissions[$routeName])) {
+            return $managePermissions[$routeName];
+        }
+
+        foreach ($managePermissions as $prefix => $permission) {
+            if (str_starts_with($routeName, $prefix . '.')) {
+                return $permission;
+            }
+        }
+
+        return null;
+    }
+
+    public function canViewFeature(?string $permission): bool
+    {
+        return $this->hasPermission($permission);
+    }
+
+    public function canManageFeature(?string $permission): bool
+    {
+        return $this->hasPermission($permission);
+    }
+
+    public function canManageUser(User $target): bool
+    {
+        if ((int) $this->id === (int) $target->id) {
+            return false;
+        }
+
+        if (!$this->hasPermission('users.manage')) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->roleLevel() < $target->roleLevel() && !$target->isSuperAdmin();
+    }
+
+    public function canAssignRole(Role $role): bool
+    {
+        if (!$this->hasPermission('users.manage')) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return !$role->isSuperAdmin()
+            && !$role->is_protected
+            && (int) $role->level > $this->roleLevel();
+    }
+
+    public function manageableRoleIds(?EloquentCollection $roles = null): array
+    {
+        $roles ??= Role::query()->where('status', 'Active')->get();
+
+        return $roles
+            ->filter(fn (Role $role) => $this->canAssignRole($role))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 }

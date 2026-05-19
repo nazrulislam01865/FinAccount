@@ -10,7 +10,7 @@ class TransactionHeadRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('transaction-heads.manage');
     }
 
     protected function prepareForValidation(): void

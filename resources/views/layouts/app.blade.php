@@ -12,7 +12,12 @@
 
     @stack('styles')
 </head>
-<body class="sidebar-booting">
+@php
+    $currentUser = auth()->user();
+    $currentManagePermission = $currentUser?->managePermissionForRoute(request()->route()?->getName());
+    $isReadOnlyFeature = $currentManagePermission && $currentUser?->hasPermission($currentManagePermission) !== true;
+@endphp
+<body class="sidebar-booting {{ $isReadOnlyFeature ? 'is-read-only-feature' : '' }}">
 <div class="app" id="appShell">
     <script>
         (function () {
@@ -50,6 +55,11 @@
         @include('partials.topbar')
 
         <section class="content">
+            @if($isReadOnlyFeature)
+                <div class="card" style="padding:14px 18px;margin-bottom:18px;border-color:#fed7aa;background:#fff7ed;color:#9a3412;font-weight:750">
+                    Your role can view this feature, but create/update/delete controls are locked.
+                </div>
+            @endif
             @yield('content')
         </section>
     </main>
@@ -91,6 +101,19 @@
 
         resultCount.textContent = `Showing ${visibleRows.length} of ${rows.length} entries`;
     };
+
+    if (document.body.classList.contains('is-read-only-feature')) {
+        document.querySelectorAll('form[data-frontend-form]').forEach((form) => {
+            form.querySelectorAll('input, select, textarea, button[type="submit"]').forEach((field) => {
+                field.disabled = true;
+            });
+        });
+
+        document.querySelectorAll('form[data-delete-form] button[type="submit"], .delete-btn').forEach((button) => {
+            button.disabled = true;
+            button.title = 'Read-only for your role';
+        });
+    }
 
     document.addEventListener('submit', async (event) => {
         const form = event.target.closest('form[data-delete-form]');

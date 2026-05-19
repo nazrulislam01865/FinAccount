@@ -325,6 +325,8 @@ window.AccountingUI = (() => {
 
             if (key === 'text') {
               show = show && row.innerText.toLowerCase().includes(value);
+            } else if (key === 'role') {
+              show = show && String(row.dataset[key] || '').toLowerCase().includes(value);
             } else {
               show = show && String(row.dataset[key] || '').toLowerCase() === value;
             }

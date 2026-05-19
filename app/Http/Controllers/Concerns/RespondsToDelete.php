@@ -23,15 +23,22 @@ trait RespondsToDelete
             ->with('success', $message);
     }
 
-    protected function deleteFailure(Request $request, string $routeName, string $message, Throwable $exception): JsonResponse|RedirectResponse
-    {
-        report($exception);
+    protected function deleteFailure(
+        Request $request,
+        string $routeName,
+        string $message,
+        ?Throwable $exception = null,
+        int $status = 422
+    ): JsonResponse|RedirectResponse {
+        if ($exception) {
+            report($exception);
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => false,
                 'message' => $message,
-            ], 422);
+            ], $status);
         }
 
         return redirect()

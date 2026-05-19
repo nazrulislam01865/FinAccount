@@ -36,6 +36,17 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        $user = Auth::user();
+
+        if ($user && method_exists($user, 'isActive') && !$user->isActive()) {
+            Auth::logout();
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account is inactive. Please contact a Super Admin or Admin.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

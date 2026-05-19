@@ -20,7 +20,7 @@ class PartyRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('parties.manage');
     }
 
     protected function prepareForValidation(): void

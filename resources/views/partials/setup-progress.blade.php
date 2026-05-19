@@ -1,7 +1,8 @@
 @php
     use Illuminate\Support\Facades\Route;
 
-    $steps = [
+    $currentUser = auth()->user();
+    $allSteps = [
         1 => ['label' => 'Company Setup', 'route' => 'setup.company'],
         2 => ['label' => 'Chart of Accounts', 'route' => 'setup.chart-of-accounts'],
         3 => ['label' => 'Cash / Bank Setup', 'route' => 'setup.cash-bank-accounts'],
@@ -12,12 +13,19 @@
         8 => ['label' => 'Voucher Numbering', 'route' => 'setup.voucher-numbering'],
     ];
 
+    $steps = collect($allSteps)
+        ->filter(fn ($step) => Route::has($step['route']) && ($currentUser?->canViewRoute($step['route']) ?? false))
+        ->all();
+
     $current = (int) ($current ?? 1);
-    $total = count($steps);
-    $current = max(1, min($current, $total));
-    $percent = round(($current / $total) * 100);
+    $visibleNumbers = array_keys($steps);
+    $total = max(1, count($steps));
+    $position = array_search($current, $visibleNumbers, true);
+    $visibleCurrent = $position === false ? 1 : $position + 1;
+    $percent = round(($visibleCurrent / $total) * 100);
 @endphp
 
+@if(count($steps) > 0)
 <div class="card setup-progress-horizontal" aria-label="Setup Progress">
     <div class="setup-progress-head">
         <div>
@@ -26,7 +34,7 @@
         </div>
 
         <div class="setup-progress-count">
-            Step {{ $current }} of {{ $total }}
+            Step {{ $visibleCurrent }} of {{ $total }}
         </div>
     </div>
 
@@ -39,19 +47,20 @@
             @php
                 $label = $step['label'];
                 $route = $step['route'];
-                $url = Route::has($route) ? route($route) : '#';
-                $state = $number < $current ? 'done' : ($number === $current ? 'current' : 'pending');
-                $status = $number < $current ? 'Completed' : ($number === $current ? 'In Progress' : 'Pending');
+                $url = route($route);
+                $stepPosition = array_search($number, $visibleNumbers, true) + 1;
+                $state = $stepPosition < $visibleCurrent ? 'done' : ($stepPosition === $visibleCurrent ? 'current' : 'pending');
+                $status = $stepPosition < $visibleCurrent ? 'Completed' : ($stepPosition === $visibleCurrent ? 'In Progress' : 'Pending');
             @endphp
 
             <a
                 href="{{ $url }}"
                 class="setup-progress-step {{ $state }}"
-                @if($number === $current) aria-current="page" @endif
+                @if($stepPosition === $visibleCurrent) aria-current="page" @endif
                 title="Go to {{ $label }}"
             >
                 <div class="setup-progress-dot">
-                    {{ $number < $current ? '✓' : $number }}
+                    {{ $stepPosition < $visibleCurrent ? '✓' : $stepPosition }}
                 </div>
 
                 <div class="setup-progress-copy">
@@ -62,3 +71,4 @@
         @endforeach
     </div>
 </div>
+@endif

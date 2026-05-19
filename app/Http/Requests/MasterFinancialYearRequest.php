@@ -9,7 +9,7 @@ class MasterFinancialYearRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('master-data.manage');
     }
 
     /**

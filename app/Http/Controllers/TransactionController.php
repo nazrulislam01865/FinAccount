@@ -24,11 +24,15 @@ class TransactionController extends Controller
     ): View {
         $currentFinancialYear = $financialYearService->current($request->user()?->id);
 
+        $user = $request->user();
+
         $transactionHeads = TransactionHead::query()
             ->where('status', 'Active')
             ->with(['settlementTypes' => fn ($query) => $query->where('status', 'Active')->orderBy('sort_order')])
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->filter(fn (TransactionHead $head) => $this->transactionHeadVisibleForUser($user, $head))
+            ->values();
 
         $settlementTypes = SettlementType::query()
             ->where('status', 'Active')
@@ -139,4 +143,94 @@ class TransactionController extends Controller
             'redirect' => route('transactions.create'),
         ], 201);
     }
+    private function transactionHeadVisibleForUser(?\App\Models\User $user,
+        TransactionHead $head
+    ): bool {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasPermission('transactions.draft') && !$user->hasPermission('transactions.create')) {
+            return true;
+        }
+
+        if (!$user->hasPermission('transactions.create')) {
+            return false;
+        }
+
+        $settlements = $head->settlementTypes->isNotEmpty()
+            ? $head->settlementTypes
+            : collect([null]);
+
+        foreach ($settlements as $settlement) {
+            $permissions = $this->requiredTransactionPermissions($head, $settlement);
+            $allowed = true;
+
+            foreach ($permissions as $permission) {
+                if (!$user->hasPermission($permission)) {
+                    $allowed = false;
+                    break;
+                }
+            }
+
+            if ($allowed) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function requiredTransactionPermissions(TransactionHead $head, ?\App\Models\SettlementType $settlement = null): array
+    {
+        $permissions = [];
+        $nature = trim((string) $head->nature);
+        $headText = strtoupper(trim($head->name.' '.$head->nature.' '.($settlement?->name ?? '').' '.($settlement?->code ?? '')));
+        $settlementKey = $this->settlementKey($settlement);
+
+        $naturePermission = config('access.transaction_type_permissions.'.$nature);
+        if ($naturePermission) {
+            $permissions[] = $naturePermission;
+        }
+
+        if ($nature === 'Expense') {
+            if ($settlementKey === 'due') {
+                $permissions[] = 'transactions.purchase.create';
+            } elseif (in_array($settlementKey, ['cash', 'bank', 'advance_paid', 'advance_received'], true)) {
+                $permissions[] = 'transactions.payment.create';
+            }
+        }
+
+        if ($nature === 'Receipt' && ($settlementKey === 'due' || str_contains($headText, 'SALE') || str_contains($headText, 'INVOICE'))) {
+            $permissions[] = 'transactions.sales.create';
+        }
+
+        if (str_contains($headText, 'SUPPLIER') || str_contains($headText, 'PURCHASE') || str_contains($headText, 'VENDOR')) {
+            if ($nature === 'Payment') {
+                $permissions[] = 'transactions.payment.create';
+            } elseif ($settlementKey === 'due') {
+                $permissions[] = 'transactions.purchase.create';
+            }
+        }
+
+        return array_values(array_unique($permissions));
+    }
+
+    private function settlementKey(?\App\Models\SettlementType $settlement): string
+    {
+        $code = strtoupper((string) $settlement?->code);
+        $name = strtoupper((string) $settlement?->name);
+        $value = $code . ' ' . $name;
+
+        return match (true) {
+            str_contains($value, 'ADVANCE_PAID') || str_contains($value, 'ADVANCE PAID') => 'advance_paid',
+            str_contains($value, 'ADVANCE_RECEIVED') || str_contains($value, 'ADVANCE RECEIVED') => 'advance_received',
+            str_contains($value, 'CASH') => 'cash',
+            str_contains($value, 'BANK') => 'bank',
+            str_contains($value, 'DUE') => 'due',
+            str_contains($value, 'ADJUST') => 'adjustment',
+            default => 'other',
+        };
+    }
+
 }

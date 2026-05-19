@@ -11,6 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->string('name')->unique();
             $table->string('description')->nullable();
+            $table->unsignedSmallInteger('level')->default(999)->index();
             $table->enum('status', ['Active', 'Inactive'])->default('Active');
             $table->timestamps();
         });

@@ -10,7 +10,7 @@ class VoucherNumberingRuleRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('voucher-numbering.manage');
     }
 
     protected function prepareForValidation(): void

@@ -312,6 +312,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     }
 
+
+    async function parseJsonResponse(response) {
+        const raw = await response.text();
+
+        if (!raw) {
+            return {};
+        }
+
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            throw {
+                message: response.ok
+                    ? 'Unexpected empty or invalid server response.'
+                    : `Server returned ${response.status}. Check storage/logs/laravel.log for the backend exception.`,
+                raw,
+            };
+        }
+    }
+
     function showToast(message) {
         if (window.AccountingUI?.showToast) {
             window.AccountingUI.showToast(message);
@@ -713,7 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'same-origin',
             });
 
-            const result = await response.json();
+            const result = await parseJsonResponse(response);
 
             if (!response.ok || !result.success) {
                 throw result;
@@ -844,7 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'same-origin',
             });
 
-            const result = await response.json();
+            const result = await parseJsonResponse(response);
 
             if (!response.ok) {
                 const message = result.errors
@@ -862,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 700);
         } catch (error) {
             console.error(error);
-            showToast('Transaction API error. Please check backend code.');
+            showToast(error?.message || 'Transaction API error. Please check backend code.');
         }
     }
 

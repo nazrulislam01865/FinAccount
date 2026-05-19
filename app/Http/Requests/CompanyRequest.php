@@ -8,7 +8,7 @@ class CompanyRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('company.manage');
     }
 
     protected function prepareForValidation(): void

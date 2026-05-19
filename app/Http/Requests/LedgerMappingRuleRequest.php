@@ -14,7 +14,7 @@ class LedgerMappingRuleRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->hasAnyPermission('ledger-mapping.manage');
     }
 
     protected function prepareForValidation(): void

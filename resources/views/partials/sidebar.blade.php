@@ -1,6 +1,7 @@
 @php
     use Illuminate\Support\Facades\Route;
 
+    $currentUser = auth()->user();
     $routeName = request()->route()?->getName();
     $isActive = function ($name) use ($routeName) {
         if ($routeName === 'dashboard' && $name === 'setup.company') {
@@ -10,7 +11,21 @@
         return ($routeName === $name || str_starts_with((string) $routeName, $name . '.')) ? 'active' : '';
     };
 
+    $canRoute = fn ($name) => Route::has($name) && ($currentUser?->canViewRoute($name) ?? false);
+    $canPermission = fn ($permission) => $currentUser?->hasPermission($permission) ?? false;
+
     $isMasterDataRoute = request()->routeIs('setup.master-data*');
+
+    $setupLinks = [
+        ['label' => 'Company Setup', 'route' => 'setup.company', 'icon' => '1'],
+        ['label' => 'Chart of Accounts', 'route' => 'setup.chart-of-accounts', 'icon' => '2'],
+        ['label' => 'Cash / Bank Setup', 'route' => 'setup.cash-bank-accounts', 'icon' => '3'],
+        ['label' => 'Party / Person Setup', 'route' => 'setup.parties', 'icon' => '4'],
+        ['label' => 'Transaction Head Setup', 'route' => 'setup.transaction-heads', 'icon' => '5'],
+        ['label' => 'Ledger Mapping', 'route' => 'setup.ledger-mapping', 'icon' => '6'],
+        ['label' => 'Opening Balance Setup', 'route' => 'setup.opening-balances', 'icon' => '7'],
+        ['label' => 'Voucher Numbering', 'route' => 'setup.voucher-numbering', 'icon' => '8'],
+    ];
 
     $masterDataLinks = [
         ['label' => 'Business Types', 'route' => 'setup.master-data.business-types'],
@@ -30,123 +45,98 @@
         </div>
     </a>
 
-  
-    <div class="nav-title">Setup</div>
+    @if(collect($setupLinks)->contains(fn ($link) => $canRoute($link['route'])) || $canRoute('setup.master-data'))
+        <div class="nav-title">Setup</div>
 
-    <a href="{{ route('setup.company') }}" class="nav-item {{ $isActive('setup.company') }}">
-        <div class="nav-icon">1</div>
-        <span>Company Setup</span>
-    </a>
-
-    <a href="{{ route('setup.chart-of-accounts') }}" class="nav-item {{ $isActive('setup.chart-of-accounts') }}">
-        <div class="nav-icon">2</div>
-        <span>Chart of Accounts</span>
-    </a>
-
-    <a href="{{ route('setup.cash-bank-accounts') }}" class="nav-item {{ $isActive('setup.cash-bank-accounts') }}">
-        <div class="nav-icon">3</div>
-        <span>Cash / Bank Setup</span>
-    </a>
-
-    <a href="{{ route('setup.parties') }}" class="nav-item {{ $isActive('setup.parties') }}">
-        <div class="nav-icon">4</div>
-        <span>Party / Person Setup</span>
-    </a>
-
-    <a href="{{ route('setup.transaction-heads') }}" class="nav-item {{ $isActive('setup.transaction-heads') }}">
-        <div class="nav-icon">5</div>
-        <span>Transaction Head Setup</span>
-    </a>
-
-    <a href="{{ route('setup.ledger-mapping') }}" class="nav-item {{ $isActive('setup.ledger-mapping') }}">
-        <div class="nav-icon">6</div>
-        <span>Ledger Mapping</span>
-    </a>
-
-    <a
-        href="{{ Route::has('setup.opening-balances') ? route('setup.opening-balances') : '#' }}"
-        class="nav-item {{ $isActive('setup.opening-balances') }}"
-    >
-        <div class="nav-icon">7</div>
-        <span>Opening Balance Setup</span>
-    </a>
-
-    <a
-        href="{{ Route::has('setup.voucher-numbering') ? route('setup.voucher-numbering') : '#' }}"
-        class="nav-item {{ $isActive('setup.voucher-numbering') }}"
-    >
-        <div class="nav-icon">8</div>
-        <span>Voucher Numbering</span>
-    </a>
-    <details class="nav-group master-data-nav-group" {{ $isMasterDataRoute ? 'open' : '' }}>
-        <summary
-            class="nav-item nav-parent {{ $isActive('setup.master-data') }}"
-            data-sidebar-group-summary
-            aria-controls="masterDataSubmenu"
-        >
-            <div class="nav-icon">M</div>
-            <span>Master Data</span>
-            <span class="nav-arrow" aria-hidden="true">⌄</span>
-        </summary>
-
-        <div
-            class="nav-submenu {{ $isMasterDataRoute ? 'is-open' : '' }}"
-            id="masterDataSubmenu"
-            aria-label="Master Data Submenu"
-        >
-            @foreach($masterDataLinks as $masterLink)
-                <a
-                    href="{{ route($masterLink['route']) }}"
-                    class="nav-subitem {{ request()->routeIs($masterLink['route']) ? 'active' : '' }}"
-                >
-                    <span>{{ $masterLink['label'] }}</span>
+        @foreach($setupLinks as $link)
+            @if($canRoute($link['route']))
+                <a href="{{ route($link['route']) }}" class="nav-item {{ $isActive($link['route']) }}">
+                    <div class="nav-icon">{{ $link['icon'] }}</div>
+                    <span>{{ $link['label'] }}</span>
                 </a>
-            @endforeach
-        </div>
-    </details>
+            @endif
+        @endforeach
+
+        @if($canRoute('setup.master-data'))
+            <details class="nav-group master-data-nav-group" {{ $isMasterDataRoute ? 'open' : '' }}>
+                <summary
+                    class="nav-item nav-parent {{ $isActive('setup.master-data') }}"
+                    data-sidebar-group-summary
+                    aria-controls="masterDataSubmenu"
+                >
+                    <div class="nav-icon">M</div>
+                    <span>Master Data</span>
+                    <span class="nav-arrow" aria-hidden="true">⌄</span>
+                </summary>
+
+                <div
+                    class="nav-submenu {{ $isMasterDataRoute ? 'is-open' : '' }}"
+                    id="masterDataSubmenu"
+                    aria-label="Master Data Submenu"
+                >
+                    @foreach($masterDataLinks as $masterLink)
+                        @if($canRoute($masterLink['route']))
+                            <a
+                                href="{{ route($masterLink['route']) }}"
+                                class="nav-subitem {{ request()->routeIs($masterLink['route']) ? 'active' : '' }}"
+                            >
+                                <span>{{ $masterLink['label'] }}</span>
+                            </a>
+                        @endif
+                    @endforeach
+                </div>
+            </details>
+        @endif
+    @endif
 
     <div class="nav-title">Main Menu</div>
 
-    <a
-        href="{{ Route::has('transactions.create') ? route('transactions.create') : '#' }}"
-        class="nav-item {{ $isActive('transactions.create') }}"
-    >
-        <div class="nav-icon">＋</div>
-        <span>Add Transaction</span>
-    </a>
+    @if($canRoute('transactions.create'))
+        <a
+            href="{{ route('transactions.create') }}"
+            class="nav-item {{ $isActive('transactions.create') }}"
+        >
+            <div class="nav-icon">＋</div>
+            <span>Add Transaction</span>
+        </a>
+    @endif
 
-    <a href="#" class="nav-item">
-        <div class="nav-icon">📄</div>
-        <span>Transaction List</span>
-    </a>
+    @if($canPermission('transactions.view'))
+        <a href="#" class="nav-item">
+            <div class="nav-icon">📄</div>
+            <span>Transaction List</span>
+        </a>
+    @endif
 
-    <a href="#" class="nav-item">
-        <div class="nav-icon">⏳</div>
-        <span>Due Management</span>
-    </a>
+    @if($canPermission('customer-ledgers.view') || $canPermission('supplier-ledgers.view'))
+        <a href="#" class="nav-item">
+            <div class="nav-icon">📘</div>
+            <span>Ledger Report</span>
+        </a>
+    @endif
 
-    <a href="#" class="nav-item">
-        <div class="nav-icon">↗</div>
-        <span>Advance Entry</span>
-    </a>
+    @if($canPermission('cash-bank-book.view'))
+        <a href="#" class="nav-item">
+            <div class="nav-icon">🏦</div>
+            <span>Cash / Bank Book</span>
+        </a>
+    @endif
 
-    <a href="#" class="nav-item">
-        <div class="nav-icon">📘</div>
-        <span>Ledger Report</span>
-    </a>
+    @if($canPermission('reports.view'))
+        <a href="#" class="nav-item">
+            <div class="nav-icon">▣</div>
+            <span>Reports</span>
+        </a>
+    @endif
 
-    <a href="#" class="nav-item">
-        <div class="nav-icon">🏦</div>
-        <span>Cash / Bank Book</span>
-    </a>
+    @if($canRoute('settings.users-roles'))
+        <div class="nav-title">Settings</div>
 
-
-    <div class="nav-title">Settings</div>
-
-    <a href="{{ route('settings.users-roles') }}" class="nav-item {{ $isActive('settings.users-roles') }}">
-        <div class="nav-icon">U</div>
-        <span>Users & Roles</span>
-    </a>
+        <a href="{{ route('settings.users-roles') }}" class="nav-item {{ $isActive('settings.users-roles') }}">
+            <div class="nav-icon">U</div>
+            <span>Users & Roles</span>
+        </a>
+    @endif
 
     <div class="help-card">
         <div class="help-badge">?</div>
