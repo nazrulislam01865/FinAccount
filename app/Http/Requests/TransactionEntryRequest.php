@@ -94,6 +94,7 @@ class TransactionEntryRequest extends FormRequest
                 return;
             }
 
+            $this->validateStatusPermission($validator);
             $this->validateDateInsideActiveFinancialYear($validator);
             $this->validateHeadSettlementPair($validator, $head, $settlement);
             $this->validatePartyRequirement($validator, $head);
@@ -118,6 +119,10 @@ class TransactionEntryRequest extends FormRequest
 
     public function ensureCanUseResolvedVoucherType(?string $voucherType): void
     {
+        if ($voucherType === 'Draft Voucher' && $this->user()?->hasAnyPermission(['transactions.create', 'transactions.draft'])) {
+            return;
+        }
+
         $permission = $this->permissionForVoucherType($voucherType);
 
         if (!$permission || $this->user()?->hasPermission($permission)) {
@@ -139,6 +144,26 @@ class TransactionEntryRequest extends FormRequest
             'Draft Voucher' => 'transactions.draft',
             default => null,
         };
+    }
+
+    private function validateStatusPermission(Validator $validator): void
+    {
+        $user = $this->user();
+        $status = $this->input('status', 'Posted');
+
+        if ($status === 'Posted' && !$user?->hasPermission('transactions.create')) {
+            $validator->errors()->add(
+                'permission',
+                'Your role can save draft transactions only. Final posting is locked.'
+            );
+        }
+
+        if ($status === 'Draft' && !$user?->hasAnyPermission(['transactions.create', 'transactions.draft'])) {
+            $validator->errors()->add(
+                'permission',
+                'Your role is not allowed to save draft transactions.'
+            );
+        }
     }
 
     public function messages(): array

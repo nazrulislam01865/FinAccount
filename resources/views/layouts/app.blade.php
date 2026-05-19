@@ -15,7 +15,7 @@
 @php
     $currentUser = auth()->user();
     $currentManagePermission = $currentUser?->managePermissionForRoute(request()->route()?->getName());
-    $isReadOnlyFeature = $currentManagePermission && $currentUser?->hasPermission($currentManagePermission) !== true;
+    $isReadOnlyFeature = $currentManagePermission && $currentUser?->hasAnyPermission($currentManagePermission) !== true;
 @endphp
 <body class="sidebar-booting {{ $isReadOnlyFeature ? 'is-read-only-feature' : '' }}">
 <div class="app" id="appShell">

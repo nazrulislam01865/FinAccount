@@ -44,7 +44,7 @@ class UserRoleController extends Controller
             'roles' => $roles,
             'assignableRoleIds' => $assignableRoleIds,
             'accessMatrix' => config('access.matrix', []),
-            'matrixColumns' => ['Super Admin', 'Company Admin', 'Finance Manager', 'Accountant', 'Cashier', 'Sales User', 'Purchase User', 'Auditor', 'Viewer'],
+            'matrixColumns' => array_keys(config('access.roles', [])),
             'canManageUsers' => $actor?->hasPermission('users.manage') ?? false,
         ]);
     }

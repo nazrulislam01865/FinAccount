@@ -271,7 +271,13 @@
                             <tr>
                                 <td class="strong">{{ $row['feature'] }}</td>
                                 @foreach($matrixColumns as $column)
-                                    @php $value = $row[$column] ?? 'No'; @endphp
+                                    @php
+                                        $value = $row[$column] ?? match ($column) {
+                                            'Admin' => $row['Company Admin'] ?? 'Full',
+                                            'Management Viewer / Report Viewer' => $row['Viewer'] ?? 'View',
+                                            default => 'No',
+                                        };
+                                    @endphp
                                     <td>
                                         <span class="badge {{ str_contains($value, 'No') ? 'badge-neutral' : (str_contains($value, 'Full') ? 'badge-success' : 'badge-primary') }}">
                                             {{ $value }}

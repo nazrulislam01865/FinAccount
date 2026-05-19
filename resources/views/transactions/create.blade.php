@@ -29,6 +29,11 @@
         'linked_ledger_account_id' => $party->linked_ledger_account_id,
     ])->values();
 
+    $currentUser = auth()->user();
+    $canPostTransaction = $currentUser?->hasPermission('transactions.create') ?? false;
+    $canSaveDraftTransaction = $currentUser?->hasAnyPermission(['transactions.create', 'transactions.draft']) ?? false;
+    $isDraftOnlyTransactionUser = !$canPostTransaction && $canSaveDraftTransaction;
+
 @endphp
 
 <div class="page-title">
@@ -80,10 +85,12 @@
             data-heads-url="{{ route('api.dropdowns.transaction-heads') }}"
             data-settlements-url="{{ route('api.dropdowns.settlement-types') }}"
             data-parties-url="{{ route('api.dropdowns.parties') }}"
+            data-can-post="{{ $canPostTransaction ? '1' : '0' }}"
+            data-can-draft="{{ $canSaveDraftTransaction ? '1' : '0' }}"
         >
             @csrf
 
-            <input type="hidden" id="statusInput" name="status" value="Posted">
+            <input type="hidden" id="statusInput" name="status" value="{{ $isDraftOnlyTransactionUser ? 'Draft' : 'Posted' }}">
 
             <h3 class="section-title">Transaction Information</h3>
 
@@ -163,10 +170,20 @@
                 </div>
             </div>
 
+            @if($isDraftOnlyTransactionUser)
+                <div class="validation warn" style="display:block;margin-top:12px">
+                    Your role can enter transactions as draft only. Final posting is locked until an authorized user reviews/posts it.
+                </div>
+            @endif
+
             <div class="actions">
                 <button type="button" class="btn-ghost" id="clearBtn">Clear</button>
-                <button type="button" class="btn-outline" id="draftBtn">Save Draft</button>
-                <button type="submit" class="btn-primary">Post Transaction</button>
+                @if($canSaveDraftTransaction)
+                    <button type="button" class="btn-outline" id="draftBtn">Save Draft</button>
+                @endif
+                @if($canPostTransaction)
+                    <button type="submit" class="btn-primary" id="postBtn">Post Transaction</button>
+                @endif
             </div>
         </form>
 
@@ -279,6 +296,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fallbackHeads = @json($headPayload);
     const fallbackParties = @json($partyPayload);
     const form = document.getElementById('transactionForm');
+    const canPostTransaction = form?.dataset.canPost === '1';
+    const canSaveDraftTransaction = form?.dataset.canDraft === '1';
 
     const date = document.getElementById('date');
     const head = document.getElementById('head');
@@ -837,6 +856,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function submitTransaction(status) {
         statusInput.value = status;
+        if (status === 'Posted' && !canPostTransaction) {
+            showToast('Your role can save draft transactions only. Final posting is locked.');
+            return;
+        }
+
+        if (status === 'Draft' && !canSaveDraftTransaction) {
+            showToast('Your role is not allowed to save draft transactions.');
+            return;
+        }
+
         summaryStatus.textContent = status;
         summaryStatus.className = status === 'Posted'
             ? 'badge badge-success'
@@ -888,9 +917,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function clearForm() {
         form.reset();
-        statusInput.value = 'Posted';
-        summaryStatus.textContent = 'Draft';
-        summaryStatus.className = 'badge badge-warning';
+        statusInput.value = canPostTransaction ? 'Posted' : 'Draft';
+        summaryStatus.textContent = statusInput.value;
+        summaryStatus.className = statusInput.value === 'Posted'
+            ? 'badge badge-success'
+            : 'badge badge-warning';
 
         date.value = '{{ now()->toDateString() }}';
         amount.value = '10000';
@@ -924,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
         submitTransaction('Posted');
     });
 
-    document.getElementById('draftBtn').addEventListener('click', () => {
+    document.getElementById('draftBtn')?.addEventListener('click', () => {
         submitTransaction('Draft');
     });
 
@@ -941,6 +972,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function boot() {
+        statusInput.value = canPostTransaction ? statusInput.value : 'Draft';
+        summaryStatus.textContent = statusInput.value;
+        summaryStatus.className = statusInput.value === 'Posted'
+            ? 'badge badge-success'
+            : 'badge badge-warning';
+
         resetPreview();
 
         await loadTransactionHeads();

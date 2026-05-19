@@ -155,7 +155,7 @@ class User extends Authenticatable
         return [];
     }
 
-    public function managePermissionForRoute(?string $routeName): ?string
+    public function managePermissionForRoute(?string $routeName): string|array|null
     {
         if (!$routeName) {
             return null;
