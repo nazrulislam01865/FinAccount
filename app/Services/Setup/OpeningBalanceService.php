@@ -118,17 +118,17 @@ class OpeningBalanceService
         $settlementType = $this->openingSettlementType($transactionHead);
         $voucherNumbering = $this->openingVoucherNumbering($company, $financialYear, $userId);
 
-        $nextNumber = $voucherNumbering->next_number;
+        $nextNumber = max((int) $voucherNumbering->next_number, 1);
         $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
 
-        if (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
-            throw ValidationException::withMessages([
-                'voucher_number' => 'Opening voucher number already exists. Please check Voucher Numbering Setup.',
-            ]);
+        while (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
+            $nextNumber++;
+            $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
         }
 
         $voucherNumbering->update([
             'last_number' => $nextNumber,
+            'status' => 'Active',
             'updated_by' => $userId,
         ]);
 
@@ -243,7 +243,7 @@ class OpeningBalanceService
 
     private function openingVoucherNumbering(?Company $company, FinancialYear $financialYear, ?int $userId): VoucherNumberingRule
     {
-        return VoucherNumberingRule::query()->firstOrCreate(
+        $rule = VoucherNumberingRule::query()->firstOrCreate(
             [
                 'company_id' => $company?->id,
                 'financial_year_id' => $financialYear->id,
@@ -262,6 +262,19 @@ class OpeningBalanceService
                 'updated_by' => $userId,
             ]
         );
+
+        if ($rule->status !== 'Active') {
+            $rule->forceFill([
+                'status' => 'Active',
+                'prefix' => $rule->prefix ?: 'OP',
+                'format_template' => $rule->format_template ?: 'OP-{YYYY}-{00000}',
+                'number_length' => $rule->number_length ?: 5,
+                'used_for' => $rule->used_for ?: 'Opening balance',
+                'updated_by' => $userId,
+            ])->save();
+        }
+
+        return $rule->fresh();
     }
 
     private function blankToNull(mixed $value): ?string

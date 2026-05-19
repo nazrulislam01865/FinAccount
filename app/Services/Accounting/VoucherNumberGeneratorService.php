@@ -4,6 +4,7 @@ namespace App\Services\Accounting;
 
 use App\Models\Company;
 use App\Models\FinancialYear;
+use App\Models\VoucherHeader;
 use App\Models\VoucherNumberingRule;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +17,15 @@ class VoucherNumberGeneratorService
         ?CarbonInterface $voucherDate = null
     ): string {
         $rule = $this->activeRule($voucherType, $financialYear);
+        $nextNumber = max((int) $rule->next_number, 1);
+        $voucherNumber = $rule->generate($nextNumber, $voucherDate);
 
-        return $rule->generate($rule->next_number, $voucherDate);
+        while (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
+            $nextNumber++;
+            $voucherNumber = $rule->generate($nextNumber, $voucherDate);
+        }
+
+        return $voucherNumber;
     }
 
     public function reserve(
@@ -39,11 +47,17 @@ class VoucherNumberGeneratorService
                 $rule = $this->ensureRule($voucherType, $financialYear);
             }
 
-            $nextNumber = $rule->next_number;
+            $nextNumber = max((int) $rule->next_number, 1);
             $voucherNumber = $rule->generate($nextNumber, $voucherDate);
+
+            while (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
+                $nextNumber++;
+                $voucherNumber = $rule->generate($nextNumber, $voucherDate);
+            }
 
             $rule->update([
                 'last_number' => $nextNumber,
+                'status' => 'Active',
             ]);
 
             return $voucherNumber;
@@ -70,7 +84,7 @@ class VoucherNumberGeneratorService
             ?? strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $voucherType), 0, 2))
             ?: 'VN';
 
-        return VoucherNumberingRule::query()->firstOrCreate(
+        $rule = VoucherNumberingRule::query()->firstOrCreate(
             [
                 'company_id' => $companyId,
                 'financial_year_id' => $financialYear->id,
@@ -89,6 +103,18 @@ class VoucherNumberGeneratorService
                 'updated_by' => null,
             ]
         );
+
+        if ($rule->status !== 'Active') {
+            $rule->forceFill([
+                'status' => 'Active',
+                'prefix' => $rule->prefix ?: $prefix,
+                'format_template' => $rule->format_template ?: $prefix . '-{YYYY}-{00000}',
+                'number_length' => $rule->number_length ?: 5,
+                'used_for' => $rule->used_for ?: $this->usedFor($voucherType),
+            ])->save();
+        }
+
+        return $rule->fresh();
     }
 
     private function usedFor(string $voucherType): string

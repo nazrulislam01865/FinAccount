@@ -14,6 +14,7 @@ use App\Services\Accounting\FinancialYearService;
 use App\Services\Accounting\TransactionPostingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -122,12 +123,14 @@ class TransactionController extends Controller
         } catch (Throwable $exception) {
             Log::error('Transaction preview failed.', [
                 'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
                 'user_id' => $request->user()?->id,
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Transaction preview failed. Please check Financial Year, Ledger Mapping, and Voucher Numbering setup.',
+                'message' => $this->transactionFailureMessage($exception, 'preview'),
             ], 500);
         }
     }
@@ -171,13 +174,42 @@ class TransactionController extends Controller
         } catch (Throwable $exception) {
             Log::error('Transaction posting failed.', [
                 'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
                 'user_id' => $request->user()?->id,
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Transaction posting failed. Please check Financial Year, Ledger Mapping, and Voucher Numbering setup.',
+                'message' => $this->transactionFailureMessage($exception, 'posting'),
             ], 500);
         }
+    }
+
+    private function transactionFailureMessage(Throwable $exception, string $stage): string
+    {
+        $message = $exception->getMessage();
+        $lower = strtolower($message);
+        $label = $stage === 'preview' ? 'Transaction preview failed' : 'Transaction posting failed';
+
+        if ($exception instanceof QueryException) {
+            if (str_contains($lower, 'duplicate') && str_contains($lower, 'voucher')) {
+                return $label . ': voucher number already exists. The system will now skip used voucher numbers automatically; clear cache and try again.';
+            }
+
+            if (str_contains($lower, 'foreign key constraint')) {
+                return $label . ': selected setup data is missing or inactive in cloud. Check Transaction Head, Settlement Type, Ledger Mapping, Party, Cash/Bank, and Financial Year setup.';
+            }
+
+            if (str_contains($lower, 'data truncated') || str_contains($lower, 'invalid enum') || str_contains($lower, 'incorrect')) {
+                return $label . ': cloud database schema is older than the code. Run php artisan migrate --force and try again.';
+            }
+        }
+
+        if ($message !== '') {
+            return $label . ': ' . $message;
+        }
+
+        return $label . '. Please check Financial Year, Ledger Mapping, Cash/Bank setup, and Voucher Numbering setup.';
     }
 }

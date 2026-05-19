@@ -102,7 +102,6 @@
 
 <form
     id="openingBalanceForm"
-    data-frontend-form
     data-action="{{ route('api.opening-balances.store') }}"
     data-success="Opening balance saved."
 >
@@ -287,6 +286,7 @@
                                         <button
                                             class="icon-btn edit-opening-row"
                                             type="button"
+                                            data-opening-action="edit"
                                             title="Edit opening balance row"
                                             @disabled($openingIsFinal)
                                         >
@@ -475,6 +475,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('openingBalanceForm');
     const statusInput = document.getElementById('openingStatus');
 
+    function csrf() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+
+    async function parseJsonResponse(response) {
+        const raw = await response.text();
+
+        if (!raw) {
+            return {};
+        }
+
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            return {
+                success: false,
+                message: response.ok
+                    ? 'Unexpected server response while saving opening balance.'
+                    : `Server returned ${response.status}. Check storage/logs/laravel.log for the backend exception.`,
+            };
+        }
+    }
+
+    function firstValidationMessage(errors) {
+        if (!errors) {
+            return null;
+        }
+
+        const first = Object.values(errors)[0];
+
+        return Array.isArray(first) ? first[0] : first;
+    }
+
     const branchLocation = document.getElementById('branchLocation');
     const balanceDate = document.getElementById('balanceDate');
     const financialYear = document.getElementById('financialYearId');
@@ -622,8 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <td class="net-dr net-balance">0.00 Dr</td>
             <td><input class="item-remarks remarks-input" name="items[${index}][remarks]" value="${escapeHtml(data.remarks)}"></td>
             <td class="action-cell">
-                <button class="icon-btn done-opening-row" type="button" title="Keep row changes">✓</button>
-                <button class="icon-btn cancel-opening-row" type="button" title="Cancel row edit">↺</button>
+                <button class="icon-btn done-opening-row" type="button" data-opening-action="done" title="Keep row changes">✓</button>
+                <button class="icon-btn cancel-opening-row" type="button" data-opening-action="cancel" title="Cancel row edit">↺</button>
             </td>
         `;
     }
@@ -670,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="hidden" class="item-remarks" name="items[${index}][remarks]" value="${escapeHtml(data.remarks)}">
             </td>
             <td class="action-cell">
-                <button class="icon-btn edit-opening-row" type="button" title="Edit opening balance row" ${openingIsFinal ? 'disabled' : ''}>✎</button>
+                <button class="icon-btn edit-opening-row" type="button" data-opening-action="edit" title="Edit opening balance row" ${openingIsFinal ? 'disabled' : ''}>✎</button>
             </td>
         `;
     }
@@ -1132,10 +1165,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
 
-    tbody.addEventListener('click', (event) => {
-        const button = event.target.closest('button');
-
-        if (!button) {
+    function handleOpeningRowAction(button) {
+        if (!button || button.disabled) {
             return;
         }
 
@@ -1145,19 +1176,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (button.classList.contains('edit-opening-row')) {
+        const action = button.dataset.openingAction
+            || (button.classList.contains('edit-opening-row') ? 'edit' : null)
+            || (button.classList.contains('done-opening-row') ? 'done' : null)
+            || (button.classList.contains('cancel-opening-row') ? 'cancel' : null);
+
+        if (action === 'edit') {
             makeRowEditable(row, rowData(row), true);
+            row.querySelector('.account-select, .debit, .credit, .remarks-input')?.focus({ preventScroll: false });
             showToast('Opening balance row loaded for editing. Click Save Draft to update.');
             return;
         }
 
-        if (button.classList.contains('done-opening-row')) {
+        if (action === 'done') {
             makeRowViewOnly(row, rowData(row));
             showToast('Row changes kept. Click Save Draft to update opening balance.');
             return;
         }
 
-        if (button.classList.contains('cancel-opening-row')) {
+        if (action === 'cancel') {
             const original = row.dataset.originalRow
                 ? JSON.parse(row.dataset.originalRow)
                 : null;
@@ -1173,6 +1210,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('New opening balance row removed.');
             }
         }
+    }
+
+    tbody.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-opening-action], .edit-opening-row, .done-opening-row, .cancel-opening-row');
+
+        if (!button) {
+            return;
+        }
+
+        event.preventDefault();
+        handleOpeningRowAction(button);
     });
 
     dataRows().forEach((row) => {
@@ -1261,7 +1309,77 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = `${window.location.pathname}?${params.toString()}`;
     });
 
-    form.addEventListener('submit', validateBeforeSubmit, true);
+    async function submitOpeningBalance(event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        if (event.submitter?.id === 'saveDraftBtn') {
+            statusInput.value = 'Draft';
+        }
+
+        if (event.submitter?.id === 'finishBtn') {
+            statusInput.value = 'Final';
+        }
+
+        if (validateBeforeSubmit(event) === false) {
+            return;
+        }
+
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const submitButton = event.submitter || form.querySelector('button[type="submit"]');
+        const originalText = submitButton?.textContent;
+
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = statusInput.value === 'Final' ? 'Posting...' : 'Saving...';
+        }
+
+        try {
+            const response = await fetch(form.dataset.action, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrf(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: new FormData(form),
+            });
+
+            const result = await parseJsonResponse(response);
+
+            if (!response.ok || result.success === false) {
+                showToast(firstValidationMessage(result.errors) || result.message || 'Opening balance could not be saved.');
+
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = originalText;
+                }
+
+                return;
+            }
+
+            showToast(result.message || form.dataset.success || 'Opening balance saved.');
+
+            setTimeout(() => {
+                window.location.href = result.redirect || window.location.href;
+            }, 700);
+        } catch (error) {
+            console.error(error);
+            showToast(error?.message || 'Opening balance save failed. Check storage/logs/laravel.log.');
+
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = originalText;
+            }
+        }
+    }
+
+    form.addEventListener('submit', submitOpeningBalance, true);
 
     if (openingIsFinal) {
         form.querySelectorAll('input, select, textarea, button').forEach((element) => {
