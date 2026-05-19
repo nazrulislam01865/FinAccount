@@ -15,7 +15,10 @@ use App\Services\Accounting\FinancialYearService;
 use App\Services\Setup\OpeningBalanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
 
 class OpeningBalanceController extends Controller
 {
@@ -97,6 +100,8 @@ class OpeningBalanceController extends Controller
             $cashBankOpeningBalances
         );
 
+        $canManageOpeningBalances = (bool) $request->user()?->hasAnyPermission(['opening-balances.manage']);
+
         return view('setup.opening-balances', [
             'currentFinancialYear' => $currentFinancialYear,
             'financialYears' => $financialYears,
@@ -112,6 +117,7 @@ class OpeningBalanceController extends Controller
             'openingIsFinal' => $openingIsFinal,
             'postedOpeningVoucher' => $postedOpeningVoucher,
             'seedOpeningRows' => $seedOpeningRows,
+            'canManageOpeningBalances' => $canManageOpeningBalances,
         ]);
     }
 
@@ -119,10 +125,28 @@ class OpeningBalanceController extends Controller
         OpeningBalanceRequest $request,
         OpeningBalanceService $service
     ): JsonResponse {
-        $result = $service->save(
-            $request->validated(),
-            $request->user()?->id
-        );
+        try {
+            $result = $service->save(
+                $request->validated(),
+                $request->user()?->id
+            );
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            Log::error('Opening balance save failed.', [
+                'message' => $exception->getMessage(),
+                'financial_year_id' => $request->input('financial_year_id'),
+                'branch_location' => $request->input('branch_location'),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => config('app.debug')
+                    ? 'Opening balance save failed: ' . $exception->getMessage()
+                    : 'Opening balance save failed. Please check Financial Year, Chart of Accounts, Party, and permission setup.',
+            ], 500);
+        }
 
         $isFinal = $request->input('status') === 'Final';
         $voucherNumber = $result['voucher']?->voucher_number;

@@ -5,6 +5,11 @@
 @section('content')
 @php
     $hasSavedOpeningRows = $openingBalances->isNotEmpty();
+    $canManageOpeningBalances = $canManageOpeningBalances ?? (auth()->user()?->hasAnyPermission(['opening-balances.manage']) === true);
+    $openingCanEdit = !$openingIsFinal && $canManageOpeningBalances;
+    $openingEditLockedMessage = $openingIsFinal
+        ? 'Opening balance is finalized and cannot be edited directly.'
+        : 'Your role can view Opening Balance Setup, but cannot edit or save opening balances.';
 
     $rows = $hasSavedOpeningRows
         ? $openingBalances->map(fn ($balance) => [
@@ -100,10 +105,18 @@
     </div>
 @endif
 
+@if(!$openingCanEdit && !$openingIsFinal)
+    <div class="card hint-box" style="margin-bottom:16px;border-color:#fed7aa;background:#fff7ed;color:#9a3412">
+        <strong>Read-only access.</strong> Your role can view Opening Balance Setup, but edit/save controls are locked.
+    </div>
+@endif
+
 <form
     id="openingBalanceForm"
     data-action="{{ route('api.opening-balances.store') }}"
     data-success="Opening balance saved."
+    data-opening-can-edit="{{ $openingCanEdit ? '1' : '0' }}"
+    data-opening-locked-message="{{ $openingEditLockedMessage }}"
 >
     @csrf
 
@@ -153,7 +166,7 @@
                     </select>
                 </div>
 
-                <button class="btn-outline" id="importBtn" type="button" @disabled($openingIsFinal)>
+                <button class="btn-outline" id="importBtn" type="button" @disabled(!$openingCanEdit)>
                     ⇧ Import from Excel
                 </button>
 
@@ -172,7 +185,7 @@
                     </div>
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                        <button class="btn-outline" id="loadSampleBtn" type="button" @disabled($openingIsFinal)>
+                        <button class="btn-outline" id="loadSampleBtn" type="button" @disabled(!$openingCanEdit)>
                             Load PRD Sample
                         </button>
 
@@ -284,11 +297,12 @@
 
                                     <td class="action-cell">
                                         <button
-                                            class="icon-btn edit-opening-row"
+                                            class="icon-btn edit-opening-row {{ $openingCanEdit ? '' : 'is-locked' }}"
                                             type="button"
                                             data-opening-action="edit"
-                                            title="Edit opening balance row"
-                                            @disabled($openingIsFinal)
+                                            title="{{ $openingCanEdit ? 'Edit opening balance row' : $openingEditLockedMessage }}"
+                                            data-opening-locked-message="{{ $openingEditLockedMessage }}"
+                                            aria-disabled="{{ $openingCanEdit ? 'false' : 'true' }}"
                                         >
                                             ✎
                                         </button>
@@ -309,7 +323,7 @@
                     class="add-row"
                     id="addRowBtn"
                     type="button"
-                    @disabled($openingIsFinal)
+                    @disabled(!$openingCanEdit)
                 >
                     + Add New Row
                 </button>
@@ -342,11 +356,11 @@
                     </button>
 
                     <div>
-                        <button class="btn-outline" id="saveDraftBtn" type="submit" @disabled($openingIsFinal)>
+                        <button class="btn-outline" id="saveDraftBtn" type="submit" @disabled(!$openingCanEdit)>
                             Save Draft
                         </button>
 
-                        <button class="btn-primary" id="finishBtn" type="submit" @disabled($openingIsFinal)>
+                        <button class="btn-primary" id="finishBtn" type="submit" @disabled(!$openingCanEdit)>
                             Post Opening Balance
                         </button>
                     </div>
@@ -399,7 +413,7 @@
                 <h3>Import from Excel</h3>
                 <p>Upload your opening balances using the Excel template.</p>
 
-                <button class="btn-outline" type="button" style="width:100%" id="uploadExcelBtn" @disabled($openingIsFinal)>
+                <button class="btn-outline" type="button" style="width:100%" id="uploadExcelBtn" @disabled(!$openingCanEdit)>
                     ⇧ Upload Excel File
                 </button>
 
@@ -460,6 +474,16 @@
     .action-cell .icon-btn + .icon-btn {
         margin-left: 4px;
     }
+
+    .edit-opening-row.is-locked {
+        opacity: .55;
+        cursor: not-allowed;
+    }
+
+    .opening-edit-row input,
+    .opening-edit-row select {
+        min-width: 120px;
+    }
 </style>
 @endpush
 
@@ -470,10 +494,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const parties = @json($partyPayload);
     const openingIsFinal = @json($openingIsFinal);
     const hasSavedOpeningRows = @json($hasSavedOpeningRows);
+    const openingCanEdit = @json($openingCanEdit);
 
     const tbody = document.getElementById('balanceTable');
     const form = document.getElementById('openingBalanceForm');
     const statusInput = document.getElementById('openingStatus');
+    const lockedMessage = form?.dataset.openingLockedMessage || 'Opening balance cannot be edited for your role or current status.';
 
     function csrf() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -514,6 +540,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const saveDraftBtn = document.getElementById('saveDraftBtn');
     const finishBtn = document.getElementById('finishBtn');
+
+    function showLockedMessage() {
+        showToast(lockedMessage);
+    }
 
     function showToast(message) {
         if (window.AccountingUI?.showToast) {
@@ -703,14 +733,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="hidden" class="item-remarks" name="items[${index}][remarks]" value="${escapeHtml(data.remarks)}">
             </td>
             <td class="action-cell">
-                <button class="icon-btn edit-opening-row" type="button" data-opening-action="edit" title="Edit opening balance row" ${openingIsFinal ? 'disabled' : ''}>✎</button>
+                <button class="icon-btn edit-opening-row ${openingCanEdit ? '' : 'is-locked'}" type="button" data-opening-action="edit" title="Edit opening balance row" aria-disabled="${openingCanEdit ? 'false' : 'true'}">✎</button>
             </td>
         `;
     }
 
     function makeRowEditable(row, data, keepOriginal = false) {
-        if (openingIsFinal) {
-            showToast('Opening balance is finalized and cannot be edited.');
+        if (!openingCanEdit) {
+            showLockedMessage();
             return;
         }
 
@@ -837,11 +867,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (normalBalance === 'Debit') {
             credit.value = '0.00';
             credit.readOnly = true;
-            debit.readOnly = openingIsFinal;
+            debit.readOnly = !openingCanEdit;
         } else {
             debit.value = '0.00';
             debit.readOnly = true;
-            credit.readOnly = openingIsFinal;
+            credit.readOnly = !openingCanEdit;
         }
     }
 
@@ -877,7 +907,7 @@ document.addEventListener('DOMContentLoaded', () => {
         partySelect.innerHTML = partyOptions(account?.id || '', oldParty);
         partySelect.dataset.partyRequired = requiresParty ? 'true' : 'false';
         partySelect.required = requiresParty && availableParties.length > 0;
-        partySelect.disabled = openingIsFinal || availableParties.length === 0;
+        partySelect.disabled = !openingCanEdit || availableParties.length === 0;
 
         applyNormalBalance(row, account);
         recalc();
@@ -968,8 +998,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addRow(accountId = '', debit = 0, credit = 0, partyId = '', remarks = '') {
-        if (openingIsFinal) {
-            showToast('Opening balance is finalized and cannot be edited.');
+        if (!openingCanEdit) {
+            showLockedMessage();
             return;
         }
 
@@ -1005,8 +1035,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadPrdSample() {
-        if (openingIsFinal) {
-            showToast('Opening balance is finalized and cannot be edited.');
+        if (!openingCanEdit) {
+            showLockedMessage();
             return;
         }
 
@@ -1166,7 +1196,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleOpeningRowAction(button) {
-        if (!button || button.disabled) {
+        if (!button) {
+            return;
+        }
+
+        if (button.disabled) {
+            showLockedMessage();
             return;
         }
 
@@ -1182,6 +1217,11 @@ document.addEventListener('DOMContentLoaded', () => {
             || (button.classList.contains('cancel-opening-row') ? 'cancel' : null);
 
         if (action === 'edit') {
+            if (!openingCanEdit || button.getAttribute('aria-disabled') === 'true') {
+                showLockedMessage();
+                return;
+            }
+
             makeRowEditable(row, rowData(row), true);
             row.querySelector('.account-select, .debit, .credit, .remarks-input')?.focus({ preventScroll: false });
             showToast('Opening balance row loaded for editing. Click Save Draft to update.');
@@ -1313,6 +1353,11 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        if (!openingCanEdit) {
+            showLockedMessage();
+            return;
+        }
+
         if (event.submitter?.id === 'saveDraftBtn') {
             statusInput.value = 'Draft';
         }
@@ -1381,9 +1426,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     form.addEventListener('submit', submitOpeningBalance, true);
 
-    if (openingIsFinal) {
-        form.querySelectorAll('input, select, textarea, button').forEach((element) => {
-            if (element.id === 'validateBtn' || element.id === 'downloadBtn' || element.id === 'cancelBtn') {
+    if (!openingCanEdit) {
+        form.querySelectorAll('input:not([type="hidden"]), select, textarea, button').forEach((element) => {
+            if (
+                element.id === 'validateBtn'
+                || element.id === 'downloadBtn'
+                || element.id === 'cancelBtn'
+                || element.classList.contains('edit-opening-row')
+            ) {
                 return;
             }
 
