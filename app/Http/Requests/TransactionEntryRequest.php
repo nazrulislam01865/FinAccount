@@ -11,15 +11,14 @@ use App\Models\TransactionHead;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 class TransactionEntryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
-
-        return $user?->hasAnyPermission(['transactions.create', 'transactions.draft']) ?? false;
+        return (bool) $this->user()?->hasAnyPermission('transactions.create|transactions.manage');
     }
 
     protected function prepareForValidation(): void
@@ -97,7 +96,6 @@ class TransactionEntryRequest extends FormRequest
 
             $this->validateDateInsideActiveFinancialYear($validator);
             $this->validateHeadSettlementPair($validator, $head, $settlement);
-            $this->validateRolePermissionForTransaction($validator, $head, $settlement);
             $this->validatePartyRequirement($validator, $head);
             $this->validateReferenceRequirement($validator, $head);
 
@@ -115,6 +113,32 @@ class TransactionEntryRequest extends FormRequest
             $this->validateMappingRequirement($validator, $mapping);
             $this->validateCashBankRequirement($validator, $mapping);
         }];
+    }
+
+
+    public function ensureCanUseResolvedVoucherType(?string $voucherType): void
+    {
+        $permission = $this->permissionForVoucherType($voucherType);
+
+        if (!$permission || $this->user()?->hasPermission($permission)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'permission' => 'Your assigned role is not allowed to create this transaction type.',
+        ]);
+    }
+
+    private function permissionForVoucherType(?string $voucherType): ?string
+    {
+        return match ($voucherType) {
+            'Payment Voucher' => 'payments.create',
+            'Receipt Voucher' => 'receipts.create',
+            'Journal Voucher' => 'journals.manage',
+            'Contra / Transfer Voucher' => 'payments.create',
+            'Draft Voucher' => 'transactions.create',
+            default => null,
+        };
     }
 
     public function messages(): array
@@ -198,83 +222,6 @@ class TransactionEntryRequest extends FormRequest
                 'Selected Party / Person does not match the party type required by this Transaction Head.'
             );
         }
-    }
-
-
-    private function validateRolePermissionForTransaction(
-        Validator $validator,
-        TransactionHead $head,
-        SettlementType $settlement
-    ): void {
-        $user = $this->user();
-
-        if (!$user) {
-            $validator->errors()->add('authorization', 'You must be logged in to create a transaction.');
-            return;
-        }
-
-        if ($this->input('status') === 'Posted' && !$user->hasPermission('transactions.create')) {
-            $validator->errors()->add(
-                'status',
-                'Your role can save draft transactions only. You cannot post final vouchers.'
-            );
-        }
-
-        if ($this->input('status') === 'Draft' && !$user->hasPermission('transactions.create') && $user->hasPermission('transactions.draft')) {
-            return;
-        }
-
-        $requiredPermissions = $this->requiredTransactionPermissions($head, $settlement);
-
-        foreach ($requiredPermissions as $permission) {
-            if (!$user->hasPermission($permission)) {
-                $label = config('access.permissions.'.$permission, $permission);
-                $validator->errors()->add(
-                    'authorization',
-                    'Your role is not allowed to '.$label.'.'
-                );
-                return;
-            }
-        }
-    }
-
-    private function requiredTransactionPermissions(TransactionHead $head, SettlementType $settlement): array
-    {
-        $permissions = [];
-        $nature = trim((string) $head->nature);
-        $headText = strtoupper(trim($head->name.' '.$head->nature.' '.$settlement->name.' '.$settlement->code));
-        $settlementKey = $this->settlementKey($settlement);
-
-        $naturePermission = config('access.transaction_type_permissions.'.$nature);
-        if ($naturePermission) {
-            $permissions[] = $naturePermission;
-        }
-
-        if ($nature === 'Expense') {
-            if ($settlementKey === 'due') {
-                $permissions[] = 'transactions.purchase.create';
-            } elseif (in_array($settlementKey, ['cash', 'bank', 'advance_paid', 'advance_received'], true)) {
-                $permissions[] = 'transactions.payment.create';
-            }
-        }
-
-        if ($nature === 'Receipt' && ($settlementKey === 'due' || str_contains($headText, 'SALE') || str_contains($headText, 'INVOICE'))) {
-            $permissions[] = 'transactions.sales.create';
-        }
-
-        if (str_contains($headText, 'SUPPLIER') || str_contains($headText, 'PURCHASE') || str_contains($headText, 'VENDOR')) {
-            if ($nature === 'Payment' || $settlementKey === 'due') {
-                $permissions[] = $nature === 'Payment'
-                    ? 'transactions.payment.create'
-                    : 'transactions.purchase.create';
-            }
-        }
-
-        if (str_contains($headText, 'CUSTOMER') && $nature === 'Receipt') {
-            $permissions[] = 'transactions.receipt.create';
-        }
-
-        return array_values(array_unique($permissions));
     }
 
     private function validateReferenceRequirement(Validator $validator, TransactionHead $head): void

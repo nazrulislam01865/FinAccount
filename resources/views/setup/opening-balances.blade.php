@@ -1044,19 +1044,33 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('PRD sample opening balance loaded. Review party rows before posting.');
     }
 
+    function commitEditableRows() {
+        dataRows().forEach((row) => {
+            if (!isEditableRow(row)) {
+                return;
+            }
+
+            makeRowViewOnly(row, rowData(row));
+        });
+    }
+
     function validateBeforeSubmit(event) {
-        const difference = recalc();
         const status = statusInput.value;
 
-        if (Math.abs(difference) >= 0.01) {
+        if (status === 'Draft') {
+            commitEditableRows();
+        }
+
+        const difference = recalc();
+        const rows = dataRows();
+
+        if (status === 'Final' && Math.abs(difference) >= 0.01) {
             event.preventDefault();
             event.stopImmediatePropagation();
 
-            showToast('Opening balance total debit must equal total credit before posting.');
+            showToast('Opening balance total debit must equal total credit before final posting. Save as Draft if you are still editing.');
             return false;
         }
-
-        const rows = dataRows();
 
         const hasAmount = rows.some((row) => {
             const debit = row.querySelector('.debit');

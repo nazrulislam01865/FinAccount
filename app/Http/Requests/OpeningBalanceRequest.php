@@ -248,12 +248,12 @@ class OpeningBalanceRequest extends FormRequest
                 $totalCredit += $credit;
             }
 
-            if (round($totalDebit, 2) !== round($totalCredit, 2)) {
+            if ($this->input('status') === 'Final' && round($totalDebit, 2) !== round($totalCredit, 2)) {
                 $difference = number_format(abs($totalDebit - $totalCredit), 2);
 
                 $validator->errors()->add(
                     'items',
-                    "Opening balance total debit must equal total credit before posting. Difference: {$difference}."
+                    "Opening balance total debit must equal total credit before final posting. Difference: {$difference}."
                 );
             }
         });

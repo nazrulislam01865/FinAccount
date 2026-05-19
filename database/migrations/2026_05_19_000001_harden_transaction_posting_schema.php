@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\VoucherNumberingRule;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -8,78 +9,112 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $this->widenLedgerMappingPartyEffect();
-        $this->backfillVoucherNumberingRules();
+        $this->widenMySqlEnumsUsedByPosting();
+        $this->ensureVoucherNumberingRules();
     }
 
     public function down(): void
     {
-        // Data-preserving migration. Do not delete voucher numbering rules or shrink
-        // party_ledger_effect, because existing transaction setup may already use
-        // the wider values.
+        // This migration only hardens production data and widens enum columns.
+        // It is intentionally not destructive on rollback.
     }
 
-    private function widenLedgerMappingPartyEffect(): void
+    private function widenMySqlEnumsUsedByPosting(): void
     {
-        if (!Schema::hasTable('ledger_mapping_rules') || !Schema::hasColumn('ledger_mapping_rules', 'party_ledger_effect')) {
+        if (DB::getDriverName() !== 'mysql') {
             return;
         }
 
-        if (DB::getDriverName() === 'mysql') {
+        if (Schema::hasTable('voucher_numbering_rules')) {
+            DB::statement('ALTER TABLE voucher_numbering_rules MODIFY voucher_type VARCHAR(100) NOT NULL');
+            DB::statement('ALTER TABLE voucher_numbering_rules MODIFY prefix VARCHAR(20) NOT NULL');
+        }
+
+        if (Schema::hasTable('ledger_mapping_rules') && Schema::hasColumn('ledger_mapping_rules', 'party_ledger_effect')) {
             DB::statement("ALTER TABLE ledger_mapping_rules MODIFY party_ledger_effect VARCHAR(100) NOT NULL DEFAULT 'No Effect'");
         }
     }
 
-    private function backfillVoucherNumberingRules(): void
+    private function ensureVoucherNumberingRules(): void
     {
         if (!Schema::hasTable('voucher_numbering_rules') || !Schema::hasTable('financial_years')) {
             return;
         }
 
+        $financialYearIds = DB::table('financial_years')->pluck('id');
+        $companyIds = Schema::hasTable('companies')
+            ? DB::table('companies')->pluck('id')
+            : collect([null]);
+
+        if ($companyIds->isEmpty()) {
+            $companyIds = collect([null]);
+        }
+
         $rules = [
-            ['Opening Voucher', 'OP', 'OP-{YYYY}-{00000}', 'Opening balance'],
-            ['Payment Voucher', 'PV', 'PV-{YYYY}-{00000}', 'Cash/bank payments'],
-            ['Receipt Voucher', 'RV', 'RV-{YYYY}-{00000}', 'Cash/bank receipts'],
-            ['Journal Voucher', 'JV', 'JV-{YYYY}-{00000}', 'Due, adjustment, opening balance'],
-            ['Contra / Transfer Voucher', 'CV', 'CV-{YYYY}-{00000}', 'Cash to bank or bank to bank transfer'],
-            ['Draft Voucher', 'DR', 'DR-{YYYY}-{00000}', 'Unposted draft transactions'],
+            ['voucher_type' => 'Payment Voucher', 'prefix' => 'PV', 'used_for' => 'Cash/bank payments'],
+            ['voucher_type' => 'Receipt Voucher', 'prefix' => 'RV', 'used_for' => 'Cash/bank receipts'],
+            ['voucher_type' => 'Journal Voucher', 'prefix' => 'JV', 'used_for' => 'Non-cash journal entries'],
+            ['voucher_type' => 'Contra / Transfer Voucher', 'prefix' => 'CV', 'used_for' => 'Cash/bank transfers'],
+            ['voucher_type' => 'Draft Voucher', 'prefix' => 'DR', 'used_for' => 'Unposted draft transactions'],
+            ['voucher_type' => 'Opening Voucher', 'prefix' => 'OP', 'used_for' => 'Opening balance posting'],
         ];
 
+        foreach ($companyIds as $companyId) {
+            foreach ($financialYearIds as $financialYearId) {
+                foreach ($rules as $rule) {
+                    $this->upsertVoucherRule($companyId, (int) $financialYearId, $rule);
+                }
+            }
+        }
+    }
+
+    private function upsertVoucherRule(mixed $companyId, int $financialYearId, array $rule): void
+    {
+        $query = DB::table('voucher_numbering_rules')
+            ->where('financial_year_id', $financialYearId)
+            ->where('voucher_type', $rule['voucher_type']);
+
+        if ($companyId === null) {
+            $query->whereNull('company_id');
+        } else {
+            $query->where('company_id', $companyId);
+        }
+
+        $existing = $query->first();
         $now = now();
 
-        DB::table('financial_years')
-            ->orderBy('id')
-            ->get(['id', 'company_id'])
-            ->each(function ($financialYear) use ($rules, $now): void {
-                foreach ($rules as [$type, $prefix, $format, $usedFor]) {
-                    $exists = DB::table('voucher_numbering_rules')
-                        ->where('company_id', $financialYear->company_id)
-                        ->where('financial_year_id', $financialYear->id)
-                        ->where('voucher_type', $type)
-                        ->exists();
+        if ($existing) {
+            DB::table('voucher_numbering_rules')
+                ->where('id', $existing->id)
+                ->update([
+                    'prefix' => $rule['prefix'],
+                    'format_template' => $rule['prefix'] . '-{YYYY}-{00000}',
+                    'number_length' => 5,
+                    'reset_every_year' => true,
+                    'used_for' => $rule['used_for'],
+                    'status' => 'Active',
+                    'updated_at' => $now,
+                ]);
 
-                    if ($exists) {
-                        continue;
-                    }
+            return;
+        }
 
-                    DB::table('voucher_numbering_rules')->insert([
-                        'company_id' => $financialYear->company_id,
-                        'financial_year_id' => $financialYear->id,
-                        'voucher_type' => $type,
-                        'prefix' => $prefix,
-                        'format_template' => $format,
-                        'starting_number' => 1,
-                        'number_length' => 5,
-                        'last_number' => 0,
-                        'reset_every_year' => true,
-                        'used_for' => $usedFor,
-                        'status' => 'Active',
-                        'created_by' => null,
-                        'updated_by' => null,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ]);
-                }
-            });
+        DB::table('voucher_numbering_rules')->insert([
+            'company_id' => $companyId,
+            'financial_year_id' => $financialYearId,
+            'voucher_type' => $rule['voucher_type'],
+            'prefix' => $rule['prefix'],
+            'format_template' => $rule['prefix'] . '-{YYYY}-{00000}',
+            'starting_number' => 1,
+            'number_length' => 5,
+            'last_number' => 0,
+            'reset_every_year' => true,
+            'used_for' => $rule['used_for'],
+            'status' => 'Active',
+            'created_by' => null,
+            'updated_by' => null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 };
