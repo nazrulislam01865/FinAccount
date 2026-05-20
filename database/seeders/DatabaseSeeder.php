@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             TransactionHeadSeeder::class,
             CashBankAccountSeeder::class,
             LedgerMappingRuleSeeder::class,
+            AdvanceAccountingRuleSeeder::class,
             VoucherNumberingRuleSeeder::class,
         ]);
     }

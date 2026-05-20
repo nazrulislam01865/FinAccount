@@ -86,7 +86,7 @@ class AdvanceManagementController extends Controller
             ]);
         }
 
-        if ($rule->party_ledger_effect !== $expectedEffect) {
+        if ($this->effectiveAdvanceEffect($rule) !== $expectedEffect) {
             throw ValidationException::withMessages([
                 'transaction_head_id' => $this->effectErrorMessage($entryMode, $advanceType),
             ]);
@@ -333,28 +333,122 @@ class AdvanceManagementController extends Controller
 
     private function rulePayload(array $effects): Collection
     {
+        $effectLookup = array_flip($effects);
+
         return LedgerMappingRule::query()
-            ->with(['transactionHead', 'settlementType', 'debitAccount', 'creditAccount'])
+            ->with(['transactionHead', 'settlementType', 'debitAccount.accountType', 'creditAccount.accountType'])
             ->where('status', 'Active')
-            ->whereIn('party_ledger_effect', $effects)
-            ->orderBy('party_ledger_effect')
+            ->orderBy('rule_code')
             ->get()
-            ->map(fn (LedgerMappingRule $rule) => [
-                'transaction_head_id' => $rule->transaction_head_id,
-                'settlement_type_id' => $rule->settlement_type_id,
-                'advance_type' => match ($rule->party_ledger_effect) {
-                    'Increase Advance Asset', 'Decrease Advance Asset' => 'Paid',
-                    'Increase Advance Liability', 'Decrease Advance Liability' => 'Received',
-                    default => null,
-                },
-                'entry_mode' => str_starts_with($rule->party_ledger_effect, 'Increase') ? 'New Advance' : 'Advance Adjustment',
-                'label' => trim(($rule->transactionHead?->name ?? 'Transaction Head') . ' - ' . ($rule->settlementType?->name ?? 'Settlement')),
-                'effect' => $rule->party_ledger_effect,
-                'debit_account' => $rule->debitAccount?->account_name,
-                'credit_account' => $rule->creditAccount?->account_name,
-                'requires_cash_bank' => (bool) ($rule->debitAccount?->is_cash_bank || $rule->creditAccount?->is_cash_bank),
-            ])
+            ->map(function (LedgerMappingRule $rule) {
+                $effect = $this->effectiveAdvanceEffect($rule);
+
+                if (!str_contains($effect, 'Advance')) {
+                    return null;
+                }
+
+                return [
+                    'transaction_head_id' => $rule->transaction_head_id,
+                    'settlement_type_id' => $rule->settlement_type_id,
+                    'advance_type' => match ($effect) {
+                        'Increase Advance Asset', 'Decrease Advance Asset' => 'Paid',
+                        'Increase Advance Liability', 'Decrease Advance Liability' => 'Received',
+                        default => null,
+                    },
+                    'entry_mode' => str_starts_with($effect, 'Increase') ? 'New Advance' : 'Advance Adjustment',
+                    'label' => trim(($rule->transactionHead?->name ?? 'Transaction Head') . ' - ' . ($rule->settlementType?->name ?? 'Settlement')),
+                    'effect' => $effect,
+                    'debit_account' => $rule->debitAccount?->account_name,
+                    'credit_account' => $rule->creditAccount?->account_name,
+                    'requires_cash_bank' => (bool) ($rule->debitAccount?->is_cash_bank || $rule->creditAccount?->is_cash_bank),
+                ];
+            })
+            ->filter(fn (?array $payload) => $payload && isset($effectLookup[$payload['effect']]))
+            ->unique(fn (array $payload) => implode('|', [
+                $payload['transaction_head_id'],
+                $payload['settlement_type_id'],
+                $payload['effect'],
+            ]))
             ->values();
+    }
+
+    private function effectiveAdvanceEffect(LedgerMappingRule $rule): string
+    {
+        $storedEffect = (string) ($rule->party_ledger_effect ?? 'No Effect');
+
+        if (in_array($storedEffect, [
+            'Increase Advance Asset',
+            'Decrease Advance Asset',
+            'Increase Advance Liability',
+            'Decrease Advance Liability',
+        ], true)) {
+            return $storedEffect;
+        }
+
+        $headText = strtoupper(trim(($rule->transactionHead?->nature ?? '') . ' ' . ($rule->transactionHead?->name ?? '')));
+        $settlementKey = $this->advanceSettlementKey($rule);
+        $debitName = strtoupper((string) ($rule->debitAccount?->account_name ?? ''));
+        $creditName = strtoupper((string) ($rule->creditAccount?->account_name ?? ''));
+        $debitType = $rule->debitAccount?->accountType?->name;
+        $creditType = $rule->creditAccount?->accountType?->name;
+
+        $debitIsAdvanceAsset = $debitType === 'Asset' && $this->looksLikeAdvanceAsset($debitName);
+        $creditIsAdvanceAsset = $creditType === 'Asset' && $this->looksLikeAdvanceAsset($creditName);
+        $debitIsAdvanceLiability = $debitType === 'Liability' && $this->looksLikeAdvanceLiability($debitName);
+        $creditIsAdvanceLiability = $creditType === 'Liability' && $this->looksLikeAdvanceLiability($creditName);
+
+        if (in_array($settlementKey, ['cash', 'bank', 'advance_paid'], true)) {
+            if (str_contains($headText, 'ADVANCE PAID') || $debitIsAdvanceAsset) {
+                return 'Increase Advance Asset';
+            }
+        }
+
+        if (in_array($settlementKey, ['cash', 'bank', 'advance_received'], true)) {
+            if (str_contains($headText, 'ADVANCE RECEIVED') || $creditIsAdvanceLiability) {
+                return 'Increase Advance Liability';
+            }
+        }
+
+        if ($settlementKey === 'adjustment') {
+            if (str_contains($headText, 'ADVANCE PAID') || $creditIsAdvanceAsset) {
+                return 'Decrease Advance Asset';
+            }
+
+            if (str_contains($headText, 'ADVANCE RECEIVED') || $debitIsAdvanceLiability) {
+                return 'Decrease Advance Liability';
+            }
+        }
+
+        return $storedEffect ?: 'No Effect';
+    }
+
+    private function advanceSettlementKey(LedgerMappingRule $rule): string
+    {
+        $value = strtoupper(trim(($rule->settlementType?->code ?? '') . ' ' . ($rule->settlementType?->name ?? '')));
+
+        return match (true) {
+            str_contains($value, 'ADVANCE_PAID') || str_contains($value, 'ADVANCE PAID') => 'advance_paid',
+            str_contains($value, 'ADVANCE_RECEIVED') || str_contains($value, 'ADVANCE RECEIVED') => 'advance_received',
+            str_contains($value, 'ADJUST') => 'adjustment',
+            str_contains($value, 'CASH') => 'cash',
+            str_contains($value, 'BANK') => 'bank',
+            default => 'other',
+        };
+    }
+
+    private function looksLikeAdvanceAsset(string $accountName): bool
+    {
+        return str_contains($accountName, 'ADVANCE TO')
+            || str_contains($accountName, 'ADVANCE PAID')
+            || str_contains($accountName, 'SUPPLIER ADVANCE')
+            || str_contains($accountName, 'EMPLOYEE ADVANCE');
+    }
+
+    private function looksLikeAdvanceLiability(string $accountName): bool
+    {
+        return str_contains($accountName, 'ADVANCE FROM')
+            || str_contains($accountName, 'ADVANCE RECEIVED')
+            || str_contains($accountName, 'CUSTOMER ADVANCE');
     }
 
     private function expectedEffect(string $entryMode, string $advanceType): string
