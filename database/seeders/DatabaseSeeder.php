@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             LedgerMappingRuleSeeder::class,
             AdvanceAccountingRuleSeeder::class,
             VoucherNumberingRuleSeeder::class,
+            AccountingRegisterBackfillSeeder::class,
         ]);
     }
 }

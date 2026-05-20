@@ -8,6 +8,7 @@ use App\Models\DueRegister;
 use App\Models\LedgerMappingRule;
 use App\Models\Party;
 use App\Models\VoucherHeader;
+use App\Models\VoucherDetail;
 use App\Services\Accounting\TransactionPostingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -316,12 +317,42 @@ class AdvanceManagementController extends Controller
 
     private function currentDueBalance(int $partyId, int $accountId, string $dueType): float
     {
+        $registeredBalance = $this->currentRegisteredDueBalance($partyId, $accountId, $dueType);
+        $ledgerBalance = $this->currentLedgerDueBalance($partyId, $accountId, $dueType);
+
+        // Older posted vouchers may exist before due_register was introduced/backfilled.
+        // Use the larger positive balance so Advance Adjustment cooperates with both
+        // previous voucher details and the newer due_register model.
+        return round(max($registeredBalance, $ledgerBalance), 2);
+    }
+
+    private function currentRegisteredDueBalance(int $partyId, int $accountId, string $dueType): float
+    {
         return round((float) DueRegister::query()
             ->where('party_id', $partyId)
             ->where('account_id', $accountId)
             ->where('due_type', $dueType)
             ->whereHas('voucherHeader', fn ($query) => $query->where('status', VoucherHeader::STATUS_POSTED))
             ->sum('balance_effect'), 2);
+    }
+
+    private function currentLedgerDueBalance(int $partyId, int $accountId, string $dueType): float
+    {
+        $totals = VoucherDetail::query()
+            ->selectRaw('COALESCE(SUM(voucher_details.debit), 0) as total_debit, COALESCE(SUM(voucher_details.credit), 0) as total_credit')
+            ->join('voucher_headers', 'voucher_headers.id', '=', 'voucher_details.voucher_header_id')
+            ->where('voucher_headers.status', VoucherHeader::STATUS_POSTED)
+            ->where('voucher_details.account_id', $accountId)
+            ->where(function ($query) use ($partyId) {
+                $query->where('voucher_details.party_id', $partyId)
+                    ->orWhere('voucher_headers.party_id', $partyId);
+            })
+            ->first();
+
+        $debit = (float) ($totals?->total_debit ?? 0);
+        $credit = (float) ($totals?->total_credit ?? 0);
+
+        return round($dueType === 'Payable' ? $credit - $debit : $debit - $credit, 2);
     }
 
     private function computedAdvanceStatus(float $balance, float $adjusted): string
@@ -516,7 +547,7 @@ class AdvanceManagementController extends Controller
 
             if ($balance < $amount) {
                 throw ValidationException::withMessages([
-                    'amount' => 'Advance paid adjustment cannot be greater than the current payable due for this party. Record or select the supplier due first.',
+                    'amount' => 'Advance paid adjustment cannot be greater than the current payable due for this party. Current payable due is BDT ' . number_format(max(0, $balance), 2) . '. Post or select a supplier bill/due first.',
                 ]);
             }
 
@@ -536,7 +567,7 @@ class AdvanceManagementController extends Controller
 
         if ($balance < $amount) {
             throw ValidationException::withMessages([
-                'amount' => 'Advance received adjustment cannot be greater than the current receivable due for this party. Record or select the customer receivable first.',
+                'amount' => 'Advance received adjustment cannot be greater than the current receivable due for this party. Current receivable due is BDT ' . number_format(max(0, $balance), 2) . '. Post or select a customer invoice/due first.',
             ]);
         }
     }
