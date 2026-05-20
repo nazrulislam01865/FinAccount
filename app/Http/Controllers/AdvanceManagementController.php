@@ -73,6 +73,13 @@ class AdvanceManagementController extends Controller
         $advanceType = (string) $validated['advance_type'];
         $expectedEffect = $this->expectedEffect($entryMode, $advanceType);
 
+        $cashBankAccountId = !empty($validated['cash_bank_account_id'])
+            ? (int) $validated['cash_bank_account_id']
+            : null;
+        $advanceAccountId = !empty($validated['account_id'])
+            ? (int) $validated['account_id']
+            : null;
+
         $rule = LedgerMappingRule::query()
             ->with(['transactionHead', 'settlementType', 'debitAccount.accountType', 'creditAccount.accountType'])
             ->where('transaction_head_id', $validated['transaction_head_id'])
@@ -92,14 +99,14 @@ class AdvanceManagementController extends Controller
             ]);
         }
 
-        if ($entryMode === 'New Advance' && !$validated['cash_bank_account_id']) {
+        if ($entryMode === 'New Advance' && !$cashBankAccountId) {
             throw ValidationException::withMessages([
                 'cash_bank_account_id' => 'Cash / Bank account is required when posting a new advance.',
             ]);
         }
 
         if ($entryMode === 'Advance Adjustment') {
-            if (!$validated['account_id']) {
+            if (!$advanceAccountId) {
                 throw ValidationException::withMessages([
                     'account_id' => 'Please select an open advance balance before posting an adjustment.',
                 ]);
@@ -107,7 +114,7 @@ class AdvanceManagementController extends Controller
 
             $balance = $this->currentAdvanceBalance(
                 partyId: (int) $validated['party_id'],
-                accountId: (int) $validated['account_id'],
+                accountId: $advanceAccountId,
                 advanceType: $advanceType
             );
 
@@ -130,7 +137,7 @@ class AdvanceManagementController extends Controller
                 'transaction_head_id' => (int) $validated['transaction_head_id'],
                 'settlement_type_id' => (int) $validated['settlement_type_id'],
                 'party_id' => (int) $validated['party_id'],
-                'cash_bank_account_id' => $validated['cash_bank_account_id'] ? (int) $validated['cash_bank_account_id'] : null,
+                'cash_bank_account_id' => $cashBankAccountId,
                 'amount' => $amount,
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -140,7 +147,6 @@ class AdvanceManagementController extends Controller
             $preview = $postingService->preview($postingInput, $request->user()?->id, false);
 
             if ($entryMode === 'Advance Adjustment') {
-                $advanceAccountId = (int) $validated['account_id'];
                 $this->validatePreviewTouchesAdvanceAccount($preview, $advanceAccountId, $advanceType);
                 $this->validateLinkedDueBalance($preview, (int) $validated['party_id'], $advanceType, $amount);
             }
