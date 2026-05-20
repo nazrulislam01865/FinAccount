@@ -108,8 +108,15 @@
         </a>
     @endif
 
-    @if($canPermission('customer-ledgers.view') || $canPermission('supplier-ledgers.view'))
-        <a href="#" class="nav-item">
+    @if($canRoute('due-management.index'))
+        <a href="{{ route('due-management.index') }}" class="nav-item {{ $isActive('due-management.index') }}">
+            <div class="nav-icon">⏳</div>
+            <span>Due Management</span>
+        </a>
+    @endif
+
+    @if($canRoute('ledger-report.index'))
+        <a href="{{ route('ledger-report.index') }}" class="nav-item {{ $isActive('ledger-report.index') }}">
             <div class="nav-icon">📘</div>
             <span>Ledger Report</span>
         </a>

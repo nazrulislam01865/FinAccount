@@ -11,6 +11,8 @@ use App\Http\Controllers\Setup\OpeningBalanceController;
 use App\Http\Controllers\Setup\PartyController;
 use App\Http\Controllers\Setup\TransactionHeadController;
 use App\Http\Controllers\Setup\VoucherNumberingController;
+use App\Http\Controllers\DueManagementController;
+use App\Http\Controllers\LedgerReportController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -51,6 +53,24 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/transactions/create', [TransactionController::class, 'create'])
         ->middleware('permission:transactions.view|transactions.create|transactions.draft')
         ->name('transactions.create');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Due Management and Ledger Reports
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/due-management', [DueManagementController::class, 'index'])
+        ->middleware('permission:due-management.view|customer-ledgers.view|supplier-ledgers.view|reports.view')
+        ->name('due-management.index');
+
+    Route::post('/api/due-management/settle', [DueManagementController::class, 'settle'])
+        ->middleware('permission:due-management.manage|transactions.create')
+        ->name('api.due-management.settle');
+
+    Route::get('/ledger-report', [LedgerReportController::class, 'index'])
+        ->middleware('permission:ledger-report.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
+        ->name('ledger-report.index');
 
     /*
     |--------------------------------------------------------------------------
