@@ -63,9 +63,11 @@ class LedgerMappingRuleSeeder extends Seeder
             ['LM-017', 'Advance Paid', 'BANK', $advanceAsset, $bank, 'Increase Advance Asset', 'Advance paid by bank: Dr Advance to Supplier / Cr Bank.'],
             ['LM-018', 'Advance Received', 'CASH', $cash, $advanceLiability, 'Increase Advance Liability', 'Advance received in cash: Dr Cash / Cr Advance from Customer.'],
             ['LM-019', 'Advance Received', 'BANK', $bank, $advanceLiability, 'Increase Advance Liability', 'Advance received by bank: Dr Bank / Cr Advance from Customer.'],
-            ['LM-020', 'Office Rent Expense', 'CASH', $rentExpense, $cash, 'No Effect', 'Office rent paid in cash: Dr Office Rent Expense / Cr Cash.'],
-            ['LM-021', 'Office Rent Expense', 'BANK', $rentExpense, $bank, 'No Effect', 'Office rent paid by bank: Dr Office Rent Expense / Cr Bank.'],
-            ['LM-022', 'Office Rent Expense', 'DUE', $rentExpense, $ap, 'Increase Liability', 'Office rent due: Dr Office Rent Expense / Cr Accounts Payable.'],
+            ['LM-020', 'Advance Paid Adjustment', 'ADJUSTMENT', $ap, $advanceAsset, 'Decrease Advance Asset', 'Advance paid adjusted against supplier payable: Dr Accounts Payable / Cr Advance to Supplier.'],
+            ['LM-021', 'Advance Received Adjustment', 'ADJUSTMENT', $advanceLiability, $ar, 'Decrease Advance Liability', 'Advance received adjusted against customer receivable: Dr Advance from Customer / Cr Accounts Receivable.'],
+            ['LM-022', 'Office Rent Expense', 'CASH', $rentExpense, $cash, 'No Effect', 'Office rent paid in cash: Dr Office Rent Expense / Cr Cash.'],
+            ['LM-023', 'Office Rent Expense', 'BANK', $rentExpense, $bank, 'No Effect', 'Office rent paid by bank: Dr Office Rent Expense / Cr Bank.'],
+            ['LM-024', 'Office Rent Expense', 'DUE', $rentExpense, $ap, 'Increase Liability', 'Office rent due: Dr Office Rent Expense / Cr Accounts Payable.'],
         ];
 
         foreach ($rules as [$code, $headName, $settlementCode, $debit, $credit, $effect, $description]) {

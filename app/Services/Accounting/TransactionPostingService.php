@@ -306,6 +306,50 @@ class TransactionPostingService
 
             default => null,
         };
+
+        $this->createLinkedDueMovementForAdvanceAdjustment($voucher, $partyId, $effect, $entries, $amount);
+    }
+
+    private function createLinkedDueMovementForAdvanceAdjustment(
+        VoucherHeader $voucher,
+        int $partyId,
+        string $effect,
+        $entries,
+        float $amount
+    ): void {
+        if ($effect === 'Decrease Advance Asset') {
+            $payableEntry = $entries->first(fn (array $entry) =>
+                ($entry['entry_type'] ?? null) === 'Debit'
+                && ($entry['account_type'] ?? null) === 'Liability'
+            );
+
+            $this->createDueMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($payableEntry),
+                'Payable',
+                'Decrease',
+                $amount
+            );
+
+            return;
+        }
+
+        if ($effect === 'Decrease Advance Liability') {
+            $receivableEntry = $entries->first(fn (array $entry) =>
+                ($entry['entry_type'] ?? null) === 'Credit'
+                && ($entry['account_type'] ?? null) === 'Asset'
+            );
+
+            $this->createDueMovement(
+                $voucher,
+                $partyId,
+                $this->accountIdFromEntry($receivableEntry),
+                'Receivable',
+                'Decrease',
+                $amount
+            );
+        }
     }
 
     private function createDueMovement(

@@ -122,6 +122,8 @@ return [
         'supplier-ledgers.view' => 'View Supplier Ledger',
         'due-management.view' => 'View Due Management',
         'due-management.manage' => 'Manage Due Payment / Collection',
+        'advance-management.view' => 'View Advance Management',
+        'advance-management.manage' => 'Manage Advance Entry / Adjustment',
         'ledger-report.view' => 'View Ledger Report',
         'cash-bank-book.view' => 'View Cash / Bank Book',
         'reports.view' => 'View Reports',
@@ -154,12 +156,15 @@ return [
             'approvals.manage', 'audit-trail.view',
             'due-management.view',
             'due-management.manage',
+            'advance-management.view',
+            'advance-management.manage',
             'ledger-report.view',
         ],
         'Approver' => [
             'dashboard.view', 'transactions.view', 'approvals.view', 'approvals.manage', 'audit-trail.view',
             'reports.view', 'customer-ledgers.view', 'supplier-ledgers.view', 'cash-bank-book.view',
             'due-management.view',
+            'advance-management.view',
             'ledger-report.view',
         ],
         'Accountant' => [
@@ -172,6 +177,8 @@ return [
             'cash-bank-book.view', 'reports.view', 'audit-trail.view',
             'due-management.view',
             'due-management.manage',
+            'advance-management.view',
+            'advance-management.manage',
             'ledger-report.view',
         ],
         'Cashier' => [
@@ -179,6 +186,8 @@ return [
             'transactions.payment.create', 'transactions.receipt.create', 'cash-bank-book.view', 'reports.view',
             'due-management.view',
             'due-management.manage',
+            'advance-management.view',
+            'advance-management.manage',
             'ledger-report.view',
         ],
         'Sales User' => [
@@ -187,6 +196,8 @@ return [
             'cash-bank-book.view', 'reports.view',
             'due-management.view',
             'due-management.manage',
+            'advance-management.view',
+            'advance-management.manage',
             'ledger-report.view',
         ],
         'Purchase User' => [
@@ -195,6 +206,8 @@ return [
             'cash-bank-book.view', 'reports.view',
             'due-management.view',
             'due-management.manage',
+            'advance-management.view',
+            'advance-management.manage',
             'ledger-report.view',
         ],
         'Inventory / Store User' => [
@@ -205,6 +218,8 @@ return [
             'cash-bank.view', 'customer-ledgers.view', 'supplier-ledgers.view', 'cash-bank-book.view', 'reports.view',
             'due-management.view',
             'due-management.manage',
+            'advance-management.view',
+            'advance-management.manage',
             'ledger-report.view',
         ],
         'Data Entry Operator' => [
@@ -217,12 +232,14 @@ return [
             'customer-ledgers.view', 'supplier-ledgers.view', 'cash-bank-book.view', 'reports.view', 'reports.full',
             'audit-trail.view',
             'due-management.view',
+            'advance-management.view',
             'ledger-report.view',
         ],
         'Management Viewer / Report Viewer' => [
             'dashboard.view', 'company.view', 'transactions.view', 'customer-ledgers.view', 'supplier-ledgers.view',
             'cash-bank-book.view', 'reports.view', 'reports.full',
             'due-management.view',
+            'advance-management.view',
             'ledger-report.view',
         ],
         'Viewer' => [
@@ -231,6 +248,7 @@ return [
             'transactions.view', 'sales-invoices.view', 'purchase-bills.view', 'customer-ledgers.view',
             'supplier-ledgers.view', 'cash-bank-book.view', 'reports.view',
             'due-management.view',
+            'advance-management.view',
             'ledger-report.view',
         ],
         'Support Admin' => [
@@ -238,6 +256,7 @@ return [
             'parties.view', 'transaction-heads.view', 'ledger-mapping.view', 'opening-balances.view',
             'voucher-numbering.view', 'transactions.view', 'reports.view', 'users.view', 'support.view',
             'due-management.view',
+            'advance-management.view',
             'ledger-report.view',
         ],
     ],
@@ -260,6 +279,7 @@ return [
         'setup.voucher-numbering' => ['voucher-numbering.view'],
         'transactions.create' => ['transactions.view', 'transactions.create', 'transactions.draft'],
         'due-management.index' => ['due-management.view', 'customer-ledgers.view', 'supplier-ledgers.view', 'reports.view'],
+        'advance-management.index' => ['advance-management.view', 'reports.view', 'customer-ledgers.view', 'supplier-ledgers.view'],
         'ledger-report.index' => ['ledger-report.view', 'reports.view', 'customer-ledgers.view', 'supplier-ledgers.view'],
         'settings.users-roles' => ['users.view'],
     ],
@@ -281,6 +301,7 @@ return [
         'setup.voucher-numbering' => 'voucher-numbering.manage',
         'transactions.create' => ['transactions.create', 'transactions.draft'],
         'due-management.index' => ['due-management.manage', 'transactions.create'],
+        'advance-management.index' => ['advance-management.manage', 'transactions.create'],
         'settings.users-roles' => 'users.manage',
     ],
 

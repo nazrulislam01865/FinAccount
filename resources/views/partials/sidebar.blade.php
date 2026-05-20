@@ -115,6 +115,13 @@
         </a>
     @endif
 
+    @if($canRoute('advance-management.index'))
+        <a href="{{ route('advance-management.index') }}" class="nav-item {{ $isActive('advance-management.index') }}">
+            <div class="nav-icon">↗</div>
+            <span>Advance Management</span>
+        </a>
+    @endif
+
     @if($canRoute('ledger-report.index'))
         <a href="{{ route('ledger-report.index') }}" class="nav-item {{ $isActive('ledger-report.index') }}">
             <div class="nav-icon">📘</div>

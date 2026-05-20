@@ -11,6 +11,7 @@ use App\Http\Controllers\Setup\OpeningBalanceController;
 use App\Http\Controllers\Setup\PartyController;
 use App\Http\Controllers\Setup\TransactionHeadController;
 use App\Http\Controllers\Setup\VoucherNumberingController;
+use App\Http\Controllers\AdvanceManagementController;
 use App\Http\Controllers\DueManagementController;
 use App\Http\Controllers\LedgerReportController;
 use App\Http\Controllers\ReleaseNoteController;
@@ -68,6 +69,14 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::post('/api/due-management/settle', [DueManagementController::class, 'settle'])
         ->middleware('permission:due-management.manage|transactions.create')
         ->name('api.due-management.settle');
+
+    Route::get('/advance-management', [AdvanceManagementController::class, 'index'])
+        ->middleware('permission:advance-management.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
+        ->name('advance-management.index');
+
+    Route::post('/api/advance-management', [AdvanceManagementController::class, 'store'])
+        ->middleware('permission:advance-management.manage|transactions.create')
+        ->name('api.advance-management.store');
 
     Route::get('/ledger-report', [LedgerReportController::class, 'index'])
         ->middleware('permission:ledger-report.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
