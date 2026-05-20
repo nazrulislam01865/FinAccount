@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AdvanceRegister;
 use App\Models\CashBankAccount;
+use App\Models\ChartOfAccount;
 use App\Models\DueRegister;
 use App\Models\LedgerMappingRule;
 use App\Models\Party;
@@ -220,6 +221,11 @@ class AdvanceManagementController extends Controller
                     ->first();
 
                 $status = $this->computedAdvanceStatus($balance, $adjusted);
+                $linkedDueBalance = $this->linkedDueBalanceForAdvanceRow(
+                    partyId: (int) $first->party_id,
+                    advanceType: $first->advance_type
+                );
+                $maxAdjustment = round(min(max(0, $balance), max(0, $linkedDueBalance['balance'])), 2);
 
                 return [
                     'key' => $first->party_id . '|' . $first->account_id . '|' . $first->advance_type,
@@ -235,6 +241,10 @@ class AdvanceManagementController extends Controller
                     'adjusted_amount' => $adjusted,
                     'balance' => max(0, $balance),
                     'raw_balance' => $balance,
+                    'linked_due_balance' => $linkedDueBalance['balance'],
+                    'linked_due_label' => $linkedDueBalance['label'],
+                    'linked_due_account_id' => $linkedDueBalance['account_id'],
+                    'max_adjustment' => $maxAdjustment,
                     'advance_date' => $firstDate ? Carbon::parse($firstDate)->toDateString() : null,
                     'status' => $status,
                     'latest_voucher' => $latest?->voucherHeader?->voucher_number,
@@ -545,11 +555,12 @@ class AdvanceManagementController extends Controller
 
             $balance = $this->currentDueBalance($partyId, (int) $dueEntry['account_id'], 'Payable');
 
-            if ($balance < $amount) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Advance paid adjustment cannot be greater than the current payable due for this party. Current payable due is BDT ' . number_format(max(0, $balance), 2) . '. Post or select a supplier bill/due first.',
-                ]);
-            }
+            $this->assertAmountDoesNotExceedDue(
+                amount: $amount,
+                balance: $balance,
+                dueLabel: 'payable',
+                messagePrefix: 'Advance paid adjustment'
+            );
 
             return;
         }
@@ -565,10 +576,105 @@ class AdvanceManagementController extends Controller
 
         $balance = $this->currentDueBalance($partyId, (int) $dueEntry['account_id'], 'Receivable');
 
-        if ($balance < $amount) {
-            throw ValidationException::withMessages([
-                'amount' => 'Advance received adjustment cannot be greater than the current receivable due for this party. Current receivable due is BDT ' . number_format(max(0, $balance), 2) . '. Post or select a customer invoice/due first.',
-            ]);
+        $this->assertAmountDoesNotExceedDue(
+            amount: $amount,
+            balance: $balance,
+            dueLabel: 'receivable',
+            messagePrefix: 'Advance received adjustment'
+        );
+    }
+
+    private function assertAmountDoesNotExceedDue(float $amount, float $balance, string $dueLabel, string $messagePrefix): void
+    {
+        $amountCents = $this->moneyToCents($amount);
+        $balanceCents = max(0, $this->moneyToCents($balance));
+
+        if ($amountCents <= $balanceCents) {
+            return;
         }
+
+        $hint = $dueLabel === 'payable'
+            ? 'Post or select a supplier bill/due first.'
+            : 'Post or select a customer invoice/due first.';
+
+        throw ValidationException::withMessages([
+            'amount' => $messagePrefix
+                . ' cannot be greater than the current ' . $dueLabel . ' due for this party. '
+                . 'Current ' . $dueLabel . ' due is BDT ' . number_format($balanceCents / 100, 2) . '. '
+                . 'The maximum allowed adjustment is the smaller amount between the selected advance balance and the current ' . $dueLabel . ' due. '
+                . $hint,
+        ]);
+    }
+
+    private function moneyToCents(float|int|string $value): int
+    {
+        return (int) round(((float) $value) * 100);
+    }
+
+    private function linkedDueBalanceForAdvanceRow(int $partyId, string $advanceType): array
+    {
+        $dueType = $advanceType === 'Paid' ? 'Payable' : 'Receivable';
+        $accountTypeName = $advanceType === 'Paid' ? 'Liability' : 'Asset';
+        $preferredNames = $advanceType === 'Paid'
+            ? ['ACCOUNTS PAYABLE', 'SUPPLIER DUE', 'PAYABLE']
+            : ['ACCOUNTS RECEIVABLE', 'CUSTOMER DUE', 'RECEIVABLE'];
+
+        $accounts = $this->linkedDueCandidateAccounts($advanceType, $accountTypeName, $preferredNames);
+
+        $best = [
+            'balance' => 0.0,
+            'label' => $dueType,
+            'account_id' => null,
+        ];
+
+        foreach ($accounts as $account) {
+            $balance = $this->currentDueBalance($partyId, (int) $account->id, $dueType);
+
+            if ($balance > $best['balance']) {
+                $best = [
+                    'balance' => round(max(0, $balance), 2),
+                    'label' => $account->display_name ?? $account->account_name ?? $dueType,
+                    'account_id' => (int) $account->id,
+                ];
+            }
+        }
+
+        return $best;
+    }
+
+    private function linkedDueCandidateAccounts(string $advanceType, string $accountTypeName, array $preferredNames): Collection
+    {
+        $fromRules = LedgerMappingRule::query()
+            ->with(['debitAccount.accountType', 'creditAccount.accountType'])
+            ->where('status', 'Active')
+            ->get()
+            ->filter(fn (LedgerMappingRule $rule) => $this->effectiveAdvanceEffect($rule) === ($advanceType === 'Paid' ? 'Decrease Advance Asset' : 'Decrease Advance Liability'))
+            ->map(function (LedgerMappingRule $rule) use ($advanceType) {
+                return $advanceType === 'Paid' ? $rule->debitAccount : $rule->creditAccount;
+            })
+            ->filter(fn ($account) => $account && $account->accountType?->name === $accountTypeName);
+
+        $fromNames = ChartOfAccount::query()
+            ->with('accountType')
+            ->where('status', 'Active')
+            ->whereHas('accountType', fn ($query) => $query->where('name', $accountTypeName))
+            ->get()
+            ->filter(function (ChartOfAccount $account) use ($preferredNames) {
+                $name = strtoupper((string) $account->account_name);
+
+                foreach ($preferredNames as $preferredName) {
+                    if (str_contains($name, $preferredName)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+
+        return $fromRules
+            ->merge($fromNames)
+            ->filter()
+            ->unique('id')
+            ->values();
     }
 }

@@ -130,6 +130,9 @@
                                 data-advance-type="{{ $row['advance_type'] }}"
                                 data-advance-type-label="{{ $row['advance_type_label'] }}"
                                 data-balance="{{ $row['balance'] }}"
+                                data-linked-due-balance="{{ $row['linked_due_balance'] ?? 0 }}"
+                                data-linked-due-label="{{ e($row['linked_due_label'] ?? '') }}"
+                                data-max-adjustment="{{ $row['max_adjustment'] ?? 0 }}"
                                 data-original="{{ $row['original_amount'] }}"
                                 data-adjusted="{{ $row['adjusted_amount'] }}"
                                 data-status="{{ $row['status'] }}"
@@ -216,9 +219,14 @@
                         <input type="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
                     </div>
                     <div>
-                        <label>Available Balance</label>
+                        <label>Available Advance</label>
                         <input id="availableBalanceText" value="BDT 0.00" readonly>
                     </div>
+                </div>
+                <div id="linkedDueBalanceWrap" style="display:none">
+                    <label id="linkedDueBalanceLabel">Current Payable / Receivable Due</label>
+                    <input id="linkedDueBalanceText" value="BDT 0.00" readonly>
+                    <div class="hint">For adjustment, the allowed amount is the smaller of available advance and current payable/receivable due.</div>
                 </div>
                 <div class="two-col">
                     <div>
@@ -301,6 +309,9 @@
     const amount = document.getElementById('advanceAmount');
     const cashBank = document.getElementById('cashBankAccountId');
     const availableBalanceText = document.getElementById('availableBalanceText');
+    const linkedDueBalanceWrap = document.getElementById('linkedDueBalanceWrap');
+    const linkedDueBalanceLabel = document.getElementById('linkedDueBalanceLabel');
+    const linkedDueBalanceText = document.getElementById('linkedDueBalanceText');
     const preview = document.getElementById('advanceLedgerPreview');
 
     function currentRules() {
@@ -355,6 +366,8 @@
         partyId.value = partySelect.value || '';
         accountId.value = '';
         availableBalanceText.value = 'BDT 0.00';
+        linkedDueBalanceWrap.style.display = 'none';
+        linkedDueBalanceText.value = 'BDT 0.00';
         amount.max = '';
         amount.value = amount.value || '0.00';
         cashBank.disabled = false;
@@ -369,12 +382,28 @@
         partySelect.value = row.dataset.partyId;
         accountId.value = row.dataset.accountId;
         advanceType.value = row.dataset.advanceType;
-        availableBalanceText.value = money(row.dataset.balance);
-        amount.value = Number(row.dataset.balance || 0).toFixed(2);
-        amount.max = Number(row.dataset.balance || 0).toFixed(2);
+        const advanceBalance = Number(row.dataset.balance || 0);
+        const dueBalance = Number(row.dataset.linkedDueBalance || 0);
+        const maxAdjustment = Number(row.dataset.maxAdjustment || 0);
+        availableBalanceText.value = money(advanceBalance);
 
         if (forceAdjustment) {
             entryMode.value = 'Advance Adjustment';
+        }
+
+        if (entryMode.value === 'Advance Adjustment') {
+            linkedDueBalanceWrap.style.display = '';
+            linkedDueBalanceLabel.textContent = advanceType.value === 'Paid'
+                ? 'Current Supplier Payable Due'
+                : 'Current Customer Receivable Due';
+            linkedDueBalanceText.value = money(dueBalance);
+            amount.value = Number(maxAdjustment || 0).toFixed(2);
+            amount.max = Number(maxAdjustment || 0).toFixed(2);
+        } else {
+            linkedDueBalanceWrap.style.display = 'none';
+            linkedDueBalanceText.value = 'BDT 0.00';
+            amount.value = advanceBalance.toFixed(2);
+            amount.max = '';
         }
 
         renderRules();
@@ -406,6 +435,10 @@
             if (entryMode.value === 'New Advance') {
                 accountId.value = '';
                 availableBalanceText.value = 'BDT 0.00';
+                linkedDueBalanceWrap.style.display = 'none';
+                linkedDueBalanceText.value = 'BDT 0.00';
+            } else {
+                linkedDueBalanceWrap.style.display = '';
             }
             renderRules();
         });
@@ -442,6 +475,21 @@
         if (entryMode.value === 'Advance Adjustment' && !accountId.value) {
             showToast('Please select an open advance row before adjustment.');
             return;
+        }
+
+        if (entryMode.value === 'Advance Adjustment') {
+            const maxAllowed = Number(amount.max || 0);
+            const requested = Number(amount.value || 0);
+            if (maxAllowed <= 0) {
+                showToast(advanceType.value === 'Paid'
+                    ? 'This supplier has advance balance, but no payable due is available to adjust. Post a supplier bill/due first.'
+                    : 'This customer has advance balance, but no receivable due is available to adjust. Post a customer invoice/due first.');
+                return;
+            }
+            if (requested > maxAllowed) {
+                showToast('Adjustment amount cannot be greater than the smaller of available advance and linked due. Maximum allowed: ' + money(maxAllowed));
+                return;
+            }
         }
 
         const submitter = event.submitter || form.querySelector('button[type="submit"]');
