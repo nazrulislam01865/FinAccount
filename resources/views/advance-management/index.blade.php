@@ -227,6 +227,7 @@
                     <label id="linkedDueBalanceLabel">Current Payable / Receivable Due</label>
                     <input id="linkedDueBalanceText" value="BDT 0.00" readonly>
                     <div class="hint">For adjustment, the allowed amount is the smaller of available advance and current payable/receivable due.</div>
+                    <div id="adjustmentLimitNotice" class="advance-limit-notice" style="display:none"></div>
                 </div>
                 <div class="two-col">
                     <div>
@@ -267,7 +268,7 @@
             <div class="actions">
                 <button class="btn-ghost" type="reset">Clear</button>
                 @if($canManageAdvance)
-                    <button class="btn-primary" type="submit">Post Advance</button>
+                    <button class="btn-primary" type="submit" id="advanceSubmitButton">Post Advance</button>
                 @endif
             </div>
         </form>
@@ -284,7 +285,7 @@
 
 @push('styles')
 <style>
-    .advance-toolbar{grid-template-columns:minmax(220px,1fr)170px 185px 150px 150px 120px}.advance-layout{grid-template-columns:minmax(0,1fr)390px}.advance-tabs{display:flex;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px rgba(16,24,40,.04);flex-wrap:wrap}.advance-tab{padding:10px 14px;border-radius:12px;background:#fff;color:#475467;border:0;font-size:13px;font-weight:850;min-height:38px}.advance-tab.active{background:var(--primary);color:#fff}.money-cell{text-align:right;font-weight:800;white-space:nowrap}.red-text{color:#dc2626!important}.green-text{color:#067647!important}.orange-text{color:#b54708!important}.advance-stats .stat-card span{display:block;font-size:12px}.ledger-preview-box{border:1px solid var(--line);border-radius:14px;background:#fbfcfd;padding:14px;font-size:13px;line-height:1.55}.ledger-preview-box strong{display:block;margin-bottom:6px}.advance-layout .form-card{position:sticky;top:98px}.advance-layout .helper-card p{font-size:13px;line-height:1.45;color:#475467}@media(max-width:1320px){.advance-layout{grid-template-columns:1fr}.advance-toolbar{grid-template-columns:1fr 1fr 1fr}.right-stack{grid-template-columns:1fr 1fr}.advance-layout .form-card{position:static}}@media(max-width:880px){.advance-toolbar,.right-stack{grid-template-columns:1fr}.advance-layout{grid-template-columns:1fr}.advance-tabs{display:grid}.advance-tab{text-align:left}}
+    .advance-toolbar{grid-template-columns:minmax(220px,1fr)170px 185px 150px 150px 120px}.advance-layout{grid-template-columns:minmax(0,1fr)390px}.advance-tabs{display:flex;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px rgba(16,24,40,.04);flex-wrap:wrap}.advance-tab{padding:10px 14px;border-radius:12px;background:#fff;color:#475467;border:0;font-size:13px;font-weight:850;min-height:38px}.advance-tab.active{background:var(--primary);color:#fff}.money-cell{text-align:right;font-weight:800;white-space:nowrap}.red-text{color:#dc2626!important}.green-text{color:#067647!important}.orange-text{color:#b54708!important}.advance-stats .stat-card span{display:block;font-size:12px}.ledger-preview-box{border:1px solid var(--line);border-radius:14px;background:#fbfcfd;padding:14px;font-size:13px;line-height:1.55}.ledger-preview-box strong{display:block;margin-bottom:6px}.advance-limit-notice{margin-top:10px;padding:10px 12px;border-radius:12px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:12px;line-height:1.45}.advance-limit-notice.success{background:#ecfdf3;color:#067647;border-color:#bbf7d0}.advance-layout .form-card{position:sticky;top:98px}.advance-layout .helper-card p{font-size:13px;line-height:1.45;color:#475467}@media(max-width:1320px){.advance-layout{grid-template-columns:1fr}.advance-toolbar{grid-template-columns:1fr 1fr 1fr}.right-stack{grid-template-columns:1fr 1fr}.advance-layout .form-card{position:static}}@media(max-width:880px){.advance-toolbar,.right-stack{grid-template-columns:1fr}.advance-layout{grid-template-columns:1fr}.advance-tabs{display:grid}.advance-tab{text-align:left}}
 </style>
 @endpush
 
@@ -313,6 +314,30 @@
     const linkedDueBalanceLabel = document.getElementById('linkedDueBalanceLabel');
     const linkedDueBalanceText = document.getElementById('linkedDueBalanceText');
     const preview = document.getElementById('advanceLedgerPreview');
+    const adjustmentLimitNotice = document.getElementById('adjustmentLimitNotice');
+    const submitButton = document.getElementById('advanceSubmitButton');
+
+    const cents = (value) => Math.round(Number(value || 0) * 100);
+
+    function setAdjustmentLimitNotice(message, isOk = false) {
+        if (!adjustmentLimitNotice) return;
+        if (!message) {
+            adjustmentLimitNotice.style.display = 'none';
+            adjustmentLimitNotice.textContent = '';
+            adjustmentLimitNotice.classList.remove('success');
+            return;
+        }
+        adjustmentLimitNotice.style.display = '';
+        adjustmentLimitNotice.textContent = message;
+        adjustmentLimitNotice.classList.toggle('success', Boolean(isOk));
+    }
+
+    function setSubmitAvailability(enabled) {
+        if (submitButton) {
+            submitButton.disabled = !enabled;
+            submitButton.title = enabled ? '' : 'This advance cannot be adjusted until a matching payable/receivable due exists.';
+        }
+    }
 
     function currentRules() {
         const source = entryMode.value === 'New Advance' ? newRules : adjustmentRules;
@@ -369,7 +394,10 @@
         linkedDueBalanceWrap.style.display = 'none';
         linkedDueBalanceText.value = 'BDT 0.00';
         amount.max = '';
+        amount.disabled = false;
         amount.value = amount.value || '0.00';
+        setAdjustmentLimitNotice('');
+        setSubmitAvailability(true);
         cashBank.disabled = false;
         renderRules();
     }
@@ -397,13 +425,32 @@
                 ? 'Current Supplier Payable Due'
                 : 'Current Customer Receivable Due';
             linkedDueBalanceText.value = money(dueBalance);
-            amount.value = Number(maxAdjustment || 0).toFixed(2);
-            amount.max = Number(maxAdjustment || 0).toFixed(2);
+
+            if (cents(maxAdjustment) <= 0) {
+                amount.value = '';
+                amount.removeAttribute('max');
+                amount.disabled = true;
+                setSubmitAvailability(false);
+                setAdjustmentLimitNotice(
+                    advanceType.value === 'Paid'
+                        ? 'This supplier has advance balance, but no payable due is available to adjust. Post a supplier bill/due first, then adjust the advance.'
+                        : 'This customer has advance balance, but no receivable due is available to adjust. Post a customer invoice/due first, then adjust the advance.'
+                );
+            } else {
+                amount.disabled = false;
+                amount.value = Number(maxAdjustment || 0).toFixed(2);
+                amount.max = Number(maxAdjustment || 0).toFixed(2);
+                setSubmitAvailability(true);
+                setAdjustmentLimitNotice('Maximum adjustment allowed now: ' + money(maxAdjustment) + '.', true);
+            }
         } else {
             linkedDueBalanceWrap.style.display = 'none';
             linkedDueBalanceText.value = 'BDT 0.00';
+            amount.disabled = false;
             amount.value = advanceBalance.toFixed(2);
             amount.max = '';
+            setAdjustmentLimitNotice('');
+            setSubmitAvailability(true);
         }
 
         renderRules();
@@ -437,8 +484,17 @@
                 availableBalanceText.value = 'BDT 0.00';
                 linkedDueBalanceWrap.style.display = 'none';
                 linkedDueBalanceText.value = 'BDT 0.00';
+                amount.disabled = false;
+                amount.removeAttribute('max');
+                setAdjustmentLimitNotice('');
+                setSubmitAvailability(true);
             } else {
                 linkedDueBalanceWrap.style.display = '';
+                amount.disabled = false;
+                amount.removeAttribute('max');
+                amount.value = '';
+                setAdjustmentLimitNotice('Select an open advance row to load the available advance and matching due balance.');
+                setSubmitAvailability(false);
             }
             renderRules();
         });
@@ -480,13 +536,13 @@
         if (entryMode.value === 'Advance Adjustment') {
             const maxAllowed = Number(amount.max || 0);
             const requested = Number(amount.value || 0);
-            if (maxAllowed <= 0) {
+            if (cents(maxAllowed) <= 0) {
                 showToast(advanceType.value === 'Paid'
                     ? 'This supplier has advance balance, but no payable due is available to adjust. Post a supplier bill/due first.'
                     : 'This customer has advance balance, but no receivable due is available to adjust. Post a customer invoice/due first.');
                 return;
             }
-            if (requested > maxAllowed) {
+            if (cents(requested) > cents(maxAllowed)) {
                 showToast('Adjustment amount cannot be greater than the smaller of available advance and linked due. Maximum allowed: ' + money(maxAllowed));
                 return;
             }

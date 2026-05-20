@@ -120,15 +120,18 @@ class AdvanceManagementController extends Controller
                 advanceType: $advanceType
             );
 
-            if ($balance <= 0) {
+            $balanceCents = max(0, $this->moneyToCents($balance));
+            $amountCents = $this->moneyToCents($amount);
+
+            if ($balanceCents <= 0) {
                 throw ValidationException::withMessages([
                     'amount' => 'This advance record has no outstanding balance.',
                 ]);
             }
 
-            if ($amount > $balance) {
+            if ($amountCents > $balanceCents) {
                 throw ValidationException::withMessages([
-                    'amount' => 'Adjustment amount cannot be greater than the current advance balance.',
+                    'amount' => 'Adjustment amount cannot be greater than the current advance balance. Current advance balance is BDT ' . number_format($balanceCents / 100, 2) . '.',
                 ]);
             }
         }

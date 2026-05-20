@@ -78,24 +78,48 @@ class LedgerMappingRuleSeeder extends Seeder
                 continue;
             }
 
-            LedgerMappingRule::query()->updateOrCreate(
-                [
-                    'company_id' => $company?->id,
-                    'transaction_head_id' => $transactionHead->id,
-                    'settlement_type_id' => $settlementType->id,
-                ],
-                [
-                    'rule_code' => $code,
-                    'debit_account_id' => $debit->id,
-                    'credit_account_id' => $credit->id,
-                    'party_ledger_effect' => $effect,
-                    'auto_post' => true,
-                    'description' => $description,
-                    'status' => 'Active',
-                    'created_by' => 1,
-                    'updated_by' => 1,
-                ]
-            );
+            $attributes = [
+                'company_id' => $company?->id,
+                'transaction_head_id' => $transactionHead->id,
+                'settlement_type_id' => $settlementType->id,
+            ];
+
+            $values = [
+                'debit_account_id' => $debit->id,
+                'credit_account_id' => $credit->id,
+                'party_ledger_effect' => $effect,
+                'auto_post' => true,
+                'description' => $description,
+                'status' => 'Active',
+                'created_by' => 1,
+                'updated_by' => 1,
+            ];
+
+            $ruleForCombo = LedgerMappingRule::query()
+                ->where($attributes)
+                ->first();
+
+            $ruleForCode = LedgerMappingRule::query()
+                ->where('rule_code', $code)
+                ->first();
+
+            if ($ruleForCombo) {
+                if (!$ruleForCode || $ruleForCode->id === $ruleForCombo->id) {
+                    $values['rule_code'] = $code;
+                }
+
+                $ruleForCombo->fill($values)->save();
+                continue;
+            }
+
+            if ($ruleForCode) {
+                $ruleForCode->fill($attributes + $values)->save();
+                continue;
+            }
+
+            LedgerMappingRule::query()->create($attributes + $values + [
+                'rule_code' => $code,
+            ]);
         }
     }
 }
