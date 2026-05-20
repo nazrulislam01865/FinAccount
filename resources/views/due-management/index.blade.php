@@ -140,6 +140,7 @@
                                     <div class="action-cell">
                                         @if($canSettleDue && $row['balance_due'] > 0)
                                             <button type="button" class="icon-btn" title="Select due" data-select-due>✓</button>
+                                            <button type="button" class="icon-btn" title="Edit / settle due" data-select-due>✎</button>
                                         @else
                                             <span class="muted">-</span>
                                         @endif
@@ -168,22 +169,34 @@
             action="{{ route('api.due-management.settle') }}"
             method="POST"
             data-settlement-rules='@json($rulePayload)'
+            data-due-rows='@json($allDueRows->values())'
         >
             @csrf
             <h3 class="section-title">Due Payment / Collection</h3>
 
-            <input type="hidden" name="party_id" id="settlePartyId">
             <input type="hidden" name="account_id" id="settleAccountId">
-            <input type="hidden" name="due_type" id="settleDueType">
 
             <div class="form-grid">
                 <div>
-                    <label>Selected Party</label>
-                    <input id="selectedPartyText" value="Select a due row" readonly>
+                    <label>Party / Person <span class="required">*</span></label>
+                    <select name="party_id" id="settlePartyId" required>
+                        <option value="">Select party</option>
+                        @foreach($parties as $party)
+                            <option value="{{ $party->id }}">{{ $party->party_name }}{{ $party->partyType?->name ? ' - ' . $party->partyType?->name : '' }}</option>
+                        @endforeach
+                    </select>
+                    <div class="hint">Connected with Party / Person Setup. You can also click a due row from the list.</div>
+                </div>
+                <div>
+                    <label>Due Type <span class="required">*</span></label>
+                    <select name="due_type" id="settleDueType" required>
+                        <option value="Payable">Payable</option>
+                        <option value="Receivable">Receivable</option>
+                    </select>
                 </div>
                 <div>
                     <label>Due Ledger</label>
-                    <input id="selectedAccountText" value="-" readonly>
+                    <input id="selectedAccountText" value="Select party and due type" readonly>
                 </div>
                 <div class="two-col">
                     <div>
@@ -263,23 +276,38 @@
 
     const money = (value) => 'BDT ' + Number(value || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const rules = JSON.parse(form.dataset.settlementRules || '[]');
+    const dueRows = JSON.parse(form.dataset.dueRows || '[]');
     const showToast = (message) => window.AccountingUI?.showToast ? window.AccountingUI.showToast(message) : alert(message);
 
     function setSelectedRow(row) {
         document.querySelectorAll('[data-due-row]').forEach(item => item.style.background = '');
         row.style.background = '#eef4ff';
 
-        const dueType = row.dataset.dueType;
-        const balance = Number(row.dataset.balance || 0);
+        fillDueSelection({
+            party_id: row.dataset.partyId,
+            party_name: row.dataset.partyName,
+            account_id: row.dataset.accountId,
+            account_name: row.dataset.accountName,
+            due_type: row.dataset.dueType,
+            balance_due: row.dataset.balance
+        });
+    }
 
-        document.getElementById('settlePartyId').value = row.dataset.partyId;
-        document.getElementById('settleAccountId').value = row.dataset.accountId;
+    function fillDueSelection(row) {
+        const dueType = row.due_type || 'Payable';
+        const balance = Number(row.balance_due || 0);
+
+        document.getElementById('settlePartyId').value = row.party_id || '';
+        document.getElementById('settleAccountId').value = row.account_id || '';
         document.getElementById('settleDueType').value = dueType;
-        document.getElementById('selectedPartyText').value = row.dataset.partyName;
-        document.getElementById('selectedAccountText').value = row.dataset.accountName;
+        document.getElementById('selectedAccountText').value = row.account_name || '-';
         document.getElementById('selectedBalanceText').value = money(balance);
-        document.getElementById('settleAmount').value = balance.toFixed(2);
-        document.getElementById('settleAmount').max = balance.toFixed(2);
+        document.getElementById('settleAmount').value = balance > 0 ? balance.toFixed(2) : '';
+        if (balance > 0) {
+            document.getElementById('settleAmount').max = balance.toFixed(2);
+        } else {
+            document.getElementById('settleAmount').removeAttribute('max');
+        }
 
         const select = document.getElementById('settleRuleHead');
         const settlement = document.getElementById('settleRuleSettlement');
@@ -309,6 +337,27 @@
         updateRulePreview();
     }
 
+    function syncPartyDueSelection() {
+        const partyId = document.getElementById('settlePartyId').value;
+        const dueType = document.getElementById('settleDueType').value;
+        if (!partyId || !dueType) {
+            return;
+        }
+
+        const row = dueRows.find(item => String(item.party_id) === String(partyId) && item.due_type === dueType && Number(item.balance_due || 0) > 0);
+        if (!row) {
+            document.getElementById('settleAccountId').value = '';
+            document.getElementById('selectedAccountText').value = 'No open ' + dueType.toLowerCase() + ' balance found';
+            document.getElementById('selectedBalanceText').value = money(0);
+            document.getElementById('settleAmount').value = '';
+            document.getElementById('settleAmount').removeAttribute('max');
+            document.getElementById('settlementPreview').innerHTML = '<strong>No open due</strong>This party has no open ' + dueType.toLowerCase() + ' balance to settle. Post a due entry first.';
+            return;
+        }
+
+        fillDueSelection(row);
+    }
+
     function updateRulePreview() {
         const select = document.getElementById('settleRuleHead');
         const option = select.selectedOptions[0];
@@ -323,12 +372,14 @@
     });
 
     document.getElementById('settleRuleHead')?.addEventListener('change', updateRulePreview);
+    document.getElementById('settlePartyId')?.addEventListener('change', syncPartyDueSelection);
+    document.getElementById('settleDueType')?.addEventListener('change', syncPartyDueSelection);
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        if (!document.getElementById('settlePartyId').value) {
-            showToast('Please select a due row first.');
+        if (!document.getElementById('settlePartyId').value || !document.getElementById('settleAccountId').value) {
+            showToast('Please select an open due row or choose a party with an open due balance first.');
             return;
         }
 

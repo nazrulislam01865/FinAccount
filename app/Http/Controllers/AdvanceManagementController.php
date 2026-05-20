@@ -59,6 +59,7 @@ class AdvanceManagementController extends Controller
         $validated = $request->validate([
             'entry_mode' => ['required', Rule::in(['New Advance', 'Advance Adjustment'])],
             'advance_type' => ['required', Rule::in(['Paid', 'Received'])],
+            'adjustment_method' => ['nullable', Rule::in(['Against Due', 'Direct Recognition'])],
             'party_id' => ['required', 'integer', Rule::exists('parties', 'id')->where(fn ($query) => $query->where('status', 'Active'))],
             'account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query->where('status', 'Active'))],
             'transaction_head_id' => ['required', 'integer', Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query->where('status', 'Active'))],
@@ -73,6 +74,9 @@ class AdvanceManagementController extends Controller
         $amount = round((float) $validated['amount'], 2);
         $entryMode = (string) $validated['entry_mode'];
         $advanceType = (string) $validated['advance_type'];
+        $adjustmentMethod = $entryMode === 'Advance Adjustment'
+            ? (string) ($validated['adjustment_method'] ?? 'Against Due')
+            : 'New Advance';
         $expectedEffect = $this->expectedEffect($entryMode, $advanceType);
 
         $cashBankAccountId = !empty($validated['cash_bank_account_id'])
@@ -153,7 +157,21 @@ class AdvanceManagementController extends Controller
 
             if ($entryMode === 'Advance Adjustment') {
                 $this->validatePreviewTouchesAdvanceAccount($preview, $advanceAccountId, $advanceType);
-                $this->validateLinkedDueBalance($preview, (int) $validated['party_id'], $advanceType, $amount);
+                $actualAdjustmentMethod = $this->previewAdjustmentMethod($preview, $advanceType);
+
+                if ($actualAdjustmentMethod !== $adjustmentMethod) {
+                    throw ValidationException::withMessages([
+                        'adjustment_method' => $adjustmentMethod === 'Against Due'
+                            ? 'The selected rule is a direct recognition rule. Select an Against Due rule that uses Accounts Payable/Accounts Receivable.'
+                            : 'The selected rule is an Against Due rule. Select a direct recognition rule that posts to Expense/Purchase or Income.',
+                    ]);
+                }
+
+                if ($adjustmentMethod === 'Against Due') {
+                    $this->validateLinkedDueBalance($preview, (int) $validated['party_id'], $advanceType, $amount);
+                } else {
+                    $this->validateDirectRecognitionPreview($preview, $advanceType);
+                }
             }
 
             $voucher = $postingService->save($postingInput, null, $request->user()?->id);
@@ -406,6 +424,7 @@ class AdvanceManagementController extends Controller
                         default => null,
                     },
                     'entry_mode' => str_starts_with($effect, 'Increase') ? 'New Advance' : 'Advance Adjustment',
+                    'adjustment_method' => str_starts_with($effect, 'Decrease') ? $this->ruleAdjustmentMethod($rule, $effect) : 'New Advance',
                     'label' => trim(($rule->transactionHead?->name ?? 'Transaction Head') . ' - ' . ($rule->settlementType?->name ?? 'Settlement')),
                     'effect' => $effect,
                     'debit_account' => $rule->debitAccount?->account_name,
@@ -418,6 +437,7 @@ class AdvanceManagementController extends Controller
                 $payload['transaction_head_id'],
                 $payload['settlement_type_id'],
                 $payload['effect'],
+                $payload['adjustment_method'] ?? '',
             ]))
             ->values();
     }
@@ -517,8 +537,8 @@ class AdvanceManagementController extends Controller
         return match ([$entryMode, $advanceType]) {
             ['New Advance', 'Paid'] => 'Select an Advance Paid rule that debits Advance to Supplier / Employee and credits Cash/Bank.',
             ['New Advance', 'Received'] => 'Select an Advance Received rule that debits Cash/Bank and credits Advance from Customer.',
-            ['Advance Adjustment', 'Paid'] => 'Select an Advance Paid Adjustment rule that debits Accounts Payable and credits Advance to Supplier / Employee.',
-            ['Advance Adjustment', 'Received'] => 'Select an Advance Received Adjustment rule that debits Advance from Customer and credits Accounts Receivable.',
+            ['Advance Adjustment', 'Paid'] => 'Select an Advance Paid Adjustment rule that either debits Accounts Payable or debits an Expense/Purchase account and credits Advance to Supplier / Employee.',
+            ['Advance Adjustment', 'Received'] => 'Select an Advance Received Adjustment rule that either credits Accounts Receivable or credits an Income account and debits Advance from Customer.',
             default => 'Selected advance rule does not match the requested advance type.',
         };
     }
@@ -540,6 +560,98 @@ class AdvanceManagementController extends Controller
                     : 'The selected rule must debit the same Advance from Customer ledger used by this advance balance.',
             ]);
         }
+    }
+
+    private function ruleAdjustmentMethod(LedgerMappingRule $rule, string $effect): string
+    {
+        if ($effect === 'Decrease Advance Asset') {
+            $debitType = $rule->debitAccount?->accountType?->name;
+            $debitName = strtoupper((string) ($rule->debitAccount?->account_name ?? ''));
+
+            return ($debitType === 'Liability' && (str_contains($debitName, 'PAYABLE') || str_contains($debitName, 'SUPPLIER DUE')))
+                ? 'Against Due'
+                : 'Direct Recognition';
+        }
+
+        if ($effect === 'Decrease Advance Liability') {
+            $creditType = $rule->creditAccount?->accountType?->name;
+            $creditName = strtoupper((string) ($rule->creditAccount?->account_name ?? ''));
+
+            return ($creditType === 'Asset' && (str_contains($creditName, 'RECEIVABLE') || str_contains($creditName, 'CUSTOMER DUE')))
+                ? 'Against Due'
+                : 'Direct Recognition';
+        }
+
+        return 'New Advance';
+    }
+
+    private function previewAdjustmentMethod(array $preview, string $advanceType): string
+    {
+        $entries = collect($preview['entries'] ?? []);
+
+        if ($advanceType === 'Paid') {
+            $dueEntry = $entries->first(fn (array $entry) =>
+                ($entry['entry_type'] ?? null) === 'Debit'
+                && ($entry['account_type'] ?? null) === 'Liability'
+                && $this->looksLikePayableAccount((string) ($entry['account_name'] ?? ''))
+            );
+
+            return $dueEntry ? 'Against Due' : 'Direct Recognition';
+        }
+
+        $dueEntry = $entries->first(fn (array $entry) =>
+            ($entry['entry_type'] ?? null) === 'Credit'
+            && ($entry['account_type'] ?? null) === 'Asset'
+            && $this->looksLikeReceivableAccount((string) ($entry['account_name'] ?? ''))
+        );
+
+        return $dueEntry ? 'Against Due' : 'Direct Recognition';
+    }
+
+    private function validateDirectRecognitionPreview(array $preview, string $advanceType): void
+    {
+        $entries = collect($preview['entries'] ?? []);
+
+        if ($advanceType === 'Paid') {
+            $recognitionEntry = $entries->first(fn (array $entry) =>
+                ($entry['entry_type'] ?? null) === 'Debit'
+                && in_array(($entry['account_type'] ?? null), ['Expense', 'Asset'], true)
+                && !$this->looksLikeAdvanceAsset(strtoupper((string) ($entry['account_name'] ?? '')))
+            );
+
+            if (!$recognitionEntry) {
+                throw ValidationException::withMessages([
+                    'transaction_head_id' => 'Direct Advance Paid recognition must debit an Expense/Purchase or Asset account and credit Advance to Supplier / Employee.',
+                ]);
+            }
+
+            return;
+        }
+
+        $recognitionEntry = $entries->first(fn (array $entry) =>
+            ($entry['entry_type'] ?? null) === 'Credit'
+            && ($entry['account_type'] ?? null) === 'Income'
+        );
+
+        if (!$recognitionEntry) {
+            throw ValidationException::withMessages([
+                'transaction_head_id' => 'Direct Advance Received recognition must debit Advance from Customer and credit an Income account.',
+            ]);
+        }
+    }
+
+    private function looksLikePayableAccount(string $accountName): bool
+    {
+        $accountName = strtoupper($accountName);
+
+        return str_contains($accountName, 'PAYABLE') || str_contains($accountName, 'SUPPLIER DUE');
+    }
+
+    private function looksLikeReceivableAccount(string $accountName): bool
+    {
+        $accountName = strtoupper($accountName);
+
+        return str_contains($accountName, 'RECEIVABLE') || str_contains($accountName, 'CUSTOMER DUE');
     }
 
     private function validateLinkedDueBalance(array $preview, int $partyId, string $advanceType, float $amount): void

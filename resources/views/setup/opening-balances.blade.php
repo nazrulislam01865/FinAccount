@@ -6,10 +6,8 @@
 @php
     $hasSavedOpeningRows = $openingBalances->isNotEmpty();
     $canManageOpeningBalances = $canManageOpeningBalances ?? (auth()->user()?->hasAnyPermission(['opening-balances.manage']) === true);
-    $openingCanEdit = !$openingIsFinal && $canManageOpeningBalances;
-    $openingEditLockedMessage = $openingIsFinal
-        ? 'Opening balance is finalized and cannot be edited directly.'
-        : 'Your role can view Opening Balance Setup, but cannot edit or save opening balances.';
+    $openingCanEdit = $canManageOpeningBalances;
+    $openingEditLockedMessage = 'Your role can view Opening Balance Setup, but cannot edit or save opening balances.';
 
     $rows = $hasSavedOpeningRows
         ? $openingBalances->map(fn ($balance) => [
@@ -92,7 +90,7 @@
 @if($openingIsFinal)
     <div class="card hint-box" style="margin-bottom:16px">
         <strong>Opening balance is finalized.</strong>
-        Posted opening balances cannot be edited directly. Use a reversal or adjustment voucher if correction is required.
+        Posted opening balances are currently editable. Saving as Final will replace the existing opening voucher lines for this financial year/branch instead of creating duplicate opening balances.
 
         @if($postedOpeningVoucher)
             <div style="margin-top:6px">
@@ -105,7 +103,7 @@
     </div>
 @endif
 
-@if(!$openingCanEdit && !$openingIsFinal)
+@if(!$openingCanEdit)
     <div class="card hint-box" style="margin-bottom:16px;border-color:#fed7aa;background:#fff7ed;color:#9a3412">
         <strong>Read-only access.</strong> Your role can view Opening Balance Setup, but edit/save controls are locked.
     </div>
@@ -128,7 +126,7 @@
                 <div>
                     <label>Financial Year <span class="required">*</span></label>
 
-                    <select name="financial_year_id" id="financialYearId" required @disabled($openingIsFinal)>
+                    <select name="financial_year_id" id="financialYearId" required >
                         <option value="">Select Financial Year</option>
 
                         @foreach($financialYears as $financialYear)
@@ -151,13 +149,13 @@
                         id="balanceDate"
                         value="{{ $balanceDate }}"
                         required
-                        @disabled($openingIsFinal)
+                        
                     >
                 </div>
 
                 <div>
                     <label>Branch / Location</label>
-                    <select name="branch_location" id="branchLocation" @disabled($openingIsFinal)>
+                    <select name="branch_location" id="branchLocation" >
                         @foreach($branches as $branch)
                             <option value="{{ $branch }}" @selected($branchLocation === $branch)>
                                 {{ $branch }}
@@ -1182,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (status === 'Final') {
-            const confirmed = confirm('Post opening balance now? Once posted, it cannot be edited directly.');
+            const confirmed = confirm('Post opening balance now? If an opening voucher already exists for this financial year/branch, its lines will be replaced with the current balances.');
 
             if (!confirmed) {
                 event.preventDefault();
