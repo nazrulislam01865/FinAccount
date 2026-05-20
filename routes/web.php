@@ -13,6 +13,7 @@ use App\Http\Controllers\Setup\TransactionHeadController;
 use App\Http\Controllers\Setup\VoucherNumberingController;
 use App\Http\Controllers\DueManagementController;
 use App\Http\Controllers\LedgerReportController;
+use App\Http\Controllers\ReleaseNoteController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -71,6 +72,26 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/ledger-report', [LedgerReportController::class, 'index'])
         ->middleware('permission:ledger-report.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
         ->name('ledger-report.index');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Release Tracker
+    |--------------------------------------------------------------------------
+    | Only Super Admin can access cloud release tracking.
+    */
+    Route::prefix('release-notes')->name('release-notes.')->middleware('super.admin')->group(function () {
+        Route::get('/', [ReleaseNoteController::class, 'index'])->name('index');
+        Route::post('/', [ReleaseNoteController::class, 'store'])->name('store');
+        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])->name('update');
+        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::prefix('api/release-notes')->name('api.release-notes.')->middleware('super.admin')->group(function () {
+        Route::post('/', [ReleaseNoteController::class, 'store'])->name('store');
+        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])->name('update');
+        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])->name('destroy');
+    });
 
     /*
     |--------------------------------------------------------------------------

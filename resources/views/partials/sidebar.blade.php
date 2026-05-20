@@ -136,6 +136,16 @@
         </a>
     @endif
 
+
+    @if($currentUser?->isSuperAdmin() && Route::has('release-notes.index'))
+        <div class="nav-title">System</div>
+
+        <a href="{{ route('release-notes.index') }}" class="nav-item {{ $isActive('release-notes.index') }}">
+            <div class="nav-icon">🚀</div>
+            <span>Release Tracker</span>
+        </a>
+    @endif
+
     @if($canRoute('settings.users-roles'))
         <div class="nav-title">Settings</div>
 
