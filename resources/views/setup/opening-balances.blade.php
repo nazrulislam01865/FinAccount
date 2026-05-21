@@ -6,8 +6,10 @@
 @php
     $hasSavedOpeningRows = $openingBalances->isNotEmpty();
     $canManageOpeningBalances = $canManageOpeningBalances ?? (auth()->user()?->hasAnyPermission(['opening-balances.manage']) === true);
-    $openingCanEdit = $canManageOpeningBalances;
-    $openingEditLockedMessage = 'Your role can view Opening Balance Setup, but cannot edit or save opening balances.';
+    $openingCanEdit = !$openingIsFinal && $canManageOpeningBalances;
+    $openingEditLockedMessage = $openingIsFinal
+        ? 'Opening balance is finalized and cannot be edited directly.'
+        : 'Your role can view Opening Balance Setup, but cannot edit or save opening balances.';
 
     $rows = $hasSavedOpeningRows
         ? $openingBalances->map(fn ($balance) => [
@@ -90,7 +92,7 @@
 @if($openingIsFinal)
     <div class="card hint-box" style="margin-bottom:16px">
         <strong>Opening balance is finalized.</strong>
-        Posted opening balances are currently editable. Saving as Final will replace the existing opening voucher lines for this financial year/branch instead of creating duplicate opening balances.
+        Posted opening balances cannot be edited directly. Use a reversal or adjustment voucher if correction is required.
 
         @if($postedOpeningVoucher)
             <div style="margin-top:6px">
@@ -103,7 +105,7 @@
     </div>
 @endif
 
-@if(!$openingCanEdit)
+@if(!$openingCanEdit && !$openingIsFinal)
     <div class="card hint-box" style="margin-bottom:16px;border-color:#fed7aa;background:#fff7ed;color:#9a3412">
         <strong>Read-only access.</strong> Your role can view Opening Balance Setup, but edit/save controls are locked.
     </div>
@@ -126,7 +128,7 @@
                 <div>
                     <label>Financial Year <span class="required">*</span></label>
 
-                    <select name="financial_year_id" id="financialYearId" required >
+                    <select name="financial_year_id" id="financialYearId" required @disabled($openingIsFinal)>
                         <option value="">Select Financial Year</option>
 
                         @foreach($financialYears as $financialYear)
@@ -149,13 +151,13 @@
                         id="balanceDate"
                         value="{{ $balanceDate }}"
                         required
-                        
+                        @disabled($openingIsFinal)
                     >
                 </div>
 
                 <div>
                     <label>Branch / Location</label>
-                    <select name="branch_location" id="branchLocation" >
+                    <select name="branch_location" id="branchLocation" @disabled($openingIsFinal)>
                         @foreach($branches as $branch)
                             <option value="{{ $branch }}" @selected($branchLocation === $branch)>
                                 {{ $branch }}
@@ -183,10 +185,6 @@
                     </div>
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                        <button class="btn-outline" id="loadSampleBtn" type="button" @disabled(!$openingCanEdit)>
-                            Load PRD Sample
-                        </button>
-
                         <button class="btn-outline" id="downloadBtn" type="button">
                             ⇩ Download Template
                         </button>
@@ -392,7 +390,7 @@
                 <div class="ready-list">
                     <div><span class="checkmark">✓</span>Chart of Accounts Created</div>
                     <div><span class="checkmark">✓</span>Parties / Sub-ledgers Added</div>
-                    <div><span class="checkmark">✓</span>Ledger Mapping Completed</div>
+                    <div><span class="checkmark">✓</span>Accounting Rules Setup Completed</div>
                     <div><span class="checkmark">✓</span>Opening Balances Entered</div>
                     <div><span class="checkmark">✓</span>Balances Validated</div>
                 </div>
@@ -1018,93 +1016,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return row;
     }
 
-    function findAccountByNames(names) {
-        const upperNames = names.map((name) => name.toUpperCase());
-
-        return accounts.find((account) => {
-            const label = `${account.account_code} ${account.account_name} ${account.display_name}`.toUpperCase();
-
-            return upperNames.some((name) => label.includes(name));
-        });
-    }
-
-    function firstLinkedParty(accountId) {
-        return linkedParties(accountId)[0]?.id || '';
-    }
-
-    function loadPrdSample() {
-        if (!openingCanEdit) {
-            showLockedMessage();
-            return;
-        }
-
-        const sample = [
-            {
-                account: findAccountByNames(['Cash in Hand', 'Cash']),
-                debit: 50000,
-                credit: 0,
-                remarks: 'Sample opening cash balance',
-            },
-            {
-                account: findAccountByNames(['Bank Account', 'Bank']),
-                debit: 100000,
-                credit: 0,
-                remarks: 'Sample opening bank balance',
-            },
-            {
-                account: findAccountByNames(['Accounts Receivable', 'Customer Due', 'Receivable']),
-                debit: 20000,
-                credit: 0,
-                remarks: 'Sample customer opening due',
-            },
-            {
-                account: findAccountByNames(['Inventory / Stock', 'Seed Inventory', 'Stock Value', 'Inventory']),
-                debit: 80000,
-                credit: 0,
-                remarks: 'Sample opening inventory value',
-            },
-            {
-                account: findAccountByNames(['Accounts Payable', 'Supplier Due', 'Payable']),
-                debit: 0,
-                credit: 30000,
-                remarks: 'Sample supplier opening payable',
-            },
-            {
-                account: findAccountByNames(['Owner Capital', 'Capital']),
-                debit: 0,
-                credit: 220000,
-                remarks: 'Sample owner capital balancing figure',
-            },
-        ].filter((item) => item.account);
-
-        if (sample.length === 0) {
-            showToast('No matching chart of accounts found for the PRD sample.');
-            return;
-        }
-
-        if (hasSavedOpeningRows) {
-            showToast('Saved opening balance rows are view-only. Use Add New Row to append another line.');
-            return;
-        }
-
-        tbody.innerHTML = '';
-
-        sample.forEach((item) => {
-            const partyId = firstLinkedParty(item.account.id);
-
-            addRow(
-                item.account.id,
-                item.debit,
-                item.credit,
-                partyId,
-                item.remarks
-            );
-        });
-
-        recalc();
-        showToast('PRD sample opening balance loaded. Review party rows before posting.');
-    }
-
     function commitEditableRows() {
         dataRows().forEach((row) => {
             if (!isEditableRow(row)) {
@@ -1180,7 +1091,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (status === 'Final') {
-            const confirmed = confirm('Post opening balance now? If an opening voucher already exists for this financial year/branch, its lines will be replaced with the current balances.');
+            const confirmed = confirm('Post opening balance now? Once posted, it cannot be edited directly.');
 
             if (!confirmed) {
                 event.preventDefault();
@@ -1275,7 +1186,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('New opening balance row added.');
     });
 
-    document.getElementById('loadSampleBtn')?.addEventListener('click', loadPrdSample);
 
     document.getElementById('validateBtn')?.addEventListener('click', () => {
         const difference = recalc();

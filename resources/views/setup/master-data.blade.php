@@ -447,7 +447,7 @@
             <div class="master-card-head">
                 <div>
                     <h3>Settlement Types</h3>
-                    <p>These values appear in Transaction Head, Ledger Mapping, and Add Transaction forms.</p>
+                    <p>These values appear in Transaction Head, Accounting Rules Setup, and Add Transaction forms.</p>
                 </div>
                 <span class="badge badge-primary">{{ $settlementTypes->count() }} Items</span>
             </div>

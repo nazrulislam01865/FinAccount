@@ -167,7 +167,7 @@ class LedgerMappingRuleRequest extends FormRequest
         if ($duplicate) {
             $validator->errors()->add(
                 'settlement_type_id',
-                'A mapping rule already exists for this transaction head and settlement type.'
+                'An accounting rule already exists for this transaction head and settlement type.'
             );
         }
     }
@@ -427,7 +427,7 @@ class LedgerMappingRuleRequest extends FormRequest
     {
         return [
             'rule_code.regex' => 'Rule Code may contain only letters, numbers, dots, hyphens, and underscores.',
-            'rule_code.unique' => 'This Ledger Mapping Rule Code already exists. Please use another code.',
+            'rule_code.unique' => 'This Accounting Rule Code already exists. Please use another code.',
 
             'transaction_head_id.required' => 'Transaction Head is required.',
             'transaction_head_id.exists' => 'Selected Transaction Head is invalid or inactive.',

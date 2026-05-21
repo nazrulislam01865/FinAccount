@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
@@ -167,7 +168,9 @@ class TransactionController extends Controller
                     'voucher_number' => $voucher->voucher_number,
                     'status' => $voucher->status,
                 ],
-                'redirect' => route('transactions.create'),
+                'redirect' => Route::has('accounting-reports.transactions.index')
+                    ? route('accounting-reports.transactions.index')
+                    : route('transactions.create'),
             ], 201);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -198,7 +201,7 @@ class TransactionController extends Controller
             }
 
             if (str_contains($lower, 'foreign key constraint')) {
-                return $label . ': selected setup data is missing or inactive in cloud. Check Transaction Head, Settlement Type, Ledger Mapping, Party, Cash/Bank, and Financial Year setup.';
+                return $label . ': selected setup data is missing or inactive in cloud. Check Transaction Head, Settlement Type, Accounting Rules Setup, Party, Cash/Bank, and Financial Year setup.';
             }
 
             if (str_contains($lower, 'data truncated') || str_contains($lower, 'invalid enum') || str_contains($lower, 'incorrect')) {
@@ -210,6 +213,6 @@ class TransactionController extends Controller
             return $label . ': ' . $message;
         }
 
-        return $label . '. Please check Financial Year, Ledger Mapping, Cash/Bank setup, and Voucher Numbering setup.';
+        return $label . '. Please check Financial Year, Accounting Rules Setup, Cash/Bank setup, and Voucher Numbering setup.';
     }
 }

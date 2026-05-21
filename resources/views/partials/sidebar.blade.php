@@ -22,7 +22,7 @@
         ['label' => 'Cash / Bank Setup', 'route' => 'setup.cash-bank-accounts', 'icon' => '3'],
         ['label' => 'Party / Person Setup', 'route' => 'setup.parties', 'icon' => '4'],
         ['label' => 'Transaction Head Setup', 'route' => 'setup.transaction-heads', 'icon' => '5'],
-        ['label' => 'Ledger Mapping', 'route' => 'setup.ledger-mapping', 'icon' => '6'],
+        ['label' => 'Accounting Rules Setup', 'route' => 'setup.accounting-rules-setup', 'icon' => '6'],
         ['label' => 'Opening Balance Setup', 'route' => 'setup.opening-balances', 'icon' => '7'],
         ['label' => 'Voucher Numbering', 'route' => 'setup.voucher-numbering', 'icon' => '8'],
     ];
@@ -64,15 +64,15 @@
                     data-sidebar-group-summary
                     aria-controls="masterDataSubmenu"
                 >
-                    <div class="nav-icon">M</div>
-                    <span>Master Data</span>
+                    <div class="nav-icon">9</div>
+                    <span>Master Setup</span>
                     <span class="nav-arrow" aria-hidden="true">⌄</span>
                 </summary>
 
                 <div
                     class="nav-submenu {{ $isMasterDataRoute ? 'is-open' : '' }}"
                     id="masterDataSubmenu"
-                    aria-label="Master Data Submenu"
+                    aria-label="Master Setup Submenu"
                 >
                     @foreach($masterDataLinks as $masterLink)
                         @if($canRoute($masterLink['route']))
@@ -101,8 +101,8 @@
         </a>
     @endif
 
-    @if($canPermission('transactions.view'))
-        <a href="#" class="nav-item">
+    @if($canRoute('accounting-reports.transactions.index') || $canPermission('transactions.view'))
+        <a href="{{ route('accounting-reports.transactions.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.transactions.*') ? 'active' : '' }}">
             <div class="nav-icon">📄</div>
             <span>Transaction List</span>
         </a>
@@ -129,15 +129,15 @@
         </a>
     @endif
 
-    @if($canPermission('cash-bank-book.view'))
-        <a href="#" class="nav-item">
+    @if($canRoute('accounting-reports.cash-bank-book.index') || $canPermission('cash-bank-book.view'))
+        <a href="{{ route('accounting-reports.cash-bank-book.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.cash-bank-book.*') ? 'active' : '' }}">
             <div class="nav-icon">🏦</div>
             <span>Cash / Bank Book</span>
         </a>
     @endif
 
-    @if($canPermission('reports.view'))
-        <a href="#" class="nav-item">
+    @if($canRoute('accounting-reports.index') || $canPermission('reports.view'))
+        <a href="{{ route('accounting-reports.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.index') ? 'active' : '' }}">
             <div class="nav-icon">▣</div>
             <span>Reports</span>
         </a>

@@ -188,9 +188,17 @@ Route::middleware(['auth', 'active.user'])->group(function () {
             ->middleware('permission:transaction-heads.manage')
             ->name('transaction-heads.destroy');
 
-        Route::get('/ledger-mapping', [LedgerMappingController::class, 'index'])
+        Route::get('/accounting-rules-setup', [LedgerMappingController::class, 'index'])
+            ->middleware('permission:ledger-mapping.view')
+            ->name('accounting-rules-setup');
+
+        Route::get('/ledger-mapping', fn () => redirect()->route('setup.accounting-rules-setup'))
             ->middleware('permission:ledger-mapping.view')
             ->name('ledger-mapping');
+
+        Route::delete('/accounting-rules-setup/{ledger_mapping_rule}', [LedgerMappingController::class, 'destroy'])
+            ->middleware('permission:ledger-mapping.manage')
+            ->name('accounting-rules-setup.destroy');
 
         Route::delete('/ledger-mapping/{ledger_mapping_rule}', [LedgerMappingController::class, 'destroy'])
             ->middleware('permission:ledger-mapping.manage')
@@ -321,6 +329,14 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->middleware('permission:transaction-heads.manage')
         ->name('api.transaction-heads.update');
 
+    Route::post('/api/accounting-rules-setup', [LedgerMappingController::class, 'store'])
+        ->middleware('permission:ledger-mapping.manage')
+        ->name('api.accounting-rules-setup.store');
+    Route::match(['post', 'put'], '/api/accounting-rules-setup/{ledger_mapping_rule}', [LedgerMappingController::class, 'update'])
+        ->middleware('permission:ledger-mapping.manage')
+        ->name('api.accounting-rules-setup.update');
+
+    // Legacy API aliases kept so older cached pages or bookmarks do not break immediately after deployment.
     Route::post('/api/ledger-mapping', [LedgerMappingController::class, 'store'])
         ->middleware('permission:ledger-mapping.manage')
         ->name('api.ledger-mapping.store');

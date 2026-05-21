@@ -203,14 +203,6 @@
                         <option value="Received">Advance Received</option>
                     </select>
                 </div>
-                <div id="adjustmentMethodWrap" style="display:none">
-                    <label>Adjustment Method <span class="required">*</span></label>
-                    <select name="adjustment_method" id="adjustmentMethod">
-                        <option value="Against Due">Adjustment Against Due</option>
-                        <option value="Direct Recognition">Direct Expense / Income Recognition</option>
-                    </select>
-                    <div class="hint">Against Due reduces AP/AR. Direct Recognition posts to Expense/Purchase or Income without requiring a due balance.</div>
-                </div>
                 <div>
                     <label>Party / Person <span class="required">*</span></label>
                     <select id="advancePartySelect" required>
@@ -257,7 +249,7 @@
                     <select name="transaction_head_id" id="advanceRuleHead" required>
                         <option value="">Select rule</option>
                     </select>
-                    <div class="hint">Rules are loaded from Transaction Head Setup + Ledger Mapping Setup.</div>
+                    <div class="hint">Rules are loaded from Transaction Head Setup + Accounting Rules Setup.</div>
                 </div>
                 <div>
                     <label>Reference</label>
@@ -285,7 +277,7 @@
             <h3>Accounting Control</h3>
             <p><strong>Advance paid:</strong> Dr Advance to Supplier / Employee, Cr Cash/Bank.</p>
             <p><strong>Advance received:</strong> Dr Cash/Bank, Cr Advance from Customer.</p>
-            <p><strong>Against Due:</strong> clears advance against AP/AR without double-counting income or expense.</p><p><strong>Direct Recognition:</strong> clears advance directly to Expense/Purchase or Income when no due invoice is needed.</p>
+            <p><strong>Adjustment:</strong> clears advance and reduces related AP/AR due without re-recording cash movement.</p>
         </div>
     </aside>
 </div>
@@ -310,8 +302,6 @@
 
     const entryMode = document.getElementById('entryMode');
     const advanceType = document.getElementById('advanceType');
-    const adjustmentMethodWrap = document.getElementById('adjustmentMethodWrap');
-    const adjustmentMethod = document.getElementById('adjustmentMethod');
     const partySelect = document.getElementById('advancePartySelect');
     const partyId = document.getElementById('advancePartyId');
     const accountId = document.getElementById('advanceAccountId');
@@ -351,12 +341,7 @@
 
     function currentRules() {
         const source = entryMode.value === 'New Advance' ? newRules : adjustmentRules;
-        return source.filter(rule => {
-            const baseMatch = rule.advance_type === advanceType.value && rule.entry_mode === entryMode.value;
-            if (!baseMatch) return false;
-            if (entryMode.value !== 'Advance Adjustment') return true;
-            return (rule.adjustment_method || 'Against Due') === adjustmentMethod.value;
-        });
+        return source.filter(rule => rule.advance_type === advanceType.value && rule.entry_mode === entryMode.value);
     }
 
     function renderRules() {
@@ -366,7 +351,7 @@
 
         if (!rules.length) {
             ruleSelect.innerHTML = '<option value="">No rule configured</option>';
-            preview.innerHTML = '<strong>Missing setup</strong>Configure the related Advance rule in Ledger Mapping Setup first.';
+            preview.innerHTML = '<strong>Missing setup</strong>Configure the related Advance accounting rule in Accounting Rules Setup first.';
             return;
         }
 
@@ -377,7 +362,6 @@
             option.dataset.debit = rule.debit_account || '';
             option.dataset.credit = rule.credit_account || '';
             option.dataset.requiresCashBank = rule.requires_cash_bank ? '1' : '0';
-            option.dataset.adjustmentMethod = rule.adjustment_method || '';
             option.textContent = rule.label;
             ruleSelect.appendChild(option);
             if (index === 0) settlementId.value = rule.settlement_type_id;
@@ -396,9 +380,7 @@
         if (cashBank.disabled) cashBank.value = '';
 
         const adjustmentNote = entryMode.value === 'Advance Adjustment'
-            ? (adjustmentMethod.value === 'Against Due'
-                ? '<br><span class="muted">Against Due reduces the matching payable/receivable balance and clears the advance.</span>'
-                : '<br><span class="muted">Direct Recognition clears the advance directly against Expense/Purchase or Income.</span>')
+            ? '<br><span class="muted">Adjustment also reduces the matching payable/receivable due balance when the rule uses AP/AR.</span>'
             : '<br><span class="muted">Actual Cash/Bank ledger is taken from selected Cash / Bank account.</span>';
 
         preview.innerHTML = '<strong>Ledger preview</strong>Dr ' + (option.dataset.debit || '-') + '<br>Cr ' + (option.dataset.credit || '-') + adjustmentNote;
@@ -406,8 +388,6 @@
 
     function resetForNewAdvance() {
         entryMode.value = 'New Advance';
-        adjustmentMethodWrap.style.display = 'none';
-        adjustmentMethod.required = false;
         partyId.value = partySelect.value || '';
         accountId.value = '';
         availableBalanceText.value = 'BDT 0.00';
@@ -440,38 +420,30 @@
         }
 
         if (entryMode.value === 'Advance Adjustment') {
-            adjustmentMethodWrap.style.display = '';
-            adjustmentMethod.required = true;
-            const usesDue = adjustmentMethod.value === 'Against Due';
-            linkedDueBalanceWrap.style.display = usesDue ? '' : 'none';
+            linkedDueBalanceWrap.style.display = '';
             linkedDueBalanceLabel.textContent = advanceType.value === 'Paid'
                 ? 'Current Supplier Payable Due'
                 : 'Current Customer Receivable Due';
             linkedDueBalanceText.value = money(dueBalance);
 
-            const allowedAmount = usesDue ? maxAdjustment : advanceBalance;
-            if (cents(allowedAmount) <= 0) {
+            if (cents(maxAdjustment) <= 0) {
                 amount.value = '';
                 amount.removeAttribute('max');
                 amount.disabled = true;
                 setSubmitAvailability(false);
-                setAdjustmentLimitNotice(usesDue
-                    ? (advanceType.value === 'Paid'
-                        ? 'This supplier has advance balance, but no payable due is available. Select Direct Expense/Purchase Recognition or post a supplier bill/due first.'
-                        : 'This customer has advance balance, but no receivable due is available. Select Direct Income Recognition or post a customer invoice/due first.')
-                    : 'This advance record has no outstanding balance to recognize.');
+                setAdjustmentLimitNotice(
+                    advanceType.value === 'Paid'
+                        ? 'This supplier has advance balance, but no payable due is available to adjust. Post a supplier bill/due first, then adjust the advance.'
+                        : 'This customer has advance balance, but no receivable due is available to adjust. Post a customer invoice/due first, then adjust the advance.'
+                );
             } else {
                 amount.disabled = false;
-                amount.value = Number(allowedAmount || 0).toFixed(2);
-                amount.max = Number(allowedAmount || 0).toFixed(2);
+                amount.value = Number(maxAdjustment || 0).toFixed(2);
+                amount.max = Number(maxAdjustment || 0).toFixed(2);
                 setSubmitAvailability(true);
-                setAdjustmentLimitNotice(usesDue
-                    ? 'Maximum against-due adjustment allowed now: ' + money(allowedAmount) + '.'
-                    : 'Direct recognition can clear up to the available advance: ' + money(allowedAmount) + '.', true);
+                setAdjustmentLimitNotice('Maximum adjustment allowed now: ' + money(maxAdjustment) + '.', true);
             }
         } else {
-            adjustmentMethodWrap.style.display = 'none';
-            adjustmentMethod.required = false;
             linkedDueBalanceWrap.style.display = 'none';
             linkedDueBalanceText.value = 'BDT 0.00';
             amount.disabled = false;
@@ -505,11 +477,9 @@
         }
     });
 
-    [entryMode, advanceType, adjustmentMethod].forEach(element => {
+    [entryMode, advanceType].forEach(element => {
         element.addEventListener('change', () => {
             if (entryMode.value === 'New Advance') {
-                adjustmentMethodWrap.style.display = 'none';
-                adjustmentMethod.required = false;
                 accountId.value = '';
                 availableBalanceText.value = 'BDT 0.00';
                 linkedDueBalanceWrap.style.display = 'none';
@@ -519,24 +489,11 @@
                 setAdjustmentLimitNotice('');
                 setSubmitAvailability(true);
             } else {
-                adjustmentMethodWrap.style.display = '';
-                adjustmentMethod.required = true;
-                const selectedRow = Array.from(document.querySelectorAll('[data-advance-row]')).find(row =>
-                    row.dataset.partyId === partyId.value
-                    && row.dataset.accountId === accountId.value
-                    && row.dataset.advanceType === advanceType.value
-                );
-
-                if (selectedRow) {
-                    selectAdvance(selectedRow, true);
-                    return;
-                }
-
-                linkedDueBalanceWrap.style.display = adjustmentMethod.value === 'Against Due' ? '' : 'none';
+                linkedDueBalanceWrap.style.display = '';
                 amount.disabled = false;
                 amount.removeAttribute('max');
                 amount.value = '';
-                setAdjustmentLimitNotice('Select an open advance row to load the available advance. Against Due also checks payable/receivable due; Direct Recognition does not require a due balance.');
+                setAdjustmentLimitNotice('Select an open advance row to load the available advance and matching due balance.');
                 setSubmitAvailability(false);
             }
             renderRules();
@@ -580,13 +537,13 @@
             const maxAllowed = Number(amount.max || 0);
             const requested = Number(amount.value || 0);
             if (cents(maxAllowed) <= 0) {
-                showToast(adjustmentMethod.value === 'Against Due'
-                    ? 'No payable/receivable due is available for against-due adjustment. Select Direct Recognition or post the due first.'
-                    : 'This advance record has no outstanding balance to recognize.');
+                showToast(advanceType.value === 'Paid'
+                    ? 'This supplier has advance balance, but no payable due is available to adjust. Post a supplier bill/due first.'
+                    : 'This customer has advance balance, but no receivable due is available to adjust. Post a customer invoice/due first.');
                 return;
             }
             if (cents(requested) > cents(maxAllowed)) {
-                showToast('Adjustment amount is greater than the allowed amount for the selected method. Maximum allowed: ' + money(maxAllowed));
+                showToast('Adjustment amount cannot be greater than the smaller of available advance and linked due. Maximum allowed: ' + money(maxAllowed));
                 return;
             }
         }

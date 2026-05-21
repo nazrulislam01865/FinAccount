@@ -473,10 +473,10 @@ class MappingResolverService
         $key = $this->settlementKey($rule);
 
         if (in_array($key, ['cash', 'bank', 'advance_paid', 'advance_received'], true)) {
-            return 'Cash/Bank account is selected automatically from Ledger Mapping. Configure an active Cash/Bank Account linked to the cash/bank ledger used in this rule.';
+            return 'Cash/Bank account is selected automatically from Accounting Rules Setup. Configure an active Cash/Bank Account linked to the cash/bank ledger used in this accounting rule.';
         }
 
-        return 'Cash/Bank account could not be selected automatically from the active Ledger Mapping rule.';
+        return 'Cash/Bank account could not be selected automatically from the active accounting rule.';
     }
 
     private function settlementKey(LedgerMappingRule $rule): string

@@ -141,7 +141,7 @@
                     <select id="settlement" name="settlement_type_id" required>
                         <option value="">Select Settlement</option>
                     </select>
-                    <div class="hint" id="settlementHint">Only settlement types with active accounting mapping are shown. Cash/Bank ledger is selected automatically from Ledger Mapping.</div>
+                    <div class="hint" id="settlementHint">Only settlement types with active accounting rules are shown. Cash/Bank ledger is selected automatically from Accounting Rules Setup.</div>
                 </div>
 
                 <div>
@@ -475,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         settlementHint.textContent = isCashBankSettlement()
-            ? `Cash/Bank account will be automatically ${cashBankDirectionLabel()} from the active Ledger Mapping rule.`
+            ? `Cash/Bank account will be automatically ${cashBankDirectionLabel()} from the active accounting rule.`
             : 'Only settlement types with active accounting mapping are shown. No manual Cash/Bank selection is required.';
     }
 
@@ -762,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             const message = error?.errors
                 ? Object.values(error.errors)[0][0]
-                : error?.message || 'Posting blocked. Please configure ledger mapping first.';
+                : error?.message || 'Posting blocked. Please configure Accounting Rules Setup first.';
 
             lastPreviewOk = false;
 

@@ -2204,3 +2204,111 @@ body.sidebar-navigating .sidebar-backdrop {
     font-size: 13px;
     font-weight: 750;
 }
+
+/* Keep toolbar action buttons aligned with filter controls */
+.toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.toolbar select,
+.toolbar button,
+.toolbar .button,
+.opening-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.opening-toolbar select,
+.opening-toolbar button,
+.opening-toolbar .button,
+.voucher-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.voucher-toolbar select,
+.voucher-toolbar button,
+.voucher-toolbar .button,
+.voucher-numbering-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.voucher-numbering-toolbar select,
+.voucher-numbering-toolbar button,
+.voucher-numbering-toolbar .button,
+.due-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.due-toolbar select,
+.due-toolbar button,
+.due-toolbar .button,
+.advance-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.advance-toolbar select,
+.advance-toolbar button,
+.advance-toolbar .button,
+.ledger-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.ledger-toolbar select,
+.ledger-toolbar button,
+.ledger-toolbar .button {
+    height: 44px;
+    min-height: 44px;
+}
+
+.toolbar button,
+.toolbar .button,
+.opening-toolbar button,
+.opening-toolbar .button,
+.voucher-toolbar button,
+.voucher-toolbar .button,
+.voucher-numbering-toolbar button,
+.voucher-numbering-toolbar .button,
+.due-toolbar button,
+.due-toolbar .button,
+.advance-toolbar button,
+.advance-toolbar .button,
+.ledger-toolbar button,
+.ledger-toolbar .button {
+    width: 100%;
+    min-width: 0;
+    align-self: end;
+    white-space: nowrap;
+}
+
+/* Always expose horizontal overflow affordance for wide grids/tables. */
+.table-card,
+.table-wrap,
+.setup-progress-steps,
+.matrix-scroll {
+    overflow-x: scroll !important;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f2f4f7;
+    scrollbar-gutter: stable;
+    overscroll-behavior-x: contain;
+}
+
+.table-card,
+.table-wrap,
+.matrix-scroll {
+    padding-bottom: 10px;
+}
+
+.table-card::-webkit-scrollbar,
+.table-wrap::-webkit-scrollbar,
+.setup-progress-steps::-webkit-scrollbar,
+.matrix-scroll::-webkit-scrollbar {
+    height: 12px;
+}
+
+.table-card::-webkit-scrollbar-track,
+.table-wrap::-webkit-scrollbar-track,
+.setup-progress-steps::-webkit-scrollbar-track,
+.matrix-scroll::-webkit-scrollbar-track {
+    background: #f2f4f7;
+    border-radius: 999px;
+}
+
+.table-card::-webkit-scrollbar-thumb,
+.table-wrap::-webkit-scrollbar-thumb,
+.setup-progress-steps::-webkit-scrollbar-thumb,
+.matrix-scroll::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border: 3px solid #f2f4f7;
+    border-radius: 999px;
+}
+
+.table-card::-webkit-scrollbar-thumb:hover,
+.table-wrap::-webkit-scrollbar-thumb:hover,
+.setup-progress-steps::-webkit-scrollbar-thumb:hover,
+.matrix-scroll::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* When a card contains a dedicated table wrapper, keep the card static and expose only the inner scrollbar. */
+.table-card:has(.table-wrap) {
+    overflow-x: hidden !important;
+    padding-bottom: 0;
+}

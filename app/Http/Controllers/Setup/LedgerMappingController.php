@@ -54,7 +54,7 @@ class LedgerMappingController extends Controller
             ->orderBy('account_name')
             ->get();
 
-        return view('setup.ledger-mapping', [
+        return view('setup.accounting-rules-setup', [
             'rules' => $rules,
             'transactionHeads' => $transactionHeads,
             'settlementTypes' => $settlementTypes,
@@ -74,9 +74,9 @@ class LedgerMappingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Ledger mapping rule saved successfully.',
+            'message' => 'Accounting rule saved successfully.',
             'data' => $rule,
-            'redirect' => route('setup.ledger-mapping'),
+            'redirect' => route('setup.accounting-rules-setup'),
         ], 201);
     }
 
@@ -93,9 +93,9 @@ class LedgerMappingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Ledger mapping rule updated successfully.',
+            'message' => 'Accounting rule updated successfully.',
             'data' => $rule,
-            'redirect' => route('setup.ledger-mapping'),
+            'redirect' => route('setup.accounting-rules-setup'),
         ]);
     }
 
@@ -109,16 +109,16 @@ class LedgerMappingController extends Controller
         } catch (Throwable $exception) {
             return $this->deleteFailure(
                 $request,
-                'setup.ledger-mapping',
-                'This ledger mapping rule could not be deleted. Please try again or check related records.',
+                'setup.accounting-rules-setup',
+                'This accounting rule could not be deleted. Please try again or check related records.',
                 $exception
             );
         }
 
         return $this->deleteSuccess(
             $request,
-            'setup.ledger-mapping',
-            'Ledger mapping rule deleted successfully.'
+            'setup.accounting-rules-setup',
+            'Accounting rule deleted successfully.'
         );
     }
 }

@@ -127,7 +127,7 @@ class MasterDataController extends Controller
             'settlement-types' => [
                 'label' => 'Settlement Types',
                 'route' => 'setup.master-data.settlement-types',
-                'description' => 'Values used in transaction heads, ledger mapping, and transactions.',
+                'description' => 'Values used in transaction heads, Accounting Rules Setup, and transactions.',
                 'count' => SettlementType::query()->count(),
             ],
             'party-types' => [
@@ -249,7 +249,7 @@ class MasterDataController extends Controller
         }
 
         if (DB::table('ledger_mapping_rules')->where('settlement_type_id', $settlementType->id)->exists()) {
-            return $this->blocked($request, 'This settlement type is used by ledger mapping rules and cannot be deleted.', 'setup.master-data.settlement-types');
+            return $this->blocked($request, 'This settlement type is used by accounting rules and cannot be deleted.', 'setup.master-data.settlement-types');
         }
 
         $settlementType->delete();

@@ -36,12 +36,6 @@ class AdvanceAccountingRuleSeeder extends Seeder
         $accountsPayable = $this->findPostingAccount(['accounts payable', 'supplier due', 'payable'], 'Liability')
             ?: $this->ensurePostingAccount('2010', 'Accounts Payable', 'Liability', false);
 
-        $purchaseOrExpense = $this->findPostingAccount(['purchase', 'expense', 'cost'], 'Expense')
-            ?: $this->ensurePostingAccount('5010', 'Purchase / Expense', 'Expense', false);
-
-        $income = $this->findPostingAccount(['sales', 'service income', 'income', 'revenue'], 'Income')
-            ?: $this->ensurePostingAccount('4010', 'Sales / Service Income', 'Income', false);
-
         $cashSettlement = $this->ensureSettlement('CASH', 'Cash', 1);
         $bankSettlement = $this->ensureSettlement('BANK', 'Bank', 2);
         $adjustmentSettlement = $this->ensureSettlement('ADJUSTMENT', 'Adjustment', 6);
@@ -53,8 +47,6 @@ class AdvanceAccountingRuleSeeder extends Seeder
         $advanceReceivedHead = $this->ensureHead($company?->id, 'TH-009', 'Advance Received', 'Receipt', $customerPartyTypeId, [$cashSettlement->id, $bankSettlement->id]);
         $advancePaidAdjustmentHead = $this->ensureHead($company?->id, 'TH-010', 'Advance Paid Adjustment', 'Journal', $supplierPartyTypeId, [$adjustmentSettlement->id]);
         $advanceReceivedAdjustmentHead = $this->ensureHead($company?->id, 'TH-011', 'Advance Received Adjustment', 'Journal', $customerPartyTypeId, [$adjustmentSettlement->id]);
-        $advancePaidDirectHead = $this->ensureHead($company?->id, 'TH-012', 'Advance Paid Direct Expense Recognition', 'Journal', $supplierPartyTypeId, [$adjustmentSettlement->id]);
-        $advanceReceivedDirectHead = $this->ensureHead($company?->id, 'TH-013', 'Advance Received Direct Income Recognition', 'Journal', $customerPartyTypeId, [$adjustmentSettlement->id]);
 
         $this->upsertRule($company?->id, 'LM-ADV-001', $advancePaidHead, $cashSettlement, $advanceAsset, $cash, 'Increase Advance Asset', 'Advance paid in cash: Dr Advance to Supplier / Employee, Cr Cash.');
         $this->upsertRule($company?->id, 'LM-ADV-002', $advancePaidHead, $bankSettlement, $advanceAsset, $bank, 'Increase Advance Asset', 'Advance paid by bank: Dr Advance to Supplier / Employee, Cr Bank.');
@@ -62,8 +54,6 @@ class AdvanceAccountingRuleSeeder extends Seeder
         $this->upsertRule($company?->id, 'LM-ADV-004', $advanceReceivedHead, $bankSettlement, $bank, $advanceLiability, 'Increase Advance Liability', 'Advance received by bank: Dr Bank, Cr Advance from Customer.');
         $this->upsertRule($company?->id, 'LM-ADV-005', $advancePaidAdjustmentHead, $adjustmentSettlement, $accountsPayable, $advanceAsset, 'Decrease Advance Asset', 'Advance paid adjusted with payable: Dr Accounts Payable, Cr Advance to Supplier / Employee.');
         $this->upsertRule($company?->id, 'LM-ADV-006', $advanceReceivedAdjustmentHead, $adjustmentSettlement, $advanceLiability, $accountsReceivable, 'Decrease Advance Liability', 'Advance received adjusted with receivable: Dr Advance from Customer, Cr Accounts Receivable.');
-        $this->upsertRule($company?->id, 'LM-ADV-007', $advancePaidDirectHead, $adjustmentSettlement, $purchaseOrExpense, $advanceAsset, 'Decrease Advance Asset', 'Advance paid direct expense recognition: Dr Expense/Purchase, Cr Advance to Supplier / Employee.');
-        $this->upsertRule($company?->id, 'LM-ADV-008', $advanceReceivedDirectHead, $adjustmentSettlement, $advanceLiability, $income, 'Decrease Advance Liability', 'Advance received direct income recognition: Dr Advance from Customer, Cr Income.');
     }
 
     private function ensurePostingAccount(string $code, string $name, string $typeName, bool $cashBank): ChartOfAccount
@@ -139,42 +129,23 @@ class AdvanceAccountingRuleSeeder extends Seeder
         string $effect,
         string $description
     ): void {
-        $attributes = [
-            'company_id' => $companyId,
-            'transaction_head_id' => $head->id,
-            'settlement_type_id' => $settlement->id,
-        ];
-
-        $values = [
-            'debit_account_id' => $debit->id,
-            'credit_account_id' => $credit->id,
-            'party_ledger_effect' => $effect,
-            'auto_post' => true,
-            'description' => $description,
-            'status' => 'Active',
-            'created_by' => 1,
-            'updated_by' => 1,
-        ];
-
-        $ruleForCombo = LedgerMappingRule::query()->where($attributes)->first();
-        $ruleForCode = LedgerMappingRule::query()->where('rule_code', $code)->first();
-
-        if ($ruleForCombo) {
-            if (!$ruleForCode || $ruleForCode->id === $ruleForCombo->id) {
-                $values['rule_code'] = $code;
-            }
-
-            $ruleForCombo->fill($values)->save();
-            return;
-        }
-
-        if ($ruleForCode) {
-            $ruleForCode->fill($attributes + $values)->save();
-            return;
-        }
-
-        LedgerMappingRule::query()->create($attributes + $values + [
-            'rule_code' => $code,
-        ]);
+        LedgerMappingRule::query()->updateOrCreate(
+            [
+                'company_id' => $companyId,
+                'transaction_head_id' => $head->id,
+                'settlement_type_id' => $settlement->id,
+            ],
+            [
+                'rule_code' => $code,
+                'debit_account_id' => $debit->id,
+                'credit_account_id' => $credit->id,
+                'party_ledger_effect' => $effect,
+                'auto_post' => true,
+                'description' => $description,
+                'status' => 'Active',
+                'created_by' => 1,
+                'updated_by' => 1,
+            ]
+        );
     }
 }

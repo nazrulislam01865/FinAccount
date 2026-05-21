@@ -25,6 +25,7 @@ class OpeningBalanceService
             $branchLocation = $this->blankToNull($data['branch_location'] ?? null);
             $status = $data['status'] ?? 'Draft';
 
+            $this->blockIfAlreadyFinalized($financialYear->id, $branchLocation);
 
             OpeningBalance::query()
                 ->where('financial_year_id', $financialYear->id)
@@ -35,6 +36,7 @@ class OpeningBalanceService
                         $query->where('branch_location', $branchLocation);
                     }
                 })
+                ->where('status', 'Draft')
                 ->delete();
 
             $lines = [];
@@ -114,77 +116,44 @@ class OpeningBalanceService
 
         $transactionHead = $this->openingTransactionHead($company, $userId);
         $settlementType = $this->openingSettlementType($transactionHead);
-        $voucher = VoucherHeader::query()
-            ->where('financial_year_id', $financialYear->id)
-            ->where('voucher_type', 'Opening Voucher')
-            ->where('status', VoucherHeader::STATUS_POSTED)
-            ->where(function ($query) use ($branchLocation) {
-                if ($branchLocation === null || $branchLocation === '') {
-                    $query->whereNull('reference')->orWhere('reference', '');
-                } else {
-                    $query->where('reference', $branchLocation);
-                }
-            })
-            ->latest('id')
-            ->first();
+        $voucherNumbering = $this->openingVoucherNumbering($company, $financialYear, $userId);
 
-        if (!$voucher) {
-            $voucherNumbering = $this->openingVoucherNumbering($company, $financialYear, $userId);
-            $nextNumber = max((int) $voucherNumbering->next_number, 1);
+        $nextNumber = max((int) $voucherNumbering->next_number, 1);
+        $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
+
+        while (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
+            $nextNumber++;
             $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
-
-            while (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
-                $nextNumber++;
-                $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
-            }
-
-            $voucherNumbering->update([
-                'last_number' => $nextNumber,
-                'status' => 'Active',
-                'updated_by' => $userId,
-            ]);
-
-            $voucher = VoucherHeader::query()->create([
-                'company_id' => $company?->id,
-                'financial_year_id' => $financialYear->id,
-                'voucher_number' => $voucherNumber,
-                'voucher_type' => 'Opening Voucher',
-                'voucher_date' => $balanceDate,
-                'transaction_head_id' => $transactionHead->id,
-                'settlement_type_id' => $settlementType->id,
-                'party_id' => null,
-                'cash_bank_account_id' => null,
-                'amount' => $totalDebit,
-                'total_debit' => $totalDebit,
-                'total_credit' => $totalCredit,
-                'party_ledger_effect' => 'Opening Balance',
-                'cash_bank_effect' => 'Opening Balance',
-                'reference' => $branchLocation,
-                'notes' => trim('Opening balance for ' . $financialYear->name . ($branchLocation ? ' - ' . $branchLocation : '')),
-                'status' => VoucherHeader::STATUS_POSTED,
-                'posted_at' => now(),
-                'created_by' => $userId,
-                'updated_by' => $userId,
-            ]);
-        } else {
-            $voucher->update([
-                'voucher_date' => $balanceDate,
-                'transaction_head_id' => $transactionHead->id,
-                'settlement_type_id' => $settlementType->id,
-                'amount' => $totalDebit,
-                'total_debit' => $totalDebit,
-                'total_credit' => $totalCredit,
-                'party_ledger_effect' => 'Opening Balance',
-                'cash_bank_effect' => 'Opening Balance',
-                'reference' => $branchLocation,
-                'notes' => trim('Opening balance for ' . $financialYear->name . ($branchLocation ? ' - ' . $branchLocation : '')),
-                'status' => VoucherHeader::STATUS_POSTED,
-                'posted_at' => $voucher->posted_at ?: now(),
-                'updated_by' => $userId,
-            ]);
-
-            $voucher->details()->delete();
         }
+
+        $voucherNumbering->update([
+            'last_number' => $nextNumber,
+            'status' => 'Active',
+            'updated_by' => $userId,
+        ]);
+
+        $voucher = VoucherHeader::query()->create([
+            'company_id' => $company?->id,
+            'financial_year_id' => $financialYear->id,
+            'voucher_number' => $voucherNumber,
+            'voucher_type' => 'Opening Voucher',
+            'voucher_date' => $balanceDate,
+            'transaction_head_id' => $transactionHead->id,
+            'settlement_type_id' => $settlementType->id,
+            'party_id' => null,
+            'cash_bank_account_id' => null,
+            'amount' => $totalDebit,
+            'total_debit' => $totalDebit,
+            'total_credit' => $totalCredit,
+            'party_ledger_effect' => 'Opening Balance',
+            'cash_bank_effect' => 'Opening Balance',
+            'reference' => $branchLocation,
+            'notes' => trim('Opening balance for ' . $financialYear->name . ($branchLocation ? ' - ' . $branchLocation : '')),
+            'status' => VoucherHeader::STATUS_POSTED,
+            'posted_at' => now(),
+            'created_by' => $userId,
+            'updated_by' => $userId,
+        ]);
 
         foreach ($lines as $index => $line) {
             $entryType = $line['debit'] > 0 ? 'Debit' : 'Credit';
