@@ -32,6 +32,8 @@ class AccountingReportService
             ->paginate((int) config('accounting_reports.per_page', 25))
             ->withQueryString();
 
+        $this->attachJournalLinesToTransactions($transactions->getCollection());
+
         return [
             'transactions' => $transactions,
             'stats' => (object) [
@@ -41,6 +43,40 @@ class AccountingReportService
                 'total_draft' => (int) ($stats->total_draft ?? 0),
             ],
         ];
+    }
+
+    private function attachJournalLinesToTransactions(Collection $transactions): void
+    {
+        $voucherIds = $transactions
+            ->pluck('voucher_id')
+            ->filter()
+            ->values();
+
+        if ($voucherIds->isEmpty()) {
+            return;
+        }
+
+        $linesByVoucher = DB::table('voucher_details as d')
+            ->join('chart_of_accounts as a', 'a.id', '=', 'd.account_id')
+            ->whereIn('d.voucher_header_id', $voucherIds)
+            ->orderBy('d.line_no')
+            ->orderBy('d.id')
+            ->selectRaw('d.voucher_header_id AS voucher_id')
+            ->selectRaw('a.account_code AS account_code')
+            ->selectRaw('a.account_name AS account_name')
+            ->selectRaw('d.debit AS debit')
+            ->selectRaw('d.credit AS credit')
+            ->selectRaw('d.narration AS description')
+            ->get()
+            ->groupBy('voucher_id');
+
+        $transactions->transform(function (object $transaction) use ($linesByVoucher) {
+            $transaction->journal_lines = $linesByVoucher
+                ->get($transaction->voucher_id, collect())
+                ->values();
+
+            return $transaction;
+        });
     }
 
     public function transactionBaseQuery(array $filters = []): Builder
