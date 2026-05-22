@@ -87,19 +87,38 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     |--------------------------------------------------------------------------
     | Release Tracker
     |--------------------------------------------------------------------------
-    | Only Super Admin can access cloud release tracking.
+    | Access is controlled by the editable role permission matrix.
     */
-    Route::prefix('release-notes')->name('release-notes.')->middleware('super.admin')->group(function () {
-        Route::get('/', [ReleaseNoteController::class, 'index'])->name('index');
-        Route::post('/', [ReleaseNoteController::class, 'store'])->name('store');
-        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])->name('update');
-        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])->name('destroy');
+    Route::prefix('release-notes')->name('release-notes.')->group(function () {
+        Route::get('/', [ReleaseNoteController::class, 'index'])
+            ->middleware('permission:release-notes.view')
+            ->name('index');
+
+        Route::post('/', [ReleaseNoteController::class, 'store'])
+            ->middleware('permission:release-notes.manage')
+            ->name('store');
+
+        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])
+            ->middleware('permission:release-notes.manage')
+            ->name('update');
+
+        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])
+            ->middleware('permission:release-notes.manage')
+            ->name('destroy');
     });
 
-    Route::prefix('api/release-notes')->name('api.release-notes.')->middleware('super.admin')->group(function () {
-        Route::post('/', [ReleaseNoteController::class, 'store'])->name('store');
-        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])->name('update');
-        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])->name('destroy');
+    Route::prefix('api/release-notes')->name('api.release-notes.')->group(function () {
+        Route::post('/', [ReleaseNoteController::class, 'store'])
+            ->middleware('permission:release-notes.manage')
+            ->name('store');
+
+        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])
+            ->middleware('permission:release-notes.manage')
+            ->name('update');
+
+        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])
+            ->middleware('permission:release-notes.manage')
+            ->name('destroy');
     });
 
     /*
@@ -223,7 +242,7 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/settings/users-roles', [UserRoleController::class, 'index'])
-        ->middleware('permission:users.view')
+        ->middleware('permission:users.view|roles.manage')
         ->name('settings.users-roles');
 
     Route::delete('/settings/users/{user}', [UserRoleController::class, 'destroyUser'])
@@ -380,6 +399,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::match(['post', 'put'], '/api/users/{user}', [UserRoleController::class, 'updateUser'])
         ->middleware('permission:users.manage')
         ->name('api.users.update');
+
+    Route::post('/api/roles/permissions', [UserRoleController::class, 'updateRolePermissions'])
+        ->middleware('permission:roles.manage')
+        ->name('api.roles.permissions.update');
 });
 
 require __DIR__.'/auth.php';

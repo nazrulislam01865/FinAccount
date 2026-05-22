@@ -34,6 +34,7 @@
     $defaultFromDate = $releaseDates->min() ?: now()->subDays(7)->toDateString();
     $defaultToDate = $releaseDates->max() ?: now()->toDateString();
     $today = now()->toDateString();
+    $canManageReleaseNotes = auth()->user()?->hasPermission('release-notes.manage') ?? false;
 @endphp
 
 <div class="release-page">
@@ -47,7 +48,9 @@
     <div class="quick-actions release-actions">
         <button class="btn-outline" type="button" id="releaseExportBtn">⇩ Export CSV</button>
         <button class="btn-ghost" type="button" id="releasePrintBtn">Print</button>
-        <button class="btn-primary" type="button" id="releaseNewBtn">+ New Release Item</button>
+        @if($canManageReleaseNotes)
+            <button class="btn-primary" type="button" id="releaseNewBtn">+ New Release Item</button>
+        @endif
     </div>
 </div>
 
@@ -59,7 +62,7 @@
 
     <div class="release-meta">
         <span class="pill pill-blue">Grouped View</span>
-        <span class="pill pill-green">Super Admin Only</span>
+        <span class="pill pill-green">Matrix Controlled</span>
         <span class="pill pill-purple">Cloud Release Tracker</span>
     </div>
 </div>
@@ -200,18 +203,23 @@
                                     <td><span class="badge {{ $statusBadgeClass($releaseItem->status) }}">{{ $releaseItem->status }}</span></td>
                                     <td>
                                         <div class="action-cell">
-                                            <button class="icon-btn release-edit-btn" type="button" title="Edit">✎</button>
+                                            @if($canManageReleaseNotes)
+                                                <button class="icon-btn release-edit-btn" type="button" title="Edit">✎</button>
 
-                                            <form
-                                                method="POST"
-                                                action="{{ url('/release-notes/' . $releaseItem->id) }}"
-                                                onsubmit="return confirm('Delete this release item?')"
-                                            >
-                                                @csrf
-                                                @method('DELETE')
+                                                <form
+                                                    method="POST"
+                                                    data-delete-form
+                                                    action="{{ url('/release-notes/' . $releaseItem->id) }}"
+                                                    onsubmit="return confirm('Delete this release item?')"
+                                                >
+                                                    @csrf
+                                                    @method('DELETE')
 
-                                                <button class="icon-btn delete-btn" type="submit" title="Delete">🗑</button>
-                                            </form>
+                                                    <button class="icon-btn delete-btn" type="submit" title="Delete">🗑</button>
+                                                </form>
+                                            @else
+                                                <span class="badge badge-neutral">View Only</span>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -251,7 +259,7 @@
             <div class="panel-head">
                 <div>
                     <h3 id="releaseFormTitle">New Release Item</h3>
-                    <p class="muted">Only Super Admin can create, edit, and delete release records.</p>
+                    <p class="muted">{{ $canManageReleaseNotes ? 'Your role can manage release records from the role matrix.' : 'Your role can view release records only; create, edit, and delete are blocked by the role matrix.' }}</p>
                 </div>
                 <span class="badge badge-primary" id="releaseFormMode">New</span>
             </div>

@@ -25,20 +25,22 @@ class RolePermissionSeeder extends Seeder
         $rolePermissions = config('access.role_permissions', []);
 
         foreach (config('access.roles', []) as $roleName => $definition) {
-            $payload = [
-                'description' => $definition['description'] ?? null,
-                'status' => 'Active',
-            ];
+            $role = Role::firstOrNew(['name' => $roleName]);
+            $isNewRole = !$role->exists;
+
+            $role->description = $definition['description'] ?? null;
+            $role->status = 'Active';
 
             if (Schema::hasColumn('roles', 'level')) {
-                $payload['level'] = $definition['level'] ?? 99;
+                $role->level = $definition['level'] ?? 99;
             }
 
             if (Schema::hasColumn('roles', 'is_protected')) {
-                $payload['is_protected'] = $definition['protected'] ?? false;
+                $role->is_protected = $definition['protected'] ?? false;
             }
 
-            $role = Role::updateOrCreate(['name' => $roleName], $payload);
+            $role->save();
+
             $configuredPermissions = $rolePermissions[$roleName] ?? [];
 
             $ids = in_array('*', $configuredPermissions, true)
@@ -49,7 +51,14 @@ class RolePermissionSeeder extends Seeder
                     ->values()
                     ->all();
 
-            $role->permissions()->sync($ids);
+            if ($role->isSuperAdmin()) {
+                $role->permissions()->sync($allPermissionIds);
+                continue;
+            }
+
+            if ($isNewRole || !$role->permissions()->exists()) {
+                $role->permissions()->sync($ids);
+            }
         }
     }
 }

@@ -92,8 +92,49 @@
     }
 
     .role-summary { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-    .matrix-scroll { overflow-x:auto; }
-    .matrix-scroll table th, .matrix-scroll table td { white-space:nowrap; }
+    .matrix-scroll {
+        max-height: none;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 10px;
+        overscroll-behavior-x: contain;
+    }
+    .matrix-scroll table { min-width: 1280px; }
+    .matrix-scroll table th, .matrix-scroll table td { white-space:nowrap; vertical-align:middle; }
+    .matrix-scroll table th:first-child, .matrix-scroll table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: #fff;
+        box-shadow: 1px 0 0 var(--line);
+    }
+    .matrix-scroll table thead th:first-child { z-index: 3; }
+    .permission-cell { min-width: 240px; white-space:normal !important; }
+    .permission-module { color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    .permission-key { color:var(--muted); font-size:11px; margin-top:4px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .permission-decision-cell { min-width: 148px; }
+    .access-select {
+        min-width: 132px;
+        height: 38px;
+        min-height: 38px;
+        border-width: 1.5px;
+        border-radius: 999px;
+        padding: 7px 34px 7px 14px;
+        font-size: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        appearance: none;
+        background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position: calc(100% - 18px) 16px, calc(100% - 13px) 16px;
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+    }
+    .access-select:disabled { cursor: not-allowed; opacity: 1; }
+    .access-select.is-allowed { border-color:#86efac; background-color:#f0fdf4; color:#166534; }
+    .access-select.is-denied { border-color:#fca5a5; background-color:#fff1f2; color:#991b1b; }
+    .access-select.is-locked { border-color:#bfdbfe; background-color:#eff6ff; color:#1d4ed8; }
+    .access-select:focus { border-color: currentColor; box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+    .matrix-actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:14px 20px; border-top:1px solid var(--line); }
     .blocked-note { color:#b42318; font-size:12px; font-weight:750; }
 
     @media (max-width: 520px) {
@@ -112,7 +153,7 @@
 <div class="page-title">
     <div>
         <h2>Users & Roles</h2>
-        <p>Super Admin/Admin controlled user creation with role hierarchy and access matrix authorization.</p>
+        <p>Role-matrix controlled user creation, role assignment, and feature access authorization.</p>
     </div>
 </div>
 
@@ -251,44 +292,89 @@
         <div class="card table-card">
             <div class="panel-head" style="padding:18px 20px;margin:0;border-bottom:1px solid var(--line)">
                 <div>
-                    <h3>Access Matrix</h3>
-                    <p class="muted" style="margin:5px 0 0;font-size:13px">Default matrix follows the uploaded managerial document. Permissions remain enforced by middleware and backend validation.</p>
+                    <h3>Role Access Matrix</h3>
+                    <p class="muted" style="margin:5px 0 0;font-size:13px">Column-wise roles and row-wise tasks are now connected to the real backend permission table. Authorized users can grant or remove access role-by-role from this matrix.</p>
                 </div>
+
+                @if($canManageRolePermissions)
+                    <span class="badge badge-success">Matrix Editable</span>
+                @else
+                    <span class="badge badge-neutral">View Only</span>
+                @endif
             </div>
 
-            <div class="matrix-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Module / Feature</th>
-                            @foreach($matrixColumns as $column)
-                                <th>{{ $column }}</th>
-                            @endforeach
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($accessMatrix as $row)
+            <form
+                id="rolePermissionMatrixForm"
+                method="POST"
+                action="{{ route('api.roles.permissions.update') }}"
+                data-frontend-form
+                data-action="{{ route('api.roles.permissions.update') }}"
+                data-success="Role access matrix updated successfully."
+            >
+                @csrf
+
+                <div class="matrix-scroll">
+                    <table>
+                        <thead>
                             <tr>
-                                <td class="strong">{{ $row['feature'] }}</td>
-                                @foreach($matrixColumns as $column)
-                                    @php
-                                        $value = $row[$column] ?? match ($column) {
-                                            'Admin' => $row['Company Admin'] ?? 'Full',
-                                            'Management Viewer / Report Viewer' => $row['Viewer'] ?? 'View',
-                                            default => 'No',
-                                        };
-                                    @endphp
-                                    <td>
-                                        <span class="badge {{ str_contains($value, 'No') ? 'badge-neutral' : (str_contains($value, 'Full') ? 'badge-success' : 'badge-primary') }}">
-                                            {{ $value }}
-                                        </span>
-                                    </td>
+                                <th class="permission-cell">Task / Permission</th>
+                                @foreach($roles as $role)
+                                    <th>
+                                        <div class="strong">{{ $role->name }}</div>
+                                        <div class="permission-key">Level {{ $role->level }}</div>
+                                    </th>
                                 @endforeach
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            @foreach($permissionRows as $permission)
+                                <tr>
+                                    <td class="permission-cell">
+                                        <div class="permission-module">{{ $permission['module'] }}</div>
+                                        <div class="strong">{{ $permission['label'] }}</div>
+                                        <div class="permission-key">{{ $permission['name'] }}</div>
+                                    </td>
+
+                                    @foreach($roles as $role)
+                                        @php
+                                            $hasAccess = $role->isSuperAdmin() || !empty($rolePermissionMatrix[(int) $role->id][$permission['name']]);
+                                        @endphp
+                                        <td class="permission-decision-cell">
+                                            @if($role->isSuperAdmin())
+                                                <select class="access-select is-locked" disabled title="Super Admin remains fully protected">
+                                                    <option selected>Always Full</option>
+                                                </select>
+                                            @else
+                                                <select
+                                                    class="access-select {{ $hasAccess ? 'is-allowed' : 'is-denied' }}"
+                                                    name="permissions[{{ $role->id }}][{{ $permission['name'] }}]"
+                                                    data-access-select
+                                                    {{ $canManageRolePermissions ? '' : 'disabled' }}
+                                                >
+                                                    <option value="1" {{ $hasAccess ? 'selected' : '' }}>Allow Access</option>
+                                                    <option value="0" {{ !$hasAccess ? 'selected' : '' }}>Block Access</option>
+                                                </select>
+                                            @endif
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="matrix-actions">
+                    <div class="hint">
+                        Access changes affect every user assigned to that role. To remove access from one person, edit that user and remove/replace the role.
+                    </div>
+
+                    @if($canManageRolePermissions)
+                        <button class="btn-primary" type="submit">Save Role Access</button>
+                    @else
+                        <button class="btn-ghost" type="button" disabled>Requires Role Permission</button>
+                    @endif
+                </div>
+            </form>
         </div>
     </div>
 
@@ -296,7 +382,7 @@
         <div class="card form-panel">
             <div class="panel-head">
                 <h3 id="userFormTitle">Create User</h3>
-                <span class="muted">Admin controlled</span>
+                <span class="muted">Matrix controlled</span>
             </div>
 
             @if($canManageUsers)
@@ -376,7 +462,7 @@
 
                     <div class="hint-box">
                         <strong>Hierarchy rule</strong>
-                        Super Admin can manage all users and roles. Admin can manage only lower-level users. Lower-level users cannot control same-level or upper-level users.
+                        Users with Manage Users permission can manage lower-level users. Super Admin remains protected so the system owner cannot be locked out.
                     </div>
 
                     <div class="form-actions">
@@ -393,11 +479,26 @@
         </div>
 
         <div class="card info-card">
-            <h3>Payment Entry Control</h3>
-            <p>Payment Entry create permission is assigned only to Super Admin, Company Admin/Admin, Finance Manager, Accountant, Cashier, and Purchase User according to the matrix.</p>
+            <h3>Access Control Rule</h3>
+            <p>Role matrix changes are saved to the permission_role table and enforced by middleware, route checks, and read-only UI locks across the system.</p>
         </div>
     </aside>
 </div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-access-select]').forEach((select) => {
+        const syncAccessState = () => {
+            select.classList.toggle('is-allowed', select.value === '1');
+            select.classList.toggle('is-denied', select.value !== '1');
+        };
+
+        select.addEventListener('change', syncAccessState);
+        syncAccessState();
+    });
+});
+</script>
 
 @if($canManageUsers)
 <script>
@@ -522,6 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, true);
 
     roleCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateRolePreview));
+
 
     document.querySelectorAll('#usersTable .edit-btn').forEach((button) => {
         button.addEventListener('click', () => loadForEdit(button.closest('tr')));

@@ -67,7 +67,7 @@ class ReleaseNoteController extends Controller
 
     public function destroy(Request $request, ReleaseItem $releaseItem): JsonResponse|RedirectResponse
     {
-        abort_unless($request->user()?->isSuperAdmin(), 403, 'Only Super Admin can delete release items.');
+        abort_unless($request->user()?->hasPermission('release-notes.manage'), 403, 'You are not allowed to delete release items.');
 
         try {
             $releaseItem->delete();

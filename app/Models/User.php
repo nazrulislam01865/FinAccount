@@ -15,6 +15,12 @@ class User extends Authenticatable
 
     protected $hidden = ['password', 'remember_token'];
 
+    private ?array $permissionNameCache = null;
+
+    private ?bool $superAdminCache = null;
+
+    private ?int $roleLevelCache = null;
+
     protected function casts(): array
     {
         return [
@@ -35,12 +41,20 @@ class User extends Authenticatable
 
     public function hasRole(string $role): bool
     {
-        return $this->activeRoles()->where('name', $role)->exists();
+        return $this->activeRoleCollection()
+            ->contains(fn (Role $activeRole) => $activeRole->name === $role);
     }
 
     public function hasAnyRole(array $roles): bool
     {
-        return $this->activeRoles()->whereIn('name', $roles)->exists();
+        $roles = array_values(array_unique(array_map('strval', $roles)));
+
+        if ($roles === []) {
+            return false;
+        }
+
+        return $this->activeRoleCollection()
+            ->contains(fn (Role $activeRole) => in_array($activeRole->name, $roles, true));
     }
 
     public function isActive(): bool
@@ -50,14 +64,25 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->activeRoles()
-            ->where(fn ($query) => $query->where('name', 'Super Admin')->orWhere('level', 1))
-            ->exists();
+        if ($this->superAdminCache !== null) {
+            return $this->superAdminCache;
+        }
+
+        $this->superAdminCache = $this->activeRoleCollection()
+            ->contains(fn (Role $role) => $role->isSuperAdmin());
+
+        return $this->superAdminCache;
     }
 
     public function roleLevel(): int
     {
-        return (int) ($this->activeRoles()->min('level') ?? 999);
+        if ($this->roleLevelCache !== null) {
+            return $this->roleLevelCache;
+        }
+
+        $this->roleLevelCache = (int) ($this->activeRoleCollection()->min('level') ?? 999);
+
+        return $this->roleLevelCache;
     }
 
     public function hasPermission(?string $permission): bool
@@ -66,17 +91,7 @@ class User extends Authenticatable
             return true;
         }
 
-        if (str_contains($permission, '|')) {
-            return $this->hasAnyPermission(explode('|', $permission));
-        }
-
-        if ($this->isSuperAdmin()) {
-            return true;
-        }
-
-        return $this->activeRoles()
-            ->whereHas('permissions', fn ($query) => $query->where('name', $permission))
-            ->exists();
+        return $this->hasAnyPermission($permission);
     }
 
     public function hasAnyPermission(string|array|null $permissions): bool
@@ -87,13 +102,21 @@ class User extends Authenticatable
             return true;
         }
 
+        // Super Admin is intentionally protected so the system owner cannot be locked out
+        // while the editable role matrix remains the source of truth for every other role.
         if ($this->isSuperAdmin()) {
             return true;
         }
 
-        return $this->activeRoles()
-            ->whereHas('permissions', fn ($query) => $query->whereIn('name', $permissions))
-            ->exists();
+        $allowed = $this->permissionNames();
+
+        foreach ($permissions as $permission) {
+            if (isset($allowed[$permission])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function normalizePermissions(string|array|null $permissions): array
@@ -120,6 +143,41 @@ class User extends Authenticatable
         }
 
         return array_values(array_unique($normalized));
+    }
+
+    private function permissionNames(): array
+    {
+        if ($this->permissionNameCache !== null) {
+            return $this->permissionNameCache;
+        }
+
+        $this->loadMissing('roles.permissions');
+
+        $this->permissionNameCache = $this->activeRoleCollection()
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('name'))
+            ->filter()
+            ->unique()
+            ->mapWithKeys(fn (string $permission) => [$permission => true])
+            ->all();
+
+        return $this->permissionNameCache;
+    }
+
+    private function activeRoleCollection()
+    {
+        $this->loadMissing('roles');
+
+        return $this->roles
+            ->filter(fn (Role $role) => ($role->status ?? 'Active') === 'Active')
+            ->values();
+    }
+
+    public function flushAccessCache(): void
+    {
+        $this->permissionNameCache = null;
+        $this->superAdminCache = null;
+        $this->roleLevelCache = null;
+        $this->unsetRelation('roles');
     }
 
     public function canViewRoute(?string $routeName): bool

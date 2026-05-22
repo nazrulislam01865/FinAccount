@@ -10,7 +10,7 @@ class ReleaseItemRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->isSuperAdmin();
+        return (bool) $this->user()?->hasPermission('release-notes.manage');
     }
 
     public function rules(): array

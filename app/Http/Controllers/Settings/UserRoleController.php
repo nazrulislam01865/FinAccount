@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Concerns\RespondsToDelete;
 use App\Http\Controllers\Controller;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Setup\EntityDeleteService;
@@ -37,15 +38,34 @@ class UserRoleController extends Controller
             ->orderBy('name')
             ->get();
 
+        $permissionLabels = collect(config('access.permissions', []));
+        $permissionRows = $permissionLabels
+            ->map(fn (string $label, string $name) => [
+                'name' => $name,
+                'label' => $label,
+                'module' => $this->permissionModule($name),
+            ])
+            ->values();
+
+        $rolePermissionMatrix = $roles->mapWithKeys(function (Role $role) {
+            return [
+                (int) $role->id => $role->permissions
+                    ->pluck('name')
+                    ->mapWithKeys(fn (string $name) => [$name => true])
+                    ->all(),
+            ];
+        });
+
         $assignableRoleIds = $actor?->manageableRoleIds($roles) ?? [];
 
         return view('settings.users-roles', [
             'users' => $users,
             'roles' => $roles,
             'assignableRoleIds' => $assignableRoleIds,
-            'accessMatrix' => config('access.matrix', []),
-            'matrixColumns' => array_keys(config('access.roles', [])),
+            'permissionRows' => $permissionRows,
+            'rolePermissionMatrix' => $rolePermissionMatrix,
             'canManageUsers' => $actor?->hasPermission('users.manage') ?? false,
+            'canManageRolePermissions' => $actor?->hasPermission('roles.manage') ?? false,
         ]);
     }
 
@@ -153,6 +173,67 @@ class UserRoleController extends Controller
         );
     }
 
+    public function updateRolePermissions(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor?->hasPermission('roles.manage'), 403, 'You are not allowed to update role permission access.');
+
+        $data = $request->validate([
+            'permissions' => ['required', 'array'],
+            'permissions.*' => ['array'],
+        ]);
+
+        $roles = Role::query()
+            ->where('status', 'Active')
+            ->with('permissions')
+            ->get()
+            ->keyBy(fn (Role $role) => (int) $role->id);
+
+        $permissionIdsByName = Permission::query()->pluck('id', 'name');
+        $allPermissionIds = $permissionIdsByName->values()->map(fn ($id) => (int) $id)->all();
+        $configuredPermissionNames = array_keys(config('access.permissions', []));
+
+        DB::transaction(function () use ($data, $roles, $permissionIdsByName, $allPermissionIds, $configuredPermissionNames) {
+            foreach ($data['permissions'] as $roleId => $permissionPayload) {
+                $role = $roles->get((int) $roleId);
+
+                if (!$role) {
+                    abort(422, 'One or more selected roles are invalid.');
+                }
+
+                if ($role->isSuperAdmin()) {
+                    $role->permissions()->sync($allPermissionIds);
+                    continue;
+                }
+
+                $selectedPermissionIds = collect($permissionPayload)
+                    ->filter(fn ($value) => in_array((string) $value, ['1', 'true', 'on', 'yes'], true))
+                    ->keys()
+                    ->filter(fn ($permissionName) => in_array((string) $permissionName, $configuredPermissionNames, true))
+                    ->map(fn ($permissionName) => $permissionIdsByName[$permissionName] ?? null)
+                    ->filter()
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                $role->permissions()->sync($selectedPermissionIds);
+            }
+
+            $superAdminRoles = $roles->filter(fn (Role $role) => $role->isSuperAdmin());
+
+            foreach ($superAdminRoles as $role) {
+                $role->permissions()->sync($allPermissionIds);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Role permission matrix updated successfully.',
+            'redirect' => route('settings.users-roles'),
+        ]);
+    }
+
     private function authorizedRoleIds(User $actor, array $requestedRoleIds): array
     {
         $requestedRoleIds = collect($requestedRoleIds)->map(fn ($id) => (int) $id)->unique()->values();
@@ -169,6 +250,28 @@ class UserRoleController extends Controller
         }
 
         return $requestedRoleIds->all();
+    }
+
+    private function permissionModule(string $permission): string
+    {
+        $prefix = str($permission)->before('.')->headline()->toString();
+
+        return match ($prefix) {
+            'Cash Bank' => 'Cash / Bank',
+            'Chart Of Accounts' => 'Chart of Accounts',
+            'Due Management' => 'Due Management',
+            'Advance Management' => 'Advance Management',
+            'Ledger Mapping' => 'Accounting Rules',
+            'Ledger Report' => 'Ledger Report',
+            'Master Data' => 'Master Data',
+            'Opening Balances' => 'Opening Balance',
+            'Sales Invoices' => 'Sales Invoice',
+            'Purchase Bills' => 'Purchase Bill',
+            'Transaction Heads' => 'Transaction Heads',
+            'Transactions' => 'Transaction Entry',
+            'Voucher Numbering' => 'Voucher Numbering',
+            default => $prefix,
+        };
     }
 
     private function guardLastSuperAdmin(User $user, array $newRoleIds, string $newStatus, bool $deleting = false): void

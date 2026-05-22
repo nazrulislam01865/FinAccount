@@ -158,7 +158,7 @@
     @endif
 
 
-    @if($currentUser?->isSuperAdmin() && Route::has('release-notes.index'))
+    @if($canRoute('release-notes.index'))
         <div class="nav-title">System</div>
 
         <a href="{{ route('release-notes.index') }}" class="nav-item {{ $isActive('release-notes.index') }}">

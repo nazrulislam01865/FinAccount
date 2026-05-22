@@ -134,6 +134,8 @@ return [
         'users.view' => 'View Users & Roles',
         'users.manage' => 'Manage Users & Roles',
         'roles.manage' => 'Manage Role Permissions',
+        'release-notes.view' => 'View Release Notes',
+        'release-notes.manage' => 'Manage Release Notes',
         'inventory.view' => 'View Inventory Module',
         'inventory.manage' => 'Manage Inventory Module',
         'support.view' => 'View Support Configuration',
@@ -293,7 +295,8 @@ return [
         'accounting-reports.trial-balance.export' => ['reports.view', 'reports.full'],
         'accounting-reports.income-statement.index' => ['reports.view', 'reports.full'],
         'accounting-reports.income-statement.export' => ['reports.view', 'reports.full'],
-        'settings.users-roles' => ['users.view'],
+        'release-notes.index' => ['release-notes.view'],
+        'settings.users-roles' => ['users.view', 'roles.manage'],
     ],
 
     'manage_permissions' => [
@@ -315,7 +318,8 @@ return [
         'transactions.create' => ['transactions.create', 'transactions.draft'],
         'due-management.index' => ['due-management.manage', 'transactions.create'],
         'advance-management.index' => ['advance-management.manage', 'transactions.create'],
-        'settings.users-roles' => 'users.manage',
+        'release-notes.index' => 'release-notes.manage',
+        'settings.users-roles' => ['users.manage', 'roles.manage'],
     ],
 
     'transaction_type_permissions' => [
