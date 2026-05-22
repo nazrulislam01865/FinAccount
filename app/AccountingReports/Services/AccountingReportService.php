@@ -297,6 +297,267 @@ class AccountingReportService
             ->get();
     }
 
+    public function trialBalance(array $filters = []): array
+    {
+        $fromDate = $filters['from_date'] ?? now()->startOfMonth()->toDateString();
+        $toDate = $filters['to_date'] ?? now()->toDateString();
+        $accountType = $filters['account_type'] ?? 'All';
+        $balanceType = $filters['balance_type'] ?? 'All';
+        $search = mb_strtolower(trim((string) ($filters['q'] ?? '')));
+
+        $openingSub = DB::table('voucher_details as d')
+            ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
+            ->whereIn('v.status', $this->reportStatuses())
+            ->whereNull('v.deleted_at')
+            ->whereDate('v.voucher_date', '<', $fromDate)
+            ->groupBy('d.account_id')
+            ->selectRaw('d.account_id')
+            ->selectRaw('COALESCE(SUM(d.debit), 0) AS opening_debit_raw')
+            ->selectRaw('COALESCE(SUM(d.credit), 0) AS opening_credit_raw');
+
+        $periodSub = DB::table('voucher_details as d')
+            ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
+            ->whereIn('v.status', $this->reportStatuses())
+            ->whereNull('v.deleted_at')
+            ->whereDate('v.voucher_date', '>=', $fromDate)
+            ->whereDate('v.voucher_date', '<=', $toDate)
+            ->groupBy('d.account_id')
+            ->selectRaw('d.account_id')
+            ->selectRaw('COALESCE(SUM(d.debit), 0) AS period_debit')
+            ->selectRaw('COALESCE(SUM(d.credit), 0) AS period_credit');
+
+        $rows = DB::table('chart_of_accounts as a')
+            ->leftJoin('account_types as at', 'at.id', '=', 'a.account_type_id')
+            ->leftJoinSub($openingSub, 'op', 'op.account_id', '=', 'a.id')
+            ->leftJoinSub($periodSub, 'pd', 'pd.account_id', '=', 'a.id')
+            ->whereNull('a.deleted_at')
+            ->where(function (Builder $query) {
+                $query->where('a.posting_allowed', 1)
+                    ->orWhereNotNull('op.account_id')
+                    ->orWhereNotNull('pd.account_id');
+            })
+            ->when($accountType !== 'All' && $accountType !== '', function (Builder $query) use ($accountType) {
+                $query->where('at.name', $accountType);
+            })
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $needle = '%' . $search . '%';
+                $query->where(function (Builder $where) use ($needle) {
+                    $where->whereRaw('LOWER(a.account_code) LIKE ?', [$needle])
+                        ->orWhereRaw('LOWER(a.account_name) LIKE ?', [$needle]);
+                });
+            })
+            ->orderBy('at.sort_order')
+            ->orderBy('a.account_code')
+            ->selectRaw('a.id AS account_id')
+            ->selectRaw('a.account_code')
+            ->selectRaw('a.account_name')
+            ->selectRaw("COALESCE(at.name, 'Unclassified') AS account_type")
+            ->selectRaw("COALESCE(a.normal_balance, at.normal_balance, 'Debit') AS normal_balance")
+            ->selectRaw('COALESCE(op.opening_debit_raw, 0) AS opening_debit_raw')
+            ->selectRaw('COALESCE(op.opening_credit_raw, 0) AS opening_credit_raw')
+            ->selectRaw('COALESCE(pd.period_debit, 0) AS period_debit')
+            ->selectRaw('COALESCE(pd.period_credit, 0) AS period_credit')
+            ->get()
+            ->map(function (object $row) {
+                $openingNet = (float) $row->opening_debit_raw - (float) $row->opening_credit_raw;
+                $closingNet = $openingNet + (float) $row->period_debit - (float) $row->period_credit;
+
+                $row->opening_debit = max($openingNet, 0);
+                $row->opening_credit = max($openingNet * -1, 0);
+                $row->period_debit = (float) $row->period_debit;
+                $row->period_credit = (float) $row->period_credit;
+                $row->closing_debit = max($closingNet, 0);
+                $row->closing_credit = max($closingNet * -1, 0);
+                $row->has_activity = $row->opening_debit > 0
+                    || $row->opening_credit > 0
+                    || $row->period_debit > 0
+                    || $row->period_credit > 0
+                    || $row->closing_debit > 0
+                    || $row->closing_credit > 0;
+
+                return $row;
+            })
+            ->filter(function (object $row) use ($balanceType) {
+                return match ($balanceType) {
+                    'Debit' => $row->closing_debit > 0,
+                    'Credit' => $row->closing_credit > 0,
+                    'Zero' => $row->closing_debit == 0.0 && $row->closing_credit == 0.0,
+                    default => true,
+                };
+            })
+            ->values();
+
+        $totalDebit = $rows->sum('closing_debit');
+        $totalCredit = $rows->sum('closing_credit');
+        $difference = round($totalDebit - $totalCredit, 2);
+
+        return [
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'rows' => $rows,
+            'groups' => $rows->groupBy('account_type'),
+            'account_types' => $this->accountTypes(),
+            'total_debit' => (float) $totalDebit,
+            'total_credit' => (float) $totalCredit,
+            'difference' => (float) $difference,
+            'is_balanced' => abs($difference) < 0.01,
+            'max_debit' => $rows->sortByDesc('closing_debit')->first(),
+            'max_credit' => $rows->sortByDesc('closing_credit')->first(),
+            'zero_count' => $rows->filter(fn (object $row) => $row->closing_debit == 0.0 && $row->closing_credit == 0.0)->count(),
+        ];
+    }
+
+    public function incomeStatement(array $filters = []): array
+    {
+        $fromDate = $filters['from_date'] ?? now()->startOfMonth()->toDateString();
+        $toDate = $filters['to_date'] ?? now()->toDateString();
+        $section = $filters['section'] ?? 'All';
+        $search = mb_strtolower(trim((string) ($filters['q'] ?? '')));
+        $yearStart = $this->financialYearStartFor($toDate);
+
+        $periodSub = $this->profitLossAggregateQuery($fromDate, $toDate);
+        $ytdSub = $this->profitLossAggregateQuery($yearStart, $toDate);
+
+        $rows = DB::table('chart_of_accounts as a')
+            ->join('account_types as at', 'at.id', '=', 'a.account_type_id')
+            ->leftJoin('chart_of_accounts as parent', 'parent.id', '=', 'a.parent_id')
+            ->leftJoinSub($periodSub, 'period', 'period.account_id', '=', 'a.id')
+            ->leftJoinSub($ytdSub, 'ytd', 'ytd.account_id', '=', 'a.id')
+            ->whereNull('a.deleted_at')
+            ->where('a.posting_allowed', 1)
+            ->whereIn('at.name', ['Income', 'Expense'])
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $needle = '%' . $search . '%';
+                $query->where(function (Builder $where) use ($needle) {
+                    $where->whereRaw('LOWER(a.account_code) LIKE ?', [$needle])
+                        ->orWhereRaw('LOWER(a.account_name) LIKE ?', [$needle]);
+                });
+            })
+            ->orderBy('at.sort_order')
+            ->orderBy('a.account_code')
+            ->selectRaw('a.id AS account_id')
+            ->selectRaw('a.account_code')
+            ->selectRaw('a.account_name')
+            ->selectRaw("COALESCE(parent.account_name, '') AS parent_account_name")
+            ->selectRaw('at.name AS account_type')
+            ->selectRaw('COALESCE(period.debit, 0) AS period_debit')
+            ->selectRaw('COALESCE(period.credit, 0) AS period_credit')
+            ->selectRaw('COALESCE(ytd.debit, 0) AS ytd_debit')
+            ->selectRaw('COALESCE(ytd.credit, 0) AS ytd_credit')
+            ->get()
+            ->map(function (object $row) {
+                $row->section = $this->profitLossSection($row);
+
+                if ($row->account_type === 'Income') {
+                    $row->amount = (float) $row->period_credit - (float) $row->period_debit;
+                    $row->ytd_amount = (float) $row->ytd_credit - (float) $row->ytd_debit;
+                } else {
+                    $row->amount = (float) $row->period_debit - (float) $row->period_credit;
+                    $row->ytd_amount = (float) $row->ytd_debit - (float) $row->ytd_credit;
+                }
+
+                return $row;
+            })
+            ->filter(function (object $row) {
+                return abs((float) $row->amount) >= 0.01 || abs((float) $row->ytd_amount) >= 0.01;
+            })
+            ->values();
+
+        $displayRows = $section === 'All'
+            ? $rows
+            : $rows->filter(fn (object $row) => $row->section === $section)->values();
+
+        $revenue = $rows->where('section', 'Revenue')->sum('amount');
+        $cost = $rows->where('section', 'Cost of Sales')->sum('amount');
+        $expense = $rows->where('section', 'Operating Expenses')->sum('amount');
+        $grossProfit = $revenue - $cost;
+        $netProfit = $grossProfit - $expense;
+
+        $ytdRevenue = $rows->where('section', 'Revenue')->sum('ytd_amount');
+        $ytdCost = $rows->where('section', 'Cost of Sales')->sum('ytd_amount');
+        $ytdExpense = $rows->where('section', 'Operating Expenses')->sum('ytd_amount');
+        $ytdGrossProfit = $ytdRevenue - $ytdCost;
+        $ytdNetProfit = $ytdGrossProfit - $ytdExpense;
+
+        return [
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'year_start' => $yearStart,
+            'rows' => $displayRows,
+            'groups' => $displayRows->groupBy('section'),
+            'revenue' => (float) $revenue,
+            'cost' => (float) $cost,
+            'expense' => (float) $expense,
+            'gross_profit' => (float) $grossProfit,
+            'net_profit' => (float) $netProfit,
+            'ytd_revenue' => (float) $ytdRevenue,
+            'ytd_cost' => (float) $ytdCost,
+            'ytd_expense' => (float) $ytdExpense,
+            'ytd_gross_profit' => (float) $ytdGrossProfit,
+            'ytd_net_profit' => (float) $ytdNetProfit,
+            'gross_margin' => $revenue != 0.0 ? ($grossProfit / $revenue) * 100 : 0.0,
+            'net_margin' => $revenue != 0.0 ? ($netProfit / $revenue) * 100 : 0.0,
+            'expense_ratio' => $revenue != 0.0 ? ($expense / $revenue) * 100 : 0.0,
+        ];
+    }
+
+    public function accountTypes(): Collection
+    {
+        return DB::table('account_types')
+            ->where('status', 'Active')
+            ->orderBy('sort_order')
+            ->pluck('name');
+    }
+
+    private function profitLossAggregateQuery(string $fromDate, string $toDate): Builder
+    {
+        return DB::table('voucher_details as d')
+            ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
+            ->whereIn('v.status', $this->reportStatuses())
+            ->whereNull('v.deleted_at')
+            ->whereDate('v.voucher_date', '>=', $fromDate)
+            ->whereDate('v.voucher_date', '<=', $toDate)
+            ->groupBy('d.account_id')
+            ->selectRaw('d.account_id')
+            ->selectRaw('COALESCE(SUM(d.debit), 0) AS debit')
+            ->selectRaw('COALESCE(SUM(d.credit), 0) AS credit');
+    }
+
+    private function financialYearStartFor(string $date): string
+    {
+        $financialYear = DB::table('financial_years')
+            ->whereNull('deleted_at')
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->orderByDesc('is_active')
+            ->orderByDesc('start_date')
+            ->first(['start_date']);
+
+        return $financialYear?->start_date ?: \Illuminate\Support\Carbon::parse($date)->startOfYear()->toDateString();
+    }
+
+    private function profitLossSection(object $row): string
+    {
+        if ($row->account_type === 'Income') {
+            return 'Revenue';
+        }
+
+        $name = mb_strtolower($row->account_name . ' ' . ($row->parent_account_name ?? ''));
+
+        foreach (['cost of sales', 'direct cost', 'purchase', 'cogs', 'seed cost', 'stock cost'] as $needle) {
+            if (str_contains($name, $needle)) {
+                return 'Cost of Sales';
+            }
+        }
+
+        return 'Operating Expenses';
+    }
+
+    private function reportStatuses(): array
+    {
+        return array_values(array_unique(array_merge($this->postedStatuses, $this->reversedStatuses)));
+    }
+
     private function applyBookTypeFilter(Builder $query, string $bookType): void
     {
         if ($bookType === 'All' || $bookType === 'Combined Book' || $bookType === '') {

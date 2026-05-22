@@ -136,6 +136,20 @@
         </a>
     @endif
 
+    @if($canRoute('accounting-reports.trial-balance.index') || $canPermission('reports.view'))
+        <a href="{{ route('accounting-reports.trial-balance.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.trial-balance.*') ? 'active' : '' }}">
+            <div class="nav-icon">TB</div>
+            <span>Trial Balance</span>
+        </a>
+    @endif
+
+    @if($canRoute('accounting-reports.income-statement.index') || $canPermission('reports.view'))
+        <a href="{{ route('accounting-reports.income-statement.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.income-statement.*') ? 'active' : '' }}">
+            <div class="nav-icon">IS</div>
+            <span>Income Statement</span>
+        </a>
+    @endif
+
     @if($canRoute('accounting-reports.index') || $canPermission('reports.view'))
         <a href="{{ route('accounting-reports.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.index') ? 'active' : '' }}">
             <div class="nav-icon">▣</div>

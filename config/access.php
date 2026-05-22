@@ -289,6 +289,10 @@ return [
         'accounting-reports.transactions.reverse' => ['transactions.reverse'],
         'accounting-reports.cash-bank-book.index' => ['cash-bank-book.view', 'reports.view'],
         'accounting-reports.cash-bank-book.export' => ['cash-bank-book.view', 'reports.view'],
+        'accounting-reports.trial-balance.index' => ['reports.view', 'reports.full'],
+        'accounting-reports.trial-balance.export' => ['reports.view', 'reports.full'],
+        'accounting-reports.income-statement.index' => ['reports.view', 'reports.full'],
+        'accounting-reports.income-statement.export' => ['reports.view', 'reports.full'],
         'settings.users-roles' => ['users.view'],
     ],
 

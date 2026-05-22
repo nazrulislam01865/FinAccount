@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\AccountingReports\CashBankBookController;
+use App\Http\Controllers\AccountingReports\IncomeStatementController;
 use App\Http\Controllers\AccountingReports\TransactionListController;
+use App\Http\Controllers\AccountingReports\TrialBalanceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'active.user'])
@@ -31,4 +33,18 @@ Route::middleware(['web', 'auth', 'active.user'])
         Route::get('/cash-bank-book/export', [CashBankBookController::class, 'export'])
             ->middleware('permission:cash-bank-book.view|reports.view')
             ->name('cash-bank-book.export');
+
+        Route::get('/trial-balance', [TrialBalanceController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('trial-balance.index');
+        Route::get('/trial-balance/export', [TrialBalanceController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('trial-balance.export');
+
+        Route::get('/income-statement', [IncomeStatementController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('income-statement.index');
+        Route::get('/income-statement/export', [IncomeStatementController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('income-statement.export');
     });
