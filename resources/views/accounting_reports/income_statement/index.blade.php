@@ -18,49 +18,42 @@
         }
     };
     $sections = ['Revenue', 'Cost of Sales', 'Operating Expenses'];
+    $reportSummaryRows = [
+        ['label' => 'Gross Margin', 'value' => number_format((float) $report['gross_margin'], 2) . '%'],
+        ['label' => 'Net Margin', 'value' => number_format((float) $report['net_margin'], 2) . '%'],
+        ['label' => 'Expense Ratio', 'value' => number_format((float) $report['expense_ratio'], 2) . '%'],
+        ['label' => 'Basis', 'value' => 'Accrual'],
+    ];
+    $ytdRows = [
+        ['label' => 'Revenue', 'value' => $money($report['ytd_revenue'])],
+        ['label' => 'Cost', 'value' => $money($report['ytd_cost'])],
+        ['label' => 'Expenses', 'value' => $money($report['ytd_expense'])],
+        ['label' => 'Net Profit', 'value' => $moneySigned($report['ytd_net_profit'])],
+    ];
 @endphp
 
 <div class="financial-report-page">
-    <div class="page-title">
-        <div>
-            <h2>Income Statement</h2>
-            <p>Revenue, direct cost, expenses, gross profit, and net profit generated from posted journal lines.</p>
-        </div>
-        <div class="quick-actions">
+    <x-report.page-header
+        title="Income Statement"
+        subtitle="Revenue, direct cost, expenses, gross profit, and net profit generated from posted journal lines."
+    >
+        <x-slot:actions>
             <a class="button btn-outline" href="{{ route('accounting-reports.income-statement.export', request()->query()) }}">⇩ Export CSV</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.income-statement.index', request()->query()) }}">Generate Report</a>
-        </div>
+        </x-slot:actions>
+    </x-report.page-header>
+
+    <div class="report-summary-grid report-summary-grid-six">
+        <x-report.stat-card label="Total Revenue" :value="$money($report['revenue'])" tone="success" />
+        <x-report.stat-card label="Cost of Sales" :value="$money($report['cost'])" tone="warning" />
+        <x-report.stat-card label="Operating Expenses" :value="$money($report['expense'])" tone="danger" />
+        <x-report.stat-card label="Net Profit / Loss" :value="$moneySigned($report['net_profit'])" :tone="$report['net_profit'] >= 0 ? 'primary' : 'danger'" />
+        <x-report.info-card title="Report Summary" :rows="$reportSummaryRows" />
+        <x-report.info-card title="YTD Position" :rows="$ytdRows" />
     </div>
 
-    <div class="income-summary-grid">
-        <div class="card stat-card"><small>Total Revenue</small><strong style="color:#067647">{{ $money($report['revenue']) }}</strong></div>
-        <div class="card stat-card"><small>Cost of Sales</small><strong style="color:#b54708">{{ $money($report['cost']) }}</strong></div>
-        <div class="card stat-card"><small>Operating Expenses</small><strong style="color:#dc2626">{{ $money($report['expense']) }}</strong></div>
-        <div class="card stat-card"><small>Net Profit / Loss</small><strong style="color:{{ $report['net_profit'] >= 0 ? '#2563eb' : '#dc2626' }}">{{ $moneySigned($report['net_profit']) }}</strong></div>
-
-        <div class="card income-info-card">
-            <div class="income-info-title">Report Summary</div>
-            <div class="compact-ratio-grid">
-                <span>Gross Margin</span><strong>{{ number_format((float) $report['gross_margin'], 2) }}%</strong>
-                <span>Net Margin</span><strong>{{ number_format((float) $report['net_margin'], 2) }}%</strong>
-                <span>Expense Ratio</span><strong>{{ number_format((float) $report['expense_ratio'], 2) }}%</strong>
-                <span>Basis</span><strong>Accrual</strong>
-            </div>
-        </div>
-
-        <div class="card income-info-card">
-            <div class="income-info-title">YTD Position</div>
-            <div class="compact-ratio-grid">
-                <span>Revenue</span><strong>{{ $money($report['ytd_revenue']) }}</strong>
-                <span>Cost</span><strong>{{ $money($report['ytd_cost']) }}</strong>
-                <span>Expenses</span><strong>{{ $money($report['ytd_expense']) }}</strong>
-                <span>Net Profit</span><strong>{{ $moneySigned($report['ytd_net_profit']) }}</strong>
-            </div>
-        </div>
-    </div>
-
-    <form method="GET" action="{{ route('accounting-reports.income-statement.index') }}" class="card report-toolbar income">
+    <form method="GET" action="{{ route('accounting-reports.income-statement.index') }}" class="card report-toolbar report-toolbar-seven">
         <div class="field search-field">
             <label>Search Account</label>
             <span>⌕</span>
@@ -88,30 +81,25 @@
                 <option value="Accrual" selected>Accrual Basis</option>
             </select>
         </div>
-        <div class="filter-actions">
-            <button class="btn-primary" type="submit">Run</button>
-            <a class="button btn-ghost" href="{{ route('accounting-reports.income-statement.index') }}">Reset</a>
-        </div>
+        <x-report.filter-actions :reset-route="route('accounting-reports.income-statement.index')" />
     </form>
 
-    <div class="report-grid income-table-full">
-        <div class="card table-card">
-            <div class="card-head">
-                <div>
-                    <h3>Profit & Loss Statement</h3>
-                    <p>{{ $formatDate($report['from_date']) }} to {{ $formatDate($report['to_date']) }} · YTD from {{ $formatDate($report['year_start']) }}</p>
-                </div>
-                <span class="badge {{ $report['net_profit'] >= 0 ? 'badge-success' : 'badge-warning' }}">{{ $report['net_profit'] >= 0 ? 'Profit Position' : 'Loss Position' }}</span>
-            </div>
+    <div class="report-grid report-grid-full">
+        <x-report.table-card
+            title="Profit & Loss Statement"
+            :subtitle="$formatDate($report['from_date']) . ' to ' . $formatDate($report['to_date']) . ' · YTD from ' . $formatDate($report['year_start'])"
+            :badge="$report['net_profit'] >= 0 ? 'Profit Position' : 'Loss Position'"
+            :badge-class="$report['net_profit'] >= 0 ? 'badge-success' : 'badge-warning'"
+        >
             <div class="table-wrap">
-                <table>
+                <table class="financial-table income-table">
                     <thead>
                         <tr>
                             <th>Particulars</th>
                             <th>Account Code</th>
                             <th>Account Type</th>
-                            <th style="text-align:right">Amount</th>
-                            <th style="text-align:right">YTD Amount</th>
+                            <th class="amount">Amount</th>
+                            <th class="amount">YTD Amount</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -158,7 +146,7 @@
                 </table>
             </div>
             <div class="report-note"><strong>Accounting check:</strong> this report includes Income and Expense ledger accounts only. Assets, liabilities, equity, cash, bank, receivable, and payable balances stay out of the Income Statement and appear in the Trial Balance or Balance Sheet.</div>
-        </div>
+        </x-report.table-card>
     </div>
     <div class="print-note">Income Statement report printed from FinAcco Accounting System.</div>
 </div>

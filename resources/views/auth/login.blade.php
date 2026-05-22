@@ -25,12 +25,12 @@
             @csrf
             <div>
                 <label>Email</label>
-                <input type="email" name="email" value="{{ old('email', 'admin@example.com') }}" required autofocus>
+                <input type="email" name="email" value="{{ old('email') }}" required autofocus>
                 @error('email')<div class="field-error">{{ $message }}</div>@enderror
             </div>
             <div>
                 <label>Password</label>
-                <input type="password" name="password" value="password" required>
+                <input type="password" name="password" required>
                 @error('password')<div class="field-error">{{ $message }}</div>@enderror
             </div>
             <label class="auth-check"><input type="checkbox" name="remember"> Remember me</label>

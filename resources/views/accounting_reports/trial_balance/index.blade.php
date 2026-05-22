@@ -17,49 +17,42 @@
             return (string) $date;
         }
     };
+    $summaryRows = [
+        ['label' => 'Period', 'value' => $formatDate($report['from_date']) . ' - ' . $formatDate($report['to_date'])],
+        ['label' => 'Basis', 'value' => 'Accrual'],
+        ['label' => 'Currency', 'value' => $currency ?? 'BDT'],
+        ['label' => 'Ledger Count', 'value' => (string) $report['rows']->count()],
+    ];
+    $analysisRows = [
+        ['label' => 'Highest Debit', 'value' => $report['max_debit'] ? $report['max_debit']->account_name . ' - ' . $money($report['max_debit']->closing_debit) : '—'],
+        ['label' => 'Highest Credit', 'value' => $report['max_credit'] ? $report['max_credit']->account_name . ' - ' . $money($report['max_credit']->closing_credit) : '—'],
+        ['label' => 'Zero Balance', 'value' => (string) $report['zero_count']],
+        ['label' => 'Difference', 'value' => $money(abs($report['difference']))],
+    ];
 @endphp
 
 <div class="financial-report-page">
-    <div class="page-title">
-        <div>
-            <h2>Trial Balance</h2>
-            <p>Ledger-wise debit and credit balances generated from posted voucher detail lines.</p>
-        </div>
-        <div class="quick-actions">
+    <x-report.page-header
+        title="Trial Balance"
+        subtitle="Ledger-wise debit and credit balances generated from posted voucher detail lines."
+    >
+        <x-slot:actions>
             <a class="button btn-outline" href="{{ route('accounting-reports.trial-balance.export', request()->query()) }}">⇩ Export CSV</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.trial-balance.index', request()->query()) }}">↻ Refresh Report</a>
-        </div>
+        </x-slot:actions>
+    </x-report.page-header>
+
+    <div class="report-summary-grid report-summary-grid-six">
+        <x-report.stat-card label="Total Closing Debit" :value="$money($report['total_debit'])" tone="primary" />
+        <x-report.stat-card label="Total Closing Credit" :value="$money($report['total_credit'])" tone="primary" />
+        <x-report.stat-card label="Difference" :value="$money(abs($report['difference']))" :tone="$report['is_balanced'] ? 'success' : 'danger'" />
+        <x-report.stat-card label="Report Status" :value="$report['is_balanced'] ? 'Balanced' : 'Unbalanced'" :tone="$report['is_balanced'] ? 'success' : 'danger'" />
+        <x-report.info-card title="Report Summary" :rows="$summaryRows" />
+        <x-report.info-card title="Quick Analysis" :rows="$analysisRows" />
     </div>
 
-    <div class="trial-summary-grid">
-        <div class="card stat-card"><small>Total Closing Debit</small><strong>{{ $money($report['total_debit']) }}</strong></div>
-        <div class="card stat-card"><small>Total Closing Credit</small><strong>{{ $money($report['total_credit']) }}</strong></div>
-        <div class="card stat-card"><small>Difference</small><strong style="color:{{ $report['is_balanced'] ? '#067647' : '#dc2626' }}">{{ $money(abs($report['difference'])) }}</strong></div>
-        <div class="card stat-card"><small>Report Status</small><strong style="color:{{ $report['is_balanced'] ? '#067647' : '#dc2626' }}">{{ $report['is_balanced'] ? 'Balanced' : 'Unbalanced' }}</strong></div>
-
-        <div class="card income-info-card">
-            <div class="income-info-title">Report Summary</div>
-            <div class="compact-ratio-grid">
-                <span>Period</span><strong>{{ $formatDate($report['from_date']) }} - {{ $formatDate($report['to_date']) }}</strong>
-                <span>Basis</span><strong>Accrual</strong>
-                <span>Currency</span><strong>{{ $currency ?? 'BDT' }}</strong>
-                <span>Ledger Count</span><strong>{{ $report['rows']->count() }}</strong>
-            </div>
-        </div>
-
-        <div class="card income-info-card">
-            <div class="income-info-title">Quick Analysis</div>
-            <div class="compact-ratio-grid">
-                <span>Highest Debit</span><strong>{{ $report['max_debit'] ? $report['max_debit']->account_name . ' - ' . $money($report['max_debit']->closing_debit) : '—' }}</strong>
-                <span>Highest Credit</span><strong>{{ $report['max_credit'] ? $report['max_credit']->account_name . ' - ' . $money($report['max_credit']->closing_credit) : '—' }}</strong>
-                <span>Zero Balance</span><strong>{{ $report['zero_count'] }}</strong>
-                <span>Difference</span><strong>{{ $money(abs($report['difference'])) }}</strong>
-            </div>
-        </div>
-    </div>
-
-    <form method="GET" action="{{ route('accounting-reports.trial-balance.index') }}" class="card report-toolbar trial">
+    <form method="GET" action="{{ route('accounting-reports.trial-balance.index') }}" class="card report-toolbar report-toolbar-seven">
         <div class="field search-field">
             <label>Search Ledger</label>
             <span>⌕</span>
@@ -90,34 +83,31 @@
                 @endforeach
             </select>
         </div>
-        <div class="filter-actions">
-            <button class="btn-primary" type="submit">Run</button>
-            <a class="button btn-ghost" href="{{ route('accounting-reports.trial-balance.index') }}">Reset</a>
-        </div>
+        <x-report.filter-actions :reset-route="route('accounting-reports.trial-balance.index')" />
     </form>
 
-    <div class="report-grid trial-table-full">
-        <div class="card table-card">
-            <div class="card-head">
-                <div>
-                    <h3>Ledger Balances</h3>
-                    <p>{{ $formatDate($report['from_date']) }} to {{ $formatDate($report['to_date']) }} · {{ $report['rows']->count() }} ledger(s)</p>
-                </div>
-                <span class="badge {{ $report['is_balanced'] ? 'badge-success' : 'badge-warning' }}">{{ $report['is_balanced'] ? 'Balanced' : 'Difference Found' }}</span>
-            </div>
+    <div class="report-grid report-grid-full">
+        <x-report.table-card
+            title="Ledger Balances"
+            :subtitle="$formatDate($report['from_date']) . ' to ' . $formatDate($report['to_date']) . ' · ' . $report['rows']->count() . ' ledger(s)'"
+            :badge="$report['is_balanced'] ? 'Balanced' : 'Difference Found'"
+            :badge-class="$report['is_balanced'] ? 'badge-success' : 'badge-warning'"
+            footer-left="Reports use voucher detail debit/credit rows only."
+            footer-right="Draft and cancelled vouchers are excluded."
+        >
             <div class="table-wrap">
-                <table>
+                <table class="financial-table trial-table">
                     <thead>
                         <tr>
                             <th>Code</th>
                             <th>Ledger Account</th>
                             <th>Group</th>
-                            <th style="text-align:right">Opening Debit</th>
-                            <th style="text-align:right">Opening Credit</th>
-                            <th style="text-align:right">Period Debit</th>
-                            <th style="text-align:right">Period Credit</th>
-                            <th style="text-align:right">Closing Debit</th>
-                            <th style="text-align:right">Closing Credit</th>
+                            <th class="amount">Opening Debit</th>
+                            <th class="amount">Opening Credit</th>
+                            <th class="amount">Period Debit</th>
+                            <th class="amount">Period Credit</th>
+                            <th class="amount">Closing Debit</th>
+                            <th class="amount">Closing Credit</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -164,11 +154,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="table-footer">
-                <span>Reports use voucher detail debit/credit rows only.</span>
-                <span>Draft and cancelled vouchers are excluded.</span>
-            </div>
-        </div>
+        </x-report.table-card>
     </div>
     <div class="print-note">Trial Balance report printed from FinAcco Accounting System.</div>
 </div>

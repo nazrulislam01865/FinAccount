@@ -20,29 +20,7 @@
     </div>
 </div>
 
-<form class="card toolbar ledger-toolbar" method="GET" action="{{ route('ledger-report.index') }}">
-    <div>
-        <label>Ledger Account</label>
-        <select name="account_id" required>
-            @foreach($accounts as $ledgerAccount)
-                <option value="{{ $ledgerAccount->id }}" @selected($account && $account->id === $ledgerAccount->id)>
-                    {{ $ledgerAccount->account_code }} - {{ $ledgerAccount->account_name }}
-                </option>
-            @endforeach
-        </select>
-    </div>
-    <div>
-        <label>From Date</label>
-        <input type="date" name="from_date" value="{{ $fromDate }}" required>
-    </div>
-    <div>
-        <label>To Date</label>
-        <input type="date" name="to_date" value="{{ $toDate }}" required>
-    </div>
-    <button class="btn-primary" type="submit">Run Report</button>
-</form>
-
-<div class="stats-grid ledger-stats" style="margin-top:18px">
+<div class="stats-grid ledger-stats" style="margin-bottom:18px">
     <div class="card stat-card">
         <small>Opening Balance</small>
         <strong class="orange-text">{{ $report['opening_balance_label'] }}</strong>
@@ -64,6 +42,28 @@
         <span class="muted">Running ending balance</span>
     </div>
 </div>
+
+<form class="card toolbar ledger-toolbar" method="GET" action="{{ route('ledger-report.index') }}">
+    <div>
+        <label>Ledger Account</label>
+        <select name="account_id" required>
+            @foreach($accounts as $ledgerAccount)
+                <option value="{{ $ledgerAccount->id }}" @selected($account && $account->id === $ledgerAccount->id)>
+                    {{ $ledgerAccount->account_code }} - {{ $ledgerAccount->account_name }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+    <div>
+        <label>From Date</label>
+        <input type="date" name="from_date" value="{{ $fromDate }}" required>
+    </div>
+    <div>
+        <label>To Date</label>
+        <input type="date" name="to_date" value="{{ $toDate }}" required>
+    </div>
+    <button class="btn-primary" type="submit">Run Report</button>
+</form>
 
 <div class="layout ledger-layout" style="margin-top:18px">
     <div class="left-stack">

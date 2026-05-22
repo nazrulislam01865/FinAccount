@@ -6,6 +6,8 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class AdminUserSeeder extends Seeder
 {
@@ -13,30 +15,54 @@ class AdminUserSeeder extends Seeder
     {
         $superAdmin = Role::where('name', 'Super Admin')->first();
 
-        if (!$superAdmin) {
+        if (! $superAdmin) {
             return;
         }
 
-        // Promote the existing first user to Super Admin so current installations keep their login.
         $existingUser = User::query()->orderBy('id')->first();
 
-        if (!$existingUser) {
-            $existingUser = User::create([
-                'name' => 'Super Admin',
-                'email' => 'admin@example.com',
-                'password' => Hash::make('password'),
-                'status' => 'Active',
-            ]);
+        if (! $existingUser) {
+            $existingUser = $this->createInitialAdminFromEnvironment();
+        }
+
+        if (! $existingUser) {
+            Log::warning('No initial Super Admin user was seeded because ADMIN_EMAIL and ADMIN_PASSWORD are not configured.');
+            return;
         }
 
         $existingUser->forceFill(['status' => 'Active'])->save();
         $existingUser->roles()->syncWithoutDetaching([$superAdmin->id]);
 
-        // If the previous seeded admin account exists separately, keep it usable as Super Admin too.
-        $seededAdmin = User::where('email', 'admin@example.com')->first();
-        if ($seededAdmin) {
-            $seededAdmin->forceFill(['status' => 'Active'])->save();
-            $seededAdmin->roles()->syncWithoutDetaching([$superAdmin->id]);
+        $adminEmail = env('ADMIN_EMAIL');
+        if ($adminEmail) {
+            $seededAdmin = User::where('email', $adminEmail)->first();
+            if ($seededAdmin) {
+                $seededAdmin->forceFill(['status' => 'Active'])->save();
+                $seededAdmin->roles()->syncWithoutDetaching([$superAdmin->id]);
+            }
         }
+    }
+
+    private function createInitialAdminFromEnvironment(): ?User
+    {
+        $email = trim((string) env('ADMIN_EMAIL', ''));
+        $password = (string) env('ADMIN_PASSWORD', '');
+        $name = trim((string) env('ADMIN_NAME', 'Super Admin')) ?: 'Super Admin';
+
+        if ($email === '' || $password === '') {
+            return null;
+        }
+
+        if (strlen($password) < 12) {
+            Log::warning('Initial admin user was not created because ADMIN_PASSWORD must be at least 12 characters.');
+            return null;
+        }
+
+        return User::create([
+            'name' => $name,
+            'email' => Str::lower($email),
+            'password' => Hash::make($password),
+            'status' => 'Active',
+        ]);
     }
 }
