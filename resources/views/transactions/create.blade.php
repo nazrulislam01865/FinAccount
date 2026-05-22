@@ -394,11 +394,11 @@ document.addEventListener('DOMContentLoaded', () => {
             credentials: 'same-origin',
         });
 
-        if (!response.ok) {
-            throw new Error(`Dropdown request failed: ${url}`);
-        }
+        const result = await parseJsonResponse(response);
 
-        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.message || `Dropdown request failed (${response.status}): ${url}`);
+        }
 
         return Array.isArray(result.data) ? result.data : [];
     }
@@ -523,26 +523,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadTransactionHeads() {
+        const previousValue = head.value;
+        const renderHeadDropdown = () => {
+            renderOptions(head, heads, 'Select Transaction Head', (item) => item.name);
+            head.disabled = false;
+
+            if (previousValue && heads.some((item) => String(item.id) === String(previousValue))) {
+                head.value = previousValue;
+            } else if (!head.value && heads.length > 0) {
+                head.value = heads[0].id;
+            }
+
+            if (heads.length === 0) {
+                head.innerHTML = '<option value="">No active Transaction Heads found</option>';
+            }
+        };
+
         head.disabled = true;
-        head.innerHTML = '<option value="">Loading Transaction Heads...</option>';
+        heads = fallbackHeads.map(normaliseHead);
+
+        if (heads.length > 0) {
+            renderHeadDropdown();
+        } else {
+            head.innerHTML = '<option value="">Loading Transaction Heads...</option>';
+        }
 
         try {
-            heads = (await getRows(form.dataset.headsUrl)).map(normaliseHead);
+            const apiHeads = (await getRows(form.dataset.headsUrl)).map(normaliseHead);
+
+            if (apiHeads.length > 0) {
+                heads = apiHeads;
+                renderHeadDropdown();
+            }
         } catch (error) {
-            console.error(error);
-            heads = fallbackHeads.map(normaliseHead);
-            showToast('Could not fetch Transaction Heads from API. Showing page-loaded data.');
-        }
+            console.warn('Transaction Heads API fallback used:', error);
 
-        renderOptions(head, heads, 'Select Transaction Head', (item) => item.name);
-        head.disabled = false;
-
-        if (!head.value && heads.length > 0) {
-            head.value = heads[0].id;
-        }
-
-        if (heads.length === 0) {
-            head.innerHTML = '<option value="">No active Transaction Heads found</option>';
+            if (heads.length === 0) {
+                showToast('Could not fetch Transaction Heads from API. Please check your role access and cloud route cache.');
+                renderHeadDropdown();
+            }
         }
     }
 
@@ -644,9 +663,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 mapped_only: 1,
             }));
         } catch (error) {
-            console.error(error);
-            rows = [];
-            showToast('Could not fetch mapped Settlement Types for the selected Transaction Head.');
+            console.warn('Settlement Types API fallback used:', error);
+            rows = selectedHead.settlements || [];
+
+            if (rows.length === 0) {
+                showToast('Could not fetch mapped Settlement Types for the selected Transaction Head.');
+            }
         }
 
         renderOptions(

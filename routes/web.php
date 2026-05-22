@@ -254,26 +254,78 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     | Dropdown APIs
     |--------------------------------------------------------------------------
     */
-    Route::prefix('api/dropdowns')->name('api.dropdowns.')->group(function () {
-        Route::get('/business-types', [DropdownController::class, 'businessTypes'])->name('business-types');
-        Route::get('/currencies', [DropdownController::class, 'currencies'])->name('currencies');
-        Route::get('/time-zones', [DropdownController::class, 'timeZones'])->name('time-zones');
-        Route::get('/account-types', [DropdownController::class, 'accountTypes'])->name('account-types');
-        Route::get('/parent-accounts', [DropdownController::class, 'parentAccounts'])->name('parent-accounts');
-        Route::get('/party-types', [DropdownController::class, 'partyTypes'])->name('party-types');
-        Route::get('/banks', [DropdownController::class, 'banks'])->name('banks');
-        Route::get('/cash-bank-account-types', [DropdownController::class, 'cashBankAccountTypes'])->name('cash-bank-account-types');
-        Route::get('/cash-bank-ledgers', [DropdownController::class, 'cashBankLedgers'])->name('cash-bank-ledgers');
-        Route::get('/cash-bank-accounts', [DropdownController::class, 'cashBankAccounts'])->name('cash-bank-accounts');
-        Route::get('/ledger-accounts', [DropdownController::class, 'ledgerAccounts'])->name('ledger-accounts');
-        Route::get('/linked-ledgers', [DropdownController::class, 'ledgerAccounts'])->name('linked-ledgers');
-        Route::get('/party-balance-types', [DropdownController::class, 'partyBalanceTypes'])->name('party-balance-types');
-        Route::get('/transaction-head-natures', [DropdownController::class, 'transactionHeadNatures'])->name('transaction-head-natures');
-        Route::get('/party-ledger-effects', [DropdownController::class, 'partyLedgerEffects'])->name('party-ledger-effects');
-        Route::get('/yes-no-options', [DropdownController::class, 'yesNoOptions'])->name('yes-no-options');
-        Route::get('/transaction-heads', [DropdownController::class, 'transactionHeads'])->name('transaction-heads');
-        Route::get('/settlement-types', [DropdownController::class, 'settlementTypes'])->name('settlement-types');
-        Route::get('/parties', [DropdownController::class, 'parties'])->name('parties');
+    $companyDropdownPermission = 'permission:company.view|company.manage|master-data.view|master-data.manage';
+    $ledgerDropdownPermission = 'permission:chart-of-accounts.view|chart-of-accounts.manage|cash-bank.view|cash-bank.manage|parties.view|parties.manage|ledger-mapping.view|ledger-mapping.manage|opening-balances.view|opening-balances.manage|transactions.view|transactions.create|transactions.draft';
+    $cashBankDropdownPermission = 'permission:cash-bank.view|cash-bank.manage|ledger-mapping.view|ledger-mapping.manage|transactions.view|transactions.create|transactions.draft|cash-bank-book.view|reports.view';
+    $partyDropdownPermission = 'permission:parties.view|parties.manage|transactions.view|transactions.create|transactions.draft|due-management.view|due-management.manage|advance-management.view|advance-management.manage|customer-ledgers.view|supplier-ledgers.view|reports.view';
+    $transactionDropdownPermission = 'permission:transaction-heads.view|transaction-heads.manage|transactions.view|transactions.create|transactions.draft|ledger-mapping.view|ledger-mapping.manage|due-management.view|due-management.manage|advance-management.view|advance-management.manage|reports.view';
+    $settlementDropdownPermission = 'permission:master-data.view|master-data.manage|ledger-mapping.view|ledger-mapping.manage|transactions.view|transactions.create|transactions.draft|due-management.view|due-management.manage|advance-management.view|advance-management.manage|reports.view';
+
+    Route::prefix('api/dropdowns')->name('api.dropdowns.')->group(function () use (
+        $companyDropdownPermission,
+        $ledgerDropdownPermission,
+        $cashBankDropdownPermission,
+        $partyDropdownPermission,
+        $transactionDropdownPermission,
+        $settlementDropdownPermission
+    ) {
+        Route::get('/business-types', [DropdownController::class, 'businessTypes'])
+            ->middleware($companyDropdownPermission)
+            ->name('business-types');
+        Route::get('/currencies', [DropdownController::class, 'currencies'])
+            ->middleware($companyDropdownPermission)
+            ->name('currencies');
+        Route::get('/time-zones', [DropdownController::class, 'timeZones'])
+            ->middleware($companyDropdownPermission)
+            ->name('time-zones');
+        Route::get('/account-types', [DropdownController::class, 'accountTypes'])
+            ->middleware($ledgerDropdownPermission)
+            ->name('account-types');
+        Route::get('/parent-accounts', [DropdownController::class, 'parentAccounts'])
+            ->middleware($ledgerDropdownPermission)
+            ->name('parent-accounts');
+        Route::get('/party-types', [DropdownController::class, 'partyTypes'])
+            ->middleware($partyDropdownPermission . '|master-data.view|master-data.manage|transaction-heads.view|transaction-heads.manage')
+            ->name('party-types');
+        Route::get('/banks', [DropdownController::class, 'banks'])
+            ->middleware($cashBankDropdownPermission . '|master-data.view|master-data.manage')
+            ->name('banks');
+        Route::get('/cash-bank-account-types', [DropdownController::class, 'cashBankAccountTypes'])
+            ->middleware($cashBankDropdownPermission)
+            ->name('cash-bank-account-types');
+        Route::get('/cash-bank-ledgers', [DropdownController::class, 'cashBankLedgers'])
+            ->middleware($cashBankDropdownPermission)
+            ->name('cash-bank-ledgers');
+        Route::get('/cash-bank-accounts', [DropdownController::class, 'cashBankAccounts'])
+            ->middleware($cashBankDropdownPermission)
+            ->name('cash-bank-accounts');
+        Route::get('/ledger-accounts', [DropdownController::class, 'ledgerAccounts'])
+            ->middleware($ledgerDropdownPermission)
+            ->name('ledger-accounts');
+        Route::get('/linked-ledgers', [DropdownController::class, 'ledgerAccounts'])
+            ->middleware($ledgerDropdownPermission)
+            ->name('linked-ledgers');
+        Route::get('/party-balance-types', [DropdownController::class, 'partyBalanceTypes'])
+            ->middleware($partyDropdownPermission . '|opening-balances.view|opening-balances.manage')
+            ->name('party-balance-types');
+        Route::get('/transaction-head-natures', [DropdownController::class, 'transactionHeadNatures'])
+            ->middleware($transactionDropdownPermission)
+            ->name('transaction-head-natures');
+        Route::get('/party-ledger-effects', [DropdownController::class, 'partyLedgerEffects'])
+            ->middleware($transactionDropdownPermission . '|ledger-mapping.view|ledger-mapping.manage')
+            ->name('party-ledger-effects');
+        Route::get('/yes-no-options', [DropdownController::class, 'yesNoOptions'])
+            ->middleware('permission:company.view|master-data.view|chart-of-accounts.view|cash-bank.view|parties.view|transaction-heads.view|ledger-mapping.view|opening-balances.view|voucher-numbering.view|transactions.view|transactions.create|transactions.draft')
+            ->name('yes-no-options');
+        Route::get('/transaction-heads', [DropdownController::class, 'transactionHeads'])
+            ->middleware($transactionDropdownPermission)
+            ->name('transaction-heads');
+        Route::get('/settlement-types', [DropdownController::class, 'settlementTypes'])
+            ->middleware($settlementDropdownPermission)
+            ->name('settlement-types');
+        Route::get('/parties', [DropdownController::class, 'parties'])
+            ->middleware($partyDropdownPermission)
+            ->name('parties');
     });
 
     /*
