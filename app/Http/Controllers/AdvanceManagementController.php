@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AdvanceRegister;
+use App\AccountingEngine\Contracts\AccountingEngineContract;
+use App\AccountingEngine\DTO\TransactionInput;
 use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\DueRegister;
@@ -10,7 +12,6 @@ use App\Models\LedgerMappingRule;
 use App\Models\Party;
 use App\Models\VoucherHeader;
 use App\Models\VoucherDetail;
-use App\Services\Accounting\TransactionPostingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,7 +55,7 @@ class AdvanceManagementController extends Controller
         ]);
     }
 
-    public function store(Request $request, TransactionPostingService $postingService): JsonResponse
+    public function store(Request $request, AccountingEngineContract $engine): JsonResponse
     {
         $validated = $request->validate([
             'entry_mode' => ['required', Rule::in(['New Advance', 'Advance Adjustment'])],
@@ -149,14 +150,20 @@ class AdvanceManagementController extends Controller
                 'status' => VoucherHeader::STATUS_POSTED,
             ];
 
-            $preview = $postingService->preview($postingInput, $request->user()?->id, false);
+            $transactionInput = TransactionInput::fromArray(
+                $postingInput,
+                (int) ($request->user()?->company_id ?? 0),
+                (int) ($request->user()?->id ?? 0)
+            );
+
+            $preview = $engine->preview($transactionInput)->toArray();
 
             if ($entryMode === 'Advance Adjustment') {
                 $this->validatePreviewTouchesAdvanceAccount($preview, $advanceAccountId, $advanceType);
                 $this->validateLinkedDueBalance($preview, (int) $validated['party_id'], $advanceType, $amount);
             }
 
-            $voucher = $postingService->save($postingInput, null, $request->user()?->id);
+            $result = $engine->post($transactionInput);
 
             return response()->json([
                 'success' => true,
@@ -164,8 +171,8 @@ class AdvanceManagementController extends Controller
                     ? 'Advance posted successfully.'
                     : 'Advance adjustment posted successfully. Related due balance was reduced where applicable.',
                 'data' => [
-                    'voucher_id' => $voucher->id,
-                    'voucher_number' => $voucher->voucher_number,
+                    'voucher_id' => $result->voucherId,
+                    'voucher_number' => $result->voucherNumber,
                 ],
                 'redirect' => route('advance-management.index'),
             ], 201);

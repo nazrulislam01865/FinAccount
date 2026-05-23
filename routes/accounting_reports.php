@@ -1,7 +1,13 @@
 <?php
 
 use App\Http\Controllers\AccountingReports\CashBankBookController;
+use App\Http\Controllers\AccountingReports\BalanceSheetController;
+use App\Http\Controllers\AccountingReports\CashFlowStatementController;
+use App\Http\Controllers\AccountingReports\CustomerReceivableController;
+use App\Http\Controllers\AccountingReports\ExpenseReportController;
 use App\Http\Controllers\AccountingReports\IncomeStatementController;
+use App\Http\Controllers\AccountingReports\SalesReportController;
+use App\Http\Controllers\AccountingReports\SupplierPayableController;
 use App\Http\Controllers\AccountingReports\TransactionListController;
 use App\Http\Controllers\AccountingReports\TrialBalanceController;
 use Illuminate\Support\Facades\Route;
@@ -47,4 +53,47 @@ Route::middleware(['web', 'auth', 'active.user'])
         Route::get('/income-statement/export', [IncomeStatementController::class, 'export'])
             ->middleware('permission:reports.view|reports.full')
             ->name('income-statement.export');
+
+        Route::get('/balance-sheet', [BalanceSheetController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('balance-sheet.index');
+        Route::get('/balance-sheet/export', [BalanceSheetController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('balance-sheet.export');
+
+        Route::get('/cash-flow-statement', [CashFlowStatementController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('cash-flow-statement.index');
+        Route::get('/cash-flow-statement/export', [CashFlowStatementController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('cash-flow-statement.export');
+
+        Route::get('/customer-receivables', [CustomerReceivableController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full|customer-ledgers.view')
+            ->name('customer-receivables.index');
+        Route::get('/customer-receivables/export', [CustomerReceivableController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full|customer-ledgers.view')
+            ->name('customer-receivables.export');
+
+        Route::get('/supplier-payables', [SupplierPayableController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full|supplier-ledgers.view')
+            ->name('supplier-payables.index');
+        Route::get('/supplier-payables/export', [SupplierPayableController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full|supplier-ledgers.view')
+            ->name('supplier-payables.export');
+
+        Route::get('/sales-report', [SalesReportController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('sales-report.index');
+        Route::get('/sales-report/export', [SalesReportController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('sales-report.export');
+
+        Route::get('/expense-report', [ExpenseReportController::class, 'index'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('expense-report.index');
+        Route::get('/expense-report/export', [ExpenseReportController::class, 'export'])
+            ->middleware('permission:reports.view|reports.full')
+            ->name('expense-report.export');
+
     });

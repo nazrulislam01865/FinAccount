@@ -2,9 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AccountType;
-use App\Models\Currency;
-use App\Models\TimeZone;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;

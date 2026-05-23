@@ -29,7 +29,8 @@ class OpeningBalanceController extends Controller
         $company = Company::query()->first();
 
         $financialYears = FinancialYear::query()
-            ->where('status', 'Active')
+            ->whereIn('status', ['Open', 'Active'])
+            ->orderByDesc('is_current')
             ->orderByDesc('is_active')
             ->orderByDesc('start_date')
             ->get();

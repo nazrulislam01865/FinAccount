@@ -685,7 +685,7 @@
             <div class="master-card-head">
                 <div>
                     <h3>Financial Years</h3>
-                    <p>These values appear in Opening Balance and Voucher Numbering setup.</p>
+                    <p>Control the posting period, current year, and lock date used by transaction posting.</p>
                 </div>
                 <span class="badge badge-primary">{{ $financialYears->count() }} Items</span>
             </div>
@@ -697,7 +697,8 @@
                             <th>Name</th>
                             <th>Start Date</th>
                             <th>End Date</th>
-                            <th>Active Year</th>
+                            <th>Lock Date</th>
+                            <th>Current Year</th>
                             <th>Status</th>
                             <th style="text-align:right">Actions</th>
                         </tr>
@@ -709,21 +710,24 @@
                                 data-name="{{ e($year->name) }}"
                                 data-start-date="{{ optional($year->start_date)->format('Y-m-d') }}"
                                 data-end-date="{{ optional($year->end_date)->format('Y-m-d') }}"
-                                data-is-active="{{ $year->is_active ? 1 : 0 }}"
+                                data-lock-date="{{ optional($year->lock_date)->format('Y-m-d') }}"
+                                data-is-active="{{ ($year->is_current || $year->is_active) ? 1 : 0 }}"
+                                data-is-current="{{ ($year->is_current || $year->is_active) ? 1 : 0 }}"
                                 data-status="{{ $year->status }}"
                                 data-update-url="{{ route('api.master-data.financial-years.update', $year) }}"
                             >
                                 <td class="strong">{{ $year->name }}</td>
                                 <td>{{ optional($year->start_date)->format('d M Y') }}</td>
                                 <td>{{ optional($year->end_date)->format('d M Y') }}</td>
+                                <td>{{ optional($year->lock_date)->format('d M Y') ?: '—' }}</td>
                                 <td>
-                                    <span class="badge {{ $year->is_active ? 'badge-active' : 'badge-neutral' }}">
-                                        {{ $year->is_active ? 'Yes' : 'No' }}
+                                    <span class="badge {{ ($year->is_current || $year->is_active) ? 'badge-active' : 'badge-neutral' }}">
+                                        {{ ($year->is_current || $year->is_active) ? 'Yes' : 'No' }}
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge {{ $year->status === 'Active' ? 'badge-active' : 'badge-neutral' }}">
-                                        {{ $year->status }}
+                                    <span class="badge {{ $year->status === 'Open' || $year->status === 'Active' ? 'badge-active' : 'badge-neutral' }}">
+                                        {{ $year->status === 'Active' ? 'Open' : $year->status }}
                                     </span>
                                 </td>
                                 <td>
@@ -739,7 +743,7 @@
                             </tr>
                         @empty
                             <tr data-empty="true">
-                                <td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No financial years found.</td>
+                                <td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">No financial years found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -783,17 +787,25 @@
                 </div>
 
                 <div>
-                    <label>Active Financial Year</label>
+                    <label>Lock Date</label>
+                    <input type="date" name="lock_date">
+                    <div class="inline-help">Postings on or before this date are blocked.</div>
+                </div>
+
+                <div>
+                    <label>Current Financial Year</label>
+                    <input type="hidden" id="financialYearCurrent" name="is_current" value="0">
                     <input type="hidden" id="financialYearActive" name="is_active" value="0">
-                    <div class="switch" data-input="financialYearActive"></div>
-                    <div class="inline-help">Only one financial year should be active at a time.</div>
+                    <div class="switch" data-input="financialYearCurrent"></div>
+                    <div class="inline-help">Only one financial year should be current at a time.</div>
                 </div>
 
                 <div>
                     <label>Status <span class="required">*</span></label>
                     <select name="status" required>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
+                        <option value="Open">Open</option>
+                        <option value="Closed">Closed</option>
+                        <option value="Locked">Locked</option>
                     </select>
                 </div>
 
@@ -835,13 +847,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 field.value = value || '';
             });
 
-            const switchInput = form.querySelector('input[type="hidden"][name="is_active"]');
-            const switchElement = switchInput?.nextElementSibling;
+            form.querySelectorAll('.switch[data-input]').forEach((switchElement) => {
+                const input = document.getElementById(switchElement.dataset.input);
 
-            if (switchInput && switchElement?.classList.contains('switch')) {
-                switchElement.classList.toggle('on', Number(row.dataset.isActive || 0) === 1);
-                switchInput.value = switchElement.classList.contains('on') ? '1' : '0';
-            }
+                if (!input) {
+                    return;
+                }
+
+                const dataKey = input.name.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+                const enabled = Number(row.dataset[dataKey] || row.dataset.isActive || 0) === 1;
+                switchElement.classList.toggle('on', enabled);
+                input.value = enabled ? '1' : '0';
+
+                if (input.name === 'is_current') {
+                    const activeInput = form.querySelector('[name="is_active"]');
+                    if (activeInput) {
+                        activeInput.value = input.value;
+                    }
+                }
+            });
 
             form.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
@@ -866,6 +890,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (input) {
                     input.value = '0';
+                }
+
+                if (input?.name === 'is_current') {
+                    const activeInput = form.querySelector('[name="is_active"]');
+                    if (activeInput) {
+                        activeInput.value = '0';
+                    }
                 }
             });
         });

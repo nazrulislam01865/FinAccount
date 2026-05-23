@@ -2,6 +2,7 @@
 
 namespace App\Services\Setup;
 
+use App\AccountingEngine\Services\LegacyRuleMigrationService;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\LedgerMappingRule;
@@ -12,12 +13,18 @@ use Illuminate\Support\Facades\DB;
 
 class LedgerMappingRuleService
 {
+    public function __construct(
+        private readonly LegacyRuleMigrationService $legacyRuleMigrationService
+    ) {
+    }
+
     public function create(array $data, ?int $userId = null): LedgerMappingRule
     {
         return DB::transaction(function () use ($data, $userId) {
             $payload = $this->payload($data, $userId, true);
 
             $rule = LedgerMappingRule::query()->create($payload);
+            $this->legacyRuleMigrationService->sync($rule);
 
             return $this->freshRule($rule);
         });
@@ -30,6 +37,7 @@ class LedgerMappingRuleService
     ): LedgerMappingRule {
         return DB::transaction(function () use ($rule, $data, $userId) {
             $rule->update($this->payload($data, $userId, false, $rule));
+            $this->legacyRuleMigrationService->sync($rule);
 
             return $this->freshRule($rule);
         });
@@ -43,8 +51,30 @@ class LedgerMappingRuleService
     ): array {
         $payload = Arr::only($data, [
             'rule_code',
+            'rule_name',
             'transaction_head_id',
             'settlement_type_id',
+            'transaction_screen',
+            'rule_trigger',
+            'amount_required',
+            'payment_method_required',
+            'allowed_payment_method',
+            'cash_bank_ledger_required',
+            'party_required_mode',
+            'party_sub_ledger_type',
+            'other_required_input',
+            'primary_ledger_source',
+            'primary_ledger_id',
+            'primary_ledger_movement',
+            'primary_posting_side',
+            'primary_explanation',
+            'counter_ledger_source',
+            'counter_selection_method',
+            'fixed_counter_ledger_id',
+            'allowed_counter_ledger_type',
+            'counter_ledger_movement',
+            'counter_posting_side',
+            'counter_explanation',
             'debit_account_id',
             'credit_account_id',
             'party_ledger_effect',
@@ -60,9 +90,12 @@ class LedgerMappingRuleService
             unset($payload['rule_code']);
         }
 
-        $payload['party_ledger_effect'] = $payload['party_ledger_effect']
-            ?: $this->inferPartyLedgerEffect($payload);
-
+        $payload['rule_name'] = $payload['rule_name'] ?: $this->defaultRuleName($payload);
+        $payload['transaction_screen'] = $payload['transaction_screen'] ?: $this->transactionScreen($payload);
+        $payload['party_ledger_effect'] = $payload['party_ledger_effect'] ?: $this->inferPartyLedgerEffect($payload);
+        $payload['amount_required'] = (bool) ($data['amount_required'] ?? true);
+        $payload['payment_method_required'] = (bool) ($data['payment_method_required'] ?? false);
+        $payload['cash_bank_ledger_required'] = (bool) ($data['cash_bank_ledger_required'] ?? false);
         $payload['auto_post'] = (bool) ($data['auto_post'] ?? true);
         $payload['status'] = $payload['status'] ?? 'Active';
 
@@ -80,9 +113,24 @@ class LedgerMappingRuleService
         return $rule->fresh([
             'transactionHead',
             'settlementType',
+            'primaryLedger.accountType',
+            'fixedCounterLedger.accountType',
             'debitAccount.accountType',
             'creditAccount.accountType',
         ]);
+    }
+
+    private function defaultRuleName(array $payload): string
+    {
+        $head = TransactionHead::query()->find($payload['transaction_head_id'] ?? null);
+        $settlement = SettlementType::query()->find($payload['settlement_type_id'] ?? null);
+
+        return trim(($head?->name ?: 'Accounting Rule') . ' - ' . ($settlement?->name ?: 'Posting'));
+    }
+
+    private function transactionScreen(array $payload): ?string
+    {
+        return TransactionHead::query()->whereKey($payload['transaction_head_id'] ?? null)->value('transaction_screen');
     }
 
     private function inferPartyLedgerEffect(array $payload): string
@@ -180,12 +228,12 @@ class LedgerMappingRuleService
     {
         $lastCode = LedgerMappingRule::query()
             ->withTrashed()
-            ->where('rule_code', 'like', 'LM-%')
+            ->where('rule_code', 'like', 'AR-%')
             ->orderByDesc('id')
             ->value('rule_code');
 
-        $number = $lastCode ? (int) str_replace('LM-', '', $lastCode) : 0;
+        $number = $lastCode ? (int) str_replace('AR-', '', $lastCode) : 0;
 
-        return 'LM-' . str_pad((string) ($number + 1), 3, '0', STR_PAD_LEFT);
+        return 'AR-' . str_pad((string) ($number + 1), 3, '0', STR_PAD_LEFT);
     }
 }

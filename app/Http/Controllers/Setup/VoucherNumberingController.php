@@ -22,7 +22,8 @@ class VoucherNumberingController extends Controller
     public function index(): View
     {
         $financialYears = FinancialYear::query()
-            ->where('status', 'Active')
+            ->whereIn('status', ['Open', 'Active'])
+            ->orderByDesc('is_current')
             ->orderByDesc('is_active')
             ->orderByDesc('start_date')
             ->get();

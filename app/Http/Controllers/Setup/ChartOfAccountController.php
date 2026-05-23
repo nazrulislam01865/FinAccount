@@ -21,12 +21,24 @@ class ChartOfAccountController extends Controller
     public function index(): View
     {
         $accounts = ChartOfAccount::query()
-            ->with(['accountType', 'parent'])
+            ->with(['accountType', 'parent', 'partyType'])
             ->orderBy('account_code')
             ->get();
 
+        $stats = [
+            'total' => $accounts->count(),
+            'posting' => $accounts->where('posting_allowed', true)->count(),
+            'groups' => $accounts->where('posting_allowed', false)->count(),
+            'cash_bank' => $accounts->where('is_cash_bank', true)->count(),
+            'party_control' => $accounts->where('is_party_control', true)->count(),
+            'active' => $accounts->where('status', 'Active')->count(),
+        ];
+
         return view('setup.chart-of-accounts', [
             'accounts' => $accounts,
+            'stats' => $stats,
+            'coaLevels' => ChartOfAccount::COA_LEVELS,
+            'ledgerTypes' => ChartOfAccount::LEDGER_TYPES,
         ]);
     }
 
@@ -42,7 +54,7 @@ class ChartOfAccountController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Account saved successfully.',
-            'data' => $account->load(['accountType', 'parent']),
+            'data' => $account->load(['accountType', 'parent', 'partyType']),
             'redirect' => route('setup.chart-of-accounts'),
         ], 201);
     }
@@ -77,7 +89,7 @@ class ChartOfAccountController extends Controller
             return $this->deleteFailure(
                 $request,
                 'setup.chart-of-accounts',
-                'This account could not be deleted. Please try again or check related records.',
+                $exception->getMessage() ?: 'This account could not be deleted. Please try again or check related records.',
                 $exception
             );
         }

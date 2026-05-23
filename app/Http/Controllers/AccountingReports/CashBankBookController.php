@@ -17,18 +17,20 @@ class CashBankBookController extends Controller
     public function index(CashBankBookRequest $request): Response
     {
         $filters = $request->filters();
+        $filters['company_id'] = (int) ($request->user()?->company_id ?? 0);
         $data = $this->reports->cashBankBook($filters);
 
         return response()->view('accounting_reports.cash_bank_book.index', [
             'filters' => $filters,
             'report' => $data,
             'currency' => config('accounting_reports.currency', 'BDT'),
+            'configuration' => $this->reports->reportConfiguration('cash-bank-book'),
         ]);
     }
 
     public function export(CashBankBookRequest $request): StreamedResponse
     {
-        $report = $this->reports->cashBankBook($request->filters());
+        $report = $this->reports->cashBankBook(array_merge($request->filters(), ['company_id' => (int) ($request->user()?->company_id ?? 0)]));
         $fileName = 'cash-bank-book-' . now()->format('Ymd-His') . '.csv';
 
         return response()->streamDownload(function () use ($report) {

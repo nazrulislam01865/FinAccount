@@ -52,19 +52,13 @@
         <x-report.info-card title="Quick Analysis" :rows="$analysisRows" />
     </div>
 
-    <form method="GET" action="{{ route('accounting-reports.trial-balance.index') }}" class="card report-toolbar report-toolbar-seven">
-        <div class="field search-field">
-            <label>Search Ledger</label>
-            <span>⌕</span>
-            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Ledger code or account name...">
-        </div>
-        <div>
-            <label>From Date</label>
-            <input type="date" name="from_date" value="{{ $filters['from_date'] ?? $report['from_date'] }}">
-        </div>
-        <div>
-            <label>To Date</label>
-            <input type="date" name="to_date" value="{{ $filters['to_date'] ?? $report['to_date'] }}">
+    <form method="GET" action="{{ route('accounting-reports.trial-balance.index') }}" class="card report-toolbar report-toolbar-seven accounting-filter-sequence">
+        <div class="date-range-field">
+            <label>Date Range</label>
+            <div class="date-range-inputs">
+                <input type="date" name="from_date" value="{{ $filters['from_date'] ?? $report['from_date'] }}" aria-label="From Date">
+                <input type="date" name="to_date" value="{{ $filters['to_date'] ?? $report['to_date'] }}" aria-label="To Date">
+            </div>
         </div>
         <div>
             <label>Account Group</label>
@@ -82,6 +76,11 @@
                     <option value="{{ $type }}" @selected(($filters['balance_type'] ?? 'All') === $type)>{{ $type }}</option>
                 @endforeach
             </select>
+        </div>
+        <div class="field search-field">
+            <label>Search Ledger</label>
+            <span>⌕</span>
+            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Ledger code or account name...">
         </div>
         <x-report.filter-actions :reset-route="route('accounting-reports.trial-balance.index')" />
     </form>

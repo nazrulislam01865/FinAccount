@@ -10,7 +10,11 @@ class VoucherHeader extends Model
     use SoftDeletes;
 
     public const STATUS_DRAFT = 'Draft';
+    public const STATUS_PENDING_REVIEW = 'Pending Review';
     public const STATUS_POSTED = 'Posted';
+    public const STATUS_CANCELLED = 'Cancelled';
+    public const STATUS_REVERSED = 'Reversed';
+
 
     protected $fillable = [
         'company_id',
@@ -30,7 +34,15 @@ class VoucherHeader extends Model
         'reference',
         'notes',
         'status',
+        'submitted_at',
+        'submitted_by',
+        'approved_at',
+        'approved_by',
         'posted_at',
+        'posted_by',
+        'voided_at',
+        'voided_by',
+        'void_reason',
         'created_by',
         'updated_by',
     ];
@@ -40,7 +52,10 @@ class VoucherHeader extends Model
         'amount' => 'decimal:2',
         'total_debit' => 'decimal:2',
         'total_credit' => 'decimal:2',
+        'submitted_at' => 'datetime',
+        'approved_at' => 'datetime',
         'posted_at' => 'datetime',
+        'voided_at' => 'datetime',
     ];
 
     public function company()

@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\ChartOfAccount;
 use App\Models\FinancialYear;
+use App\Models\Party;
+use App\Models\TransactionHead;
 use App\Models\VoucherDetail;
 use App\Models\VoucherHeader;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -15,11 +18,18 @@ class LedgerReportController extends Controller
 {
     public function index(Request $request): View
     {
-        $accounts = ChartOfAccount::query()
+        $accountGroups = ChartOfAccount::query()
+            ->where('status', 'Active')
+            ->where('account_level', 'Group')
+            ->with('accountType')
+            ->orderBy('account_code')
+            ->get();
+
+        $allAccounts = ChartOfAccount::query()
             ->where('status', 'Active')
             ->where('account_level', 'Ledger')
             ->where('posting_allowed', true)
-            ->with('accountType')
+            ->with(['accountType', 'parent'])
             ->orderBy('account_code')
             ->get();
 
@@ -29,41 +39,63 @@ class LedgerReportController extends Controller
             ->orderByDesc('start_date')
             ->first();
 
-        $fromDate = $request->query('from_date')
-            ?: optional($financialYear?->start_date)->toDateString()
-            ?: now()->startOfMonth()->toDateString();
+        $filters = [
+            'from_date' => $request->query('from_date')
+                ?: optional($financialYear?->start_date)->toDateString()
+                ?: now()->startOfMonth()->toDateString(),
+            'to_date' => $request->query('to_date') ?: now()->toDateString(),
+            'account_group_id' => $request->query('account_group_id'),
+            'account_id' => $request->query('account_id'),
+            'party_id' => $request->query('party_id'),
+            'voucher_type' => $request->query('voucher_type', 'All'),
+            'transaction_head_id' => $request->query('transaction_head_id'),
+            'status' => $request->query('status', VoucherHeader::STATUS_POSTED),
+        ];
 
-        $toDate = $request->query('to_date') ?: now()->toDateString();
-
-        $account = $accounts->firstWhere('id', (int) $request->query('account_id')) ?: $accounts->first();
+        $accounts = $this->filterAccountsByGroup($allAccounts, $accountGroups, $filters['account_group_id']);
+        $account = $accounts->firstWhere('id', (int) $filters['account_id']) ?: $accounts->first();
+        $filters['account_id'] = $account?->id;
 
         $report = $account
-            ? $this->buildReport($account, $fromDate, $toDate)
+            ? $this->buildReport($account, $filters)
             : $this->emptyReport();
 
         return view('reports.ledger', [
+            'accountGroups' => $accountGroups,
             'accounts' => $accounts,
+            'allAccounts' => $allAccounts,
             'account' => $account,
-            'fromDate' => $fromDate,
-            'toDate' => $toDate,
+            'parties' => Party::query()
+                ->where('status', 'Active')
+                ->orderBy('party_name')
+                ->get(['id', 'party_code', 'party_name']),
+            'voucherTypes' => $this->voucherTypes(),
+            'transactionHeads' => TransactionHead::query()
+                ->where('status', 'Active')
+                ->orderBy('name')
+                ->get(['id', 'head_code', 'name']),
+            'statusOptions' => $this->statusOptions(),
+            'filters' => $filters,
+            'fromDate' => $filters['from_date'],
+            'toDate' => $filters['to_date'],
             'report' => $report,
         ]);
     }
 
-    private function buildReport(ChartOfAccount $account, string $fromDate, string $toDate): array
+    private function buildReport(ChartOfAccount $account, array $filters): array
     {
-        $from = Carbon::parse($fromDate)->toDateString();
-        $to = Carbon::parse($toDate)->toDateString();
+        $from = Carbon::parse($filters['from_date'])->toDateString();
+        $to = Carbon::parse($filters['to_date'])->toDateString();
 
-        $openingDebit = $this->baseLineQuery($account->id)
+        $openingDebit = $this->baseLineQuery($account->id, $filters)
             ->whereDate('voucher_headers.voucher_date', '<', $from)
             ->sum('voucher_details.debit');
 
-        $openingCredit = $this->baseLineQuery($account->id)
+        $openingCredit = $this->baseLineQuery($account->id, $filters)
             ->whereDate('voucher_headers.voucher_date', '<', $from)
             ->sum('voucher_details.credit');
 
-        $periodLines = $this->baseLineQuery($account->id)
+        $periodLines = $this->baseLineQuery($account->id, $filters)
             ->whereBetween('voucher_headers.voucher_date', [$from, $to])
             ->with([
                 'voucherHeader.transactionHead',
@@ -96,6 +128,7 @@ class LedgerReportController extends Controller
                 'settlement_type' => $line->voucherHeader?->settlementType?->name,
                 'party_name' => $line->party?->party_name ?: $line->voucherHeader?->party?->party_name,
                 'reference' => $line->voucherHeader?->reference,
+                'status' => $line->voucherHeader?->status,
                 'narration' => $line->narration ?: $line->voucherHeader?->notes,
                 'debit' => $debit,
                 'credit' => $credit,
@@ -123,13 +156,89 @@ class LedgerReportController extends Controller
         ];
     }
 
-    private function baseLineQuery(int $accountId)
+    private function baseLineQuery(int $accountId, array $filters = [])
     {
-        return VoucherDetail::query()
+        $query = VoucherDetail::query()
             ->select('voucher_details.*')
             ->join('voucher_headers', 'voucher_headers.id', '=', 'voucher_details.voucher_header_id')
             ->where('voucher_details.account_id', $accountId)
-            ->where('voucher_headers.status', VoucherHeader::STATUS_POSTED);
+            ->whereNull('voucher_headers.deleted_at');
+
+        $this->applyVoucherFilters($query, $filters);
+
+        return $query;
+    }
+
+    private function applyVoucherFilters(Builder $query, array $filters): void
+    {
+        if (! empty($filters['party_id'])) {
+            $partyId = (int) $filters['party_id'];
+            $query->where(function (Builder $where) use ($partyId) {
+                $where->where('voucher_headers.party_id', $partyId)
+                    ->orWhere('voucher_details.party_id', $partyId);
+            });
+        }
+
+        if (! empty($filters['voucher_type']) && $filters['voucher_type'] !== 'All') {
+            $query->where('voucher_headers.voucher_type', $filters['voucher_type']);
+        }
+
+        if (! empty($filters['transaction_head_id'])) {
+            $query->where('voucher_headers.transaction_head_id', (int) $filters['transaction_head_id']);
+        }
+
+        if (! empty($filters['status']) && $filters['status'] !== 'All') {
+            $query->where('voucher_headers.status', $filters['status']);
+        }
+    }
+
+    private function filterAccountsByGroup(Collection $accounts, Collection $groups, int|string|null $groupId): Collection
+    {
+        if (empty($groupId) || $groupId === 'All') {
+            return $accounts->values();
+        }
+
+        $group = $groups->firstWhere('id', (int) $groupId);
+
+        if (! $group) {
+            return $accounts->values();
+        }
+
+        return $accounts
+            ->filter(fn (ChartOfAccount $account) => (int) $account->parent_id === (int) $group->id
+                || (empty($account->parent_id) && (int) $account->account_type_id === (int) $group->account_type_id))
+            ->values();
+    }
+
+    private function voucherTypes(): Collection
+    {
+        return VoucherHeader::query()
+            ->whereNotNull('voucher_type')
+            ->where('voucher_type', '!=', '')
+            ->distinct()
+            ->orderBy('voucher_type')
+            ->pluck('voucher_type');
+    }
+
+    private function statusOptions(): Collection
+    {
+        $defaults = collect([
+            'All',
+            VoucherHeader::STATUS_POSTED,
+            VoucherHeader::STATUS_DRAFT,
+            'Pending Review',
+            'Reversed',
+            'Cancelled',
+        ]);
+
+        $fromDb = VoucherHeader::query()
+            ->whereNotNull('status')
+            ->where('status', '!=', '')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status');
+
+        return $defaults->merge($fromDb)->filter()->unique()->values();
     }
 
     private function signedBalance(ChartOfAccount $account, float $debit, float $credit): float

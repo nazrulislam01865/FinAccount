@@ -11,13 +11,13 @@ class FinancialYearService
 {
     public function current(?int $userId = null): ?FinancialYear
     {
-        if (!Schema::hasTable('companies') || !Schema::hasTable('financial_years')) {
+        if (! Schema::hasTable('companies') || ! Schema::hasTable('financial_years')) {
             return null;
         }
 
         $company = Company::query()->first();
 
-        if (!$company) {
+        if (! $company) {
             return null;
         }
 
@@ -30,17 +30,41 @@ class FinancialYearService
         $startDate = Carbon::create($startYear, 7, 1)->toDateString();
         $endDate = Carbon::create($startYear + 1, 6, 30)->toDateString();
 
+        $inactivePayload = [
+            'is_active' => false,
+            'updated_by' => $userId,
+        ];
+
+        if (Schema::hasColumn('financial_years', 'is_current')) {
+            $inactivePayload['is_current'] = false;
+        }
+
         FinancialYear::query()
             ->where('company_id', $company->id)
-            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->where('is_active', true);
+
+                if (Schema::hasColumn('financial_years', 'is_current')) {
+                    $query->orWhere('is_current', true);
+                }
+            })
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereDate('start_date', '!=', $startDate)
                     ->orWhereDate('end_date', '!=', $endDate);
             })
-            ->update([
-                'is_active' => false,
-                'updated_by' => $userId,
-            ]);
+            ->update($inactivePayload);
+
+        $payload = [
+            'name' => $startYear . '-' . ($startYear + 1),
+            'is_active' => true,
+            'status' => FinancialYear::STATUS_OPEN,
+            'created_by' => $userId,
+            'updated_by' => $userId,
+        ];
+
+        if (Schema::hasColumn('financial_years', 'is_current')) {
+            $payload['is_current'] = true;
+        }
 
         return FinancialYear::query()->updateOrCreate(
             [
@@ -48,13 +72,7 @@ class FinancialYearService
                 'start_date' => $startDate,
                 'end_date' => $endDate,
             ],
-            [
-                'name' => $startYear . '-' . ($startYear + 1),
-                'is_active' => true,
-                'status' => 'Active',
-                'created_by' => $userId,
-                'updated_by' => $userId,
-            ]
+            $payload
         );
     }
 }

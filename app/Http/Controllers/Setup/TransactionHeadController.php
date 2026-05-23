@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Services\Setup\EntityDeleteService;
 use App\Http\Controllers\Concerns\RespondsToDelete;
 use App\Http\Requests\TransactionHeadRequest;
+use App\Models\ChartOfAccount;
 use App\Models\SettlementType;
 use App\Models\TransactionHead;
 use App\Services\Setup\TransactionHeadService;
@@ -22,7 +23,7 @@ class TransactionHeadController extends Controller
     public function index(): View
     {
         $transactionHeads = TransactionHead::query()
-            ->with(['defaultPartyType', 'settlementTypes'])
+            ->with(['defaultPartyType', 'defaultPrimaryLedger', 'settlementTypes'])
             ->orderBy('name')
             ->get();
 
@@ -35,6 +36,15 @@ class TransactionHeadController extends Controller
         return view('setup.transaction-heads', [
             'transactionHeads' => $transactionHeads,
             'settlementTypes' => $settlementTypes,
+            'postingLedgers' => ChartOfAccount::query()
+                ->where('status', 'Active')
+                ->where('posting_allowed', true)
+                ->where(function ($query) {
+                    $query->where('coa_level', 4)
+                        ->orWhere('account_level', 'Ledger');
+                })
+                ->orderBy('account_code')
+                ->get(),
         ]);
     }
 

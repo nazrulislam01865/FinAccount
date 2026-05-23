@@ -90,6 +90,28 @@ class DropdownController extends Controller
         );
     }
 
+    public function coaLevels(): JsonResponse
+    {
+        return $this->ok(
+            collect(ChartOfAccount::COA_LEVELS)->map(fn ($name, $id) => [
+                'id' => (int) $id,
+                'name' => 'Level ' . $id,
+                'display_name' => 'Level ' . $id . ' - ' . $name,
+            ])->values()
+        );
+    }
+
+    public function ledgerTypes(): JsonResponse
+    {
+        return $this->ok(
+            collect(ChartOfAccount::LEDGER_TYPES)->map(fn ($type) => [
+                'id' => $type,
+                'name' => $type,
+                'display_name' => $type,
+            ])->values()
+        );
+    }
+
     public function partyTypes(): JsonResponse
     {
         return $this->ok(
@@ -186,7 +208,19 @@ class DropdownController extends Controller
                     'name' => $item->name,
                     'display_name' => $item->name,
                     'nature' => $item->nature,
+                    'category' => $item->category ?: $item->nature,
                     'default_party_type_id' => $item->default_party_type_id,
+                    'default_primary_ledger_id' => $item->default_primary_ledger_id,
+                    'default_movement' => $item->default_movement,
+                    'payment_method_required' => (bool) $item->payment_method_required,
+                    'party_required_mode' => $item->party_required_mode ?: ($item->requires_party ? 'Required' : 'No'),
+                    'transaction_screen' => $item->transaction_screen,
+                    'is_system_default' => (bool) ($item->is_system_default ?? false),
+                    'is_user_selectable' => (bool) ($item->is_user_selectable ?? true),
+                    'sort_order' => $item->sort_order,
+                    'linked_accounting_rule_code' => $item->linked_accounting_rule_code,
+                    'help_text' => $item->help_text,
+                    'developer_note' => $item->developer_note,
                     'requires_party' => (bool) $item->requires_party,
                     'requires_reference' => (bool) $item->requires_reference,
                     'settlement_type_ids' => $item->settlementTypes
@@ -329,6 +363,11 @@ class DropdownController extends Controller
             ->where('account_level', 'Group')
             ->with('accountType');
 
+        if ($request->filled('child_level')) {
+            $childLevel = max(1, min(4, $request->integer('child_level')));
+            $query->where('coa_level', max(1, $childLevel - 1));
+        }
+
         if ($request->filled('account_type_id')) {
             $query->where('account_type_id', $request->integer('account_type_id'));
         }
@@ -360,7 +399,10 @@ class DropdownController extends Controller
         return $this->ok(
             ChartOfAccount::query()
                 ->where('status', 'Active')
-                ->where('account_level', 'Ledger')
+                ->where(function ($nested) {
+                    $nested->where('coa_level', 4)
+                        ->orWhere('account_level', 'Ledger');
+                })
                 ->where('is_cash_bank', true)
                 ->where('posting_allowed', true)
                 ->whereNotIn('id', $usedLedgerIds)
@@ -385,7 +427,10 @@ class DropdownController extends Controller
 
         $query = ChartOfAccount::query()
             ->where('status', 'Active')
-            ->where('account_level', 'Ledger')
+            ->where(function ($nested) {
+                $nested->where('coa_level', 4)
+                    ->orWhere('account_level', 'Ledger');
+            })
             ->where('posting_allowed', true)
             ->with('accountType');
 
@@ -410,11 +455,21 @@ class DropdownController extends Controller
             'account_code' => $account->account_code,
             'account_name' => $account->account_name,
             'account_level' => $account->account_level,
+            'coa_level' => (int) ($account->coa_level ?: ($account->account_level === 'Ledger' ? 4 : 1)),
+            'level_name' => $account->level_name,
             'account_type_id' => $account->account_type_id,
             'account_type' => $account->accountType?->name,
+            'account_group' => $account->account_group,
+            'account_sub_group' => $account->account_sub_group,
+            'account_nature' => $account->account_nature ?: $account->accountType?->name,
             'normal_balance' => $account->normal_balance ?: $account->accountType?->normal_balance,
+            'ledger_type' => $account->ledger_type,
             'posting_allowed' => (bool) $account->posting_allowed,
             'is_cash_bank' => (bool) $account->is_cash_bank,
+            'is_party_control' => (bool) $account->is_party_control,
+            'party_type_id' => $account->party_type_id,
+            'is_system_ledger' => (bool) $account->is_system_ledger,
+            'is_user_selectable' => (bool) $account->is_user_selectable,
             'name' => $account->account_name,
             'display_name' => $account->display_name ?: $displayName,
         ];

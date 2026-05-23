@@ -278,6 +278,12 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         Route::get('/time-zones', [DropdownController::class, 'timeZones'])
             ->middleware($companyDropdownPermission)
             ->name('time-zones');
+        Route::get('/coa-levels', [DropdownController::class, 'coaLevels'])
+            ->middleware($ledgerDropdownPermission)
+            ->name('coa-levels');
+        Route::get('/ledger-types', [DropdownController::class, 'ledgerTypes'])
+            ->middleware($ledgerDropdownPermission)
+            ->name('ledger-types');
         Route::get('/account-types', [DropdownController::class, 'accountTypes'])
             ->middleware($ledgerDropdownPermission)
             ->name('account-types');

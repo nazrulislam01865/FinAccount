@@ -17,18 +17,20 @@ class IncomeStatementController extends Controller
     public function index(IncomeStatementRequest $request): Response
     {
         $filters = $request->filters();
+        $filters['company_id'] = (int) ($request->user()?->company_id ?? 0);
         $report = $this->reports->incomeStatement($filters);
 
         return response()->view('accounting_reports.income_statement.index', [
             'filters' => $filters,
             'report' => $report,
             'currency' => config('accounting_reports.currency', 'BDT'),
+            'configuration' => $this->reports->reportConfiguration('income-statement'),
         ]);
     }
 
     public function export(IncomeStatementRequest $request): StreamedResponse
     {
-        $report = $this->reports->incomeStatement($request->filters());
+        $report = $this->reports->incomeStatement(array_merge($request->filters(), ['company_id' => (int) ($request->user()?->company_id ?? 0)]));
         $fileName = 'income-statement-' . now()->format('Ymd-His') . '.csv';
 
         return response()->streamDownload(function () use ($report) {

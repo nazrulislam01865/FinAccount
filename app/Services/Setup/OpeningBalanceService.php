@@ -2,29 +2,47 @@
 
 namespace App\Services\Setup;
 
-use App\Models\AuditLog;
+use App\AccountingEngine\Services\AuditTrailService;
+use App\AccountingEngine\Services\FinancialPeriodGuard;
+use App\AccountingEngine\Services\JournalValidator;
+use App\AccountingEngine\Services\PartyRegisterService;
+use App\AccountingEngine\Services\VoucherNumberService;
+use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\FinancialYear;
 use App\Models\OpeningBalance;
 use App\Models\SettlementType;
 use App\Models\TransactionHead;
 use App\Models\VoucherHeader;
-use App\Models\VoucherNumberingRule;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class OpeningBalanceService
 {
+    public function __construct(
+        private readonly JournalValidator $journalValidator,
+        private readonly VoucherNumberService $voucherNumberService,
+        private readonly PartyRegisterService $partyRegisterService,
+        private readonly AuditTrailService $auditTrailService,
+        private readonly FinancialPeriodGuard $financialPeriodGuard
+    ) {
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
     public function save(array $data, ?int $userId = null): array
     {
-        return DB::transaction(function () use ($data, $userId) {
+        return DB::transaction(function () use ($data, $userId): array {
             $company = Company::query()->first();
             $financialYear = FinancialYear::query()->findOrFail($data['financial_year_id']);
             $balanceDate = Carbon::parse($data['balance_date'] ?? $financialYear->start_date)->toDateString();
             $branchLocation = $this->blankToNull($data['branch_location'] ?? null);
             $status = $data['status'] ?? 'Draft';
 
+            $this->financialPeriodGuard->assertOpen($financialYear, $balanceDate);
             $this->blockIfAlreadyFinalized($financialYear->id, $branchLocation);
 
             OpeningBalance::query()
@@ -49,12 +67,20 @@ class OpeningBalanceService
                     continue;
                 }
 
+                if ($debit > 0 && $credit > 0) {
+                    throw ValidationException::withMessages([
+                        'items' => 'A single opening balance line cannot contain both debit and credit amounts.',
+                    ]);
+                }
+
+                $ledger = $this->validateOpeningLedger((int) $item['account_id'], $item['party_id'] ?? null);
+
                 $openingBalance = OpeningBalance::query()->create([
                     'company_id' => $company?->id,
                     'financial_year_id' => $financialYear->id,
                     'balance_date' => $balanceDate,
                     'branch_location' => $branchLocation,
-                    'account_id' => $item['account_id'],
+                    'account_id' => $ledger->id,
                     'party_id' => $item['party_id'] ?? null,
                     'debit_opening' => $debit,
                     'credit_opening' => $credit,
@@ -66,7 +92,7 @@ class OpeningBalanceService
 
                 $lines[] = [
                     'opening_balance' => $openingBalance,
-                    'account_id' => (int) $item['account_id'],
+                    'account_id' => (int) $ledger->id,
                     'party_id' => $item['party_id'] ?? null,
                     'debit' => $debit,
                     'credit' => $credit,
@@ -97,6 +123,9 @@ class OpeningBalanceService
         });
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $lines
+     */
     private function postOpeningVoucher(
         ?Company $company,
         FinancialYear $financialYear,
@@ -116,28 +145,16 @@ class OpeningBalanceService
 
         $transactionHead = $this->openingTransactionHead($company, $userId);
         $settlementType = $this->openingSettlementType($transactionHead);
-        $voucherNumbering = $this->openingVoucherNumbering($company, $financialYear, $userId);
-
-        $nextNumber = max((int) $voucherNumbering->next_number, 1);
-        $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
-
-        while (VoucherHeader::query()->where('voucher_number', $voucherNumber)->exists()) {
-            $nextNumber++;
-            $voucherNumber = $voucherNumbering->generate($nextNumber, Carbon::parse($balanceDate));
-        }
-
-        $voucherNumbering->update([
-            'last_number' => $nextNumber,
-            'status' => 'Active',
-            'updated_by' => $userId,
-        ]);
+        $voucherDate = Carbon::parse($balanceDate);
+        $voucherNumber = $this->voucherNumberService->reserveWithLock('Opening Voucher', $financialYear, $voucherDate);
+        $now = now();
 
         $voucher = VoucherHeader::query()->create([
             'company_id' => $company?->id,
             'financial_year_id' => $financialYear->id,
             'voucher_number' => $voucherNumber,
             'voucher_type' => 'Opening Voucher',
-            'voucher_date' => $balanceDate,
+            'voucher_date' => $voucherDate->toDateString(),
             'transaction_head_id' => $transactionHead->id,
             'settlement_type_id' => $settlementType->id,
             'party_id' => null,
@@ -150,36 +167,55 @@ class OpeningBalanceService
             'reference' => $branchLocation,
             'notes' => trim('Opening balance for ' . $financialYear->name . ($branchLocation ? ' - ' . $branchLocation : '')),
             'status' => VoucherHeader::STATUS_POSTED,
-            'posted_at' => now(),
+            'submitted_at' => $now,
+            'submitted_by' => $userId,
+            'posted_at' => $now,
+            'posted_by' => $userId,
             'created_by' => $userId,
             'updated_by' => $userId,
         ]);
 
         foreach ($lines as $index => $line) {
-            $entryType = $line['debit'] > 0 ? 'Debit' : 'Credit';
+            $entryType = ((float) $line['debit']) > 0 ? 'Debit' : 'Credit';
 
             $voucher->details()->create([
+                'company_id' => $company?->id,
+                'branch_id' => null,
+                'transaction_date' => $voucherDate->toDateString(),
                 'line_no' => $index + 1,
                 'account_id' => $line['account_id'],
                 'party_id' => $line['party_id'],
+                'rule_line_id' => null,
+                'amount_source' => 'opening_balance',
                 'entry_type' => $entryType,
-                'debit' => $line['debit'],
-                'credit' => $line['credit'],
+                'debit' => round((float) $line['debit'], 2),
+                'credit' => round((float) $line['credit'], 2),
                 'narration' => $line['remarks'] ?: 'Opening balance',
             ]);
         }
 
-        AuditLog::query()->create([
-            'auditable_type' => VoucherHeader::class,
-            'auditable_id' => $voucher->id,
-            'event' => 'opening_balance_posted',
-            'old_values' => null,
-            'new_values' => $voucher->load('details')->toArray(),
-            'user_id' => $userId,
-            'created_at' => now(),
-        ]);
+        $voucher = $voucher->fresh(['details.account.accountType', 'details.party']);
+        $this->partyRegisterService->recordOpeningBalance($voucher);
+        $this->auditTrailService->recordPostedVoucher($voucher, $userId);
 
-        return $voucher->fresh(['details.account.accountType', 'details.party']);
+        return $voucher;
+    }
+
+    private function validateOpeningLedger(int $accountId, mixed $partyId): ChartOfAccount
+    {
+        $ledger = $this->journalValidator->assertLedgerIsPostable(
+            accountId: $accountId,
+            lineNo: 1,
+            partyId: $partyId ? (int) $partyId : null
+        );
+
+        if ($this->journalValidator->isPartyControlLedger($ledger) && ! $partyId) {
+            throw ValidationException::withMessages([
+                'items' => "Party is required for opening balance ledger {$ledger->display_name}.",
+            ]);
+        }
+
+        return $ledger;
     }
 
     private function blockIfAlreadyFinalized(int $financialYearId, ?string $branchLocation): void
@@ -196,7 +232,7 @@ class OpeningBalanceService
             })
             ->exists();
 
-        if (!$exists) {
+        if (! $exists) {
             return;
         }
 
@@ -215,6 +251,11 @@ class OpeningBalanceService
             [
                 'head_code' => 'OPENING_BALANCE',
                 'nature' => 'Journal',
+                'category' => 'Opening Balance',
+                'default_movement' => 'No Movement',
+                'payment_method_required' => false,
+                'party_required_mode' => 'Optional',
+                'transaction_screen' => 'Opening Balance',
                 'requires_party' => false,
                 'requires_reference' => false,
                 'description' => 'System transaction head used to post opening balance lines.',
@@ -239,42 +280,6 @@ class OpeningBalanceService
         $transactionHead->settlementTypes()->syncWithoutDetaching([$settlementType->id]);
 
         return $settlementType;
-    }
-
-    private function openingVoucherNumbering(?Company $company, FinancialYear $financialYear, ?int $userId): VoucherNumberingRule
-    {
-        $rule = VoucherNumberingRule::query()->firstOrCreate(
-            [
-                'company_id' => $company?->id,
-                'financial_year_id' => $financialYear->id,
-                'voucher_type' => 'Opening Voucher',
-            ],
-            [
-                'prefix' => 'OP',
-                'format_template' => 'OP-{YYYY}-{00000}',
-                'starting_number' => 1,
-                'number_length' => 5,
-                'last_number' => 0,
-                'reset_every_year' => true,
-                'used_for' => 'Opening balance',
-                'status' => 'Active',
-                'created_by' => $userId,
-                'updated_by' => $userId,
-            ]
-        );
-
-        if ($rule->status !== 'Active') {
-            $rule->forceFill([
-                'status' => 'Active',
-                'prefix' => $rule->prefix ?: 'OP',
-                'format_template' => $rule->format_template ?: 'OP-{YYYY}-{00000}',
-                'number_length' => $rule->number_length ?: 5,
-                'used_for' => $rule->used_for ?: 'Opening balance',
-                'updated_by' => $userId,
-            ])->save();
-        }
-
-        return $rule->fresh();
     }
 
     private function blankToNull(mixed $value): ?string

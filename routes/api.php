@@ -32,6 +32,12 @@ Route::middleware(['auth:sanctum'])->prefix('dropdowns')->name('api.dropdowns.')
     Route::get('/time-zones', [DropdownController::class, 'timeZones'])
         ->name('time-zones');
 
+    Route::get('/coa-levels', [DropdownController::class, 'coaLevels'])
+        ->name('coa-levels');
+
+    Route::get('/ledger-types', [DropdownController::class, 'ledgerTypes'])
+        ->name('ledger-types');
+
     Route::get('/account-types', [DropdownController::class, 'accountTypes'])
         ->name('account-types');
 

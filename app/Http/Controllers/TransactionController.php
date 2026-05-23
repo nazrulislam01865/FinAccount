@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\AccountingEngine\Contracts\AccountingEngineContract;
+use App\AccountingEngine\DTO\TransactionInput;
 use App\Http\Requests\TransactionEntryRequest;
 use App\Models\CashBankAccount;
 use App\Models\DueRegister;
@@ -11,7 +13,6 @@ use App\Models\TransactionHead;
 use App\Models\VoucherDetail;
 use App\Models\VoucherHeader;
 use App\Services\Accounting\FinancialYearService;
-use App\Services\Accounting\TransactionPostingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
@@ -31,7 +32,7 @@ class TransactionController extends Controller
 
         $transactionHeads = TransactionHead::query()
             ->where('status', 'Active')
-            ->with(['settlementTypes' => fn ($query) => $query->where('status', 'Active')->orderBy('sort_order')])
+            ->with(['defaultPartyType', 'settlementTypes' => fn ($query) => $query->where('status', 'Active')->orderBy('sort_order')])
             ->orderBy('name')
             ->get();
 
@@ -83,7 +84,7 @@ class TransactionController extends Controller
             ->sum('balance_effect');
 
         $recentTransactions = VoucherHeader::query()
-            ->with(['transactionHead', 'party', 'settlementType'])
+            ->with(['transactionHead', 'party', 'settlementType', 'details'])
             ->latest('id')
             ->limit(3)
             ->get();
@@ -104,20 +105,18 @@ class TransactionController extends Controller
 
     public function preview(
         TransactionEntryRequest $request,
-        TransactionPostingService $service
+        AccountingEngineContract $engine
     ): JsonResponse {
         try {
-            $preview = $service->preview(
-                $request->validated(),
-                $request->user()?->id,
-                $request->input('status') === VoucherHeader::STATUS_DRAFT
-            );
+            $request->validated();
 
-            $request->ensureCanUseResolvedVoucherType($preview['voucher_type'] ?? null);
+            $preview = $engine->preview(TransactionInput::fromRequest($request));
+
+            $request->ensureCanUseResolvedVoucherType($preview->voucherType);
 
             return response()->json([
                 'success' => true,
-                'data' => $preview,
+                'data' => $preview->toArray(),
             ]);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -138,36 +137,22 @@ class TransactionController extends Controller
 
     public function store(
         TransactionEntryRequest $request,
-        TransactionPostingService $service
+        AccountingEngineContract $engine
     ): JsonResponse {
         try {
-            $validated = $request->validated();
-            $draft = ($validated['status'] ?? VoucherHeader::STATUS_POSTED) === VoucherHeader::STATUS_DRAFT;
+            $request->validated();
 
-            $precheck = $service->preview(
-                $validated,
-                $request->user()?->id,
-                $draft
-            );
+            $input = TransactionInput::fromRequest($request);
+            $precheck = $engine->preview($input);
 
-            $request->ensureCanUseResolvedVoucherType($precheck['voucher_type'] ?? null);
+            $request->ensureCanUseResolvedVoucherType($precheck->voucherType);
 
-            $voucher = $service->save(
-                $validated,
-                $request->file('attachment'),
-                $request->user()?->id
-            );
+            $result = $engine->post($input, $request->file('attachment'));
 
             return response()->json([
                 'success' => true,
-                'message' => $voucher->status === VoucherHeader::STATUS_POSTED
-                    ? 'Transaction posted successfully.'
-                    : 'Transaction saved as draft.',
-                'data' => [
-                    'id' => $voucher->id,
-                    'voucher_number' => $voucher->voucher_number,
-                    'status' => $voucher->status,
-                ],
+                'message' => $result->message(),
+                'data' => $result->toArray(),
                 'redirect' => Route::has('accounting-reports.transactions.index')
                     ? route('accounting-reports.transactions.index')
                     : route('transactions.create'),

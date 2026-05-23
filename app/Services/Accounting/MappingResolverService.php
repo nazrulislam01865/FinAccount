@@ -2,7 +2,9 @@
 
 namespace App\Services\Accounting;
 
+use App\AccountingEngine\Services\AccountingRulePreviewService;
 use App\Models\CashBankAccount;
+use App\Models\Company;
 use App\Models\ChartOfAccount;
 use App\Models\LedgerMappingRule;
 use App\Models\Party;
@@ -10,6 +12,11 @@ use Illuminate\Validation\ValidationException;
 
 class MappingResolverService
 {
+    public function __construct(
+        private readonly AccountingRulePreviewService $accountingRulePreviewService
+    ) {
+    }
+
     public function resolve(int $transactionHeadId, int $settlementTypeId): LedgerMappingRule
     {
         $rule = LedgerMappingRule::query()
@@ -40,10 +47,30 @@ class MappingResolverService
         int $settlementTypeId,
         float $amount,
         ?int $cashBankAccountId = null,
-        ?int $partyId = null
+        ?int $partyId = null,
+        ?int $companyId = null,
+        ?int $userId = null,
+        ?string $voucherDate = null
     ): array {
-        $rule = $this->resolve($transactionHeadId, $settlementTypeId);
         $amount = round($amount, 2);
+        $companyId = $companyId ?: (int) Company::query()->orderBy('id')->value('id');
+
+        if ($companyId > 0) {
+            $v2Preview = $this->accountingRulePreviewService->preview([
+                'transaction_head_id' => $transactionHeadId,
+                'settlement_type_id' => $settlementTypeId,
+                'amount' => $amount,
+                'cash_bank_account_id' => $cashBankAccountId,
+                'party_id' => $partyId,
+                'voucher_date' => $voucherDate ?: now()->toDateString(),
+            ], $companyId, $userId);
+
+            if ($v2Preview !== null) {
+                return $v2Preview;
+            }
+        }
+
+        $rule = $this->resolve($transactionHeadId, $settlementTypeId);
 
         $cashBankAccount = $this->resolveCashBankAccount($rule, $cashBankAccountId);
         $party = $partyId
@@ -97,8 +124,22 @@ class MappingResolverService
         ];
     }
 
-    public function requiresCashBank(int $transactionHeadId, int $settlementTypeId): bool
+    public function requiresCashBank(int $transactionHeadId, int $settlementTypeId, ?int $companyId = null): bool
     {
+        $companyId = $companyId ?: (int) Company::query()->orderBy('id')->value('id');
+
+        if ($companyId > 0) {
+            $v2RequiresCashBank = $this->accountingRulePreviewService->requiresCashBank(
+                $transactionHeadId,
+                $settlementTypeId,
+                $companyId
+            );
+
+            if ($v2RequiresCashBank !== null) {
+                return $v2RequiresCashBank;
+            }
+        }
+
         $rule = $this->resolve($transactionHeadId, $settlementTypeId);
 
         return $this->ruleRequiresCashBank($rule);

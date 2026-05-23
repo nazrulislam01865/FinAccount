@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\AccountingEngine\Contracts\AccountingEngineContract;
+use App\AccountingEngine\DTO\TransactionInput;
 use App\Models\CashBankAccount;
 use App\Models\DueRegister;
 use App\Models\LedgerMappingRule;
 use App\Models\VoucherHeader;
-use App\Services\Accounting\TransactionPostingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,7 +46,7 @@ class DueManagementController extends Controller
         ]);
     }
 
-    public function settle(Request $request, TransactionPostingService $postingService): JsonResponse
+    public function settle(Request $request, AccountingEngineContract $engine): JsonResponse
     {
         $validated = $request->validate([
             'party_id' => ['required', 'integer', Rule::exists('parties', 'id')->where(fn ($query) => $query->where('status', 'Active'))],
@@ -117,17 +118,23 @@ class DueManagementController extends Controller
                 'status' => VoucherHeader::STATUS_POSTED,
             ];
 
-            $preview = $postingService->preview($postingInput, $request->user()?->id, false);
+            $transactionInput = TransactionInput::fromArray(
+                $postingInput,
+                (int) ($request->user()?->company_id ?? 0),
+                (int) ($request->user()?->id ?? 0)
+            );
+
+            $preview = $engine->preview($transactionInput)->toArray();
             $this->validatePreviewTouchesDueAccount($preview, (int) $validated['account_id'], (string) $validated['due_type']);
 
-            $voucher = $postingService->save($postingInput, null, $request->user()?->id);
+            $result = $engine->post($transactionInput);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Due payment / collection posted successfully. Income or expense was not recorded again.',
                 'data' => [
-                    'voucher_id' => $voucher->id,
-                    'voucher_number' => $voucher->voucher_number,
+                    'voucher_id' => $result->voucherId,
+                    'voucher_number' => $result->voucherNumber,
                     'remaining_balance' => max(0, $balance - $amount),
                 ],
                 'redirect' => route('due-management.index'),

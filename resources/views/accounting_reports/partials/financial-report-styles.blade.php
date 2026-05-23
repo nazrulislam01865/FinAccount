@@ -93,8 +93,13 @@
         margin-bottom: 18px;
     }
 
-    .financial-report-page .report-toolbar-seven {
-        grid-template-columns: repeat(7, minmax(0, 1fr));
+    .financial-report-page .report-toolbar-seven,
+    .financial-report-page .accounting-filter-sequence {
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    }
+
+    .financial-report-page .accounting-filter-sequence > * {
+        min-width: 0;
     }
 
     .financial-report-page .report-toolbar > div:not(.filter-actions),
@@ -102,6 +107,18 @@
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
+        min-width: 0;
+    }
+
+    .financial-report-page .date-range-field {
+        grid-column: span 2;
+        min-width: 0;
+    }
+
+    .financial-report-page .date-range-inputs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
         min-width: 0;
     }
 
@@ -150,7 +167,8 @@
     }
 
     .financial-report-page .table-wrap {
-        overflow-x: auto;
+        overflow-x: scroll;
+        scrollbar-gutter: stable both-edges;
     }
 
     .financial-report-page table,
@@ -261,11 +279,6 @@
             grid-template-columns: 1fr;
         }
 
-        .financial-report-page .report-toolbar-seven {
-            grid-template-columns: repeat(7, minmax(115px, 1fr));
-            overflow-x: auto;
-        }
-
         .financial-report-page .report-summary-grid-six,
         .financial-report-page .income-summary-grid,
         .financial-report-page .trial-summary-grid {
@@ -276,10 +289,15 @@
     @media (max-width: 880px) {
         .financial-report-page .report-toolbar,
         .financial-report-page .report-toolbar-seven,
+        .financial-report-page .date-range-inputs,
         .financial-report-page .report-summary-grid-six,
         .financial-report-page .income-summary-grid,
         .financial-report-page .trial-summary-grid {
             grid-template-columns: 1fr;
+        }
+
+        .financial-report-page .date-range-field {
+            grid-column: span 1;
         }
 
         .financial-report-page .report-toolbar > .filter-actions {
@@ -332,6 +350,39 @@
         .financial-report-page .page-title {
             border-bottom: 1px solid #ddd;
             padding-bottom: 12px;
+        }
+    }
+</style>
+<style>
+    .financial-report-page .checkbox-inline {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fff;
+        font-weight: 750;
+        color: #344054;
+    }
+
+    .financial-report-page .checkbox-inline input {
+        width: 16px;
+        height: 16px;
+        min-height: 16px;
+        flex: 0 0 auto;
+    }
+
+    @media (max-width: 1024px) {
+        .financial-report-page .report-summary-grid-six {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        .financial-report-page .report-summary-grid-six {
+            grid-template-columns: 1fr;
         }
     }
 </style>

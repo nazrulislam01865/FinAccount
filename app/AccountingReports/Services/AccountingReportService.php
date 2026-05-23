@@ -2,7 +2,12 @@
 
 namespace App\AccountingReports\Services;
 
+use App\AccountingReports\Services\Reports\AccountMovementReportService;
+use App\AccountingReports\Services\Reports\BalanceSheetReportService;
+use App\AccountingReports\Services\Reports\CashFlowStatementReportService;
 use App\AccountingReports\Services\Reports\IncomeStatementReportService;
+use App\AccountingReports\Services\Reports\PartyBalanceReportService;
+use App\AccountingReports\Services\Reports\ReportConfigurationService;
 use App\AccountingReports\Services\Reports\TrialBalanceReportService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -17,7 +22,12 @@ class AccountingReportService
 
     public function __construct(
         private readonly TrialBalanceReportService $trialBalanceReportService,
-        private readonly IncomeStatementReportService $incomeStatementReportService
+        private readonly IncomeStatementReportService $incomeStatementReportService,
+        private readonly BalanceSheetReportService $balanceSheetReportService,
+        private readonly CashFlowStatementReportService $cashFlowStatementReportService,
+        private readonly PartyBalanceReportService $partyBalanceReportService,
+        private readonly AccountMovementReportService $accountMovementReportService,
+        private readonly ReportConfigurationService $reportConfigurationService
     ) {
     }
 
@@ -103,6 +113,7 @@ class AccountingReportService
             ->leftJoin('parties as p', 'p.id', '=', 'v.party_id')
             ->leftJoinSub($settlementSub, 'settlement', 'settlement.voucher_header_id', '=', 'v.id')
             ->whereNull('v.deleted_at')
+            ->when(! empty($filters['company_id']), fn (Builder $query) => $query->where('v.company_id', (int) $filters['company_id']))
             ->selectRaw('v.id AS voucher_id')
             ->selectRaw('v.voucher_number AS voucher_no')
             ->selectRaw('v.voucher_date AS voucher_date')
@@ -139,15 +150,77 @@ class AccountingReportService
             $query->whereDate('v.voucher_date', '<=', $filters['to_date']);
         }
 
-        if (! empty($filters['status']) && $filters['status'] !== 'All') {
-            $query->where('v.status', $filters['status']);
-        }
+        $this->applyStandardAccountingFilters($query, $filters);
 
         if (! empty($filters['nature']) && $filters['nature'] !== 'All') {
             $query->whereRaw($this->natureSql() . ' = ?', [$filters['nature']]);
         }
 
         return $query;
+    }
+
+    private function applyStandardAccountingFilters(Builder $query, array $filters): void
+    {
+        $accountId = $filters['account_id'] ?? null;
+        $accountGroupId = $filters['account_group_id'] ?? null;
+
+        if (! empty($accountId) || ! empty($accountGroupId)) {
+            $group = null;
+
+            if (! empty($accountGroupId)) {
+                $group = DB::table('chart_of_accounts')
+                    ->where('id', (int) $accountGroupId)
+                    ->where('account_level', 'Group')
+                    ->first(['id', 'account_type_id']);
+            }
+
+            $query->whereExists(function (Builder $exists) use ($accountId, $group) {
+                $exists->selectRaw('1')
+                    ->from('voucher_details as fd')
+                    ->join('chart_of_accounts as fa', 'fa.id', '=', 'fd.account_id')
+                    ->whereColumn('fd.voucher_header_id', 'v.id');
+
+                if (! empty($accountId)) {
+                    $exists->where('fd.account_id', (int) $accountId);
+                }
+
+                if ($group) {
+                    $exists->where(function (Builder $where) use ($group) {
+                        $where->where('fa.parent_id', (int) $group->id)
+                            ->orWhere(function (Builder $sameTypeRootLedgers) use ($group) {
+                                $sameTypeRootLedgers
+                                    ->whereNull('fa.parent_id')
+                                    ->where('fa.account_type_id', (int) $group->account_type_id);
+                            });
+                    });
+                }
+            });
+        }
+
+        if (! empty($filters['party_id'])) {
+            $partyId = (int) $filters['party_id'];
+            $query->where(function (Builder $where) use ($partyId) {
+                $where->where('v.party_id', $partyId)
+                    ->orWhereExists(function (Builder $exists) use ($partyId) {
+                        $exists->selectRaw('1')
+                            ->from('voucher_details as pd')
+                            ->whereColumn('pd.voucher_header_id', 'v.id')
+                            ->where('pd.party_id', $partyId);
+                    });
+            });
+        }
+
+        if (! empty($filters['voucher_type']) && $filters['voucher_type'] !== 'All') {
+            $query->where('v.voucher_type', $filters['voucher_type']);
+        }
+
+        if (! empty($filters['transaction_head_id'])) {
+            $query->where('v.transaction_head_id', (int) $filters['transaction_head_id']);
+        }
+
+        if (! empty($filters['status']) && $filters['status'] !== 'All') {
+            $query->where('v.status', $filters['status']);
+        }
     }
 
     public function findTransaction(int|string $voucherId): ?object
@@ -188,16 +261,18 @@ class AccountingReportService
         $bookType = $filters['book_type'] ?? 'All';
         $txnType = $filters['transaction_type'] ?? 'All';
 
+        $companyId = ! empty($filters['company_id']) ? (int) $filters['company_id'] : null;
+
         $opening = DB::query()
             ->fromSub(
-                $this->cashBankMovementQuery($bookType, $accountId)
+                $this->cashBankMovementQuery($bookType, $accountId, $companyId)
                     ->whereDate('v.voucher_date', '<', $fromDate),
                 'm'
             )
             ->selectRaw('COALESCE(SUM(debit),0) - COALESCE(SUM(credit),0) AS opening_balance')
             ->value('opening_balance') ?? 0;
 
-        $periodBase = $this->cashBankMovementQuery($bookType, $accountId)
+        $periodBase = $this->cashBankMovementQuery($bookType, $accountId, $companyId)
             ->whereDate('v.voucher_date', '>=', $fromDate)
             ->whereDate('v.voucher_date', '<=', $toDate);
 
@@ -235,12 +310,12 @@ class AccountingReportService
             'closing_balance' => (float) $opening + (float) ($summary->total_inflow ?? 0) - (float) ($summary->total_outflow ?? 0),
             'total_entries' => (int) ($summary->total_entries ?? 0),
             'rows' => $rows,
-            'account_balances' => $this->cashBankAccountBalances($bookType, $toDate),
-            'cash_bank_accounts' => $this->cashBankAccounts($bookType),
+            'account_balances' => $this->cashBankAccountBalances($bookType, $toDate, $companyId),
+            'cash_bank_accounts' => $this->cashBankAccounts($bookType, $companyId),
         ];
     }
 
-    public function cashBankMovementQuery(string $bookType = 'All', int|string|null $accountId = null): Builder
+    public function cashBankMovementQuery(string $bookType = 'All', int|string|null $accountId = null, ?int $companyId = null): Builder
     {
         $query = DB::table('voucher_details as d')
             ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
@@ -249,6 +324,7 @@ class AccountingReportService
             ->where('a.is_cash_bank', 1)
             ->whereIn('v.status', array_merge($this->postedStatuses, $this->reversedStatuses))
             ->whereNull('v.deleted_at')
+            ->when($companyId, fn (Builder $query) => $query->where('v.company_id', $companyId))
             ->selectRaw('d.id AS journal_line_id')
             ->selectRaw('v.voucher_date AS journal_date')
             ->selectRaw('v.voucher_type AS journal_no')
@@ -272,12 +348,13 @@ class AccountingReportService
         return $query;
     }
 
-    public function cashBankAccounts(string $bookType = 'All'): Collection
+    public function cashBankAccounts(string $bookType = 'All', ?int $companyId = null): Collection
     {
         $query = DB::table('chart_of_accounts as a')
             ->leftJoin('cash_bank_accounts as cb', 'cb.linked_ledger_account_id', '=', 'a.id')
             ->where('a.is_cash_bank', 1)
             ->whereNull('a.deleted_at')
+            ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))
             ->selectRaw('a.id AS account_id')
             ->selectRaw('a.account_code AS account_code')
             ->selectRaw('COALESCE(cb.cash_bank_name, a.account_name) AS account_name')
@@ -289,13 +366,13 @@ class AccountingReportService
         return $query->get();
     }
 
-    public function cashBankAccountBalances(string $bookType = 'All', ?string $toDate = null): Collection
+    public function cashBankAccountBalances(string $bookType = 'All', ?string $toDate = null, ?int $companyId = null): Collection
     {
         $toDate ??= now()->toDateString();
 
         return DB::query()
             ->fromSub(
-                $this->cashBankMovementQuery($bookType)->whereDate('v.voucher_date', '<=', $toDate),
+                $this->cashBankMovementQuery($bookType, null, $companyId)->whereDate('v.voucher_date', '<=', $toDate),
                 'm'
             )
             ->groupBy('account_id', 'account_code', 'account_name')
@@ -307,12 +384,64 @@ class AccountingReportService
 
     public function trialBalance(array $filters = []): array
     {
-        return $this->trialBalanceReportService->build($filters);
+        return $this->trialBalanceReportService->build($this->withReportConfiguration($filters, 'trial-balance'));
     }
 
     public function incomeStatement(array $filters = []): array
     {
-        return $this->incomeStatementReportService->build($filters);
+        return $this->incomeStatementReportService->build($this->withReportConfiguration($filters, 'income-statement'));
+    }
+
+
+    public function balanceSheet(array $filters = []): array
+    {
+        return $this->balanceSheetReportService->build($this->withReportConfiguration($filters, 'balance-sheet'));
+    }
+
+    public function cashFlowStatement(array $filters = []): array
+    {
+        return $this->cashFlowStatementReportService->build($this->withReportConfiguration($filters, 'cash-flow-statement'));
+    }
+
+    public function customerReceivables(array $filters = []): array
+    {
+        return $this->partyBalanceReportService->customerReceivable($this->withReportConfiguration($filters, 'customer-receivables'));
+    }
+
+    public function supplierPayables(array $filters = []): array
+    {
+        return $this->partyBalanceReportService->supplierPayable($this->withReportConfiguration($filters, 'supplier-payables'));
+    }
+
+    public function salesReport(array $filters = []): array
+    {
+        return $this->accountMovementReportService->sales($this->withReportConfiguration($filters, 'sales-report'));
+    }
+
+    public function expenseReport(array $filters = []): array
+    {
+        return $this->accountMovementReportService->expenses($this->withReportConfiguration($filters, 'expense-report'));
+    }
+
+    public function reportConfiguration(string $reportKey): object
+    {
+        return $this->reportConfigurationService->forReport($reportKey, auth()->user());
+    }
+
+    private function withReportConfiguration(array $filters, string $reportKey): array
+    {
+        $configuration = $this->reportConfiguration($reportKey);
+
+        $filters['include_zero_balances'] = filter_var(
+            $filters['include_zero_balances'] ?? $configuration->include_zero_balances ?? false,
+            FILTER_VALIDATE_BOOLEAN
+        );
+        $filters['include_inactive_accounts'] = filter_var(
+            $filters['include_inactive_accounts'] ?? $configuration->include_inactive_accounts ?? false,
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        return $filters;
     }
 
     public function accountTypes(): Collection

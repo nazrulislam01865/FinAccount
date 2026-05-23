@@ -27,6 +27,8 @@ class LedgerMappingController extends Controller
             ->with([
                 'transactionHead',
                 'settlementType',
+                'primaryLedger.accountType',
+                'fixedCounterLedger.accountType',
                 'debitAccount.accountType',
                 'creditAccount.accountType',
             ])

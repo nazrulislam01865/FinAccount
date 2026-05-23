@@ -17,18 +17,20 @@ class TrialBalanceController extends Controller
     public function index(TrialBalanceRequest $request): Response
     {
         $filters = $request->filters();
+        $filters['company_id'] = (int) ($request->user()?->company_id ?? 0);
         $report = $this->reports->trialBalance($filters);
 
         return response()->view('accounting_reports.trial_balance.index', [
             'filters' => $filters,
             'report' => $report,
             'currency' => config('accounting_reports.currency', 'BDT'),
+            'configuration' => $this->reports->reportConfiguration('trial-balance'),
         ]);
     }
 
     public function export(TrialBalanceRequest $request): StreamedResponse
     {
-        $report = $this->reports->trialBalance($request->filters());
+        $report = $this->reports->trialBalance(array_merge($request->filters(), ['company_id' => (int) ($request->user()?->company_id ?? 0)]));
         $fileName = 'trial-balance-' . now()->format('Ymd-His') . '.csv';
 
         return response()->streamDownload(function () use ($report) {

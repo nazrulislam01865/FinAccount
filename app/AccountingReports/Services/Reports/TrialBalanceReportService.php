@@ -18,18 +18,21 @@ class TrialBalanceReportService
     {
         $fromDate = $filters['from_date'] ?? now()->startOfMonth()->toDateString();
         $toDate = $filters['to_date'] ?? now()->toDateString();
+        $companyId = ! empty($filters['company_id']) ? (int) $filters['company_id'] : null;
+        $includeZero = filter_var($filters['include_zero_balances'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $includeInactive = filter_var($filters['include_inactive_accounts'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $accountType = $filters['account_type'] ?? 'All';
         $balanceType = $filters['balance_type'] ?? 'All';
         $search = mb_strtolower(trim((string) ($filters['q'] ?? '')));
 
-        $openingSub = $this->accountMovementQuery()
+        $openingSub = $this->accountMovementQuery($companyId)
             ->whereDate('v.voucher_date', '<', $fromDate)
             ->groupBy('d.account_id')
             ->selectRaw('d.account_id')
             ->selectRaw('COALESCE(SUM(d.debit), 0) AS opening_debit_raw')
             ->selectRaw('COALESCE(SUM(d.credit), 0) AS opening_credit_raw');
 
-        $periodSub = $this->accountMovementQuery()
+        $periodSub = $this->accountMovementQuery($companyId)
             ->whereDate('v.voucher_date', '>=', $fromDate)
             ->whereDate('v.voucher_date', '<=', $toDate)
             ->groupBy('d.account_id')
@@ -42,6 +45,8 @@ class TrialBalanceReportService
             ->leftJoinSub($openingSub, 'op', 'op.account_id', '=', 'a.id')
             ->leftJoinSub($periodSub, 'pd', 'pd.account_id', '=', 'a.id')
             ->whereNull('a.deleted_at')
+            ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))
+            ->when(! $includeInactive, fn (Builder $query) => $query->where('a.status', 'Active'))
             ->where(function (Builder $query) {
                 $query->where('a.posting_allowed', 1)
                     ->orWhereNotNull('op.account_id')
@@ -70,6 +75,7 @@ class TrialBalanceReportService
             ->selectRaw('COALESCE(pd.period_credit, 0) AS period_credit')
             ->get()
             ->map(fn (object $row) => $this->decorateTrialBalanceRow($row))
+            ->filter(fn (object $row) => $includeZero || $row->has_activity)
             ->filter(fn (object $row) => $this->matchesBalanceType($row, $balanceType))
             ->values();
 
@@ -93,12 +99,13 @@ class TrialBalanceReportService
         ];
     }
 
-    private function accountMovementQuery(): Builder
+    private function accountMovementQuery(?int $companyId = null): Builder
     {
         return DB::table('voucher_details as d')
             ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
             ->whereIn('v.status', self::REPORT_STATUSES)
-            ->whereNull('v.deleted_at');
+            ->whereNull('v.deleted_at')
+            ->when($companyId, fn (Builder $query) => $query->where('v.company_id', $companyId));
     }
 
     private function decorateTrialBalanceRow(object $row): object

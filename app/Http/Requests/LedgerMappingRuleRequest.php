@@ -19,22 +19,77 @@ class LedgerMappingRuleRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $primaryLedgerId = $this->primary_ledger_id ?: null;
+        $counterLedgerId = $this->fixed_counter_ledger_id ?: null;
+        $primarySide = $this->input('primary_posting_side', 'Debit') ?: 'Debit';
+        $counterSide = $this->input('counter_posting_side') ?: ($primarySide === 'Debit' ? 'Credit' : 'Debit');
+
+        $debitAccountId = $this->debit_account_id ?: null;
+        $creditAccountId = $this->credit_account_id ?: null;
+
+        if ($primaryLedgerId && $counterLedgerId) {
+            if ($primarySide === 'Debit') {
+                $debitAccountId = $primaryLedgerId;
+                $creditAccountId = $counterLedgerId;
+            } else {
+                $debitAccountId = $counterLedgerId;
+                $creditAccountId = $primaryLedgerId;
+            }
+        }
+
+        $partyRequiredMode = (string) ($this->input('party_required_mode') ?: $this->input('party_required', 'No'));
+        $partyRequiredMode = match ($partyRequiredMode) {
+            'Required', 'Yes' => 'Yes',
+            'Optional' => 'Optional',
+            default => 'No',
+        };
+
+        $status = $this->input('rule_status', $this->input('status', 'Active')) ?: 'Active';
+
         $this->merge([
             'rule_code' => $this->blankToNull($this->rule_code),
+            'rule_name' => $this->blankToNull($this->rule_name),
             'transaction_head_id' => $this->transaction_head_id ?: null,
             'settlement_type_id' => $this->settlement_type_id ?: null,
-            'debit_account_id' => $this->debit_account_id ?: null,
-            'credit_account_id' => $this->credit_account_id ?: null,
+            'transaction_screen' => $this->blankToNull($this->transaction_screen),
+            'rule_trigger' => $this->blankToNull($this->rule_trigger) ?: 'Transaction Head selected',
+            'amount_required' => filter_var($this->input('amount_required', true), FILTER_VALIDATE_BOOLEAN),
+            'payment_method_required' => filter_var($this->input('payment_method_required', false), FILTER_VALIDATE_BOOLEAN),
+            'allowed_payment_method' => $this->blankToNull($this->allowed_payment_method) ?: 'N/A',
+            'cash_bank_ledger_required' => filter_var($this->input('cash_bank_ledger_required', false), FILTER_VALIDATE_BOOLEAN),
+            'party_required_mode' => $partyRequiredMode,
+            'party_sub_ledger_type' => $this->blankToNull($this->party_sub_ledger_type),
+            'other_required_input' => $this->blankToNull($this->other_required_input),
+            'primary_ledger_source' => $this->blankToNull($this->primary_ledger_source) ?: 'Fixed Ledger',
+            'primary_ledger_id' => $primaryLedgerId,
+            'primary_ledger_movement' => $this->blankToNull($this->primary_ledger_movement) ?: 'Increase',
+            'primary_posting_side' => $primarySide,
+            'primary_explanation' => $this->blankToNull($this->primary_explanation),
+            'counter_ledger_source' => $this->blankToNull($this->counter_ledger_source) ?: 'Fixed Ledger',
+            'counter_selection_method' => $this->blankToNull($this->counter_selection_method) ?: 'Fixed by Rule',
+            'fixed_counter_ledger_id' => $counterLedgerId,
+            'allowed_counter_ledger_type' => $this->blankToNull($this->allowed_counter_ledger_type) ?: 'N/A',
+            'counter_ledger_movement' => $this->blankToNull($this->counter_ledger_movement) ?: 'Decrease',
+            'counter_posting_side' => $counterSide,
+            'counter_explanation' => $this->blankToNull($this->counter_explanation),
+            'debit_account_id' => $debitAccountId,
+            'credit_account_id' => $creditAccountId,
             'party_ledger_effect' => $this->blankToNull($this->party_ledger_effect),
             'auto_post' => filter_var($this->input('auto_post', true), FILTER_VALIDATE_BOOLEAN),
             'description' => $this->blankToNull($this->description),
-            'status' => $this->status ?: 'Active',
+            'status' => $status,
         ]);
     }
 
     public function rules(): array
     {
         $ruleId = $this->route('ledger_mapping_rule')?->id;
+        $postingLedgerRule = Rule::exists('chart_of_accounts', 'id')
+            ->where(fn ($query) => $query
+                ->where('status', 'Active')
+                ->where('account_level', 'Ledger')
+                ->where('posting_allowed', true)
+                ->whereNull('deleted_at'));
 
         return [
             'rule_code' => [
@@ -46,7 +101,7 @@ class LedgerMappingRuleRequest extends FormRequest
                     ->whereNull('deleted_at')
                     ->ignore($ruleId),
             ],
-
+            'rule_name' => ['required', 'string', 'max:150'],
             'transaction_head_id' => [
                 'required',
                 'integer',
@@ -55,50 +110,75 @@ class LedgerMappingRuleRequest extends FormRequest
                         ->where('status', 'Active')
                         ->whereNull('deleted_at')),
             ],
-
             'settlement_type_id' => [
                 'required',
                 'integer',
                 Rule::exists('settlement_types', 'id')
                     ->where(fn ($query) => $query->where('status', 'Active')),
             ],
-
-            'debit_account_id' => [
-                'required',
-                'integer',
-                Rule::exists('chart_of_accounts', 'id')
-                    ->where(fn ($query) => $query
-                        ->where('status', 'Active')
-                        ->where('account_level', 'Ledger')
-                        ->where('posting_allowed', true)
-                        ->whereNull('deleted_at')),
-            ],
-
-            'credit_account_id' => [
-                'required',
-                'integer',
-                'different:debit_account_id',
-                Rule::exists('chart_of_accounts', 'id')
-                    ->where(fn ($query) => $query
-                        ->where('status', 'Active')
-                        ->where('account_level', 'Ledger')
-                        ->where('posting_allowed', true)
-                        ->whereNull('deleted_at')),
-            ],
-
-            'party_ledger_effect' => [
-                'nullable',
-                Rule::in(LedgerMappingRule::PARTY_EFFECTS),
-            ],
-
+            'transaction_screen' => ['nullable', 'string', 'max:100'],
+            'rule_trigger' => ['required', Rule::in([
+                'Transaction Head selected',
+                'Payment Method selected',
+                'Party Type selected',
+                'System mapping matched',
+            ])],
+            'amount_required' => ['required', 'boolean'],
+            'payment_method_required' => ['required', 'boolean'],
+            'allowed_payment_method' => ['required', Rule::in(['Cash, Bank', 'Cash', 'Bank', 'N/A'])],
+            'cash_bank_ledger_required' => ['required', 'boolean'],
+            'party_required_mode' => ['required', Rule::in(['No', 'Yes', 'Optional'])],
+            'party_sub_ledger_type' => ['nullable', Rule::in(['None', 'Customer', 'Supplier', 'Employee', 'Owner'])],
+            'other_required_input' => ['nullable', 'string', 'max:255'],
+            'primary_ledger_source' => ['required', Rule::in([
+                'Fixed Ledger',
+                'User Selected Cash/Bank Ledger',
+                'Transaction Head Based Ledger',
+                'System Derived Ledger',
+            ])],
+            'primary_ledger_id' => ['required', 'integer', $postingLedgerRule],
+            'primary_ledger_movement' => ['required', Rule::in(['Increase', 'Decrease'])],
+            'primary_posting_side' => ['required', Rule::in(['Debit', 'Credit'])],
+            'primary_explanation' => ['nullable', 'string', 'max:1000'],
+            'counter_ledger_source' => ['required', Rule::in([
+                'Fixed Ledger',
+                'User Selected Cash/Bank Ledger',
+                'User Selected Party Control Ledger',
+                'Transaction Head Based Ledger',
+                'Payment Method Based Ledger',
+                'Party Type Based Ledger',
+                'System Derived Ledger',
+            ])],
+            'counter_selection_method' => ['required', Rule::in([
+                'Fixed by Rule',
+                'Selected by User',
+                'Derived from Payment Method',
+                'Derived from Party Type',
+                'Derived from Transaction Head',
+                'Derived from System Mapping',
+            ])],
+            'fixed_counter_ledger_id' => ['required', 'integer', 'different:primary_ledger_id', $postingLedgerRule],
+            'allowed_counter_ledger_type' => ['required', Rule::in([
+                'Cash/Bank',
+                'Customer Receivable',
+                'Supplier Payable',
+                'Income',
+                'Expense',
+                'Asset',
+                'Liability',
+                'Equity',
+                'Party Control',
+                'N/A',
+            ])],
+            'counter_ledger_movement' => ['required', Rule::in(['Increase', 'Decrease'])],
+            'counter_posting_side' => ['required', Rule::in(['Debit', 'Credit'])],
+            'counter_explanation' => ['nullable', 'string', 'max:1000'],
+            'debit_account_id' => ['required', 'integer', $postingLedgerRule],
+            'credit_account_id' => ['required', 'integer', 'different:debit_account_id', $postingLedgerRule],
+            'party_ledger_effect' => ['nullable', Rule::in(LedgerMappingRule::PARTY_EFFECTS)],
             'auto_post' => ['required', 'boolean'],
-
             'description' => ['nullable', 'string', 'max:1000'],
-
-            'status' => [
-                'required',
-                Rule::in(['Active', 'Inactive']),
-            ],
+            'status' => ['required', Rule::in(['Active', 'Inactive', 'Draft', 'Pending Review'])],
         ];
     }
 
@@ -448,7 +528,7 @@ class LedgerMappingRuleRequest extends FormRequest
             'auto_post.boolean' => 'Auto Post must be Yes or No.',
 
             'status.required' => 'Status is required.',
-            'status.in' => 'Status must be Active or Inactive.',
+            'status.in' => 'Status must be Active, Inactive, Draft, or Pending Review.',
         ];
     }
 }

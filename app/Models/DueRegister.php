@@ -10,6 +10,8 @@ class DueRegister extends Model
 
     protected $fillable = [
         'voucher_header_id',
+        'voucher_detail_id',
+        'source_voucher_detail_id',
         'party_id',
         'account_id',
         'due_type',
@@ -29,6 +31,17 @@ class DueRegister extends Model
     public function voucherHeader()
     {
         return $this->belongsTo(VoucherHeader::class);
+    }
+
+    public function voucherDetail()
+    {
+        return $this->belongsTo(VoucherDetail::class);
+    }
+
+
+    public function sourceVoucherDetail()
+    {
+        return $this->belongsTo(VoucherDetail::class, 'source_voucher_detail_id');
     }
 
     public function party()

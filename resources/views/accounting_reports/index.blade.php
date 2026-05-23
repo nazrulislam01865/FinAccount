@@ -33,6 +33,48 @@
             'icon' => 'IS',
             'permission' => 'reports.view',
         ],
+        [
+            'title' => 'Balance Sheet',
+            'description' => 'Assets, liabilities, equity, retained profit, and balance check as of a date.',
+            'route' => 'accounting-reports.balance-sheet.index',
+            'icon' => 'BS',
+            'permission' => 'reports.full',
+        ],
+        [
+            'title' => 'Cash Flow Statement',
+            'description' => 'Operating, investing, and financing cash movement from cash/bank voucher lines.',
+            'route' => 'accounting-reports.cash-flow-statement.index',
+            'icon' => 'CF',
+            'permission' => 'reports.full',
+        ],
+        [
+            'title' => 'Customer Receivable',
+            'description' => 'Customer-wise opening, debit, credit, and closing receivable movement.',
+            'route' => 'accounting-reports.customer-receivables.index',
+            'icon' => 'CR',
+            'permission' => 'customer-ledgers.view',
+        ],
+        [
+            'title' => 'Supplier Payable',
+            'description' => 'Supplier-wise opening, debit, credit, and closing payable movement.',
+            'route' => 'accounting-reports.supplier-payables.index',
+            'icon' => 'SP',
+            'permission' => 'supplier-ledgers.view',
+        ],
+        [
+            'title' => 'Sales Report',
+            'description' => 'Sales/income ledger movements by voucher, party, transaction head, and account.',
+            'route' => 'accounting-reports.sales-report.index',
+            'icon' => 'SR',
+            'permission' => 'reports.view',
+        ],
+        [
+            'title' => 'Expense Report',
+            'description' => 'Expense ledger movements by voucher, party, transaction head, and account.',
+            'route' => 'accounting-reports.expense-report.index',
+            'icon' => 'ER',
+            'permission' => 'reports.view',
+        ],
     ];
 
     $user = auth()->user();
@@ -41,7 +83,7 @@
 <div class="page-title">
     <div>
         <h2>Accounting Reports</h2>
-        <p>Reusable report pages generated from posted voucher detail debit/credit rows.</p>
+        <p>Phase 6 reports are standardized on posted voucher detail debit/credit rows, not voucher header amount.</p>
     </div>
 </div>
 

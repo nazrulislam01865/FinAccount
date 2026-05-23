@@ -378,8 +378,11 @@ class MasterDataController extends Controller
             $company = Company::query()->first();
             $isNew = ! $financialYear->exists;
 
-            if ($data['is_active']) {
-                FinancialYear::query()->update(['is_active' => false]);
+            if ($data['is_current']) {
+                FinancialYear::query()->update([
+                    'is_active' => false,
+                    'is_current' => false,
+                ]);
             }
 
             $financialYear->fill([
@@ -387,7 +390,9 @@ class MasterDataController extends Controller
                 'name' => $data['name'],
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
-                'is_active' => $data['is_active'],
+                'lock_date' => $data['lock_date'] ?? null,
+                'is_active' => $data['is_current'],
+                'is_current' => $data['is_current'],
                 'status' => $data['status'],
                 'updated_by' => $userId,
             ]);

@@ -6,6 +6,10 @@ use App\AccountingReports\Services\AccountingReportService;
 use App\AccountingReports\Services\AccountingReversalService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccountingReports\TransactionReportRequest;
+use App\Models\ChartOfAccount;
+use App\Models\Party;
+use App\Models\TransactionHead;
+use App\Models\VoucherHeader;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -22,13 +26,40 @@ class TransactionListController extends Controller
     public function index(TransactionReportRequest $request): Response
     {
         $filters = $request->filters();
+        $filters['company_id'] = (int) ($request->user()?->company_id ?? 0);
         $data = $this->reports->paginateTransactions($filters);
 
         return response()->view('accounting_reports.transactions.index', [
             'filters' => $filters,
             'transactions' => $data['transactions'],
             'stats' => $data['stats'],
+            'accountGroups' => ChartOfAccount::query()
+                ->where('status', 'Active')
+                ->where('account_level', 'Group')
+                ->orderBy('account_code')
+                ->get(['id', 'account_code', 'account_name', 'account_type_id']),
+            'ledgerAccounts' => ChartOfAccount::query()
+                ->where('status', 'Active')
+                ->where('account_level', 'Ledger')
+                ->where('posting_allowed', true)
+                ->orderBy('account_code')
+                ->get(['id', 'account_code', 'account_name', 'parent_id', 'account_type_id']),
+            'parties' => Party::query()
+                ->where('status', 'Active')
+                ->orderBy('party_name')
+                ->get(['id', 'party_code', 'party_name']),
+            'voucherTypes' => VoucherHeader::query()
+                ->whereNotNull('voucher_type')
+                ->where('voucher_type', '!=', '')
+                ->distinct()
+                ->orderBy('voucher_type')
+                ->pluck('voucher_type'),
+            'transactionHeads' => TransactionHead::query()
+                ->where('status', 'Active')
+                ->orderBy('name')
+                ->get(['id', 'head_code', 'name']),
             'currency' => config('accounting_reports.currency', 'BDT'),
+            'configuration' => $this->reports->reportConfiguration('transaction-list'),
         ]);
     }
 
@@ -40,6 +71,7 @@ class TransactionListController extends Controller
         return response()->view('accounting_reports.transactions.show', [
             'transaction' => $transaction,
             'currency' => config('accounting_reports.currency', 'BDT'),
+            'configuration' => $this->reports->reportConfiguration('transaction-list'),
         ]);
     }
 
@@ -60,6 +92,7 @@ class TransactionListController extends Controller
     public function export(TransactionReportRequest $request): StreamedResponse
     {
         $filters = $request->filters();
+        $filters['company_id'] = (int) ($request->user()?->company_id ?? 0);
         $rows = $this->reports->transactionBaseQuery($filters)
             ->orderByDesc('voucher_date')
             ->orderByDesc('voucher_id')

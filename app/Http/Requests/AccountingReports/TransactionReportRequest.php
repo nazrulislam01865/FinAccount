@@ -18,8 +18,13 @@ class TransactionReportRequest extends FormRequest
             'q' => ['nullable', 'string', 'max:120'],
             'from_date' => ['nullable', 'date'],
             'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
-            'nature' => ['nullable', 'in:All,Payment,Receipt,Due,Advance,Adjustment'],
+            'account_group_id' => ['nullable', 'integer'],
+            'account_id' => ['nullable', 'integer'],
+            'party_id' => ['nullable', 'integer'],
+            'voucher_type' => ['nullable', 'string', 'max:60'],
+            'transaction_head_id' => ['nullable', 'integer'],
             'status' => ['nullable', 'string', 'max:40'],
+            'nature' => ['nullable', 'in:All,Payment,Receipt,Due,Advance,Adjustment'],
         ];
     }
 
@@ -29,8 +34,13 @@ class TransactionReportRequest extends FormRequest
             'q' => $this->input('q'),
             'from_date' => $this->input('from_date'),
             'to_date' => $this->input('to_date'),
-            'nature' => $this->input('nature', 'All'),
+            'account_group_id' => $this->input('account_group_id'),
+            'account_id' => $this->input('account_id'),
+            'party_id' => $this->input('party_id'),
+            'voucher_type' => $this->input('voucher_type', 'All'),
+            'transaction_head_id' => $this->input('transaction_head_id'),
             'status' => $this->input('status', 'All'),
+            'nature' => $this->input('nature', 'All'),
         ];
     }
 }

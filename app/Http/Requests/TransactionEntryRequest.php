@@ -25,7 +25,7 @@ class TransactionEntryRequest extends FormRequest
     {
         $this->merge([
             'party_id' => $this->party_id ?: null,
-            'cash_bank_account_id' => null,
+            'cash_bank_account_id' => $this->cash_bank_account_id ?: null,
             'amount' => $this->money($this->amount),
             'status' => $this->status ?: 'Posted',
             'reference' => $this->blankToNull($this->reference),
@@ -62,6 +62,14 @@ class TransactionEntryRequest extends FormRequest
                         ->whereNull('deleted_at')),
             ],
 
+            'cash_bank_account_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('cash_bank_accounts', 'id')
+                    ->where(fn ($query) => $query
+                        ->where('status', 'Active')
+                        ->whereNull('deleted_at')),
+            ],
 
             'amount' => ['required', 'numeric', 'min:0.01'],
             'reference' => ['nullable', 'string', 'max:150'],
@@ -176,6 +184,7 @@ class TransactionEntryRequest extends FormRequest
             'settlement_type_id.required' => 'Settlement Type is required.',
             'settlement_type_id.exists' => 'Selected Settlement Type is invalid or inactive.',
             'party_id.exists' => 'Selected Party / Person is invalid or inactive.',
+            'cash_bank_account_id.exists' => 'Selected Cash/Bank account is invalid or inactive.',
             'amount.required' => 'Amount is required.',
             'amount.numeric' => 'Amount must be a valid number.',
             'amount.min' => 'Amount must be greater than zero.',
@@ -286,7 +295,12 @@ class TransactionEntryRequest extends FormRequest
             return;
         }
 
-        $cashBankAccount = $this->autoCashBankAccountForMapping($mapping);
+        $cashBankAccount = $this->cash_bank_account_id
+            ? CashBankAccount::query()
+                ->with('linkedLedger.accountType')
+                ->where('status', 'Active')
+                ->find($this->integer('cash_bank_account_id'))
+            : $this->autoCashBankAccountForMapping($mapping);
 
         if (!$cashBankAccount || !$cashBankAccount->linkedLedger) {
             $validator->errors()->add(
@@ -310,7 +324,7 @@ class TransactionEntryRequest extends FormRequest
         ) {
             $validator->errors()->add(
                 'cash_bank_account_id',
-                'Auto-selected Cash/Bank account must be an active Asset cash/bank posting ledger.'
+                'Selected Cash/Bank account must be an active Asset cash/bank posting ledger.'
             );
         }
     }

@@ -53,19 +53,13 @@
         <x-report.info-card title="YTD Position" :rows="$ytdRows" />
     </div>
 
-    <form method="GET" action="{{ route('accounting-reports.income-statement.index') }}" class="card report-toolbar report-toolbar-seven">
-        <div class="field search-field">
-            <label>Search Account</label>
-            <span>⌕</span>
-            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search revenue, purchase, salary, rent...">
-        </div>
-        <div>
-            <label>From Date</label>
-            <input type="date" name="from_date" value="{{ $filters['from_date'] ?? $report['from_date'] }}">
-        </div>
-        <div>
-            <label>To Date</label>
-            <input type="date" name="to_date" value="{{ $filters['to_date'] ?? $report['to_date'] }}">
+    <form method="GET" action="{{ route('accounting-reports.income-statement.index') }}" class="card report-toolbar report-toolbar-seven accounting-filter-sequence">
+        <div class="date-range-field">
+            <label>Date Range</label>
+            <div class="date-range-inputs">
+                <input type="date" name="from_date" value="{{ $filters['from_date'] ?? $report['from_date'] }}" aria-label="From Date">
+                <input type="date" name="to_date" value="{{ $filters['to_date'] ?? $report['to_date'] }}" aria-label="To Date">
+            </div>
         </div>
         <div>
             <label>Section</label>
@@ -80,6 +74,11 @@
             <select name="basis">
                 <option value="Accrual" selected>Accrual Basis</option>
             </select>
+        </div>
+        <div class="field search-field">
+            <label>Search Account</label>
+            <span>⌕</span>
+            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search revenue, purchase, salary, rent...">
         </div>
         <x-report.filter-actions :reset-route="route('accounting-reports.income-statement.index')" />
     </form>

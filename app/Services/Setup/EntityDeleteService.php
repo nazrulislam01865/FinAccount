@@ -9,11 +9,16 @@ use App\Models\Party;
 use App\Models\TransactionHead;
 use App\Models\VoucherNumberingRule;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class EntityDeleteService
 {
     public function deleteChartOfAccount(ChartOfAccount $account): void
     {
+        if ($account->is_system_ledger) {
+            throw new RuntimeException('System ledgers are protected and cannot be deleted. Deactivate the ledger instead if it should not appear in new setup.');
+        }
+
         DB::transaction(function () use ($account) {
             $accountId = $account->id;
 

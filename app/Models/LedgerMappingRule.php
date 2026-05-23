@@ -26,8 +26,30 @@ class LedgerMappingRule extends Model
     protected $fillable = [
         'company_id',
         'rule_code',
+        'rule_name',
         'transaction_head_id',
         'settlement_type_id',
+        'transaction_screen',
+        'rule_trigger',
+        'amount_required',
+        'payment_method_required',
+        'allowed_payment_method',
+        'cash_bank_ledger_required',
+        'party_required_mode',
+        'party_sub_ledger_type',
+        'other_required_input',
+        'primary_ledger_source',
+        'primary_ledger_id',
+        'primary_ledger_movement',
+        'primary_posting_side',
+        'primary_explanation',
+        'counter_ledger_source',
+        'counter_selection_method',
+        'fixed_counter_ledger_id',
+        'allowed_counter_ledger_type',
+        'counter_ledger_movement',
+        'counter_posting_side',
+        'counter_explanation',
         'debit_account_id',
         'credit_account_id',
         'party_ledger_effect',
@@ -40,6 +62,9 @@ class LedgerMappingRule extends Model
 
     protected $casts = [
         'auto_post' => 'boolean',
+        'amount_required' => 'boolean',
+        'payment_method_required' => 'boolean',
+        'cash_bank_ledger_required' => 'boolean',
     ];
 
     public function company()
@@ -55,6 +80,16 @@ class LedgerMappingRule extends Model
     public function settlementType()
     {
         return $this->belongsTo(SettlementType::class);
+    }
+
+    public function primaryLedger()
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'primary_ledger_id');
+    }
+
+    public function fixedCounterLedger()
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'fixed_counter_ledger_id');
     }
 
     public function debitAccount()

@@ -18,12 +18,15 @@ class IncomeStatementReportService
     {
         $fromDate = $filters['from_date'] ?? now()->startOfMonth()->toDateString();
         $toDate = $filters['to_date'] ?? now()->toDateString();
+        $companyId = ! empty($filters['company_id']) ? (int) $filters['company_id'] : null;
+        $includeZero = filter_var($filters['include_zero_balances'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $includeInactive = filter_var($filters['include_inactive_accounts'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $section = $filters['section'] ?? 'All';
         $search = mb_strtolower(trim((string) ($filters['q'] ?? '')));
         $yearStart = $this->financialYearStartFor($toDate);
 
-        $periodSub = $this->profitLossAggregateQuery($fromDate, $toDate);
-        $ytdSub = $this->profitLossAggregateQuery($yearStart, $toDate);
+        $periodSub = $this->profitLossAggregateQuery($fromDate, $toDate, $companyId);
+        $ytdSub = $this->profitLossAggregateQuery($yearStart, $toDate, $companyId);
 
         $rows = DB::table('chart_of_accounts as a')
             ->join('account_types as at', 'at.id', '=', 'a.account_type_id')
@@ -31,6 +34,8 @@ class IncomeStatementReportService
             ->leftJoinSub($periodSub, 'period', 'period.account_id', '=', 'a.id')
             ->leftJoinSub($ytdSub, 'ytd', 'ytd.account_id', '=', 'a.id')
             ->whereNull('a.deleted_at')
+            ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))
+            ->when(! $includeInactive, fn (Builder $query) => $query->where('a.status', 'Active'))
             ->where('a.posting_allowed', 1)
             ->whereIn('at.name', ['Income', 'Expense'])
             ->when($search !== '', function (Builder $query) use ($search) {
@@ -53,7 +58,7 @@ class IncomeStatementReportService
             ->selectRaw('COALESCE(ytd.credit, 0) AS ytd_credit')
             ->get()
             ->map(fn (object $row) => $this->decorateProfitLossRow($row))
-            ->filter(fn (object $row) => abs((float) $row->amount) >= 0.01 || abs((float) $row->ytd_amount) >= 0.01)
+            ->filter(fn (object $row) => $includeZero || abs((float) $row->amount) >= 0.01 || abs((float) $row->ytd_amount) >= 0.01)
             ->values();
 
         $displayRows = $section === 'All'
@@ -71,12 +76,13 @@ class IncomeStatementReportService
         ], $totals);
     }
 
-    private function profitLossAggregateQuery(string $fromDate, string $toDate): Builder
+    private function profitLossAggregateQuery(string $fromDate, string $toDate, ?int $companyId = null): Builder
     {
         return DB::table('voucher_details as d')
             ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
             ->whereIn('v.status', self::REPORT_STATUSES)
             ->whereNull('v.deleted_at')
+            ->when($companyId, fn (Builder $query) => $query->where('v.company_id', $companyId))
             ->whereDate('v.voucher_date', '>=', $fromDate)
             ->whereDate('v.voucher_date', '<=', $toDate)
             ->groupBy('d.account_id')

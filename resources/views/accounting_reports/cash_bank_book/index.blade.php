@@ -23,9 +23,16 @@
         </x-slot:actions>
     </x-report.page-header>
 
-    <form method="GET" action="{{ route('accounting-reports.cash-bank-book.index') }}" class="card report-toolbar report-toolbar-seven">
+    <form method="GET" action="{{ route('accounting-reports.cash-bank-book.index') }}" class="card report-toolbar report-toolbar-seven accounting-filter-sequence">
+        <div class="date-range-field">
+            <label>Date Range</label>
+            <div class="date-range-inputs">
+                <input type="date" name="from_date" value="{{ $filters['from_date'] ?? $report['from_date'] }}" aria-label="From Date">
+                <input type="date" name="to_date" value="{{ $filters['to_date'] ?? $report['to_date'] }}" aria-label="To Date">
+            </div>
+        </div>
         <div>
-            <label>Cash / Bank Account</label>
+            <label>Ledger Account</label>
             <select name="account_id">
                 <option value="">All Cash & Bank</option>
                 @foreach($report['cash_bank_accounts'] as $account)
@@ -42,14 +49,6 @@
                     <option value="{{ $value }}" @selected(($filters['book_type'] ?? 'All') === $value)>{{ $label }}</option>
                 @endforeach
             </select>
-        </div>
-        <div>
-            <label>From Date</label>
-            <input type="date" name="from_date" value="{{ $filters['from_date'] ?? $report['from_date'] }}">
-        </div>
-        <div>
-            <label>To Date</label>
-            <input type="date" name="to_date" value="{{ $filters['to_date'] ?? $report['to_date'] }}">
         </div>
         <div>
             <label>Transaction Type</label>
