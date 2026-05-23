@@ -83,12 +83,15 @@
                             <select id="headCategory" name="category" required>
                                 <option value="">Select category</option>
                                 <option value="Sales">Sales</option>
-                                <option value="Purchase">Purchase</option>
                                 <option value="Receipt">Receipt</option>
                                 <option value="Payment">Payment</option>
                                 <option value="Expense Payment">Expense Payment</option>
-                                <option value="Due">Due</option>
+                                <option value="Asset Purchase">Asset Purchase</option>
+                                <option value="Equity">Equity / Owner Transaction</option>
+                                <option value="Loan">Loan</option>
                                 <option value="Advance">Advance</option>
+                                <option value="Purchase">Purchase</option>
+                                <option value="Due">Due</option>
                                 <option value="Adjustment">Adjustment</option>
                                 <option value="Other">Other / Journal</option>
                             </select>
@@ -181,7 +184,7 @@
                             <label>Allowed Settlement Types <span class="required">*</span></label>
                             <div class="multi-select prototype-chip-box" id="settlementTypeChips" data-selected-count="0">
                                 @foreach($settlementTypes as $settlementType)
-                                    <span class="select-chip" tabindex="0" role="button" data-id="{{ $settlementType->id }}" data-value="{{ $settlementType->id }}">
+                                    <span class="select-chip" tabindex="0" role="button" data-id="{{ $settlementType->id }}" data-value="{{ $settlementType->id }}" data-name="{{ e($settlementType->name) }}" data-code="{{ e($settlementType->code) }}">
                                         {{ $settlementType->name }}
                                     </span>
                                 @endforeach
@@ -420,6 +423,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return 'Due';
             case 'Expense Payment':
                 return 'Expense';
+            case 'Asset Purchase':
+                return 'Asset';
+            case 'Equity':
+                return 'Equity';
+            case 'Loan':
+                return 'Loan';
             case 'Advance':
                 return 'Advance';
             case 'Adjustment':
@@ -429,6 +438,59 @@ document.addEventListener('DOMContentLoaded', () => {
             default:
                 return 'Payment';
         }
+    }
+
+    function defaultRulesForCategory(category) {
+        switch (category) {
+            case 'Sales':
+                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Sales Entry', settlements: ['cash', 'bank', 'due'] };
+            case 'Receipt':
+                return { movement: 'Decrease', payment: '1', party: 'Required', screen: 'Receipt Entry', settlements: ['cash', 'bank'] };
+            case 'Payment':
+                return { movement: 'Decrease', payment: '1', party: 'Optional', screen: 'Payment Entry', settlements: ['cash', 'bank'] };
+            case 'Expense Payment':
+                return { movement: 'Increase', payment: '1', party: 'No', screen: 'Expense Entry', settlements: ['cash', 'bank'] };
+            case 'Asset Purchase':
+                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Asset Purchase Entry', settlements: ['cash', 'bank'] };
+            case 'Equity':
+                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Owner / Equity Entry', settlements: ['cash', 'bank'] };
+            case 'Loan':
+                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Loan Entry', settlements: ['cash', 'bank'] };
+            case 'Advance':
+                return { movement: 'Increase', payment: '1', party: 'Required', screen: 'Advance Entry', settlements: ['cash', 'bank', 'advance'] };
+            case 'Purchase':
+            case 'Due':
+                return { movement: 'Increase', payment: '0', party: 'Required', screen: 'Purchase / Due Entry', settlements: ['due'] };
+            case 'Adjustment':
+                return { movement: 'No Movement', payment: '0', party: 'Optional', screen: 'Adjustment Entry', settlements: ['adjust'] };
+            case 'Other':
+                return { movement: 'No Movement', payment: '0', party: 'No', screen: 'Journal Entry', settlements: ['journal', 'adjust'] };
+            default:
+                return { movement: 'Increase', payment: '0', party: 'No', screen: 'Transaction Entry', settlements: [] };
+        }
+    }
+
+    function applyCategoryDefaults() {
+        const category = fields.category.value || '';
+        const rules = defaultRulesForCategory(category);
+        fields.default_movement.value = rules.movement;
+        fields.payment_method_required.value = rules.payment;
+        fields.party_required_mode.value = rules.party;
+        if (!fields.transaction_screen.value || fields.transaction_screen.dataset.autoFilled === '1') {
+            fields.transaction_screen.value = rules.screen;
+            fields.transaction_screen.dataset.autoFilled = '1';
+        }
+        if (rules.settlements.length > 0 && selectedSettlementIds().length === 0) {
+            const selected = [];
+            settlementBox.querySelectorAll('.select-chip').forEach((chip) => {
+                const label = `${chip.dataset.code || ''} ${chip.dataset.name || chip.textContent || ''}`.toLowerCase();
+                if (rules.settlements.some((keyword) => label.includes(keyword))) {
+                    selected.push(chip.dataset.id || chip.dataset.value);
+                }
+            });
+            if (selected.length > 0) setSettlementIds(selected);
+        }
+        syncDerivedFields();
     }
 
     function selectedSettlementIds() {
@@ -463,6 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const nature = natureFromCategory(category);
         natureInput.value = nature;
         document.getElementById('requiresParty').value = fields.party_required_mode.value === 'No' ? '0' : '1';
+        if (fields.default_party_type_id) fields.default_party_type_id.required = fields.party_required_mode.value === 'Required';
         preview.category.textContent = category || '—';
         preview.nature.textContent = nature;
         preview.party.textContent = fields.party_required_mode.value || 'No';
@@ -488,6 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fields.payment_method_required.value = '0';
         fields.party_required_mode.value = 'No';
         fields.default_movement.value = 'Increase';
+        fields.transaction_screen.dataset.autoFilled = '1';
         fields.status.value = 'Active';
         fields.is_system_default.value = '0';
         fields.is_user_selectable.value = '1';
@@ -512,6 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fields.party_required_mode.value = row.dataset.partyRequiredMode || 'No';
         setDropdownValue(fields.default_party_type_id, row.dataset.defaultPartyTypeId || '');
         fields.transaction_screen.value = row.dataset.transactionScreen || '';
+        fields.transaction_screen.dataset.autoFilled = '0';
         fields.status.value = row.dataset.status || 'Active';
         fields.is_system_default.value = row.dataset.isSystemDefault || '0';
         fields.is_user_selectable.value = row.dataset.isUserSelectable || '1';
@@ -540,9 +605,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     ['change', 'input'].forEach((eventName) => {
-        [fields.category, fields.party_required_mode, fields.payment_method_required, fields.is_user_selectable].forEach((field) => {
+        [fields.party_required_mode, fields.payment_method_required, fields.is_user_selectable].forEach((field) => {
             field.addEventListener(eventName, syncDerivedFields);
         });
+        fields.category.addEventListener(eventName, applyCategoryDefaults);
+        fields.transaction_screen.addEventListener('input', () => { fields.transaction_screen.dataset.autoFilled = '0'; });
     });
 
     document.querySelectorAll('#headTable .edit-btn').forEach((button) => {

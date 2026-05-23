@@ -2647,3 +2647,41 @@ body.sidebar-navigating .sidebar-backdrop {
   .prototype-form-actions{display:grid;}
   .prototype-form-actions button{width:100%;}
 }
+
+/* SRS/prototype dropdown visibility fix for redesigned setup/transaction pages. */
+.prototype-page .prototype-card,
+.prototype-page .prototype-card-body,
+.prototype-page .section-block,
+.prototype-page .section-body,
+.prototype-page .prototype-field,
+.transaction-head-redesign-grid,
+.accounting-rule-redesign-grid,
+.transaction-entry-grid {
+    overflow: visible !important;
+}
+
+.prototype-page .prototype-table-wrap,
+.prototype-page .ledger-preview-wrap,
+.prototype-page .table-wrap.always-scroll {
+    overflow-x: scroll !important;
+    overflow-y: auto !important;
+}
+
+.prototype-page select,
+.prototype-page .prototype-field select,
+.prototype-page .section-body select {
+    position: relative;
+    z-index: 20;
+    min-height: 44px;
+    color: #1d2939;
+    background-color: #fff;
+}
+
+.prototype-page option {
+    color: #1d2939;
+    background-color: #fff;
+}
+
+.prototype-page select:focus {
+    z-index: 60;
+}

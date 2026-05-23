@@ -359,6 +359,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return stringValue === '' ? fallback : stringValue;
     }
 
+    function bool(value) {
+        return value === true || value === 1 || value === '1' || value === 'true' || value === 'Yes' || value === 'Required';
+    }
+
+    function normalisePartyMode(value) {
+        const mode = String(value || '').toLowerCase();
+        if (['yes', 'required', 'require', 'always'].includes(mode)) return 'Required';
+        if (mode === 'optional') return 'Optional';
+        return 'No';
+    }
+
     function endpoint(baseUrl, params = {}) {
         const query = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {
@@ -384,10 +395,10 @@ document.addEventListener('DOMContentLoaded', () => {
             transaction_screen: item.transaction_screen || 'Transaction Entry',
             default_party_type_id: item.default_party_type_id || null,
             default_party_type_name: item.default_party_type_name || '',
-            party_required_mode: item.party_required_mode || (item.requires_party ? 'Required' : 'No'),
+            party_required_mode: normalisePartyMode(item.party_required_mode || (item.requires_party ? 'Required' : 'No')),
             payment_method_required: Boolean(Number(item.payment_method_required) || item.payment_method_required === true),
             help_text: item.help_text || '',
-            requires_party: Boolean(Number(item.requires_party) || item.requires_party === true || item.party_required_mode === 'Required'),
+            requires_party: bool(item.requires_party) || normalisePartyMode(item.party_required_mode) === 'Required',
             requires_reference: Boolean(Number(item.requires_reference) || item.requires_reference === true),
             settlements: settlements.map((settlementItem) => ({ id: settlementItem.id, name: settlementItem.name || settlementItem.display_name, code: settlementItem.code || '' })),
         };
@@ -401,14 +412,34 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectedSettlement() { return settlement.selectedOptions[0] || null; }
     function settlementText() { const option = selectedSettlement(); return `${option?.dataset.code || ''} ${option?.textContent || ''}`.toUpperCase(); }
 
+    function selectedRequirement() {
+        const selectedHead = headById(head.value);
+        const option = selectedSettlement();
+        const partyMode = normalisePartyMode(option?.dataset.partyMode || selectedHead?.party_required_mode || 'No');
+        const partyTypeId = option?.dataset.partyTypeId || selectedHead?.default_party_type_id || '';
+        const partyTypeName = option?.dataset.partyTypeName || selectedHead?.default_party_type_name || '';
+        const paymentRequired = bool(option?.dataset.paymentRequired) || bool(selectedHead?.payment_method_required);
+        const cashBankRequired = bool(option?.dataset.cashBankRequired) || paymentRequired || isCashBankSettlement();
+
+        return {
+            partyMode,
+            partyRequired: partyMode === 'Required',
+            partyOptional: partyMode === 'Optional',
+            partyTypeId,
+            partyTypeName,
+            paymentRequired,
+            cashBankRequired,
+            source: option?.dataset.requirementSource || 'transaction_head',
+        };
+    }
+
     function isCashBankSettlement() {
         const value = settlementText();
         return value.includes('CASH') || value.includes('BANK') || value.includes('ADVANCE_PAID') || value.includes('ADVANCE PAID') || value.includes('ADVANCE_RECEIVED') || value.includes('ADVANCE RECEIVED');
     }
 
     function selectedHeadRequiresCashBank() {
-        const selectedHead = headById(head.value);
-        return Boolean(selectedHead?.payment_method_required) || isCashBankSettlement();
+        return selectedRequirement().cashBankRequired;
     }
 
     function cashBankDirectionLabel() {
@@ -516,11 +547,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadParties() {
         const selectedHead = headById(head.value);
-        const partyTypeId = selectedHead?.default_party_type_id || '';
+        const requirement = selectedRequirement();
+        const partyTypeId = requirement.partyTypeId || '';
         const previousValue = party.value;
         party.disabled = true;
         party.innerHTML = '<option value="">Loading Party / Person...</option>';
-        if (!selectedHead || (!partyTypeId && selectedHead.party_required_mode === 'No')) { renderDefaultNotApplicableParty(); return; }
+        if (!selectedHead || requirement.partyMode === 'No') { renderDefaultNotApplicableParty(); return; }
         try {
             const rows = await getRows(endpoint(form.dataset.partiesUrl, { party_type_id: partyTypeId }));
             renderPartyOptions(rows, previousValue);
@@ -542,7 +574,17 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             rows = selectedHead.settlements || [];
         }
-        renderOptions(settlement, rows, rows.length ? 'Select payment / settlement method' : 'No mapped payment methods found', (item) => item.display_name || item.name, (option, item) => { option.dataset.code = item.code || ''; });
+        renderOptions(settlement, rows, rows.length ? 'Select payment / settlement method' : 'No mapped payment methods found', (item) => item.display_name || item.name, (option, item) => {
+            option.dataset.code = item.code || '';
+            option.dataset.partyMode = normalisePartyMode(item.party_required_mode || 'No');
+            option.dataset.partyRequired = bool(item.party_required) ? '1' : '0';
+            option.dataset.partyOptional = bool(item.party_optional) ? '1' : '0';
+            option.dataset.partyTypeId = item.party_type_id || '';
+            option.dataset.partyTypeName = item.party_type_name || '';
+            option.dataset.paymentRequired = bool(item.payment_method_required) ? '1' : '0';
+            option.dataset.cashBankRequired = bool(item.cash_bank_required) ? '1' : '0';
+            option.dataset.requirementSource = item.requirement_source || '';
+        });
         if (rows.some((row) => String(row.id) === String(previousValue))) settlement.value = previousValue;
         else if (rows.length === 1) settlement.value = rows[0].id;
         else settlement.value = '';
@@ -555,16 +597,20 @@ document.addEventListener('DOMContentLoaded', () => {
         party.required = false;
         partyRequired.style.display = 'none';
         screen.value = selectedHead ? `${selectedHead.transaction_screen || 'Transaction Entry'} / ${selectedHead.category || selectedHead.nature || 'General'}` : '';
-        partyType.value = selectedHead?.default_party_type_name || selectedHead?.party_required_mode || 'Not required';
         guidanceText.textContent = selectedHead?.help_text || 'Enter normal business information. The accounting rule will prepare Debit and Credit automatically.';
         reference.required = Boolean(selectedHead?.requires_reference);
         referenceHint.textContent = selectedHead?.requires_reference ? 'Reference is required for this transaction head.' : 'Optional unless transaction head requires it.';
 
-        await Promise.all([loadSettlementOptions(), loadParties()]);
+        await loadSettlementOptions();
+        await loadParties();
 
-        const partyMustBeSelected = ['Required', 'Yes'].includes(selectedHead?.party_required_mode) && !hasDefaultNotApplicableParty();
+        const requirement = selectedRequirement();
+        const partyMustBeSelected = requirement.partyRequired && !hasDefaultNotApplicableParty();
+        const partyLabel = requirement.partyTypeName || requirement.partyMode || 'Not required';
+        partyType.value = requirement.partyMode === 'No' ? 'Not required by selected rule' : `${partyLabel} (${requirement.partyMode})`;
         party.required = partyMustBeSelected;
         partyRequired.style.display = partyMustBeSelected ? '' : 'none';
+        document.getElementById('partyWrap')?.classList.toggle('soft-required', partyMustBeSelected);
         toggleCashBank();
         if (!isBooting) schedulePreview();
     }
@@ -579,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function formReadyForPreview() {
         if (!date.value || !head.value || !settlement.value || Number(amount.value || 0) <= 0) return false;
         const selectedHead = headById(head.value);
-        if (['Required', 'Yes'].includes(selectedHead?.party_required_mode) && !party.value && !hasDefaultNotApplicableParty()) return false;
+        if (selectedRequirement().partyRequired && !party.value && !hasDefaultNotApplicableParty()) return false;
         if (selectedHead?.requires_reference && !reference.value.trim()) return false;
         if (selectedHeadRequiresCashBank() && cashBanks.length > 0 && !cashBank.value) return false;
         return true;
@@ -683,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('change', schedulePreview);
     });
     head.addEventListener('change', () => refreshForSelectedHead());
-    settlement.addEventListener('change', () => { toggleCashBank(); schedulePreview(); });
+    settlement.addEventListener('change', async () => { await loadParties(); toggleCashBank(); schedulePreview(); });
     form.addEventListener('submit', (event) => { event.preventDefault(); submitTransaction('Posted'); });
     document.getElementById('draftBtn')?.addEventListener('click', () => submitTransaction('Draft'));
     document.getElementById('clearBtn')?.addEventListener('click', clearForm);

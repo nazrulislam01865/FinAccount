@@ -89,12 +89,12 @@ class TransactionHeadRequest extends FormRequest
 
             'nature' => [
                 'required',
-                Rule::in(['Payment', 'Receipt', 'Due', 'Advance', 'Adjustment', 'Expense', 'Journal']),
+                Rule::in(['Payment', 'Receipt', 'Due', 'Advance', 'Adjustment', 'Expense', 'Journal', 'Purchase', 'Sales', 'Equity', 'Loan', 'Asset']),
             ],
 
             'category' => ['required', 'string', 'max:50'],
 
-            'default_party_type_id' => ['nullable', 'integer', 'exists:party_types,id'],
+            'default_party_type_id' => [Rule::requiredIf($this->input('party_required_mode') === 'Required'), 'nullable', 'integer', 'exists:party_types,id'],
             'default_primary_ledger_id' => ['nullable', 'integer', 'exists:chart_of_accounts,id'],
             'default_movement' => ['required', Rule::in(['Increase', 'Decrease', 'No Movement'])],
             'payment_method_required' => ['required', 'boolean'],
@@ -122,8 +122,9 @@ class TransactionHeadRequest extends FormRequest
             'name.required' => 'Transaction Head Name is required.',
             'name.unique' => 'This Transaction Head Name already exists. Please use another name.',
             'nature.required' => 'Nature is required.',
-            'nature.in' => 'Nature must be Payment, Receipt, Due, Advance, Adjustment, Expense, or Journal.',
+            'nature.in' => 'Nature must be Payment, Receipt, Due, Advance, Adjustment, Expense, Journal, Purchase, Sales, Equity, Loan, or Asset.',
             'category.required' => 'Transaction Category is required.',
+            'default_party_type_id.required' => 'Party Type is required when Party Required is set to Required.',
             'default_party_type_id.exists' => 'Selected Default Party Type is invalid.',
             'default_primary_ledger_id.exists' => 'Selected Default Primary Ledger is invalid.',
             'party_required_mode.in' => 'Party requirement must be No, Optional, or Required.',
@@ -140,10 +141,14 @@ class TransactionHeadRequest extends FormRequest
     {
         return match ($category) {
             'Sales', 'Receipt' => 'Receipt',
+            'Purchase', 'Due' => 'Due',
             'Expense Payment' => 'Expense',
+            'Asset Purchase' => 'Asset',
+            'Equity' => 'Equity',
+            'Loan' => 'Loan',
             'Advance' => 'Advance',
+            'Adjustment' => 'Adjustment',
             'Other' => 'Journal',
-            'Purchase' => 'Due',
             default => 'Payment',
         };
     }

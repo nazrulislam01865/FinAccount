@@ -2,12 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Models\AccountingRule;
 use App\Models\CashBankAccount;
 use App\Models\FinancialYear;
 use App\Models\LedgerMappingRule;
 use App\Models\Party;
 use App\Models\SettlementType;
 use App\Models\TransactionHead;
+use App\Services\Accounting\TransactionRequirementService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -105,12 +107,13 @@ class TransactionEntryRequest extends FormRequest
             $this->validateStatusPermission($validator);
             $this->validateDateInsideActiveFinancialYear($validator);
             $this->validateHeadSettlementPair($validator, $head, $settlement);
-            $this->validatePartyRequirement($validator, $head);
             $this->validateReferenceRequirement($validator, $head);
+            $this->validateDynamicInputRequirements($validator, $head, $settlement);
 
+            $hasV2Rule = $this->hasActiveAccountingRule($head, $settlement);
             $mapping = $this->mappingRule($head, $settlement);
 
-            if (!$mapping) {
+            if (!$hasV2Rule && !$mapping) {
                 $validator->errors()->add(
                     'ledger_mapping',
                     'No accounting rule is configured for this transaction purpose and settlement type.'
@@ -119,8 +122,10 @@ class TransactionEntryRequest extends FormRequest
                 return;
             }
 
-            $this->validateMappingRequirement($validator, $mapping);
-            $this->validateCashBankRequirement($validator, $mapping);
+            if ($mapping) {
+                $this->validateMappingRequirement($validator, $mapping);
+                $this->validateCashBankRequirement($validator, $mapping);
+            }
         }];
     }
 
@@ -197,16 +202,27 @@ class TransactionEntryRequest extends FormRequest
     {
         $voucherDate = Carbon::parse($this->input('voucher_date'))->toDateString();
 
-        $exists = FinancialYear::query()
-            ->where('status', 'Active')
+        $financialYear = FinancialYear::query()
+            ->whereIn('status', ['Active', 'Open'])
             ->whereDate('start_date', '<=', $voucherDate)
             ->whereDate('end_date', '>=', $voucherDate)
-            ->exists();
+            ->orderByDesc('is_current')
+            ->orderByDesc('id')
+            ->first();
 
-        if (!$exists) {
+        if (!$financialYear) {
             $validator->errors()->add(
                 'voucher_date',
-                'Transaction date must be inside an active financial year.'
+                'Transaction date must be inside an open financial year from Financial Year Setup.'
+            );
+
+            return;
+        }
+
+        if ($financialYear->lock_date && $voucherDate <= Carbon::parse($financialYear->lock_date)->toDateString()) {
+            $validator->errors()->add(
+                'voucher_date',
+                'Transaction date is inside a locked financial period. Update the lock date or choose a later date.'
             );
         }
     }
@@ -229,31 +245,41 @@ class TransactionEntryRequest extends FormRequest
         }
     }
 
-    private function validatePartyRequirement(Validator $validator, TransactionHead $head): void
-    {
-        if ($head->requires_party && !$this->party_id) {
+    private function validateDynamicInputRequirements(
+        Validator $validator,
+        TransactionHead $head,
+        SettlementType $settlement
+    ): void {
+        $requirements = app(TransactionRequirementService::class)->resolve(
+            transactionHeadId: (int) $head->id,
+            settlementTypeId: (int) $settlement->id,
+            companyId: (int) ($this->user()?->company_id ?? 0)
+        );
+
+        if (($requirements['party_required'] ?? false) && !$this->party_id) {
             $validator->errors()->add(
                 'party_id',
-                'Party / Person is required for this Transaction Head.'
+                'Party / Person is required because the selected accounting rule uses a party/sub-ledger.'
             );
 
             return;
         }
 
-        if (!$this->party_id) {
-            return;
+        if ($this->party_id) {
+            $party = Party::query()->find($this->integer('party_id'));
+
+            if ($party && !empty($requirements['party_type_id']) && (int) $party->party_type_id !== (int) $requirements['party_type_id']) {
+                $validator->errors()->add(
+                    'party_id',
+                    'Selected Party / Person does not match the party type required by this accounting rule.'
+                );
+            }
         }
 
-        $party = Party::query()->find($this->integer('party_id'));
-
-        if (!$party) {
-            return;
-        }
-
-        if ($head->default_party_type_id && (int) $party->party_type_id !== (int) $head->default_party_type_id) {
+        if (($requirements['cash_bank_required'] ?? false) && !$this->cash_bank_account_id) {
             $validator->errors()->add(
-                'party_id',
-                'Selected Party / Person does not match the party type required by this Transaction Head.'
+                'cash_bank_account_id',
+                'Cash/Bank account is required because the selected accounting rule requires a cash/bank ledger.'
             );
         }
     }
@@ -356,6 +382,21 @@ class TransactionEntryRequest extends FormRequest
         }
 
         return 'Cash/Bank account could not be selected automatically from the active accounting rule.';
+    }
+
+    private function hasActiveAccountingRule(TransactionHead $head, SettlementType $settlement): bool
+    {
+        $companyId = (int) ($this->user()?->company_id ?? 0);
+
+        return AccountingRule::query()
+            ->where('transaction_head_id', $head->id)
+            ->where('status', 'Active')
+            ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
+            ->where(function ($query) use ($settlement) {
+                $query->where('settlement_type_id', $settlement->id)
+                    ->orWhereNull('settlement_type_id');
+            })
+            ->exists();
     }
 
     private function mappingRule(TransactionHead $head, SettlementType $settlement): ?LedgerMappingRule

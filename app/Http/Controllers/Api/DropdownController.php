@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AccountType;
+use App\Models\AccountingRule;
 use App\Models\Bank;
 use App\Models\BusinessType;
 use App\Models\CashBankAccount;
@@ -15,6 +16,7 @@ use App\Models\PartyType;
 use App\Models\SettlementType;
 use App\Models\TimeZone;
 use App\Models\TransactionHead;
+use App\Services\Accounting\TransactionRequirementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -242,6 +244,9 @@ class DropdownController extends Controller
         $query = SettlementType::query()
             ->where('status', 'Active');
 
+        $head = null;
+        $mappedOnly = $request->boolean('mapped_only');
+
         if ($request->filled('transaction_head_id')) {
             $head = TransactionHead::query()
                 ->where('status', 'Active')
@@ -257,27 +262,65 @@ class DropdownController extends Controller
                 ->where('transaction_heads.status', 'Active')
                 ->whereNull('transaction_heads.deleted_at'));
 
-            if ($request->boolean('mapped_only')) {
-                $mappedSettlementIds = LedgerMappingRule::query()
+            if ($mappedOnly) {
+                $legacySettlementIds = LedgerMappingRule::query()
                     ->where('transaction_head_id', $head->id)
                     ->where('status', 'Active')
                     ->whereNull('deleted_at')
-                    ->pluck('settlement_type_id');
+                    ->pluck('settlement_type_id')
+                    ->filter();
 
-                $query->whereIn('id', $mappedSettlementIds);
+                $v2SpecificSettlementIds = AccountingRule::query()
+                    ->where('transaction_head_id', $head->id)
+                    ->where('status', 'Active')
+                    ->whereNotNull('settlement_type_id')
+                    ->pluck('settlement_type_id')
+                    ->filter();
+
+                $hasGenericV2Rule = AccountingRule::query()
+                    ->where('transaction_head_id', $head->id)
+                    ->where('status', 'Active')
+                    ->whereNull('settlement_type_id')
+                    ->exists();
+
+                if (!$hasGenericV2Rule) {
+                    $mappedSettlementIds = $legacySettlementIds
+                        ->merge($v2SpecificSettlementIds)
+                        ->unique()
+                        ->values();
+
+                    $query->whereIn('id', $mappedSettlementIds);
+                }
             }
         }
+
+        $requirementService = app(TransactionRequirementService::class);
+        $companyId = (int) ($request->user()?->company_id ?? 0);
 
         return $this->ok(
             $query->orderBy('sort_order')
                 ->orderBy('name')
                 ->get()
-                ->map(fn (SettlementType $item) => [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                    'code' => $item->code,
-                    'display_name' => $item->name,
-                ])
+                ->map(function (SettlementType $item) use ($head, $requirementService, $companyId) {
+                    $requirements = $head
+                        ? $requirementService->resolve((int) $head->id, (int) $item->id, $companyId)
+                        : [];
+
+                    return [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'code' => $item->code,
+                        'display_name' => $item->name,
+                        'party_required_mode' => $requirements['party_required_mode'] ?? 'No',
+                        'party_required' => (bool) ($requirements['party_required'] ?? false),
+                        'party_optional' => (bool) ($requirements['party_optional'] ?? false),
+                        'party_type_id' => $requirements['party_type_id'] ?? null,
+                        'party_type_name' => $requirements['party_type_name'] ?? null,
+                        'payment_method_required' => (bool) ($requirements['payment_method_required'] ?? false),
+                        'cash_bank_required' => (bool) ($requirements['cash_bank_required'] ?? false),
+                        'requirement_source' => $requirements['source'] ?? null,
+                    ];
+                })
         );
     }
 
