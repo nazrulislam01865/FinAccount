@@ -5,6 +5,7 @@ namespace App\AccountingEngine\Services;
 use App\Models\Company;
 use App\Models\FinancialYear;
 use Carbon\Carbon;
+use App\Services\Accounting\FinancialYearService;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -28,6 +29,14 @@ class FinancialPeriodGuard
             : Carbon::parse($transactionDate)->startOfDay();
 
         $resolvedCompanyId = $this->resolveCompanyId($companyId);
+
+        $selectedFinancialYear = app(FinancialYearService::class)->currentForCompany($resolvedCompanyId);
+
+        if ($selectedFinancialYear) {
+            $this->assertOpen($selectedFinancialYear, $date);
+
+            return $selectedFinancialYear;
+        }
 
         $query = FinancialYear::query()
             ->whereDate('start_date', '<=', $date->toDateString())

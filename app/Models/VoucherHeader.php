@@ -34,6 +34,7 @@ class VoucherHeader extends Model
         'reference',
         'notes',
         'status',
+        'lifecycle_state',
         'submitted_at',
         'submitted_by',
         'approved_at',
@@ -96,5 +97,30 @@ class VoucherHeader extends Model
     public function attachments()
     {
         return $this->hasMany(VoucherAttachment::class);
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function submittedBy()
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function approvedBy()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function postedBy()
+    {
+        return $this->belongsTo(User::class, 'posted_by');
+    }
+
+    public function approvalLogs()
+    {
+        return $this->hasMany(ApprovalLog::class);
     }
 }

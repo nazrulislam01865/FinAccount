@@ -110,7 +110,7 @@
                     <div class="prototype-form-grid two">
                         <div class="prototype-field">
                             <label for="date">Date <span class="required">*</span></label>
-                            <input type="date" id="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
+                            <input type="date" id="date" name="voucher_date" value="{{ $defaultVoucherDate ?? now()->toDateString() }}" required>
                         </div>
 
                         <div class="prototype-field">

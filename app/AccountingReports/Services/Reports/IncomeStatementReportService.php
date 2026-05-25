@@ -2,6 +2,7 @@
 
 namespace App\AccountingReports\Services\Reports;
 
+use App\Services\Accounting\FinancialYearService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -23,7 +24,7 @@ class IncomeStatementReportService
         $includeInactive = filter_var($filters['include_inactive_accounts'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $section = $filters['section'] ?? 'All';
         $search = mb_strtolower(trim((string) ($filters['q'] ?? '')));
-        $yearStart = $this->financialYearStartFor($toDate);
+        $yearStart = $this->financialYearStartFor($toDate, $companyId);
 
         $periodSub = $this->profitLossAggregateQuery($fromDate, $toDate, $companyId);
         $ytdSub = $this->profitLossAggregateQuery($yearStart, $toDate, $companyId);
@@ -137,8 +138,14 @@ class IncomeStatementReportService
         ];
     }
 
-    private function financialYearStartFor(string $date): string
+    private function financialYearStartFor(string $date, ?int $companyId = null): string
     {
+        $financialYear = app(FinancialYearService::class)->currentForCompany($companyId);
+
+        if ($financialYear) {
+            return $financialYear->start_date->toDateString();
+        }
+
         $financialYear = DB::table('financial_years')
             ->whereNull('deleted_at')
             ->whereDate('start_date', '<=', $date)

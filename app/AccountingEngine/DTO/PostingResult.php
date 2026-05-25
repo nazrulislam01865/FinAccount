@@ -41,11 +41,22 @@ final readonly class PostingResult
         return $this->status === VoucherHeader::STATUS_POSTED;
     }
 
+    public function submittedForApproval(): bool
+    {
+        return $this->status === VoucherHeader::STATUS_PENDING_REVIEW;
+    }
+
     public function message(): string
     {
-        return $this->posted()
-            ? 'Transaction posted successfully.'
-            : 'Transaction saved as draft.';
+        if ($this->posted()) {
+            return 'Transaction posted successfully.';
+        }
+
+        if ($this->submittedForApproval()) {
+            return 'Transaction submitted for approval.';
+        }
+
+        return 'Transaction saved as draft.';
     }
 
     /**

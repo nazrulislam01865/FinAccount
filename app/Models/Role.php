@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Role extends Model
 {
+    public const FIXED_FULL_ACCESS_ROLES = [
+        'Super Admin',
+        'Admin',
+        'Company Admin',
+    ];
+
     protected $fillable = ['name', 'description', 'level', 'is_protected', 'status'];
 
     protected $casts = [
@@ -26,5 +32,10 @@ class Role extends Model
     public function isSuperAdmin(): bool
     {
         return $this->name === 'Super Admin' || (int) $this->level === 1;
+    }
+
+    public function isFixedFullAccessRole(): bool
+    {
+        return in_array($this->name, self::FIXED_FULL_ACCESS_ROLES, true);
     }
 }

@@ -2,13 +2,14 @@
 
 namespace App\Http\Requests\AccountingReports;
 
+use App\Services\Accounting\FinancialYearService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AccountMovementReportRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->hasAnyPermission(['reports.view', 'reports.full']);
+        return (bool) $this->user()?->hasPermission('reports.full');
     }
 
     public function rules(): array
@@ -26,13 +27,15 @@ class AccountMovementReportRequest extends FormRequest
 
     public function filters(): array
     {
+        $range = app(FinancialYearService::class)->reportRange((int) ($this->user()?->company_id ?? 0));
+
         return [
             'q' => $this->input('q'),
             'account_id' => $this->input('account_id'),
             'transaction_head_id' => $this->input('transaction_head_id'),
             'party_id' => $this->input('party_id'),
-            'from_date' => $this->input('from_date', now()->startOfMonth()->toDateString()),
-            'to_date' => $this->input('to_date', now()->toDateString()),
+            'from_date' => $this->input('from_date', $range['from_date']),
+            'to_date' => $this->input('to_date', $range['to_date']),
             'include_zero_balances' => $this->boolean('include_zero_balances'),
             'company_id' => (int) ($this->user()?->company_id ?? 0),
         ];

@@ -4,8 +4,8 @@
     $currentUser = auth()->user();
     $routeName = request()->route()?->getName();
     $isActive = function ($name) use ($routeName) {
-        if ($routeName === 'dashboard' && $name === 'setup.company') {
-            return 'active';
+        if ($routeName === 'dashboard') {
+            return '';
         }
 
         return ($routeName === $name || str_starts_with((string) $routeName, $name . '.')) ? 'active' : '';
@@ -129,21 +129,21 @@
         </a>
     @endif
 
-    @if($canRoute('accounting-reports.cash-bank-book.index') || $canPermission('cash-bank-book.view'))
+    @if($canRoute('accounting-reports.cash-bank-book.index'))
         <a href="{{ route('accounting-reports.cash-bank-book.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.cash-bank-book.*') ? 'active' : '' }}">
             <div class="nav-icon">🏦</div>
             <span>Cash / Bank Book</span>
         </a>
     @endif
 
-    @if($canRoute('accounting-reports.trial-balance.index') || $canPermission('reports.view'))
+    @if($canRoute('accounting-reports.trial-balance.index'))
         <a href="{{ route('accounting-reports.trial-balance.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.trial-balance.*') ? 'active' : '' }}">
             <div class="nav-icon">TB</div>
             <span>Trial Balance</span>
         </a>
     @endif
 
-    @if($canRoute('accounting-reports.income-statement.index') || $canPermission('reports.view'))
+    @if($canRoute('accounting-reports.income-statement.index'))
         <a href="{{ route('accounting-reports.income-statement.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.income-statement.*') ? 'active' : '' }}">
             <div class="nav-icon">IS</div>
             <span>Income Statement</span>
@@ -154,6 +154,20 @@
         <a href="{{ route('accounting-reports.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.index') ? 'active' : '' }}">
             <div class="nav-icon">▣</div>
             <span>Reports</span>
+        </a>
+    @endif
+
+    @if($canRoute('approvals.index'))
+        <a href="{{ route('approvals.index') }}" class="nav-item {{ $isActive('approvals.index') }}">
+            <div class="nav-icon">✓</div>
+            <span>Approvals</span>
+        </a>
+    @endif
+
+    @if($canRoute('audit-trail.index'))
+        <a href="{{ route('audit-trail.index') }}" class="nav-item {{ $isActive('audit-trail.index') }}">
+            <div class="nav-icon">A</div>
+            <span>Audit Trail</span>
         </a>
     @endif
 

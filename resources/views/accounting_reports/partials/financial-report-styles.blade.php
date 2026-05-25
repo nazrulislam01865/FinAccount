@@ -386,3 +386,213 @@
         }
     }
 </style>
+<style>
+    /* Income Statement template alignment */
+    .financial-report-page.income-statement-page .income-template-stats {
+        grid-template-columns: repeat(4, minmax(170px, 1fr));
+    }
+
+    .financial-report-page.income-statement-page .income-template-layout {
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 18px;
+    }
+
+    .financial-report-page.income-statement-page .income-template-card {
+        overflow: hidden;
+    }
+
+    .financial-report-page.income-statement-page .income-statement-template-table {
+        min-width: 860px;
+    }
+
+    .financial-report-page.income-statement-page .section-row td {
+        background: #f8fafc;
+        color: #1d2939;
+        font-size: 13px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .financial-report-page.income-statement-page .empty-row td {
+        color: var(--muted);
+        font-size: 13px;
+        font-style: italic;
+        background: #fff;
+    }
+
+    .financial-report-page.income-statement-page .report-side-stack {
+        display: grid;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .financial-report-page.income-statement-page .side-card {
+        padding: 20px;
+    }
+
+    .financial-report-page.income-statement-page .side-card h3 {
+        margin: 0 0 15px;
+        font-size: 17px;
+        letter-spacing: -.01em;
+    }
+
+    .financial-report-page.income-statement-page .ratio-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 0;
+        border-bottom: 1px solid #edf0f3;
+    }
+
+    .financial-report-page.income-statement-page .ratio-row:first-of-type {
+        padding-top: 0;
+    }
+
+    .financial-report-page.income-statement-page .ratio-row span:first-child {
+        color: var(--muted);
+    }
+
+    .financial-report-page.income-statement-page .ratio-row strong {
+        font-weight: 900;
+        text-align: right;
+    }
+
+    .financial-report-page.income-statement-page .mini-chart {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .financial-report-page.income-statement-page .bar-item span {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 13px;
+        margin-bottom: 7px;
+        color: #344054;
+    }
+
+    .financial-report-page.income-statement-page .bar-item em {
+        color: var(--muted);
+        font-style: normal;
+        white-space: nowrap;
+    }
+
+    .financial-report-page.income-statement-page .bar {
+        height: 10px;
+        background: #eef2f6;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .financial-report-page.income-statement-page .bar-fill {
+        height: 100%;
+        background: var(--primary);
+        border-radius: 999px;
+    }
+
+    .financial-report-page.income-statement-page .bar-fill.green-bg {
+        background: #12b76a;
+    }
+
+    .financial-report-page.income-statement-page .bar-fill.orange-bg {
+        background: #f79009;
+    }
+
+    .financial-report-page.income-statement-page .guardrail-list {
+        display: grid;
+        gap: 12px;
+    }
+
+    .financial-report-page.income-statement-page .guardrail-item {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+    }
+
+    .financial-report-page.income-statement-page .guardrail-item span {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: var(--success-soft);
+        color: #067647;
+        font-weight: 900;
+    }
+
+    .financial-report-page.income-statement-page .guardrail-item p {
+        margin: 0;
+        color: #475467;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .financial-report-page.income-statement-page .insight {
+        display: flex;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid var(--line);
+        margin-top: 14px;
+    }
+
+    .financial-report-page.income-statement-page .insight:first-of-type {
+        margin-top: 0;
+    }
+
+    .financial-report-page.income-statement-page .insight-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        display: grid;
+        place-items: center;
+        font-size: 22px;
+        flex: 0 0 auto;
+    }
+
+    .financial-report-page.income-statement-page .insight strong {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    .financial-report-page.income-statement-page .insight p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    @media (max-width: 1320px) {
+        .financial-report-page.income-statement-page .income-template-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 1024px) {
+        .financial-report-page.income-statement-page .income-template-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        .financial-report-page.income-statement-page .income-template-stats {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media print {
+        .financial-report-page.income-statement-page .report-side-stack {
+            display: none !important;
+        }
+    }
+</style>

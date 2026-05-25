@@ -9,6 +9,7 @@ use App\AccountingEngine\Services\JournalValidator;
 use App\AccountingEngine\Services\PartyRegisterService;
 use App\AccountingEngine\Services\PostingService;
 use App\AccountingEngine\Services\VoucherNumberService;
+use App\Services\Approval\ApprovalWorkflowService;
 use App\Models\CashBankAccount;
 use App\Models\Company;
 use App\Models\SettlementType;
@@ -30,7 +31,8 @@ class TransactionPostingService
         private readonly PostingService $postingService,
         private readonly PartyRegisterService $partyRegisterService,
         private readonly AuditTrailService $auditTrailService,
-        private readonly MappingResolverService $mappingResolver
+        private readonly MappingResolverService $mappingResolver,
+        private readonly ApprovalWorkflowService $approvalWorkflowService
     ) {
     }
 
@@ -113,7 +115,7 @@ class TransactionPostingService
             'settlement_type' => $settlementType->name,
             'party_ledger_effect' => $mapping['party_ledger_effect'] ?? 'No Effect',
             'cash_bank_effect' => $cashBankEffect,
-            'cash_bank_account_id' => $mapping['cash_bank_account_id'] ?? $mapping['cash_bank_account']?->id,
+            'cash_bank_account_id' => $mapping['cash_bank_account_id'] ?? (($mapping['cash_bank_account'] ?? null)?->id),
             'entries' => $entries->values()->all(),
             'total_debit' => $totalDebit,
             'total_credit' => $totalCredit,
@@ -135,9 +137,9 @@ class TransactionPostingService
             $status = $data['status'] ?? VoucherHeader::STATUS_POSTED;
             $draft = $status === VoucherHeader::STATUS_DRAFT;
 
-            if (! in_array($status, [VoucherHeader::STATUS_DRAFT, VoucherHeader::STATUS_POSTED], true)) {
+            if (! in_array($status, [VoucherHeader::STATUS_DRAFT, VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_PENDING_REVIEW], true)) {
                 throw ValidationException::withMessages([
-                    'status' => 'Transaction status must be Draft or Posted.',
+                    'status' => 'Transaction status must be Draft, Submitted, or Posted.',
                 ]);
             }
 
@@ -152,6 +154,14 @@ class TransactionPostingService
                 $voucherDate
             );
 
+            $requiresApproval = $status === VoucherHeader::STATUS_POSTED
+                && $this->approvalWorkflowService->shouldSubmitForApproval($data, (string) $preview['voucher_type'], $companyId);
+
+            $data['status'] = $requiresApproval ? VoucherHeader::STATUS_PENDING_REVIEW : $status;
+            $data['lifecycle_state'] = $requiresApproval
+                ? 'Submitted'
+                : ($status === VoucherHeader::STATUS_DRAFT ? 'Draft' : 'Posted');
+
             $voucher = $this->postingService->createVoucher(
                 data: $data,
                 preview: array_merge($preview, ['voucher_number' => $voucherNumber]),
@@ -164,7 +174,12 @@ class TransactionPostingService
                 userId: $userId
             );
 
-            if ($status === VoucherHeader::STATUS_POSTED) {
+            if ($requiresApproval) {
+                $this->approvalWorkflowService->markSubmitted($voucher, $userId);
+                $this->auditTrailService->record($voucher, (int) $voucher->id, 'voucher_submitted', null, $voucher->toArray(), $userId);
+            }
+
+            if (!$requiresApproval && $status === VoucherHeader::STATUS_POSTED) {
                 $this->partyRegisterService->recordIfNeeded($voucher, $preview);
                 $this->auditTrailService->recordPostedVoucher($voucher, $userId);
             }

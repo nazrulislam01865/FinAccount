@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\DropdownController;
+use App\Http\Controllers\Approvals\ApprovalController;
+use App\Http\Controllers\Audit\AuditTrailController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\System\HealthController;
 use App\Http\Controllers\Settings\UserRoleController;
 use App\Http\Controllers\Setup\CashBankAccountController;
 use App\Http\Controllers\Setup\ChartOfAccountController;
@@ -19,6 +23,8 @@ use App\Http\Controllers\TransactionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/health', HealthController::class)->name('health');
+
 Route::get('/', function () {
     return auth()->check()
         ? redirect()->route('dashboard')
@@ -26,26 +32,25 @@ Route::get('/', function () {
 });
 
 Route::middleware(['auth', 'active.user'])->group(function () {
-    Route::get('/dashboard', function (Request $request) {
-        $user = $request->user();
+    Route::get('/dashboard', DashboardController::class)
+        ->middleware('permission:dashboard.view')
+        ->name('dashboard');
 
-        $routeCandidates = [
-            'setup.company',
-            'transactions.create',
-            'setup.chart-of-accounts',
-            'setup.cash-bank-accounts',
-            'setup.parties',
-            'settings.users-roles',
-        ];
+    Route::get('/approvals', [ApprovalController::class, 'index'])
+        ->middleware('permission:approvals.view|approvals.manage')
+        ->name('approvals.index');
 
-        foreach ($routeCandidates as $routeName) {
-            if (Route::has($routeName) && $user?->canViewRoute($routeName)) {
-                return redirect()->route($routeName);
-            }
-        }
+    Route::post('/approvals/{voucher}/approve', [ApprovalController::class, 'approve'])
+        ->middleware('permission:approvals.manage')
+        ->name('approvals.approve');
 
-        abort(403, 'No permitted landing page is available for this user.');
-    })->name('dashboard');
+    Route::post('/approvals/{voucher}/reject', [ApprovalController::class, 'reject'])
+        ->middleware('permission:approvals.manage')
+        ->name('approvals.reject');
+
+    Route::get('/audit-trail', AuditTrailController::class)
+        ->middleware('permission:audit-trail.view')
+        ->name('audit-trail.index');
 
     /*
     |--------------------------------------------------------------------------
@@ -53,7 +58,7 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/transactions/create', [TransactionController::class, 'create'])
-        ->middleware('permission:transactions.view|transactions.create|transactions.draft')
+        ->middleware('permission:transactions.create|transactions.draft')
         ->name('transactions.create');
 
 

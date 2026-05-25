@@ -4,9 +4,9 @@ namespace App\AccountingEngine\Services;
 
 use App\Models\VoucherAttachment;
 use App\Models\VoucherHeader;
+use Illuminate\Support\Facades\Schema;
 use Carbon\CarbonInterface;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Str;
 
 class PostingService
 {
@@ -28,10 +28,18 @@ class PostingService
     ): VoucherHeader {
         $status = (string) ($data['status'] ?? VoucherHeader::STATUS_POSTED);
         $now = now();
+        $lifecycleState = (string) ($data['lifecycle_state'] ?? match ($status) {
+            VoucherHeader::STATUS_DRAFT => 'Draft',
+            VoucherHeader::STATUS_PENDING_REVIEW => 'Submitted',
+            VoucherHeader::STATUS_POSTED => 'Posted',
+            VoucherHeader::STATUS_CANCELLED => 'Void',
+            VoucherHeader::STATUS_REVERSED => 'Reversed',
+            default => $status,
+        });
         $totalDebit = round(collect($entries)->sum(fn (array $entry) => (float) ($entry['debit'] ?? 0)), 2);
         $totalCredit = round(collect($entries)->sum(fn (array $entry) => (float) ($entry['credit'] ?? 0)), 2);
 
-        $voucher = VoucherHeader::query()->create([
+        $voucherPayload = [
             'company_id' => $companyId ?: null,
             'financial_year_id' => $financialYearId,
             'voucher_number' => $voucherNumber,
@@ -51,11 +59,19 @@ class PostingService
             'status' => $status,
             'submitted_at' => $status === VoucherHeader::STATUS_DRAFT ? null : $now,
             'submitted_by' => $status === VoucherHeader::STATUS_DRAFT ? null : $userId,
+            'approved_at' => $status === VoucherHeader::STATUS_POSTED ? ($data['approved_at'] ?? $now) : null,
+            'approved_by' => $status === VoucherHeader::STATUS_POSTED ? ($data['approved_by'] ?? $userId) : null,
             'posted_at' => $status === VoucherHeader::STATUS_POSTED ? $now : null,
             'posted_by' => $status === VoucherHeader::STATUS_POSTED ? $userId : null,
             'created_by' => $userId,
             'updated_by' => $userId,
-        ]);
+        ];
+
+        if (Schema::hasColumn('voucher_headers', 'lifecycle_state')) {
+            $voucherPayload['lifecycle_state'] = $lifecycleState;
+        }
+
+        $voucher = VoucherHeader::query()->create($voucherPayload);
 
         foreach ($entries as $index => $entry) {
             $voucher->details()->create([
@@ -101,11 +117,7 @@ class PostingService
 
     private function storeAttachment(VoucherHeader $voucher, UploadedFile $attachment, ?int $userId): void
     {
-        $path = $attachment->storeAs(
-            'voucher-attachments/' . $voucher->id,
-            Str::uuid() . '.' . $attachment->getClientOriginalExtension(),
-            'public'
-        );
+        $path = $attachment->store('voucher-attachments', 'local');
 
         VoucherAttachment::query()->create([
             'voucher_header_id' => $voucher->id,

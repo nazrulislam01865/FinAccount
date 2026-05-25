@@ -11,6 +11,7 @@ use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\TransactionHead;
 use App\Models\VoucherNumberingRule;
+use App\Services\Accounting\FinancialYearService;
 
 class SetupProgressService
 {
@@ -115,13 +116,14 @@ class SetupProgressService
 
     private function completionMap(): array
     {
-        $activeFinancialYear = FinancialYear::query()
-            ->where('status', 'Active')
-            ->where('is_active', true)
-            ->first();
+        $activeFinancialYear = app(FinancialYearService::class)->current();
 
         $activeFinancialYear ??= FinancialYear::query()
-            ->where('status', 'Active')
+            ->whereIn('status', ['Active', 'Open'])
+            ->where(function ($query) {
+                $query->where('is_active', true)
+                    ->orWhere('is_current', true);
+            })
             ->latest('start_date')
             ->first();
 

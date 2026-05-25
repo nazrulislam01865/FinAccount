@@ -337,11 +337,12 @@
 
                                     @foreach($roles as $role)
                                         @php
-                                            $hasAccess = $role->isSuperAdmin() || !empty($rolePermissionMatrix[(int) $role->id][$permission['name']]);
+                                            $isFixedFullAccessRole = $role->isFixedFullAccessRole();
+                                            $hasAccess = $isFixedFullAccessRole || !empty($rolePermissionMatrix[(int) $role->id][$permission['name']]);
                                         @endphp
                                         <td class="permission-decision-cell">
-                                            @if($role->isSuperAdmin())
-                                                <select class="access-select is-locked" disabled title="Super Admin remains fully protected">
+                                            @if($isFixedFullAccessRole)
+                                                <select class="access-select is-locked" disabled title="{{ $role->name }} remains fixed with full access">
                                                     <option selected>Always Full</option>
                                                 </select>
                                             @else
@@ -462,7 +463,7 @@
 
                     <div class="hint-box">
                         <strong>Hierarchy rule</strong>
-                        Users with Manage Users permission can manage lower-level users. Super Admin remains protected so the system owner cannot be locked out.
+                        Users with Manage Users permission can manage lower-level users. Super Admin, Admin, and Company Admin remain fixed full-access roles so core administrators cannot be locked out.
                     </div>
 
                     <div class="form-actions">

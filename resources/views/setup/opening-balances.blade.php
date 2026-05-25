@@ -122,6 +122,23 @@
 
     <input type="hidden" name="status" id="openingStatus" value="Draft">
 
+    <div class="opening-summary-cards">
+        <div class="card opening-counter-card">
+            <span>Total Debit</span>
+            <strong id="sideDebit">BDT 0.00</strong>
+        </div>
+
+        <div class="card opening-counter-card">
+            <span>Total Credit</span>
+            <strong id="sideCredit">BDT 0.00</strong>
+        </div>
+
+        <div class="card opening-counter-card">
+            <span>Difference</span>
+            <strong id="sideDifference" class="green">BDT 0.00</strong>
+        </div>
+    </div>
+
     <div class="layout">
         <div class="left-stack">
             <div class="card toolbar opening-toolbar">
@@ -365,25 +382,6 @@
         </div>
 
         <aside class="right-stack">
-            <div class="card summary-card">
-                <h3>Balance Summary</h3>
-
-                <div class="summary-row">
-                    <span>Total Debit</span>
-                    <strong id="sideDebit">BDT 0.00</strong>
-                </div>
-
-                <div class="summary-row">
-                    <span>Total Credit</span>
-                    <strong id="sideCredit">BDT 0.00</strong>
-                </div>
-
-                <div class="summary-row">
-                    <span>Difference</span>
-                    <strong id="sideDifference" class="green">BDT 0.00</strong>
-                </div>
-            </div>
-
             <div class="card ready-card">
                 <h3>Go-live Readiness</h3>
 
@@ -424,6 +422,38 @@
 
 @push('styles')
 <style>
+    .opening-summary-cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .opening-counter-card {
+        padding: 18px;
+        min-height: 96px;
+    }
+
+    .opening-counter-card span {
+        color: var(--muted);
+        display: block;
+        font-size: 13px;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .opening-counter-card strong {
+        display: block;
+        font-size: 24px;
+        line-height: 1.15;
+    }
+
+    @media (max-width: 980px) {
+        .opening-summary-cards {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .opening-view-row {
         background: #fff;
     }

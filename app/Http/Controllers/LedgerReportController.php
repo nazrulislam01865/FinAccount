@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\ChartOfAccount;
-use App\Models\FinancialYear;
 use App\Models\Party;
 use App\Models\TransactionHead;
 use App\Models\VoucherDetail;
 use App\Models\VoucherHeader;
+use App\Services\Accounting\FinancialYearService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -33,17 +33,12 @@ class LedgerReportController extends Controller
             ->orderBy('account_code')
             ->get();
 
-        $financialYear = FinancialYear::query()
-            ->where('status', 'Active')
-            ->orderByDesc('is_active')
-            ->orderByDesc('start_date')
-            ->first();
+        $financialYearRange = app(FinancialYearService::class)
+            ->reportRange((int) ($request->user()?->company_id ?? 0));
 
         $filters = [
-            'from_date' => $request->query('from_date')
-                ?: optional($financialYear?->start_date)->toDateString()
-                ?: now()->startOfMonth()->toDateString(),
-            'to_date' => $request->query('to_date') ?: now()->toDateString(),
+            'from_date' => $request->query('from_date') ?: $financialYearRange['from_date'],
+            'to_date' => $request->query('to_date') ?: $financialYearRange['to_date'],
             'account_group_id' => $request->query('account_group_id'),
             'account_id' => $request->query('account_id'),
             'party_id' => $request->query('party_id'),

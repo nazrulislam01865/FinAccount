@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\AccountingReports;
 
+use App\Services\Accounting\FinancialYearService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class TransactionReportRequest extends FormRequest
@@ -30,10 +31,12 @@ class TransactionReportRequest extends FormRequest
 
     public function filters(): array
     {
+        $range = app(FinancialYearService::class)->reportRange((int) ($this->user()?->company_id ?? 0));
+
         return [
             'q' => $this->input('q'),
-            'from_date' => $this->input('from_date'),
-            'to_date' => $this->input('to_date'),
+            'from_date' => $this->input('from_date', $range['from_date']),
+            'to_date' => $this->input('to_date', $range['to_date']),
             'account_group_id' => $this->input('account_group_id'),
             'account_id' => $this->input('account_id'),
             'party_id' => $this->input('party_id'),

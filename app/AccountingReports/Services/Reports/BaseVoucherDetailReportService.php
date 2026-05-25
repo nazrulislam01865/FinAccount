@@ -2,6 +2,7 @@
 
 namespace App\AccountingReports\Services\Reports;
 
+use App\Services\Accounting\FinancialYearService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -87,8 +88,14 @@ abstract class BaseVoucherDetailReportService
         };
     }
 
-    protected function financialYearStartFor(string $date): string
+    protected function financialYearStartFor(string $date, ?int $companyId = null): string
     {
+        $financialYear = app(FinancialYearService::class)->currentForCompany($companyId);
+
+        if ($financialYear) {
+            return $financialYear->start_date->toDateString();
+        }
+
         $financialYear = DB::table('financial_years')
             ->whereNull('deleted_at')
             ->whereDate('start_date', '<=', $date)

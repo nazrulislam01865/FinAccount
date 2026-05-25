@@ -54,6 +54,7 @@ class TransactionController extends Controller
             ->get();
 
         $today = now()->toDateString();
+        $defaultVoucherDate = $financialYearService->defaultTransactionDate((int) ($request->user()?->company_id ?? 0));
 
         $cashBankLedgerIds = $cashBankAccounts
             ->pluck('linked_ledger_account_id')
@@ -100,6 +101,7 @@ class TransactionController extends Controller
             'duePayable' => $duePayable,
             'dueReceivable' => $dueReceivable,
             'recentTransactions' => $recentTransactions,
+            'defaultVoucherDate' => $defaultVoucherDate,
         ]);
     }
 

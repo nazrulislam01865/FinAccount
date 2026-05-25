@@ -7,14 +7,24 @@ use App\Http\Requests\CompanyRequest;
 use App\Models\Company;
 use App\Models\FinancialYear;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CompanyController extends Controller
 {
     public function edit()
     {
+        $company = Company::query()->first();
+
         return view('setup.company', [
-            'company' => Company::query()->first(),
+            'company' => $company,
+            'financialYears' => FinancialYear::query()
+                ->orderByDesc('is_current')
+                ->orderByDesc('is_active')
+                ->orderByDesc('start_date')
+                ->get(),
+            'selectedFinancialYearId' => $this->selectedFinancialYearId($company),
         ]);
     }
 
@@ -30,39 +40,73 @@ class CompanyController extends Controller
             $data['logo_path'] = $request->file('logo')->store('company-logos', 'public');
         }
 
-        $company = Company::query()->first();
+        $selectedFinancialYear = FinancialYear::query()->findOrFail((int) $data['financial_year_id']);
+        $companyPayload = Arr::except($data, ['financial_year_id']);
 
-        if ($company) {
-            $data['updated_by'] = Auth::id();
-            $company->update($data);
-        } else {
-            $data['created_by'] = Auth::id();
-            $data['updated_by'] = Auth::id();
-            $company = Company::query()->create($data);
-        }
+        $company = DB::transaction(function () use ($companyPayload, $selectedFinancialYear) {
+            $company = Company::query()->first();
 
-        // Keep the Financial Years master table aligned with Company Setup dates required by the PRD.
-        FinancialYear::query()->update(['is_active' => false]);
-        FinancialYear::query()->updateOrCreate(
-            [
+            if ($company) {
+                $companyPayload['updated_by'] = Auth::id();
+                $company->update($companyPayload);
+            } else {
+                $companyPayload['created_by'] = Auth::id();
+                $companyPayload['updated_by'] = Auth::id();
+                $company = Company::query()->create($companyPayload);
+            }
+
+            // The Financial Year selected in Company Setup becomes the single default/current FY for the project.
+            FinancialYear::query()
+                ->where('company_id', $company->id)
+                ->orWhereNull('company_id')
+                ->update([
+                    'is_active' => false,
+                    'is_current' => false,
+                    'updated_by' => Auth::id(),
+                ]);
+
+            $selectedFinancialYear->forceFill([
                 'company_id' => $company->id,
-                'start_date' => $data['financial_year_start'],
-                'end_date' => $data['financial_year_end'],
-            ],
-            [
-                'name' => date('Y', strtotime($data['financial_year_start'])) . '-' . date('Y', strtotime($data['financial_year_end'])),
                 'is_active' => true,
-                'status' => 'Active',
-                'created_by' => Auth::id(),
+                'is_current' => true,
                 'updated_by' => Auth::id(),
-            ]
-        );
+            ])->save();
+
+            return $company->fresh();
+        });
 
         return response()->json([
             'success' => true,
             'message' => 'Company setup saved successfully.',
-            'data' => $company->fresh(),
+            'data' => $company,
             'redirect' => route('setup.chart-of-accounts'),
         ]);
+    }
+
+    private function selectedFinancialYearId(?Company $company): ?int
+    {
+        if ($company?->financial_year_start && $company?->financial_year_end) {
+            $selected = FinancialYear::query()
+                ->whereDate('start_date', $company->financial_year_start->toDateString())
+                ->whereDate('end_date', $company->financial_year_end->toDateString())
+                ->orderByDesc('is_current')
+                ->orderByDesc('is_active')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($selected) {
+                return (int) $selected->id;
+            }
+        }
+
+        return FinancialYear::query()
+            ->where(function ($query) {
+                $query->where('is_current', true)
+                    ->orWhere('is_active', true);
+            })
+            ->orderByDesc('is_current')
+            ->orderByDesc('is_active')
+            ->orderByDesc('start_date')
+            ->value('id');
     }
 }

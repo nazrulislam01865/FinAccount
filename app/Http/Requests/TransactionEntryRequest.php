@@ -4,11 +4,11 @@ namespace App\Http\Requests;
 
 use App\Models\AccountingRule;
 use App\Models\CashBankAccount;
-use App\Models\FinancialYear;
 use App\Models\LedgerMappingRule;
 use App\Models\Party;
 use App\Models\SettlementType;
 use App\Models\TransactionHead;
+use App\Services\Accounting\FinancialYearService;
 use App\Services\Accounting\TransactionRequirementService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
@@ -82,7 +82,7 @@ class TransactionEntryRequest extends FormRequest
                 Rule::in(['Draft', 'Posted']),
             ],
 
-            'attachment' => ['nullable', 'file', 'max:5120'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ];
     }
 
@@ -194,6 +194,7 @@ class TransactionEntryRequest extends FormRequest
             'amount.numeric' => 'Amount must be a valid number.',
             'amount.min' => 'Amount must be greater than zero.',
             'status.in' => 'Transaction status must be Draft or Posted.',
+            'attachment.mimes' => 'Attachment must be a PDF, JPG, JPEG, or PNG file.',
             'attachment.max' => 'Attachment size cannot exceed 5MB.',
         ];
     }
@@ -202,18 +203,25 @@ class TransactionEntryRequest extends FormRequest
     {
         $voucherDate = Carbon::parse($this->input('voucher_date'))->toDateString();
 
-        $financialYear = FinancialYear::query()
-            ->whereIn('status', ['Active', 'Open'])
-            ->whereDate('start_date', '<=', $voucherDate)
-            ->whereDate('end_date', '>=', $voucherDate)
-            ->orderByDesc('is_current')
-            ->orderByDesc('id')
-            ->first();
+        $financialYear = app(FinancialYearService::class)->currentForCompany((int) ($this->user()?->company_id ?? 0));
 
-        if (!$financialYear) {
+        if (! $financialYear) {
             $validator->errors()->add(
                 'voucher_date',
-                'Transaction date must be inside an open financial year from Financial Year Setup.'
+                'Select a Financial Year in Company Setup before posting transactions.'
+            );
+
+            return;
+        }
+
+        if (
+            $voucherDate < $financialYear->start_date->toDateString()
+            || $voucherDate > $financialYear->end_date->toDateString()
+            || ! in_array($financialYear->status, ['Active', 'Open'], true)
+        ) {
+            $validator->errors()->add(
+                'voucher_date',
+                'Transaction date must be inside the current Financial Year selected in Company Setup.'
             );
 
             return;

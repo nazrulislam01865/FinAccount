@@ -51,7 +51,7 @@ class RolePermissionSeeder extends Seeder
                     ->values()
                     ->all();
 
-            if ($role->isSuperAdmin()) {
+            if ($role->isFixedFullAccessRole()) {
                 $role->permissions()->sync($allPermissionIds);
                 continue;
             }

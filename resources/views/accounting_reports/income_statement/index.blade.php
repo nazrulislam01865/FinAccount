@@ -10,6 +10,7 @@
 @php
     $money = fn ($amount) => ($currency ?? 'BDT') . ' ' . number_format((float) $amount, 2);
     $moneySigned = fn ($amount) => ((float) $amount < 0 ? '(' . $money(abs((float) $amount)) . ')' : $money($amount));
+    $moneyShort = fn ($amount) => ($currency ?? 'BDT') . ' ' . number_format((float) $amount, 0);
     $formatDate = function ($date) {
         try {
             return \Illuminate\Support\Carbon::parse($date)->format('d M Y');
@@ -17,25 +18,39 @@
             return (string) $date;
         }
     };
+
     $sections = ['Revenue', 'Cost of Sales', 'Operating Expenses'];
+    $selectedSection = $filters['section'] ?? 'All';
+    $visibleSections = $selectedSection === 'All' ? $sections : [$selectedSection];
+    $isProfit = (float) $report['net_profit'] >= 0;
+    $basis = $filters['basis'] ?? 'Accrual';
+    $maxBarBase = max(abs((float) $report['revenue']), 1);
+    $revenueBar = abs((float) $report['revenue']) > 0 ? 100 : 0;
+    $costBar = min(100, (abs((float) $report['cost']) / $maxBarBase) * 100);
+    $expenseBar = min(100, (abs((float) $report['expense']) / $maxBarBase) * 100);
+    $periodText = $formatDate($report['from_date']) . ' to ' . $formatDate($report['to_date']);
+    $ytdText = 'YTD from ' . $formatDate($report['year_start']);
+    $totalRows = $report['rows']->count();
+
     $reportSummaryRows = [
-        ['label' => 'Gross Margin', 'value' => number_format((float) $report['gross_margin'], 2) . '%'],
-        ['label' => 'Net Margin', 'value' => number_format((float) $report['net_margin'], 2) . '%'],
-        ['label' => 'Expense Ratio', 'value' => number_format((float) $report['expense_ratio'], 2) . '%'],
-        ['label' => 'Basis', 'value' => 'Accrual'],
+        ['label' => 'Gross Profit Margin', 'value' => number_format((float) $report['gross_margin'], 2) . '%'],
+        ['label' => 'Net Profit Margin', 'value' => number_format((float) $report['net_margin'], 2) . '%'],
+        ['label' => 'Expense to Revenue', 'value' => number_format((float) $report['expense_ratio'], 2) . '%'],
+        ['label' => 'Report Basis', 'value' => $basis],
     ];
+
     $ytdRows = [
         ['label' => 'Revenue', 'value' => $money($report['ytd_revenue'])],
-        ['label' => 'Cost', 'value' => $money($report['ytd_cost'])],
+        ['label' => 'Cost of Sales', 'value' => $money($report['ytd_cost'])],
         ['label' => 'Expenses', 'value' => $money($report['ytd_expense'])],
-        ['label' => 'Net Profit', 'value' => $moneySigned($report['ytd_net_profit'])],
+        ['label' => 'Net Profit / Loss', 'value' => $moneySigned($report['ytd_net_profit'])],
     ];
 @endphp
 
-<div class="financial-report-page">
+<div class="financial-report-page income-statement-page">
     <x-report.page-header
         title="Income Statement"
-        subtitle="Revenue, direct cost, expenses, gross profit, and net profit generated from posted journal lines."
+        subtitle="Review revenue, cost, expenses, and net profit for the selected period. The report is generated from posted accounting lines only."
     >
         <x-slot:actions>
             <a class="button btn-outline" href="{{ route('accounting-reports.income-statement.export', request()->query()) }}">⇩ Export CSV</a>
@@ -44,16 +59,14 @@
         </x-slot:actions>
     </x-report.page-header>
 
-    <div class="report-summary-grid report-summary-grid-six">
-        <x-report.stat-card label="Total Revenue" :value="$money($report['revenue'])" tone="success" />
-        <x-report.stat-card label="Cost of Sales" :value="$money($report['cost'])" tone="warning" />
-        <x-report.stat-card label="Operating Expenses" :value="$money($report['expense'])" tone="danger" />
-        <x-report.stat-card label="Net Profit / Loss" :value="$moneySigned($report['net_profit'])" :tone="$report['net_profit'] >= 0 ? 'primary' : 'danger'" />
-        <x-report.info-card title="Report Summary" :rows="$reportSummaryRows" />
-        <x-report.info-card title="YTD Position" :rows="$ytdRows" />
+    <div class="report-summary-grid income-template-stats">
+        <x-report.stat-card label="Total Revenue" :value="$money($report['revenue'])" note="Income posted in this period" tone="success" />
+        <x-report.stat-card label="Cost of Sales" :value="$money($report['cost'])" note="Direct cost / purchase cost" tone="warning" />
+        <x-report.stat-card label="Operating Expenses" :value="$money($report['expense'])" note="Expense ledgers only" tone="danger" />
+        <x-report.stat-card label="Net Profit / Loss" :value="$moneySigned($report['net_profit'])" :note="$isProfit ? 'After cost and expenses' : 'Loss after cost and expenses'" :tone="$isProfit ? 'primary' : 'danger'" />
     </div>
 
-    <form method="GET" action="{{ route('accounting-reports.income-statement.index') }}" class="card report-toolbar report-toolbar-seven accounting-filter-sequence">
+    <form method="GET" action="{{ route('accounting-reports.income-statement.index') }}" class="card report-toolbar report-toolbar-seven accounting-filter-sequence income-template-filter">
         <div class="date-range-field">
             <label>Date Range</label>
             <div class="date-range-inputs">
@@ -78,20 +91,21 @@
         <div class="field search-field">
             <label>Search Account</label>
             <span>⌕</span>
-            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search revenue, purchase, salary, rent...">
+            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Search revenue, cost, salary, rent...">
         </div>
-        <x-report.filter-actions :reset-route="route('accounting-reports.income-statement.index')" />
+        <x-report.filter-actions :reset-route="route('accounting-reports.income-statement.index')" submit-label="Run" />
     </form>
 
-    <div class="report-grid report-grid-full">
+    <div class="report-grid income-template-layout">
         <x-report.table-card
             title="Profit & Loss Statement"
-            :subtitle="$formatDate($report['from_date']) . ' to ' . $formatDate($report['to_date']) . ' · YTD from ' . $formatDate($report['year_start'])"
-            :badge="$report['net_profit'] >= 0 ? 'Profit Position' : 'Loss Position'"
-            :badge-class="$report['net_profit'] >= 0 ? 'badge-success' : 'badge-warning'"
+            :subtitle="$periodText . ' · ' . $ytdText"
+            :badge="$isProfit ? 'Profit Position' : 'Loss Position'"
+            :badge-class="$isProfit ? 'badge-success' : 'badge-warning'"
+            class="income-template-card"
         >
             <div class="table-wrap">
-                <table class="financial-table income-table">
+                <table class="financial-table income-table income-statement-template-table">
                     <thead>
                         <tr>
                             <th>Particulars</th>
@@ -102,41 +116,41 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($sections as $sectionName)
+                        @foreach($visibleSections as $sectionName)
                             @php($rows = $report['groups']->get($sectionName, collect()))
-                            @if($rows->isEmpty())
-                                @continue
-                            @endif
-                            <tr class="group-row"><td colspan="5">{{ $sectionName }}</td></tr>
-                            @foreach($rows as $row)
+                            <tr class="group-row section-row"><td colspan="5">{{ $sectionName }}</td></tr>
+                            @forelse($rows as $row)
                                 <tr>
                                     <td class="strong">{{ $row->account_name }}</td>
                                     <td class="code">{{ $row->account_code }}</td>
-                                    <td><span class="badge {{ $row->account_type === 'Income' ? 'badge-success' : 'badge-warning' }}">{{ $row->account_type }}</span></td>
+                                    <td>
+                                        <span class="badge {{ $row->account_type === 'Income' ? 'badge-success' : ($sectionName === 'Cost of Sales' ? 'badge-warning' : 'badge-danger') }}">
+                                            {{ $sectionName === 'Cost of Sales' ? 'Cost of Sales' : $row->account_type }}
+                                        </span>
+                                    </td>
                                     <td class="amount">{{ $moneySigned($row->amount) }}</td>
                                     <td class="amount">{{ $moneySigned($row->ytd_amount) }}</td>
                                 </tr>
-                            @endforeach
+                            @empty
+                                <tr class="empty-row"><td colspan="5">No posted {{ strtolower($sectionName) }} movement found for the selected filter.</td></tr>
+                            @endforelse
                             <tr class="total-row">
                                 <td colspan="3">Total {{ $sectionName }}</td>
                                 <td class="amount">{{ $moneySigned($rows->sum('amount')) }}</td>
                                 <td class="amount">{{ $moneySigned($rows->sum('ytd_amount')) }}</td>
                             </tr>
-                            @if($sectionName === 'Cost of Sales')
+                            @if($sectionName === 'Cost of Sales' || ($selectedSection === 'All' && $sectionName === 'Revenue' && ! $report['groups']->has('Cost of Sales')))
                                 <tr class="gross-row">
                                     <td colspan="3">Gross Profit</td>
                                     <td class="amount">{{ $moneySigned($report['gross_profit']) }}</td>
                                     <td class="amount">{{ $moneySigned($report['ytd_gross_profit']) }}</td>
                                 </tr>
                             @endif
-                        @empty
-                            <tr data-empty="true"><td colspan="5" class="empty-state">No income or expense movement found for the selected filter.</td></tr>
-                        @endforelse
-                        @if($report['rows']->isEmpty())
-                            <tr data-empty="true"><td colspan="5" class="empty-state">No income or expense movement found for the selected filter.</td></tr>
-                        @else
-                            <tr class="{{ $report['net_profit'] >= 0 ? 'profit-row' : 'loss-row' }}">
-                                <td colspan="3">Net Profit / Loss</td>
+                        @endforeach
+
+                        @if($selectedSection === 'All')
+                            <tr class="{{ $isProfit ? 'profit-row' : 'loss-row' }}">
+                                <td colspan="3">Net {{ $isProfit ? 'Profit' : 'Loss' }}</td>
                                 <td class="amount">{{ $moneySigned($report['net_profit']) }}</td>
                                 <td class="amount">{{ $moneySigned($report['ytd_net_profit']) }}</td>
                             </tr>
@@ -144,9 +158,63 @@
                     </tbody>
                 </table>
             </div>
-            <div class="report-note"><strong>Accounting check:</strong> this report includes Income and Expense ledger accounts only. Assets, liabilities, equity, cash, bank, receivable, and payable balances stay out of the Income Statement and appear in the Trial Balance or Balance Sheet.</div>
+            <div class="report-note">
+                <strong>Accounting check:</strong> Income Statement includes only Income and Expense class ledgers. Cash, bank, receivable, payable, asset, liability, and equity ledgers are intentionally excluded and remain in Trial Balance / Balance Sheet.
+            </div>
         </x-report.table-card>
+
+        <aside class="report-side-stack">
+            <div class="card side-card">
+                <h3>Report Summary</h3>
+                @foreach($reportSummaryRows as $row)
+                    <div class="ratio-row"><span>{{ $row['label'] }}</span><strong>{{ $row['value'] }}</strong></div>
+                @endforeach
+                <div class="mini-chart" aria-label="Income statement amount comparison">
+                    <div class="bar-item">
+                        <span><b>Revenue</b><em>{{ $moneyShort($report['revenue']) }}</em></span>
+                        <div class="bar"><div class="bar-fill green-bg" style="width: {{ $revenueBar }}%"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <span><b>Cost</b><em>{{ $moneyShort($report['cost']) }}</em></span>
+                        <div class="bar"><div class="bar-fill orange-bg" style="width: {{ $costBar }}%"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <span><b>Expense</b><em>{{ $moneyShort($report['expense']) }}</em></span>
+                        <div class="bar"><div class="bar-fill" style="width: {{ $expenseBar }}%"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card side-card">
+                <h3>YTD Position</h3>
+                @foreach($ytdRows as $row)
+                    <div class="ratio-row"><span>{{ $row['label'] }}</span><strong>{{ $row['value'] }}</strong></div>
+                @endforeach
+            </div>
+
+            <div class="card side-card">
+                <h3>Accounting Guardrails</h3>
+                <div class="guardrail-list">
+                    <div class="guardrail-item"><span>✓</span><p>Report reads posted voucher details as journal-line equivalent source records.</p></div>
+                    <div class="guardrail-item"><span>✓</span><p>Income is calculated as Credit − Debit; Expense is calculated as Debit − Credit.</p></div>
+                    <div class="guardrail-item"><span>✓</span><p>Due collection / supplier payment rules do not recognize income or expense again.</p></div>
+                </div>
+            </div>
+
+            <div class="card side-card">
+                <h3>Quick Notes</h3>
+                <div class="insight">
+                    <div class="insight-icon">💡</div>
+                    <div><strong>Rule-driven posting</strong><p>Users record a transaction head and amount; the accounting rule creates the debit and credit lines used by this report.</p></div>
+                </div>
+                <div class="insight">
+                    <div class="insight-icon">✓</div>
+                    <div><strong>Clean report logic</strong><p>Only revenue, cost, and operating expense ledgers appear here. Balance Sheet accounts stay outside the Income Statement.</p></div>
+                </div>
+            </div>
+        </aside>
     </div>
-    <div class="print-note">Income Statement report printed from FinAcco Accounting System.</div>
+
+    <div class="print-note">Income Statement report printed from HisebGhor Accounting System. Period: {{ $periodText }}.</div>
 </div>
 @endsection

@@ -201,7 +201,7 @@ class UserRoleController extends Controller
                     abort(422, 'One or more selected roles are invalid.');
                 }
 
-                if ($role->isSuperAdmin()) {
+                if ($role->isFixedFullAccessRole()) {
                     $role->permissions()->sync($allPermissionIds);
                     continue;
                 }
@@ -220,9 +220,9 @@ class UserRoleController extends Controller
                 $role->permissions()->sync($selectedPermissionIds);
             }
 
-            $superAdminRoles = $roles->filter(fn (Role $role) => $role->isSuperAdmin());
+            $fixedFullAccessRoles = $roles->filter(fn (Role $role) => $role->isFixedFullAccessRole());
 
-            foreach ($superAdminRoles as $role) {
+            foreach ($fixedFullAccessRoles as $role) {
                 $role->permissions()->sync($allPermissionIds);
             }
         });

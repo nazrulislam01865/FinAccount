@@ -24,14 +24,14 @@
             'description' => 'Opening, period, and closing debit/credit balances by ledger account.',
             'route' => 'accounting-reports.trial-balance.index',
             'icon' => 'TB',
-            'permission' => 'reports.view',
+            'permission' => 'reports.full',
         ],
         [
             'title' => 'Income Statement',
             'description' => 'Revenue, cost, expenses, gross profit, and net profit for the selected period.',
             'route' => 'accounting-reports.income-statement.index',
             'icon' => 'IS',
-            'permission' => 'reports.view',
+            'permission' => 'reports.full',
         ],
         [
             'title' => 'Balance Sheet',
@@ -66,14 +66,14 @@
             'description' => 'Sales/income ledger movements by voucher, party, transaction head, and account.',
             'route' => 'accounting-reports.sales-report.index',
             'icon' => 'SR',
-            'permission' => 'reports.view',
+            'permission' => 'reports.full',
         ],
         [
             'title' => 'Expense Report',
             'description' => 'Expense ledger movements by voucher, party, transaction head, and account.',
             'route' => 'accounting-reports.expense-report.index',
             'icon' => 'ER',
-            'permission' => 'reports.view',
+            'permission' => 'reports.full',
         ],
     ];
 
@@ -89,7 +89,7 @@
 
 <div class="grid two">
     @foreach($cards as $card)
-        @if(\Illuminate\Support\Facades\Route::has($card['route']) && ($user?->canViewRoute($card['route']) || $user?->hasPermission($card['permission'])))
+        @if(\Illuminate\Support\Facades\Route::has($card['route']) && $user?->canViewRoute($card['route']))
             <a href="{{ route($card['route']) }}" class="card info-card" style="display:block;min-height:170px">
                 <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
                     <div class="nav-icon" style="width:42px;height:42px;background:var(--primary-soft);color:var(--primary)">{{ $card['icon'] }}</div>

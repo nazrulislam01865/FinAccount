@@ -19,6 +19,8 @@ class User extends Authenticatable
 
     private ?bool $superAdminCache = null;
 
+    private ?bool $fixedFullAccessRoleCache = null;
+
     private ?int $roleLevelCache = null;
 
     protected function casts(): array
@@ -74,6 +76,18 @@ class User extends Authenticatable
         return $this->superAdminCache;
     }
 
+    public function hasFixedFullAccessRole(): bool
+    {
+        if ($this->fixedFullAccessRoleCache !== null) {
+            return $this->fixedFullAccessRoleCache;
+        }
+
+        $this->fixedFullAccessRoleCache = $this->activeRoleCollection()
+            ->contains(fn (Role $role) => $role->isFixedFullAccessRole());
+
+        return $this->fixedFullAccessRoleCache;
+    }
+
     public function roleLevel(): int
     {
         if ($this->roleLevelCache !== null) {
@@ -102,9 +116,9 @@ class User extends Authenticatable
             return true;
         }
 
-        // Super Admin is intentionally protected so the system owner cannot be locked out
-        // while the editable role matrix remains the source of truth for every other role.
-        if ($this->isSuperAdmin()) {
+        // Fixed full-access roles are intentionally protected so core administrators
+        // cannot be locked out from the editable role matrix.
+        if ($this->hasFixedFullAccessRole()) {
             return true;
         }
 
@@ -176,6 +190,7 @@ class User extends Authenticatable
     {
         $this->permissionNameCache = null;
         $this->superAdminCache = null;
+        $this->fixedFullAccessRoleCache = null;
         $this->roleLevelCache = null;
         $this->unsetRelation('roles');
     }

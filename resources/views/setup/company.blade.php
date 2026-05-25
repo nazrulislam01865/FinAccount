@@ -134,24 +134,27 @@
                         ></select>
                     </div>
 
-                    <div>
-                        <label>Financial Year Start <span class="required">*</span></label>
-                        <input
-                            type="date"
-                            name="financial_year_start"
-                            value="{{ old('financial_year_start', optional($company?->financial_year_start)->format('Y-m-d') ?? '') }}"
-                            required
-                        >
-                    </div>
-
-                    <div>
-                        <label>Financial Year End <span class="required">*</span></label>
-                        <input
-                            type="date"
-                            name="financial_year_end"
-                            value="{{ old('financial_year_end', optional($company?->financial_year_end)->format('Y-m-d') ?? '') }}"
-                            required
-                        >
+                    <div class="span-2">
+                        <label>Current Financial Year <span class="required">*</span></label>
+                        <select name="financial_year_id" required>
+                            <option value="">Select Financial Year from Master Setup</option>
+                            @foreach($financialYears as $financialYear)
+                                <option
+                                    value="{{ $financialYear->id }}"
+                                    @selected((int) old('financial_year_id', $selectedFinancialYearId) === (int) $financialYear->id)
+                                >
+                                    {{ $financialYear->name }}
+                                    — {{ optional($financialYear->start_date)->format('d M Y') }} to {{ optional($financialYear->end_date)->format('d M Y') }}
+                                    @if($financialYear->is_current || $financialYear->is_active)
+                                        (Current)
+                                    @endif
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="hint">Financial years are maintained in Master Setup. The selected year is used as the default period across transactions, reports, opening balance, voucher numbering, and dashboard filters.</div>
+                        @if($financialYears->isEmpty())
+                            <div class="hint" style="color:#dc2626">Create a Financial Year in Master Setup before completing Company Setup.</div>
+                        @endif
                     </div>
                 </div>
             </div>

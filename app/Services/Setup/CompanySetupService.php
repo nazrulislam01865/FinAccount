@@ -15,6 +15,14 @@ class CompanySetupService
     {
         return DB::transaction(function () use ($data, $logo, $userId) {
             $company = Company::first();
+            $selectedFinancialYear = ! empty($data['financial_year_id'])
+                ? FinancialYear::query()->find((int) $data['financial_year_id'])
+                : null;
+
+            if ($selectedFinancialYear) {
+                $data['financial_year_start'] = $selectedFinancialYear->start_date->toDateString();
+                $data['financial_year_end'] = $selectedFinancialYear->end_date->toDateString();
+            }
 
             if ($logo) {
                 $data['logo_path'] = $logo->store('company-logos', 'public');
@@ -29,20 +37,26 @@ class CompanySetupService
                 'contact_email', 'contact_phone', 'website', 'logo_path'
             ]);
             $payload[$company ? 'updated_by' : 'created_by'] = $userId;
+            $payload['updated_by'] = $userId;
 
             $company = Company::updateOrCreate(['id' => $company?->id], $payload);
 
-            FinancialYear::where('company_id', $company->id)->update(['is_active' => false]);
-            FinancialYear::updateOrCreate(
-                ['company_id' => $company->id, 'start_date' => $data['financial_year_start'], 'end_date' => $data['financial_year_end']],
-                [
-                    'name' => date('Y', strtotime($data['financial_year_start'])) . '-' . date('Y', strtotime($data['financial_year_end'])),
+            if ($selectedFinancialYear) {
+                FinancialYear::where('company_id', $company->id)
+                    ->orWhereNull('company_id')
+                    ->update([
+                        'is_active' => false,
+                        'is_current' => false,
+                        'updated_by' => $userId,
+                    ]);
+
+                $selectedFinancialYear->forceFill([
+                    'company_id' => $company->id,
                     'is_active' => true,
-                    'status' => 'Active',
+                    'is_current' => true,
                     'updated_by' => $userId,
-                    'created_by' => $userId,
-                ]
-            );
+                ])->save();
+            }
 
             return $company->fresh(['businessType', 'currency', 'timeZone']);
         });

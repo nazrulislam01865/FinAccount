@@ -4,6 +4,21 @@ namespace App\Providers;
 
 use App\AccountingEngine\AccountingEngine;
 use App\AccountingEngine\Contracts\AccountingEngineContract;
+use App\Models\AccountingRule;
+use App\Models\CashBankAccount;
+use App\Models\ChartOfAccount;
+use App\Models\Company;
+use App\Models\FinancialYear;
+use App\Models\LedgerMappingRule;
+use App\Models\OpeningBalance;
+use App\Models\Party;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\TransactionHead;
+use App\Models\User;
+use App\Models\VoucherHeader;
+use App\Models\VoucherNumberingRule;
+use App\Observers\AuditObserver;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +36,29 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->ensureRuntimeDirectoriesExist();
+
+        foreach ([
+            Company::class,
+            FinancialYear::class,
+            ChartOfAccount::class,
+            CashBankAccount::class,
+            Party::class,
+            TransactionHead::class,
+            LedgerMappingRule::class,
+            AccountingRule::class,
+            OpeningBalance::class,
+            VoucherNumberingRule::class,
+            VoucherHeader::class,
+            User::class,
+            Role::class,
+            Permission::class,
+        ] as $auditedModel) {
+            if (class_exists($auditedModel)) {
+                $auditedModel::observe(AuditObserver::class);
+            }
+        }
+
         /*
          * Cloud-safe HTTPS handling.
          * Do not force HTTPS unless SSL/443 is configured and APP_FORCE_HTTPS=true.
@@ -31,4 +69,29 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
     }
+    /**
+     * Laravel uses these runtime folders for file sessions, compiled views,
+     * cache files, logs, testing artifacts and private/public uploads. ZIP
+     * extraction and Git deployments can drop empty directories, so recreate
+     * them before the session middleware attempts to write files.
+     */
+    private function ensureRuntimeDirectoriesExist(): void
+    {
+        foreach ([
+            storage_path('framework/sessions'),
+            storage_path('framework/views'),
+            storage_path('framework/cache'),
+            storage_path('framework/cache/data'),
+            storage_path('framework/testing'),
+            storage_path('logs'),
+            storage_path('app/private'),
+            storage_path('app/public'),
+            base_path('bootstrap/cache'),
+        ] as $directory) {
+            if (! is_dir($directory)) {
+                @mkdir($directory, 0775, true);
+            }
+        }
+    }
+
 }
