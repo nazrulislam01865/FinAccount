@@ -110,7 +110,7 @@
                     <div class="prototype-form-grid two">
                         <div class="prototype-field">
                             <label for="date">Date <span class="required">*</span></label>
-                            <input type="date" id="date" name="voucher_date" value="{{ $defaultVoucherDate ?? now()->toDateString() }}" required>
+                            <input type="date" id="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
                         </div>
 
                         <div class="prototype-field">
@@ -661,6 +661,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function normalBalanceFromType(accountType) {
+        const type = text(accountType, '').toLowerCase();
+        if (['asset', 'expense'].includes(type)) return 'Debit';
+        if (['liability', 'income', 'equity', 'owner’s equity', "owner's equity"].includes(type)) return 'Credit';
+        return 'Debit';
+    }
+
+    function postingEffectFromEntry(normalBalance, side) {
+        return normalBalance === side ? 'Increase' : 'Decrease';
+    }
+
     function renderPreview(data) {
         lastPreviewOk = true;
         const rows = data.entries.map((entry) => {
@@ -671,17 +682,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const accountCode = text(entry.account_code, '');
             const accountName = text(entry.account_name);
             const accountType = text(entry.account_type, 'Account');
-            const normalBalance = text(entry.normal_balance, side);
+            const normalBalance = text(entry.normal_balance, normalBalanceFromType(accountType));
             const sourceLabel = text(entry.source_label, 'Accounting Rule');
-            const postingEffect = text(entry.posting_effect, normalBalance === side ? 'Increase' : 'Decrease');
+            const postingEffect = text(entry.posting_effect, postingEffectFromEntry(normalBalance, side));
             const effectClass = postingEffect === 'Increase' ? 'ledger-effect-increase' : 'ledger-effect-decrease';
-            return `<tr><td><div class="ledger-account-name">${accountCode ? `${accountCode} - ` : ''}${accountName}</div><div class="ledger-account-meta"><span>${accountType}</span><span>Normal: ${normalBalance}</span><span class="${effectClass}">${postingEffect}</span></div><div class="ledger-account-rule">${side} BDT ${money(sideAmount)} → ${postingEffect} ${accountType}<br><small>Source: ${sourceLabel}</small></div></td><td>${money(entry.debit)}</td><td>${money(entry.credit)}</td></tr>`;
+            const plainMeaning = `${side} BDT ${money(sideAmount)} → ${postingEffect} ${accountType}`;
+            return `<tr><td><div class="ledger-account-name">${accountCode ? `${accountCode} - ` : ''}${accountName}</div><div class="ledger-account-meta"><span>${accountType}</span><span>Normal: ${normalBalance}</span><span class="${effectClass}">${postingEffect}</span></div><div class="ledger-account-rule">${plainMeaning}<br><small>Source: ${sourceLabel}</small></div></td><td>${money(entry.debit)}</td><td>${money(entry.credit)}</td></tr>`;
         }).join('');
         ledgerRows.innerHTML = `${rows}<tr class="total-row"><td>Total</td><td>${money(data.total_debit)}</td><td>${money(data.total_credit)}</td></tr>`;
         mappingStatus.className = 'badge badge-success';
         mappingStatus.textContent = 'Mapping Found';
         validationBox.className = data.balanced ? 'validation' : 'validation error';
-        validationBox.textContent = data.balanced ? '✓ Accounting check passed. Debit equals Credit and account effects follow normal balance rules.' : 'Debit and credit are not balanced. Posting blocked.';
+        validationBox.textContent = data.balanced ? '✓ Accounting check passed. Debit equals Credit. Account effects are shown using each ledger’s normal balance.' : 'Debit and credit are not balanced. Posting blocked.';
         voucherNo.textContent = data.voucher_number;
         voucherTypeSummary.textContent = data.voucher_type || 'Auto Detected';
         nature.textContent = data.nature;

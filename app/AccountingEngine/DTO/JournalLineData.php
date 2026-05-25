@@ -15,6 +15,12 @@ final readonly class JournalLineData
         public ?string $sourceLabel = null,
         public ?int $partyId = null,
         public ?string $narration = null,
+        public ?string $normalBalance = null,
+        public ?string $postingEffect = null,
+        public ?string $sourceType = null,
+        public ?string $accountingNote = null,
+        public ?int $ruleLineId = null,
+        public ?string $amountSource = null,
     ) {
     }
 
@@ -34,6 +40,12 @@ final readonly class JournalLineData
             sourceLabel: isset($line['source_label']) ? (string) $line['source_label'] : null,
             partyId: isset($line['party_id']) ? (int) $line['party_id'] : null,
             narration: isset($line['narration']) ? (string) $line['narration'] : null,
+            normalBalance: isset($line['normal_balance']) ? (string) $line['normal_balance'] : null,
+            postingEffect: isset($line['posting_effect']) ? (string) $line['posting_effect'] : null,
+            sourceType: isset($line['source_type']) ? (string) $line['source_type'] : null,
+            accountingNote: isset($line['accounting_note']) ? (string) $line['accounting_note'] : null,
+            ruleLineId: isset($line['rule_line_id']) ? (int) $line['rule_line_id'] : null,
+            amountSource: isset($line['amount_source']) ? (string) $line['amount_source'] : null,
         );
     }
 
@@ -53,6 +65,12 @@ final readonly class JournalLineData
             'source_label' => $this->sourceLabel,
             'party_id' => $this->partyId,
             'narration' => $this->narration,
+            'normal_balance' => $this->normalBalance,
+            'posting_effect' => $this->postingEffect,
+            'source_type' => $this->sourceType,
+            'accounting_note' => $this->accountingNote,
+            'rule_line_id' => $this->ruleLineId,
+            'amount_source' => $this->amountSource,
         ];
     }
 }
