@@ -31,6 +31,7 @@ class LedgerMappingController extends Controller
                 'fixedCounterLedger.accountType',
                 'debitAccount.accountType',
                 'creditAccount.accountType',
+                'accountingRule.lines.ledger.accountType',
             ])
             ->orderByDesc('id')
             ->get();

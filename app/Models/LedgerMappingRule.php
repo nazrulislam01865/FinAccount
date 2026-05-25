@@ -102,6 +102,12 @@ class LedgerMappingRule extends Model
         return $this->belongsTo(ChartOfAccount::class, 'credit_account_id');
     }
 
+
+    public function accountingRule()
+    {
+        return $this->hasOne(AccountingRule::class, 'legacy_ledger_mapping_rule_id');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('status', 'Active');

@@ -137,12 +137,35 @@ class AccountingRulePreviewService
 
     private function amountForLine(AccountingRuleLine $line, TransactionInput $input): float
     {
-        $amount = match ($line->amount_source ?: 'transaction_amount') {
+        $source = strtolower(trim((string) ($line->amount_source ?: 'transaction_amount')));
+        $formula = trim((string) $line->amount_formula);
+
+        $amount = match ($source) {
             'zero' => 0.00,
+            'fixed_amount' => $this->numericFormula($formula),
+            'percentage_of_amount' => $input->amount * ($this->percentageFormula($formula) / 100),
             default => $input->amount,
         };
 
         return round((float) $amount, 2);
+    }
+
+    private function numericFormula(string $formula): float
+    {
+        if ($formula === '') {
+            return 0.00;
+        }
+
+        return (float) preg_replace('/[^0-9.\-]/', '', $formula);
+    }
+
+    private function percentageFormula(string $formula): float
+    {
+        if ($formula === '') {
+            return 100.00;
+        }
+
+        return (float) str_replace('%', '', $formula);
     }
 
     /**

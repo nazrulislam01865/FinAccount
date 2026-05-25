@@ -19,13 +19,12 @@
         <div>
             <span class="page-label">Accounting Rule Setup</span>
             <h2>Accounting Rule Setup</h2>
-            <p>Teach HisebGhor how to post each business transaction automatically while keeping Phase 1 and Phase 2 engine safety intact.</p>
+            <p>Define how HisebGhor will auto-post debit and credit for each transaction head.</p>
         </div>
         <div class="prototype-actions">
             <button class="btn-outline" type="button" id="addRuleBtn">+ Add New Rule</button>
             <button class="btn-ghost" type="button" data-scroll-target="#ruleListCard">View All Rules</button>
             <button class="btn-ghost" type="button" data-scroll-target="#journalPreview">Test Rule</button>
-            <button class="btn-ghost" type="button" data-scroll-target="#ruleHelpCard">Help</button>
         </div>
     </div>
 
@@ -72,7 +71,7 @@
                     <div class="section-block">
                         <div class="section-heading">
                             <span>1</span>
-                            <div><strong>Rule identity</strong><small>Connect this rule with a Transaction Head and settlement/payment mode.</small></div>
+                            <div><strong>Rule identity</strong><small>Connect this rule with an active Transaction Head.</small></div>
                         </div>
                         <div class="section-body prototype-form-grid three">
                             <div class="prototype-field">
@@ -99,15 +98,13 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="prototype-field">
-                                <label for="settlementType">Settlement / Payment Method <span class="required">*</span></label>
-                                <select id="settlementType" name="settlement_type_id" required>
+                            <div class="hidden" hidden aria-hidden="true">
+                                <select id="settlementType" name="settlement_type_id">
                                     <option value="">Select settlement type</option>
                                     @foreach($settlementTypes as $settlementType)
                                         <option value="{{ $settlementType->id }}" data-code="{{ e($settlementType->code) }}">{{ $settlementType->name }}</option>
                                     @endforeach
                                 </select>
-                                <div class="hint">Required by the existing posting engine.</div>
                             </div>
                             <div class="prototype-field">
                                 <label for="transactionScreen">Transaction Screen</label>
@@ -332,16 +329,47 @@
                         </div>
                     </div>
 
-                    <div class="section-block prototype-test-block">
-                        <div class="section-heading">
-                            <span>5</span>
-                            <div><strong>Auto Journal Preview / Rule Test</strong><small>Try sample input and see expected journal entry before saving.</small></div>
+
+
+                    <div id="ruleLineTableBody" hidden aria-hidden="true"></div>
+                    <template id="ruleLineTemplate">
+                        <div class="rule-line-row">
+                            <input type="hidden" name="rule_lines[__INDEX__][line_role]" data-line-field="line_role">
+                            <input type="hidden" name="rule_lines[__INDEX__][side]" data-line-field="side">
+                            <input type="hidden" name="rule_lines[__INDEX__][ledger_source]" data-line-field="ledger_source">
+                            <input type="hidden" name="rule_lines[__INDEX__][ledger_id]" data-line-field="ledger_id">
+                            <input type="hidden" name="rule_lines[__INDEX__][amount_source]" data-line-field="amount_source">
+                            <input type="hidden" name="rule_lines[__INDEX__][amount_formula]" data-line-field="amount_formula">
+                            <input type="hidden" name="rule_lines[__INDEX__][movement]" data-line-field="movement">
+                            <input type="hidden" name="rule_lines[__INDEX__][allowed_ledger_type]" data-line-field="allowed_ledger_type">
+                            <input type="hidden" name="rule_lines[__INDEX__][explanation]" data-line-field="explanation">
                         </div>
-                        <div class="section-body prototype-form-grid four">
+                    </template>
+
+
+
+                    <div class="prototype-form-actions">
+                        <button type="button" class="btn-ghost" id="clearRuleBtn">Clear</button>
+                        <button type="submit" class="btn-primary">Save Accounting Rule</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <aside class="prototype-side-stack">
+            <div class="card prototype-preview-card" id="journalPreview">
+                <h3>Expected Journal Entry</h3>
+                <div class="journal-preview-body empty">Select ledgers and amount to preview Debit/Credit.</div>
+            </div>
+
+            <div class="card prototype-preview-card prototype-test-block" id="ruleTestCard">
+                <h3>Auto Journal Preview / Rule Test</h3>
+                <p class="muted" style="margin:4px 0 14px">Try sample input and see the expected journal entry.</p>
+                <div class="prototype-form-grid one">
                             <div class="prototype-field">
                                 <label for="testAmount">Example Amount</label>
                                 <input id="testAmount" type="number" min="0.01" step="0.01" value="10000">
-                            </div>
+                    </div>
                             <div class="prototype-field">
                                 <label for="testParty">Example Party</label>
                                 <input id="testParty" placeholder="Example: ABC Customer">
@@ -360,25 +388,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <div class="prototype-form-actions">
-                        <button type="button" class="btn-ghost" id="clearRuleBtn">Clear</button>
-                        <button type="submit" class="btn-primary">Save Accounting Rule</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <aside class="prototype-side-stack">
-            <div class="card prototype-preview-card" id="journalPreview">
-                <h3>Expected Journal Entry</h3>
-                <div class="journal-preview-body empty">Select ledgers and amount to preview Debit/Credit.</div>
-            </div>
-            <div class="card prototype-guidance-card" id="ruleHelpCard">
-                <div class="prototype-guidance-icon">💡</div>
-                <strong>Quick Help</strong>
-                <p>For Phase 1/2 compatibility, each active rule still resolves to one Debit ledger and one Credit ledger. The extra prototype fields are metadata for validation, screen guidance, and future rule expansion.</p>
-            </div>
         </aside>
     </div>
 
@@ -422,6 +431,49 @@
                                 $primary = $rule->primaryLedger ?: $rule->debitAccount;
                                 $counter = $rule->fixedCounterLedger ?: $rule->creditAccount;
                                 $partyMode = $rule->party_required_mode ?: $rule->party_required;
+                                $syncedLines = $rule->accountingRule?->lines ?? collect();
+                                $ruleLinePayload = $syncedLines->isNotEmpty()
+                                    ? $syncedLines->map(fn ($line) => [
+                                        'line_role' => $line->line_role,
+                                        'side' => $line->side,
+                                        'ledger_source' => $line->ledger_source,
+                                        'ledger_id' => $line->ledger_id,
+                                        'movement' => $line->movement ?: 'Increase',
+                                        'selection_method' => $line->selection_method,
+                                        'allowed_ledger_type' => $line->allowed_ledger_type,
+                                        'amount_source' => $line->amount_source ?: 'transaction_amount',
+                                        'amount_formula' => $line->amount_formula,
+                                        'explanation' => $line->explanation,
+                                    ])->values()
+                                    : collect([
+                                        [
+                                            'line_role' => 'primary',
+                                            'side' => $rule->primary_posting_side ?: 'Debit',
+                                            'ledger_source' => 'fixed',
+                                            'ledger_id' => $rule->primary_ledger_id ?: $rule->debit_account_id,
+                                            'movement' => $rule->primary_ledger_movement ?: 'Increase',
+                                            'selection_method' => null,
+                                            'allowed_ledger_type' => null,
+                                            'amount_source' => 'transaction_amount',
+                                            'amount_formula' => null,
+                                            'explanation' => $rule->primary_explanation,
+                                        ],
+                                        [
+                                            'line_role' => 'counter',
+                                            'side' => $rule->counter_posting_side ?: 'Credit',
+                                            'ledger_source' => str_contains(strtolower((string) $rule->counter_ledger_source), 'cash') ? 'user_cash_bank' : 'fixed',
+                                            'ledger_id' => $rule->fixed_counter_ledger_id ?: $rule->credit_account_id,
+                                            'movement' => $rule->counter_ledger_movement ?: 'Decrease',
+                                            'selection_method' => $rule->counter_selection_method,
+                                            'allowed_ledger_type' => $rule->allowed_counter_ledger_type,
+                                            'amount_source' => 'transaction_amount',
+                                            'amount_formula' => null,
+                                            'explanation' => $rule->counter_explanation,
+                                        ],
+                                    ]);
+                                $debitLineCount = $ruleLinePayload->where('side', 'Debit')->count();
+                                $creditLineCount = $ruleLinePayload->where('side', 'Credit')->count();
+                                $lineSummary = $debitLineCount . ' Dr / ' . $creditLineCount . ' Cr';
                             @endphp
                             <tr
                                 data-id="{{ $rule->id }}"
@@ -456,6 +508,7 @@
                                 data-counter-explanation="{{ e($rule->counter_explanation) }}"
                                 data-party-ledger-effect="{{ e($rule->party_ledger_effect) }}"
                                 data-description="{{ e($rule->description) }}"
+                                data-rule-lines="{{ e($ruleLinePayload->toJson()) }}"
                                 data-update-url="{{ route('api.accounting-rules-setup.update', $rule) }}"
                             >
                                 <td class="code">{{ $rule->rule_code ?: '—' }}</td>
@@ -504,6 +557,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const ruleDescription = document.getElementById('ruleDescription');
     const partyLedgerEffect = document.getElementById('partyLedgerEffect');
     const journalPreview = document.querySelector('#journalPreview .journal-preview-body');
+    const ruleLineBody = document.getElementById('ruleLineTableBody');
+    const ruleLineTemplate = document.getElementById('ruleLineTemplate');
+    let lastPostingSideChanged = 'primary';
 
     const fields = {
         rule_code: document.getElementById('ruleCode'),
@@ -559,16 +615,136 @@ document.addEventListener('DOMContentLoaded', () => {
         return Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    function normaliseLedgerSource(source) {
+        switch (source) {
+            case 'User Selected Cash/Bank Ledger': return 'user_cash_bank';
+            case 'User Selected Party Control Ledger': return 'party_control';
+            case 'Transaction Head Based Ledger': return 'transaction_head';
+            case 'Payment Method Based Ledger': return 'user_cash_bank';
+            case 'Party Type Based Ledger': return 'party_control';
+            case 'System Derived Ledger': return 'system_derived';
+            default: return 'fixed';
+        }
+    }
+
+    function lineLabel(line) {
+        const selector = line.role === 'primary' ? fields.primary_ledger_id : fields.fixed_counter_ledger_id;
+        const fallback = selectedOption(selector)?.textContent?.trim() || 'Selected Ledger';
+        if (line.ledger_source === 'user_cash_bank') {
+            return fields.testCashBank.value || fallback || 'Selected Cash/Bank Ledger';
+        }
+        if (line.ledger_source === 'party_control') {
+            return fallback || 'Selected Party Control Ledger';
+        }
+        if (line.ledger_source === 'transaction_head') {
+            return fallback || 'Transaction Head Default Ledger';
+        }
+        if (line.ledger_source === 'system_derived') {
+            return fallback || 'System Derived Ledger';
+        }
+        return fallback;
+    }
+
+    function setLineValue(row, field, value) {
+        const input = row.querySelector(`[data-line-field="${field}"]`);
+        if (input) input.value = value ?? '';
+    }
+
+    function getLineValue(row, field) {
+        return row.querySelector(`[data-line-field="${field}"]`)?.value ?? '';
+    }
+
+    function createRuleLine(data = {}, index = 0) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = ruleLineTemplate.innerHTML.replaceAll('__INDEX__', String(index)).trim();
+        const row = wrapper.firstElementChild;
+        ruleLineBody.appendChild(row);
+
+        setLineValue(row, 'line_role', data.line_role || (index === 0 ? 'primary' : 'counter'));
+        setLineValue(row, 'side', data.side || (index === 0 ? 'Debit' : 'Credit'));
+        setLineValue(row, 'ledger_source', data.ledger_source || 'fixed');
+        setLineValue(row, 'ledger_id', data.ledger_id || '');
+        setLineValue(row, 'amount_source', data.amount_source || 'transaction_amount');
+        setLineValue(row, 'amount_formula', data.amount_formula || '');
+        setLineValue(row, 'movement', data.movement || (index === 0 ? 'Increase' : 'Decrease'));
+        setLineValue(row, 'allowed_ledger_type', data.allowed_ledger_type || '');
+        setLineValue(row, 'explanation', data.explanation || '');
+
+        return row;
+    }
+
+    function collectRuleLines() {
+        return Array.from(ruleLineBody.querySelectorAll('.rule-line-row')).map((row, index) => ({
+            row,
+            role: getLineValue(row, 'line_role') || (index === 0 ? 'primary' : 'counter'),
+            line_role: getLineValue(row, 'line_role') || (index === 0 ? 'primary' : 'counter'),
+            side: getLineValue(row, 'side') || 'Debit',
+            ledger_source: getLineValue(row, 'ledger_source') || 'fixed',
+            ledger_id: getLineValue(row, 'ledger_id'),
+            amount_source: getLineValue(row, 'amount_source') || 'transaction_amount',
+            amount_formula: getLineValue(row, 'amount_formula'),
+            movement: getLineValue(row, 'movement') || 'Increase',
+            allowed_ledger_type: getLineValue(row, 'allowed_ledger_type'),
+            explanation: getLineValue(row, 'explanation'),
+        }));
+    }
+
+    function oppositeSide(side) {
+        return side === 'Debit' ? 'Credit' : 'Debit';
+    }
+
+    function syncPostingSides(changed = 'primary') {
+        if (changed === 'primary') {
+            fields.counter_posting_side.value = oppositeSide(fields.primary_posting_side.value);
+        } else {
+            fields.primary_posting_side.value = oppositeSide(fields.counter_posting_side.value);
+        }
+
+        if (fields.primary_posting_side.value === 'Debit') {
+            debitInput.value = fields.primary_ledger_id.value || '';
+            creditInput.value = fields.fixed_counter_ledger_id.value || '';
+        } else {
+            debitInput.value = fields.fixed_counter_ledger_id.value || '';
+            creditInput.value = fields.primary_ledger_id.value || '';
+        }
+    }
+
+    function rebuildRuleLines() {
+        ruleLineBody.innerHTML = '';
+        syncPostingSides(lastPostingSideChanged);
+
+        createRuleLine({
+            line_role: 'primary',
+            side: fields.primary_posting_side.value || 'Debit',
+            ledger_source: normaliseLedgerSource(fields.primary_ledger_source.value),
+            ledger_id: fields.primary_ledger_id.value || '',
+            amount_source: 'transaction_amount',
+            movement: fields.primary_ledger_movement.value || 'Increase',
+            allowed_ledger_type: '',
+            explanation: fields.primary_explanation.value || '',
+        }, 0);
+
+        createRuleLine({
+            line_role: 'counter',
+            side: fields.counter_posting_side.value || oppositeSide(fields.primary_posting_side.value),
+            ledger_source: normaliseLedgerSource(fields.counter_ledger_source.value),
+            ledger_id: fields.fixed_counter_ledger_id.value || '',
+            amount_source: 'transaction_amount',
+            movement: fields.counter_ledger_movement.value || 'Decrease',
+            allowed_ledger_type: fields.allowed_counter_ledger_type.value || '',
+            explanation: fields.counter_explanation.value || '',
+        }, 1);
+    }
+
     function syncTransactionHeadDefaults() {
         const option = selectedOption(fields.transaction_head_id);
         if (!option) return;
 
-        if (!fields.transaction_screen.value) {
-            fields.transaction_screen.value = option.dataset.screen || 'Transaction Entry';
-        }
+        fields.transaction_screen.value = option.dataset.screen || fields.transaction_screen.value || 'Transaction Entry';
 
         const paymentRequired = option.dataset.paymentRequired === '1';
         fields.payment_method_required.value = paymentRequired ? '1' : fields.payment_method_required.value;
+        fields.cash_bank_ledger_required.value = paymentRequired ? '1' : fields.cash_bank_ledger_required.value;
         fields.party_required_mode.value = option.dataset.partyMode === 'Required' ? 'Yes' : (option.dataset.partyMode || fields.party_required_mode.value || 'No');
     }
 
@@ -577,13 +753,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let allowed = [];
         try { allowed = JSON.parse(selectedHeadOption?.dataset.settlements || '[]').map(String); } catch (error) { allowed = []; }
 
-        Array.from(fields.settlement_type_id.options).forEach((option) => {
-            if (!option.value) return;
+        const options = Array.from(fields.settlement_type_id.options).filter((option) => option.value);
+        options.forEach((option) => {
             option.hidden = allowed.length > 0 && !allowed.includes(String(option.value));
         });
 
-        if (fields.settlement_type_id.value && selectedOption(fields.settlement_type_id)?.hidden) {
+        const selected = selectedOption(fields.settlement_type_id);
+        if (fields.settlement_type_id.value && selected?.hidden) {
             fields.settlement_type_id.value = '';
+        }
+
+        if (!fields.settlement_type_id.value) {
+            const firstAllowed = options.find((option) => !option.hidden) || options[0];
+            if (firstAllowed) fields.settlement_type_id.value = firstAllowed.value;
         }
     }
 
@@ -612,22 +794,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function syncPostingSides(changed = 'primary') {
-        if (changed === 'primary') {
-            fields.counter_posting_side.value = fields.primary_posting_side.value === 'Debit' ? 'Credit' : 'Debit';
-        } else {
-            fields.primary_posting_side.value = fields.counter_posting_side.value === 'Debit' ? 'Credit' : 'Debit';
-        }
-
-        if (fields.primary_posting_side.value === 'Debit') {
-            debitInput.value = fields.primary_ledger_id.value || '';
-            creditInput.value = fields.fixed_counter_ledger_id.value || '';
-        } else {
-            debitInput.value = fields.fixed_counter_ledger_id.value || '';
-            creditInput.value = fields.primary_ledger_id.value || '';
-        }
-    }
-
     function syncLedgerNames() {
         const primary = selectedOption(fields.primary_ledger_id);
         fields.primaryLedgerName.value = primary ? `${primary.dataset.code || ''} - ${primary.dataset.name || primary.textContent}`.replace(/^ - /, '') : '';
@@ -650,27 +816,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderJournalPreview() {
-        syncPostingSides();
+        syncSettlementFilter();
         syncLedgerNames();
+        rebuildRuleLines();
         syncDescription();
 
         const amount = Number(fields.testAmount.value || 0);
-        const primary = optionLabel(fields.primary_ledger_id) || 'Primary Ledger';
-        const counter = optionLabel(fields.fixed_counter_ledger_id) || 'Counter Ledger';
+        const lines = collectRuleLines();
 
-        if (!fields.primary_ledger_id.value || !fields.fixed_counter_ledger_id.value || amount <= 0) {
+        if (amount <= 0 || !fields.primary_ledger_id.value || !fields.fixed_counter_ledger_id.value) {
             journalPreview.className = 'journal-preview-body empty';
-            journalPreview.innerHTML = 'Select ledgers and amount to preview Debit/Credit.';
+            journalPreview.innerHTML = 'Select one primary ledger, one counter ledger, and a positive amount to preview.';
             return;
         }
 
-        const debitLabel = fields.primary_posting_side.value === 'Debit' ? primary : counter;
-        const creditLabel = fields.primary_posting_side.value === 'Debit' ? counter : primary;
+        let totalDebit = 0;
+        let totalCredit = 0;
+
+        const html = lines.map((line) => {
+            const calculatedAmount = amount;
+            if (line.side === 'Debit') totalDebit += calculatedAmount;
+            if (line.side === 'Credit') totalCredit += calculatedAmount;
+            const label = lineLabel(line);
+            const source = line.ledger_source.replaceAll('_', ' ');
+            const sideClass = line.side === 'Credit' ? 'side credit' : 'side';
+            return `<div class="entry-row"><span class="${sideClass}">${line.side}</span><div><div class="entry-ledger">${label}</div><small>${source} • ${line.movement || 'Increase'}${line.explanation ? ' • ' + line.explanation : ''}</small></div><strong class="entry-amount">BDT ${money(calculatedAmount)}</strong></div>`;
+        }).join('');
+
+        const balanced = Math.round(totalDebit * 100) === Math.round(totalCredit * 100) && totalDebit > 0 && totalCredit > 0;
         journalPreview.className = 'journal-preview-body';
         journalPreview.innerHTML = `
-            <div class="entry-row"><span class="side">Debit</span><div><div class="entry-ledger">${debitLabel}</div><small>Example Party: ${fields.testParty.value || 'N/A'}</small></div><strong class="entry-amount">BDT ${money(amount)}</strong></div>
-            <div class="entry-row"><span class="side credit">Credit</span><div><div class="entry-ledger">${creditLabel}</div><small>Payment: ${fields.testPayment.value || 'N/A'} ${fields.testCashBank.value ? '• ' + fields.testCashBank.value : ''}</small></div><strong class="entry-amount">BDT ${money(amount)}</strong></div>
-            <div class="plain-meaning">This rule posts equal debit and credit using the Phase 1 Accounting Engine wrapper and Phase 2 schema fields.</div>
+            ${html}
+            <div class="entry-row total-row"><span class="side">Total</span><div><div class="entry-ledger">Debit: BDT ${money(totalDebit)} / Credit: BDT ${money(totalCredit)}</div><small>${balanced ? 'Accounting check passed. Debit equals Credit.' : 'Accounting check failed. Debit and Credit must be equal before this rule can be active.'}</small></div><strong class="entry-amount">${balanced ? 'Balanced' : 'Mismatch'}</strong></div>
         `;
     }
 
@@ -695,7 +872,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fields.rule_status.value = 'Active';
         fields.testAmount.value = '10000';
         fields.transaction_screen.value = '';
-        syncPostingSides();
+        fields.settlement_type_id.value = '';
         renderJournalPreview();
         fields.rule_name.focus();
     }
@@ -738,8 +915,6 @@ document.addEventListener('DOMContentLoaded', () => {
             counter_explanation: 'counterExplanation',
         }).forEach(([field, dataKey]) => setField(field, row.dataset[dataKey] || ''));
 
-        syncSettlementFilter();
-        syncPostingSides();
         renderJournalPreview();
         form.scrollIntoView({ behavior: 'smooth', block: 'start' });
         showToast('Accounting rule loaded for editing.');
@@ -748,15 +923,27 @@ document.addEventListener('DOMContentLoaded', () => {
     fields.transaction_head_id.addEventListener('change', () => {
         syncTransactionHeadDefaults();
         syncSettlementFilter();
-        renderJournalPreview();
-    });
-    fields.settlement_type_id.addEventListener('change', () => {
         syncAllowedPaymentFromSettlement();
         renderJournalPreview();
     });
-    fields.primary_posting_side.addEventListener('change', () => renderJournalPreview());
+
+    fields.primary_posting_side.addEventListener('change', () => {
+        lastPostingSideChanged = 'primary';
+        renderJournalPreview();
+    });
     fields.counter_posting_side.addEventListener('change', () => {
-        syncPostingSides('counter');
+        lastPostingSideChanged = 'counter';
+        renderJournalPreview();
+    });
+
+    fields.counter_ledger_source.addEventListener('change', () => {
+        if (fields.counter_ledger_source.value === 'User Selected Cash/Bank Ledger') {
+            fields.counter_selection_method.value = 'Selected by User';
+            fields.allowed_counter_ledger_type.value = 'Cash/Bank';
+        }
+        if (fields.counter_ledger_source.value === 'Fixed Ledger') {
+            fields.counter_selection_method.value = 'Fixed by Rule';
+        }
         renderJournalPreview();
     });
 
@@ -765,6 +952,10 @@ document.addEventListener('DOMContentLoaded', () => {
         field.addEventListener('input', renderJournalPreview);
         field.addEventListener('change', renderJournalPreview);
     });
+
+    form.addEventListener('submit', () => {
+        renderJournalPreview();
+    }, true);
 
     document.querySelectorAll('#ruleTable .edit-btn').forEach((button) => {
         button.addEventListener('click', () => loadForEdit(button.closest('tr')));

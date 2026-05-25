@@ -127,8 +127,8 @@
     .financial-report-page .report-toolbar button,
     .financial-report-page .report-toolbar .button {
         width: 100%;
-        height: 48px;
-        min-height: 48px;
+        height: var(--filter-control-height, 56px);
+        min-height: var(--filter-control-height, 56px);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -141,8 +141,8 @@
     .financial-report-page .filter-actions .button,
     .financial-report-page .filter-actions button {
         width: 100%;
-        height: 48px;
-        min-height: 48px;
+        height: var(--filter-control-height, 56px);
+        min-height: var(--filter-control-height, 56px);
         padding: 0 14px;
         white-space: nowrap;
     }

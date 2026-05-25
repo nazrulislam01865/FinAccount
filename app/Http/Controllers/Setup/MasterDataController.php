@@ -379,20 +379,30 @@ class MasterDataController extends Controller
             $isNew = ! $financialYear->exists;
 
             if ($data['is_current']) {
-                FinancialYear::query()->update([
-                    'is_active' => false,
-                    'is_current' => false,
-                ]);
+                FinancialYear::query()
+                    ->when($company?->id, function ($query) use ($company) {
+                        $query->where(function ($where) use ($company) {
+                            $where->where('company_id', $company->id)
+                                ->orWhereNull('company_id');
+                        });
+                    })
+                    ->update([
+                        'is_active' => false,
+                        'is_current' => false,
+                        'updated_by' => $userId,
+                    ]);
             }
 
             $financialYear->fill([
+                // During first-time setup Company may not exist yet.
+                // So company_id must remain nullable until Company Setup assigns it.
                 'company_id' => $company?->id,
                 'name' => $data['name'],
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'lock_date' => $data['lock_date'] ?? null,
-                'is_active' => $data['is_current'],
-                'is_current' => $data['is_current'],
+                'is_active' => (bool) $data['is_current'],
+                'is_current' => (bool) $data['is_current'],
                 'status' => $data['status'],
                 'updated_by' => $userId,
             ]);
@@ -406,6 +416,7 @@ class MasterDataController extends Controller
             return $financialYear->fresh();
         });
     }
+    
 
     private function saved(string $message, object $model, string $redirectRoute): JsonResponse
     {

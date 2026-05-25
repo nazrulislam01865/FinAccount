@@ -139,8 +139,8 @@
         </div>
     </div>
 
-    <div class="layout">
-        <div class="left-stack">
+    <div class="layout opening-balance-main-layout">
+        <div class="left-stack opening-balance-full-stack">
             <div class="card toolbar opening-toolbar">
                 <div>
                     <label>Financial Year <span class="required">*</span></label>
@@ -381,41 +381,6 @@
             </div>
         </div>
 
-        <aside class="right-stack">
-            <div class="card ready-card">
-                <h3>Go-live Readiness</h3>
-
-                <div class="ready-list">
-                    <div><span class="checkmark">✓</span>Chart of Accounts Created</div>
-                    <div><span class="checkmark">✓</span>Parties / Sub-ledgers Added</div>
-                    <div><span class="checkmark">✓</span>Accounting Rules Setup Completed</div>
-                    <div><span class="checkmark">✓</span>Opening Balances Entered</div>
-                    <div><span class="checkmark">✓</span>Balances Validated</div>
-                </div>
-            </div>
-
-            <div class="card import-card">
-                <h3>Accounting Rules</h3>
-                <p style="font-size:13px;line-height:1.5">
-                    Asset and Expense accounts normally carry Debit opening balances.
-                    Liability, Equity, and Income accounts normally carry Credit opening balances.
-                    Total Debit must equal Total Credit before posting.
-                </p>
-            </div>
-
-            <div class="card import-card">
-                <h3>Import from Excel</h3>
-                <p>Upload your opening balances using the Excel template.</p>
-
-                <button class="btn-outline" type="button" style="width:100%" id="uploadExcelBtn" @disabled(!$openingCanEdit)>
-                    ⇧ Upload Excel File
-                </button>
-
-                <p style="margin-top:10px;font-size:12px">
-                    .xlsx format only, up to 5MB
-                </p>
-            </div>
-        </aside>
     </div>
 </form>
 @endsection

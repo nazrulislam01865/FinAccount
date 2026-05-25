@@ -46,6 +46,59 @@ class LedgerMappingRuleRequest extends FormRequest
 
         $status = $this->input('rule_status', $this->input('status', 'Active')) ?: 'Active';
 
+        $ruleLines = $this->normaliseRuleLines($this->input('rule_lines', []));
+
+        if ($ruleLines === [] && $primaryLedgerId && $counterLedgerId) {
+            $ruleLines = [
+                [
+                    'line_role' => 'primary',
+                    'ledger_source' => $this->normaliseLedgerSource($this->primary_ledger_source ?: 'fixed'),
+                    'ledger_id' => (int) $primaryLedgerId,
+                    'side' => $primarySide,
+                    'movement' => $this->blankToNull($this->primary_ledger_movement) ?: 'Increase',
+                    'selection_method' => null,
+                    'allowed_ledger_type' => null,
+                    'amount_source' => 'transaction_amount',
+                    'amount_formula' => null,
+                    'explanation' => $this->blankToNull($this->primary_explanation),
+                    'sort_order' => 1,
+                ],
+                [
+                    'line_role' => 'counter',
+                    'ledger_source' => $this->normaliseLedgerSource($this->counter_ledger_source ?: 'fixed'),
+                    'ledger_id' => (int) $counterLedgerId,
+                    'side' => $counterSide,
+                    'movement' => $this->blankToNull($this->counter_ledger_movement) ?: 'Decrease',
+                    'selection_method' => $this->blankToNull($this->counter_selection_method),
+                    'allowed_ledger_type' => $this->blankToNull($this->allowed_counter_ledger_type),
+                    'amount_source' => 'transaction_amount',
+                    'amount_formula' => null,
+                    'explanation' => $this->blankToNull($this->counter_explanation),
+                    'sort_order' => 2,
+                ],
+            ];
+        }
+
+        if ($ruleLines !== []) {
+            $primaryLine = $ruleLines[0];
+            $counterLine = $ruleLines[1] ?? $this->oppositeLine($primaryLine, $ruleLines);
+            $primaryLedgerId = $primaryLine['ledger_id'] ?: $primaryLedgerId;
+            $counterLedgerId = $counterLine['ledger_id'] ?: $counterLedgerId;
+            $primarySide = $primaryLine['side'] ?: $primarySide;
+            $counterSide = $counterLine['side'] ?: ($primarySide === 'Debit' ? 'Credit' : 'Debit');
+
+            $firstDebit = $this->firstLineLedgerBySide($ruleLines, 'Debit');
+            $firstCredit = $this->firstLineLedgerBySide($ruleLines, 'Credit');
+
+            if ($firstDebit) {
+                $debitAccountId = $firstDebit;
+            }
+
+            if ($firstCredit) {
+                $creditAccountId = $firstCredit;
+            }
+        }
+
         $this->merge([
             'rule_code' => $this->blankToNull($this->rule_code),
             'rule_name' => $this->blankToNull($this->rule_name),
@@ -60,18 +113,20 @@ class LedgerMappingRuleRequest extends FormRequest
             'party_required_mode' => $partyRequiredMode,
             'party_sub_ledger_type' => $this->blankToNull($this->party_sub_ledger_type),
             'other_required_input' => $this->blankToNull($this->other_required_input),
-            'primary_ledger_source' => $this->blankToNull($this->primary_ledger_source) ?: 'Fixed Ledger',
             'primary_ledger_id' => $primaryLedgerId,
-            'primary_ledger_movement' => $this->blankToNull($this->primary_ledger_movement) ?: 'Increase',
-            'primary_posting_side' => $primarySide,
-            'primary_explanation' => $this->blankToNull($this->primary_explanation),
-            'counter_ledger_source' => $this->blankToNull($this->counter_ledger_source) ?: 'Fixed Ledger',
             'counter_selection_method' => $this->blankToNull($this->counter_selection_method) ?: 'Fixed by Rule',
             'fixed_counter_ledger_id' => $counterLedgerId,
             'allowed_counter_ledger_type' => $this->blankToNull($this->allowed_counter_ledger_type) ?: 'N/A',
-            'counter_ledger_movement' => $this->blankToNull($this->counter_ledger_movement) ?: 'Decrease',
-            'counter_posting_side' => $counterSide,
             'counter_explanation' => $this->blankToNull($this->counter_explanation),
+            'rule_lines' => $ruleLines,
+            'primary_ledger_source' => $ruleLines !== [] ? $this->legacyLedgerSourceLabel($primaryLine['ledger_source']) : ($this->blankToNull($this->primary_ledger_source) ?: 'Fixed Ledger'),
+            'counter_ledger_source' => $ruleLines !== [] ? $this->legacyLedgerSourceLabel($counterLine['ledger_source']) : ($this->blankToNull($this->counter_ledger_source) ?: 'Fixed Ledger'),
+            'primary_ledger_movement' => $ruleLines !== [] ? ($primaryLine['movement'] ?: 'Increase') : ($this->blankToNull($this->primary_ledger_movement) ?: 'Increase'),
+            'counter_ledger_movement' => $ruleLines !== [] ? ($counterLine['movement'] ?: 'Decrease') : ($this->blankToNull($this->counter_ledger_movement) ?: 'Decrease'),
+            'primary_posting_side' => $primarySide,
+            'counter_posting_side' => $counterSide,
+            'primary_explanation' => $ruleLines !== [] ? ($primaryLine['explanation'] ?? null) : $this->blankToNull($this->primary_explanation),
+            'counter_explanation' => $ruleLines !== [] ? ($counterLine['explanation'] ?? null) : $this->blankToNull($this->counter_explanation),
             'debit_account_id' => $debitAccountId,
             'credit_account_id' => $creditAccountId,
             'party_ledger_effect' => $this->blankToNull($this->party_ledger_effect),
@@ -179,6 +234,18 @@ class LedgerMappingRuleRequest extends FormRequest
             'auto_post' => ['required', 'boolean'],
             'description' => ['nullable', 'string', 'max:1000'],
             'status' => ['required', Rule::in(['Active', 'Inactive', 'Draft', 'Pending Review'])],
+            'rule_lines' => ['required', 'array', 'min:2'],
+            'rule_lines.*.line_role' => ['nullable', 'string', 'max:30'],
+            'rule_lines.*.ledger_source' => ['required', Rule::in(['fixed', 'user_cash_bank', 'party_control', 'transaction_head', 'system_derived'])],
+            'rule_lines.*.ledger_id' => ['required', 'integer', $postingLedgerRule],
+            'rule_lines.*.side' => ['required', Rule::in(['Debit', 'Credit'])],
+            'rule_lines.*.movement' => ['nullable', Rule::in(['Increase', 'Decrease'])],
+            'rule_lines.*.selection_method' => ['nullable', 'string', 'max:80'],
+            'rule_lines.*.allowed_ledger_type' => ['nullable', 'string', 'max:80'],
+            'rule_lines.*.amount_source' => ['required', Rule::in(['transaction_amount', 'percentage_of_amount', 'fixed_amount', 'zero'])],
+            'rule_lines.*.amount_formula' => ['nullable', 'string', 'max:120'],
+            'rule_lines.*.explanation' => ['nullable', 'string', 'max:1000'],
+            'rule_lines.*.sort_order' => ['nullable', 'integer', 'min:1'],
         ];
     }
 
@@ -214,6 +281,7 @@ class LedgerMappingRuleRequest extends FormRequest
             $this->validatePostingAccount($validator, $credit, 'credit_account_id', 'Credit Account');
             $this->validateSettlementAccounting($validator, $head, $settlement, $debit, $credit);
             $this->validatePartyEffectAccounting($validator, $debit, $credit);
+            $this->validateRuleLines($validator);
         }];
     }
 
@@ -494,6 +562,102 @@ class LedgerMappingRuleRequest extends FormRequest
         }
 
         return 'Credit';
+    }
+
+
+    private function normaliseRuleLines(array $lines): array
+    {
+        return collect($lines)
+            ->values()
+            ->map(function (array $line, int $index): array {
+                $ledgerId = $this->blankToNull($line['ledger_id'] ?? null);
+
+                return [
+                    'line_role' => $this->blankToNull($line['line_role'] ?? null) ?: ($index === 0 ? 'primary' : ($index === 1 ? 'counter' : 'line_' . ($index + 1))),
+                    'ledger_source' => $this->normaliseLedgerSource($line['ledger_source'] ?? 'fixed'),
+                    'ledger_id' => $ledgerId ? (int) $ledgerId : null,
+                    'side' => $this->blankToNull($line['side'] ?? null) ?: ($index === 0 ? 'Debit' : 'Credit'),
+                    'movement' => $this->blankToNull($line['movement'] ?? null) ?: ($index === 0 ? 'Increase' : 'Decrease'),
+                    'selection_method' => $this->blankToNull($line['selection_method'] ?? null),
+                    'allowed_ledger_type' => $this->blankToNull($line['allowed_ledger_type'] ?? null),
+                    'amount_source' => $this->blankToNull($line['amount_source'] ?? null) ?: 'transaction_amount',
+                    'amount_formula' => $this->blankToNull($line['amount_formula'] ?? null),
+                    'explanation' => $this->blankToNull($line['explanation'] ?? null),
+                    'sort_order' => (int) ($line['sort_order'] ?? ($index + 1)),
+                ];
+            })
+            ->filter(fn (array $line): bool => filled($line['side']) && filled($line['ledger_source']))
+            ->values()
+            ->all();
+    }
+
+    private function normaliseLedgerSource(mixed $source): string
+    {
+        $value = strtolower(trim(str_replace(['_', '-'], ' ', (string) $source)));
+
+        return match (true) {
+            $value === 'user cash bank',
+            str_contains($value, 'cash/bank'),
+            str_contains($value, 'cash bank') => 'user_cash_bank',
+            str_contains($value, 'party') => 'party_control',
+            str_contains($value, 'transaction head') => 'transaction_head',
+            str_contains($value, 'system') || str_contains($value, 'derived') => 'system_derived',
+            default => 'fixed',
+        };
+    }
+
+    private function legacyLedgerSourceLabel(?string $source): string
+    {
+        return match ($source) {
+            'user_cash_bank' => 'User Selected Cash/Bank Ledger',
+            'party_control' => 'User Selected Party Control Ledger',
+            'transaction_head' => 'Transaction Head Based Ledger',
+            'system_derived' => 'System Derived Ledger',
+            default => 'Fixed Ledger',
+        };
+    }
+
+    private function oppositeLine(array $primaryLine, array $ruleLines): array
+    {
+        $oppositeSide = ($primaryLine['side'] ?? 'Debit') === 'Debit' ? 'Credit' : 'Debit';
+
+        return collect($ruleLines)->firstWhere('side', $oppositeSide) ?: [
+            'line_role' => 'counter',
+            'ledger_source' => 'fixed',
+            'ledger_id' => null,
+            'side' => $oppositeSide,
+            'movement' => 'Decrease',
+            'selection_method' => null,
+            'allowed_ledger_type' => null,
+            'amount_source' => 'transaction_amount',
+            'amount_formula' => null,
+            'explanation' => null,
+            'sort_order' => 2,
+        ];
+    }
+
+    private function firstLineLedgerBySide(array $ruleLines, string $side): ?int
+    {
+        $line = collect($ruleLines)->first(fn (array $line): bool => ($line['side'] ?? null) === $side && filled($line['ledger_id'] ?? null));
+
+        return $line ? (int) $line['ledger_id'] : null;
+    }
+
+    private function validateRuleLines(Validator $validator): void
+    {
+        $lines = $this->input('rule_lines', []);
+
+        if (! is_array($lines) || count($lines) < 2) {
+            $validator->errors()->add('rule_lines', 'Accounting Rule must generate at least one Debit line and one Credit line.');
+            return;
+        }
+
+        $debitCount = collect($lines)->where('side', 'Debit')->count();
+        $creditCount = collect($lines)->where('side', 'Credit')->count();
+
+        if ($debitCount < 1 || $creditCount < 1) {
+            $validator->errors()->add('rule_lines', 'Accounting Rule must include both Debit and Credit posting sides.');
+        }
     }
 
     private function blankToNull(mixed $value): ?string

@@ -3,6 +3,7 @@
 namespace App\Services\Setup;
 
 use App\AccountingEngine\Services\LegacyRuleMigrationService;
+use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\LedgerMappingRule;
@@ -24,7 +25,8 @@ class LedgerMappingRuleService
             $payload = $this->payload($data, $userId, true);
 
             $rule = LedgerMappingRule::query()->create($payload);
-            $this->legacyRuleMigrationService->sync($rule);
+            $accountingRule = $this->legacyRuleMigrationService->sync($rule);
+            $this->syncSubmittedRuleLines($accountingRule, $data['rule_lines'] ?? []);
 
             return $this->freshRule($rule);
         });
@@ -37,7 +39,8 @@ class LedgerMappingRuleService
     ): LedgerMappingRule {
         return DB::transaction(function () use ($rule, $data, $userId) {
             $rule->update($this->payload($data, $userId, false, $rule));
-            $this->legacyRuleMigrationService->sync($rule);
+            $accountingRule = $this->legacyRuleMigrationService->sync($rule);
+            $this->syncSubmittedRuleLines($accountingRule, $data['rule_lines'] ?? []);
 
             return $this->freshRule($rule);
         });
@@ -117,6 +120,7 @@ class LedgerMappingRuleService
             'fixedCounterLedger.accountType',
             'debitAccount.accountType',
             'creditAccount.accountType',
+            'accountingRule.lines.ledger.accountType',
         ]);
     }
 

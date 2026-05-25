@@ -2713,3 +2713,244 @@ body.sidebar-navigating .sidebar-backdrop {
 .transaction-entry-page .ledger-account-name {
     min-width: 0;
 }
+
+/* --------------------------------------------------------------------------
+   Unified filter bar sizing - UI only
+   Keeps every filter input, dropdown, and action button the same height across
+   setup pages, reports, due/advance, release notes, and prototype list filters.
+   -------------------------------------------------------------------------- */
+:root{
+    --filter-control-height:56px;
+}
+
+.toolbar,
+.opening-toolbar,
+.voucher-toolbar,
+.voucher-numbering-toolbar,
+.due-toolbar,
+.advance-toolbar,
+.ledger-toolbar,
+.prototype-filter-grid,
+.coa-filter-grid,
+.release-filters,
+.accounting-filter-sequence,
+.financial-report-page .report-toolbar{
+    align-items:end !important;
+}
+
+.toolbar > *,
+.opening-toolbar > *,
+.voucher-toolbar > *,
+.voucher-numbering-toolbar > *,
+.due-toolbar > *,
+.advance-toolbar > *,
+.ledger-toolbar > *,
+.prototype-filter-grid > *,
+.coa-filter-grid > *,
+.release-filters > *,
+.accounting-filter-sequence > *,
+.financial-report-page .report-toolbar > *{
+    min-width:0 !important;
+}
+
+.toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.toolbar select,
+.toolbar button,
+.toolbar .button,
+.opening-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.opening-toolbar select,
+.opening-toolbar button,
+.opening-toolbar .button,
+.voucher-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.voucher-toolbar select,
+.voucher-toolbar button,
+.voucher-toolbar .button,
+.voucher-numbering-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.voucher-numbering-toolbar select,
+.voucher-numbering-toolbar button,
+.voucher-numbering-toolbar .button,
+.due-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.due-toolbar select,
+.due-toolbar button,
+.due-toolbar .button,
+.advance-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.advance-toolbar select,
+.advance-toolbar button,
+.advance-toolbar .button,
+.ledger-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.ledger-toolbar select,
+.ledger-toolbar button,
+.ledger-toolbar .button,
+.prototype-filter-grid input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.prototype-filter-grid select,
+.prototype-filter-grid button,
+.prototype-filter-grid .button,
+.coa-filter-grid input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.coa-filter-grid select,
+.coa-filter-grid button,
+.coa-filter-grid .button,
+.release-filters input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.release-filters select,
+.release-filters button,
+.release-filters .button,
+.accounting-filter-sequence input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.accounting-filter-sequence select,
+.accounting-filter-sequence button,
+.accounting-filter-sequence .button,
+.financial-report-page .report-toolbar input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.financial-report-page .report-toolbar select,
+.financial-report-page .report-toolbar button,
+.financial-report-page .report-toolbar .button{
+    width:100% !important;
+    height:var(--filter-control-height) !important;
+    min-height:var(--filter-control-height) !important;
+    max-height:var(--filter-control-height) !important;
+    box-sizing:border-box !important;
+    display:inline-flex !important;
+    align-items:center !important;
+}
+
+.toolbar button,
+.toolbar .button,
+.opening-toolbar button,
+.opening-toolbar .button,
+.voucher-toolbar button,
+.voucher-toolbar .button,
+.voucher-numbering-toolbar button,
+.voucher-numbering-toolbar .button,
+.due-toolbar button,
+.due-toolbar .button,
+.advance-toolbar button,
+.advance-toolbar .button,
+.ledger-toolbar button,
+.ledger-toolbar .button,
+.prototype-filter-grid button,
+.prototype-filter-grid .button,
+.coa-filter-grid button,
+.coa-filter-grid .button,
+.release-filters button,
+.release-filters .button,
+.accounting-filter-sequence button,
+.accounting-filter-sequence .button,
+.financial-report-page .report-toolbar button,
+.financial-report-page .report-toolbar .button{
+    justify-content:center !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
+    white-space:nowrap !important;
+}
+
+.accounting-filter-sequence .filter-actions,
+.financial-report-page .report-toolbar .filter-actions{
+    align-items:end !important;
+}
+
+.filter-actions{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    align-items:end;
+    width:100%;
+}
+
+.financial-report-page .report-toolbar > .filter-actions{
+    display:grid !important;
+}
+
+.toolbar .search-field span,
+.prototype-filter-grid .search-field span,
+.coa-filter-grid .search-field span,
+.release-filters .search-field span,
+.accounting-filter-sequence .search-field span,
+.financial-report-page .report-toolbar .search-field span{
+    top:auto !important;
+    bottom:calc((var(--filter-control-height) - 18px) / 2) !important;
+    transform:none !important;
+}
+
+.toolbar label,
+.prototype-filter-grid label,
+.coa-filter-grid label,
+.release-filters label,
+.accounting-filter-sequence label,
+.financial-report-page .report-toolbar label{
+    min-height:18px;
+}
+
+@media(max-width:880px){
+    .filter-actions{
+        grid-template-columns:1fr;
+    }
+}
+
+/* Accounting Rule setup overflow fix - UI only.
+   Keep form controls inside their grid columns so the preview card never overlaps the form. */
+.accounting-rule-page,
+.accounting-rule-page .prototype-grid,
+.accounting-rule-page .prototype-card,
+.accounting-rule-page .prototype-card-body,
+.accounting-rule-page .prototype-form,
+.accounting-rule-page .section-block,
+.accounting-rule-page .section-body,
+.accounting-rule-page .prototype-form-grid,
+.accounting-rule-page .prototype-field {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.accounting-rule-page .prototype-field input,
+.accounting-rule-page .prototype-field select,
+.accounting-rule-page .prototype-field textarea,
+.accounting-rule-page .section-body input,
+.accounting-rule-page .section-body select,
+.accounting-rule-page .section-body textarea {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.accounting-rule-page .prototype-form-grid.three,
+.accounting-rule-page .prototype-form-grid.four {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.accounting-rule-page .prototype-side-stack {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+/* Accounting Rule Setup SRS/prototype screen alignment - UI only */
+.accounting-rule-page .prototype-form-grid.one {
+    grid-template-columns: 1fr;
+}
+
+.accounting-rule-page .prototype-test-block .prototype-form-grid.one {
+    gap: 14px;
+}
+
+.accounting-rule-page .prototype-test-block .prototype-field input,
+.accounting-rule-page .prototype-test-block .prototype-field select {
+    width: 100%;
+}
+
+.accounting-rule-page .prototype-test-block p.muted {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.accounting-rule-page .prototype-table-wrap table {
+    min-width: 1480px;
+}
+
+@media(max-width:1500px){
+    .accounting-rule-page .prototype-side-stack {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media(max-width:1100px){
+    .accounting-rule-page .prototype-side-stack {
+        grid-template-columns: 1fr;
+    }
+}

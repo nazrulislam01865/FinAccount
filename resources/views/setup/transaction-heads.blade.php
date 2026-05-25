@@ -25,7 +25,6 @@
             <button class="btn-outline" type="button" id="addHeadBtn">+ Add New Transaction Head</button>
             <button class="btn-ghost" type="button" data-scroll-target="#headListCard">View All Heads</button>
             <button class="btn-ghost" type="button" data-scroll-target="#mappingPreview">Rule Mapping Preview</button>
-            <button class="btn-ghost" type="button" data-scroll-target="#headHelpCard">Help</button>
         </div>
     </div>
 
@@ -217,17 +216,6 @@
         </div>
 
         <aside class="prototype-side-stack">
-            <div class="card prototype-guidance-card" id="headHelpCard">
-                <div class="prototype-guidance-icon">💡</div>
-                <strong>Quick Help</strong>
-                <p>Transaction Head is the user-facing business activity. The Accounting Rule decides which ledger will be debited and credited.</p>
-                <ul>
-                    <li>Use simple names like Customer Collection or Supplier Payment.</li>
-                    <li>Keep party mode aligned with Customer/Supplier/Employee logic.</li>
-                    <li>Use settlement types that have accounting rules configured.</li>
-                </ul>
-            </div>
-
             <div class="card prototype-preview-card" id="mappingPreview">
                 <h3>Current Form Meaning</h3>
                 <div class="prototype-preview-list">
