@@ -167,7 +167,7 @@
             </div>
             <div class="table-footer">
                 <span>Showing {{ $advanceRows->count() }} advance balance row(s)</span>
-                <span>Source: posted voucher details and advance register</span>
+                <span>Source: posted journal lines and advance register</span>
             </div>
         </div>
     </div>

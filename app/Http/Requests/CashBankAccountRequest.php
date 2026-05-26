@@ -153,6 +153,14 @@ class CashBankAccountRequest extends FormRequest
                 $validator->errors()->add('linked_ledger_account_id', 'Linked Ledger Account must be an Asset account.');
             }
 
+            if ($this->input('type') === 'Cash' && $ledger->ledger_type !== 'Cash') {
+                $validator->errors()->add('linked_ledger_account_id', 'Cash type must be linked with a Cash ledger.');
+            }
+
+            if ($this->input('type') === 'Bank' && $ledger->ledger_type !== 'Bank') {
+                $validator->errors()->add('linked_ledger_account_id', 'Bank type must be linked with a Bank ledger.');
+            }
+
             $normalBalance = $ledger->normal_balance ?: $ledger->accountType?->normal_balance;
 
             if ($normalBalance !== 'Debit') {

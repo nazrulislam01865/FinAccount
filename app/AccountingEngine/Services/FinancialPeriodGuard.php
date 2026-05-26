@@ -29,6 +29,7 @@ class FinancialPeriodGuard
             : Carbon::parse($transactionDate)->startOfDay();
 
         $resolvedCompanyId = $this->resolveCompanyId($companyId);
+        $this->assertCompanyCanPost($resolvedCompanyId);
 
         $selectedFinancialYear = app(FinancialYearService::class)->currentForCompany($resolvedCompanyId);
 
@@ -66,6 +67,21 @@ class FinancialPeriodGuard
         $this->assertOpen($financialYear, $date);
 
         return $financialYear;
+    }
+
+    private function assertCompanyCanPost(int $companyId): void
+    {
+        if ($companyId <= 0 || ! Schema::hasColumn('companies', 'status')) {
+            return;
+        }
+
+        $company = Company::query()->find($companyId);
+
+        if ($company && ($company->status ?: 'Active') !== 'Active') {
+            throw ValidationException::withMessages([
+                'company_id' => 'Company is inactive and cannot accept new postings.',
+            ]);
+        }
     }
 
     public function assertOpen(FinancialYear $financialYear, Carbon|string $transactionDate): void

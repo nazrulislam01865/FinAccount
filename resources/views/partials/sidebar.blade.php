@@ -101,6 +101,13 @@
         </a>
     @endif
 
+    @if($canRoute('manual-journals.index'))
+        <a href="{{ route('manual-journals.index') }}" class="nav-item {{ $isActive('manual-journals.index') }}">
+            <div class="nav-icon">JV</div>
+            <span>Manual Journal</span>
+        </a>
+    @endif
+
     @if($canRoute('accounting-reports.transactions.index') || $canPermission('transactions.view'))
         <a href="{{ route('accounting-reports.transactions.index') }}" class="nav-item {{ request()->routeIs('accounting-reports.transactions.*') ? 'active' : '' }}">
             <div class="nav-icon">📄</div>

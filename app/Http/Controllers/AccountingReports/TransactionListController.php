@@ -13,7 +13,8 @@ use App\Models\VoucherHeader;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Services\Reports\NativeReportExportService;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class TransactionListController extends Controller
 {
@@ -89,7 +90,7 @@ class TransactionListController extends Controller
             ->with('success', 'Transaction reversed successfully. Reversal voucher: ' . $result->voucher_no);
     }
 
-    public function export(TransactionReportRequest $request): StreamedResponse
+    public function export(TransactionReportRequest $request, NativeReportExportService $exporter): SymfonyResponse
     {
         $filters = $request->filters();
         $filters['company_id'] = (int) ($request->user()?->company_id ?? 0);
@@ -98,27 +99,20 @@ class TransactionListController extends Controller
             ->orderByDesc('voucher_id')
             ->get();
 
-        $fileName = 'transaction-list-' . now()->format('Ymd-His') . '.csv';
+        $exportRows = $rows->map(fn ($row) => [
+            $row->voucher_date,
+            $row->voucher_no,
+            $row->purpose_name,
+            $row->party_name,
+            $row->settlement,
+            $row->nature,
+            round((float) $row->amount, 2),
+            $row->status,
+            $row->reference_no,
+        ])->all();
 
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['Date', 'Voucher No', 'Transaction Head', 'Party', 'Settlement', 'Nature', 'Amount', 'Status', 'Reference']);
-
-            foreach ($rows as $row) {
-                fputcsv($out, [
-                    $row->voucher_date,
-                    $row->voucher_no,
-                    $row->purpose_name,
-                    $row->party_name,
-                    $row->settlement,
-                    $row->nature,
-                    number_format((float) $row->amount, 2, '.', ''),
-                    $row->status,
-                    $row->reference_no,
-                ]);
-            }
-
-            fclose($out);
-        }, $fileName, ['Content-Type' => 'text/csv']);
+        return $exporter->download('Transaction List', ['Date', 'Voucher No', 'Transaction Head', 'Party', 'Settlement', 'Nature', 'Amount', 'Status', 'Reference'], $exportRows, [
+            'Filtered Rows' => $rows->count(),
+        ], $request->input('format', 'xlsx'), 'transaction-list-' . now()->format('Ymd-His'));
     }
 }

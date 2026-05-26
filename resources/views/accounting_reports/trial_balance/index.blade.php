@@ -34,10 +34,11 @@
 <div class="financial-report-page">
     <x-report.page-header
         title="Trial Balance"
-        subtitle="Ledger-wise debit and credit balances generated from posted voucher detail lines."
+        subtitle="Ledger-wise debit and credit balances generated from posted journal line lines."
     >
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.trial-balance.export', request()->query()) }}">⇩ Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.trial-balance.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.trial-balance.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.trial-balance.index', request()->query()) }}">↻ Refresh Report</a>
         </x-slot:actions>
@@ -91,7 +92,7 @@
             :subtitle="$formatDate($report['from_date']) . ' to ' . $formatDate($report['to_date']) . ' · ' . $report['rows']->count() . ' ledger(s)'"
             :badge="$report['is_balanced'] ? 'Balanced' : 'Difference Found'"
             :badge-class="$report['is_balanced'] ? 'badge-success' : 'badge-warning'"
-            footer-left="Reports use voucher detail debit/credit rows only."
+            footer-left="Reports use posted journal_lines only."
             footer-right="Draft and cancelled vouchers are excluded."
         >
             <div class="table-wrap">

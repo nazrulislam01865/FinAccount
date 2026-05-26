@@ -18,6 +18,7 @@ use App\Http\Controllers\Setup\VoucherNumberingController;
 use App\Http\Controllers\AdvanceManagementController;
 use App\Http\Controllers\DueManagementController;
 use App\Http\Controllers\LedgerReportController;
+use App\Http\Controllers\ManualJournalController;
 use App\Http\Controllers\ReleaseNoteController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Http\Request;
@@ -60,6 +61,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/transactions/create', [TransactionController::class, 'create'])
         ->middleware('permission:transactions.create|transactions.draft')
         ->name('transactions.create');
+
+    Route::get('/manual-journals', [ManualJournalController::class, 'index'])
+        ->middleware('permission:transactions.journal.create')
+        ->name('manual-journals.index');
 
 
     /*
@@ -383,6 +388,16 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->middleware('permission:master-data.manage')
         ->name('api.master-data.financial-years.update');
 
+    Route::post('/api/master-data/financial-years/{financial_year}/set-current', [MasterDataController::class, 'setCurrentFinancialYear'])
+        ->middleware('permission:master-data.manage')
+        ->name('api.master-data.financial-years.set-current');
+    Route::post('/api/master-data/financial-years/{financial_year}/close', [MasterDataController::class, 'closeFinancialYear'])
+        ->middleware('permission:master-data.manage')
+        ->name('api.master-data.financial-years.close');
+    Route::post('/api/master-data/financial-years/{financial_year}/reopen', [MasterDataController::class, 'reopenFinancialYear'])
+        ->middleware('permission:master-data.manage')
+        ->name('api.master-data.financial-years.reopen');
+
     Route::post('/api/chart-of-accounts', [ChartOfAccountController::class, 'store'])
         ->middleware('permission:chart-of-accounts.manage')
         ->name('api.chart-of-accounts.store');
@@ -449,6 +464,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::post('/api/transactions', [TransactionController::class, 'store'])
         ->middleware('permission:transactions.create|transactions.draft')
         ->name('api.transactions.store');
+
+    Route::post('/api/manual-journals', [ManualJournalController::class, 'store'])
+        ->middleware('permission:transactions.journal.create')
+        ->name('api.manual-journals.store');
 
     /*
     |--------------------------------------------------------------------------

@@ -16,7 +16,9 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -214,7 +216,13 @@ class AdvanceManagementController extends Controller
                 $decreaseRows = $group->where('movement', 'Decrease');
                 $original = round((float) $increaseRows->sum('amount'), 2);
                 $adjusted = round((float) $decreaseRows->sum('amount'), 2);
-                $balance = round($original - $adjusted, 2);
+                $registeredBalance = round($original - $adjusted, 2);
+                $ledgerBalance = $this->currentLedgerAdvanceBalance(
+                    partyId: (int) $first->party_id,
+                    accountId: (int) $first->account_id,
+                    advanceType: (string) $first->advance_type
+                );
+                $balance = round(max($registeredBalance, $ledgerBalance), 2);
 
                 if ($original <= 0) {
                     return null;
@@ -251,6 +259,7 @@ class AdvanceManagementController extends Controller
                     'adjusted_amount' => $adjusted,
                     'balance' => max(0, $balance),
                     'raw_balance' => $balance,
+                    'ledger_balance' => $ledgerBalance,
                     'linked_due_balance' => $linkedDueBalance['balance'],
                     'linked_due_label' => $linkedDueBalance['label'],
                     'linked_due_account_id' => $linkedDueBalance['account_id'],
@@ -327,12 +336,51 @@ class AdvanceManagementController extends Controller
 
     private function currentAdvanceBalance(int $partyId, int $accountId, string $advanceType): float
     {
-        return round((float) AdvanceRegister::query()
+        $registeredBalance = round((float) AdvanceRegister::query()
             ->where('party_id', $partyId)
             ->where('account_id', $accountId)
             ->where('advance_type', $advanceType)
             ->whereHas('voucherHeader', fn ($query) => $query->where('status', VoucherHeader::STATUS_POSTED))
             ->sum('balance_effect'), 2);
+
+        return round(max($registeredBalance, $this->currentLedgerAdvanceBalance($partyId, $accountId, $advanceType)), 2);
+    }
+
+    private function currentLedgerAdvanceBalance(int $partyId, int $accountId, string $advanceType): float
+    {
+        if ($this->usesJournalLines()) {
+            $totals = DB::table('journal_lines as jl')
+                ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+                ->leftJoin('voucher_headers as vh', 'vh.id', '=', 'jh.voucher_header_id')
+                ->whereIn('jh.status', [VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_REVERSED])
+                ->where(function ($query) {
+                    $query->whereNull('vh.id')->orWhereNull('vh.deleted_at');
+                })
+                ->where('jl.ledger_id', $accountId)
+                ->where(function ($query) use ($partyId) {
+                    $query->where('jl.party_id', $partyId)
+                        ->orWhere('jh.party_id', $partyId);
+                })
+                ->selectRaw('COALESCE(SUM(jl.debit_amount), 0) AS total_debit')
+                ->selectRaw('COALESCE(SUM(jl.credit_amount), 0) AS total_credit')
+                ->first();
+        } else {
+            $totals = VoucherDetail::query()
+                ->selectRaw('COALESCE(SUM(voucher_details.debit), 0) AS total_debit, COALESCE(SUM(voucher_details.credit), 0) AS total_credit')
+                ->join('voucher_headers', 'voucher_headers.id', '=', 'voucher_details.voucher_header_id')
+                ->where('voucher_headers.status', VoucherHeader::STATUS_POSTED)
+                ->where('voucher_details.account_id', $accountId)
+                ->where(function ($query) use ($partyId) {
+                    $query->where('voucher_details.party_id', $partyId)
+                        ->orWhere('voucher_headers.party_id', $partyId);
+                })
+                ->first();
+        }
+
+        $debit = (float) ($totals?->total_debit ?? 0);
+        $credit = (float) ($totals?->total_credit ?? 0);
+
+        return round($advanceType === 'Received' ? $credit - $debit : $debit - $credit, 2);
     }
 
     private function currentDueBalance(int $partyId, int $accountId, string $dueType): float
@@ -358,21 +406,48 @@ class AdvanceManagementController extends Controller
 
     private function currentLedgerDueBalance(int $partyId, int $accountId, string $dueType): float
     {
-        $totals = VoucherDetail::query()
-            ->selectRaw('COALESCE(SUM(voucher_details.debit), 0) as total_debit, COALESCE(SUM(voucher_details.credit), 0) as total_credit')
-            ->join('voucher_headers', 'voucher_headers.id', '=', 'voucher_details.voucher_header_id')
-            ->where('voucher_headers.status', VoucherHeader::STATUS_POSTED)
-            ->where('voucher_details.account_id', $accountId)
-            ->where(function ($query) use ($partyId) {
-                $query->where('voucher_details.party_id', $partyId)
-                    ->orWhere('voucher_headers.party_id', $partyId);
-            })
-            ->first();
+        if ($this->usesJournalLines()) {
+            $totals = DB::table('journal_lines as jl')
+                ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+                ->leftJoin('voucher_headers as vh', 'vh.id', '=', 'jh.voucher_header_id')
+                ->whereIn('jh.status', [VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_REVERSED])
+                ->where(function ($query) {
+                    $query->whereNull('vh.id')->orWhereNull('vh.deleted_at');
+                })
+                ->where('jl.ledger_id', $accountId)
+                ->where(function ($query) use ($partyId) {
+                    $query->where('jl.party_id', $partyId)
+                        ->orWhere('jh.party_id', $partyId);
+                })
+                ->selectRaw('COALESCE(SUM(jl.debit_amount), 0) AS total_debit')
+                ->selectRaw('COALESCE(SUM(jl.credit_amount), 0) AS total_credit')
+                ->first();
+        } else {
+            $totals = VoucherDetail::query()
+                ->selectRaw('COALESCE(SUM(voucher_details.debit), 0) as total_debit, COALESCE(SUM(voucher_details.credit), 0) as total_credit')
+                ->join('voucher_headers', 'voucher_headers.id', '=', 'voucher_details.voucher_header_id')
+                ->where('voucher_headers.status', VoucherHeader::STATUS_POSTED)
+                ->where('voucher_details.account_id', $accountId)
+                ->where(function ($query) use ($partyId) {
+                    $query->where('voucher_details.party_id', $partyId)
+                        ->orWhere('voucher_headers.party_id', $partyId);
+                })
+                ->first();
+        }
 
         $debit = (float) ($totals?->total_debit ?? 0);
         $credit = (float) ($totals?->total_credit ?? 0);
 
         return round($dueType === 'Payable' ? $credit - $debit : $debit - $credit, 2);
+    }
+
+    private function usesJournalLines(): bool
+    {
+        try {
+            return Schema::hasTable('journal_headers') && Schema::hasTable('journal_lines');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function computedAdvanceStatus(float $balance, float $adjusted): string

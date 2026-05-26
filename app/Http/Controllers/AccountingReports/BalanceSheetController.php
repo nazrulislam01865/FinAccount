@@ -5,8 +5,9 @@ namespace App\Http\Controllers\AccountingReports;
 use App\AccountingReports\Services\AccountingReportService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccountingReports\BalanceSheetRequest;
+use App\Services\Reports\NativeReportExportService;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class BalanceSheetController extends Controller
 {
@@ -27,25 +28,25 @@ class BalanceSheetController extends Controller
         ]);
     }
 
-    public function export(BalanceSheetRequest $request): StreamedResponse
+    public function export(BalanceSheetRequest $request, NativeReportExportService $exporter): SymfonyResponse
     {
         $report = $this->reports->balanceSheet($request->filters());
+        $headers = ['Section', 'Code', 'Ledger', 'Parent', 'Balance'];
+        $rows = collect($report['rows'])->map(fn ($row) => [
+            $row->section,
+            $row->account_code,
+            $row->account_name,
+            $row->parent_account_name,
+            round((float) $row->report_balance, 2),
+        ])->push(['TOTAL ASSETS', '', '', '', round((float) $report['assets'], 2)])
+          ->push(['TOTAL LIABILITIES', '', '', '', round((float) $report['liabilities'], 2)])
+          ->push(['TOTAL EQUITY', '', '', '', round((float) $report['equity'], 2)])
+          ->push(['RETAINED PROFIT/LOSS', '', '', '', round((float) $report['retained_profit'], 2)])
+          ->push(['DIFFERENCE', '', '', '', round((float) $report['difference'], 2)])
+          ->all();
 
-        return response()->streamDownload(function () use ($report) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['Balance Sheet as of', $report['as_of_date']]);
-            fputcsv($out, ['Assets', number_format((float) $report['assets'], 2, '.', '')]);
-            fputcsv($out, ['Liabilities', number_format((float) $report['liabilities'], 2, '.', '')]);
-            fputcsv($out, ['Equity', number_format((float) $report['equity'], 2, '.', '')]);
-            fputcsv($out, ['Retained Profit/Loss', number_format((float) $report['retained_profit'], 2, '.', '')]);
-            fputcsv($out, ['Difference', number_format((float) $report['difference'], 2, '.', '')]);
-            fputcsv($out, []);
-            fputcsv($out, ['Section', 'Code', 'Ledger', 'Parent', 'Balance']);
-
-            foreach ($report['rows'] as $row) {
-                fputcsv($out, [$row->section, $row->account_code, $row->account_name, $row->parent_account_name, number_format((float) $row->report_balance, 2, '.', '')]);
-            }
-            fclose($out);
-        }, 'balance-sheet-' . now()->format('Ymd-His') . '.csv', ['Content-Type' => 'text/csv']);
+        return $exporter->download('Balance Sheet', $headers, $rows, [
+            'As of Date' => $report['as_of_date'],
+        ], $request->input('format', 'xlsx'), 'balance-sheet-' . now()->format('Ymd-His'));
     }
 }

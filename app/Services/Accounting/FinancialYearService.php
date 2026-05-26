@@ -35,6 +35,16 @@ class FinancialYearService
             ? Company::query()->find($resolvedCompanyId)
             : Company::query()->first();
 
+        if ($company?->default_financial_year_id) {
+            $selected = FinancialYear::query()
+                ->whereKey($company->default_financial_year_id)
+                ->first();
+
+            if ($selected) {
+                return $selected;
+            }
+        }
+
         if ($company?->financial_year_start && $company?->financial_year_end) {
             $selected = FinancialYear::query()
                 ->whereDate('start_date', $company->financial_year_start->toDateString())

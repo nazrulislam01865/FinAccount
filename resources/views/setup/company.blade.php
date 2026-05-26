@@ -79,15 +79,16 @@
                     </div>
 
                     <div>
-                        <label>Business Type</label>
+                        <label>Business Type <span class="required">*</span></label>
                         <select
                             id="businessType"
                             name="business_type_id"
+                            required
                             data-dropdown="/api/dropdowns/business-types"
                             data-placeholder="Select Business Type"
                             data-selected="{{ old('business_type_id', $company->business_type_id ?? '') }}"
                         ></select>
-                        <div class="hint">Optional business category</div>
+                        <div class="hint">Required company category used for setup defaults and reporting context.</div>
                     </div>
 
                     <div>
@@ -100,11 +101,20 @@
                     </div>
 
                     <div>
-                        <label>Tax ID / BIN</label>
+                        <label>BIN / VAT Registration No.</label>
                         <input
-                            name="tax_id_bin"
-                            value="{{ old('tax_id_bin', $company->tax_id_bin ?? '') }}"
-                            placeholder="Enter tax ID or BIN"
+                            name="bin_vat_registration_no"
+                            value="{{ old('bin_vat_registration_no', $company->bin_vat_registration_no ?? $company->tax_id_bin ?? '') }}"
+                            placeholder="Enter BIN or VAT registration no."
+                        >
+                    </div>
+
+                    <div>
+                        <label>TIN</label>
+                        <input
+                            name="tin"
+                            value="{{ old('tin', $company->tin ?? '') }}"
+                            placeholder="Enter TIN"
                         >
                     </div>
 
@@ -119,6 +129,15 @@
                             data-placeholder="Select Currency"
                             data-selected="{{ old('currency_id', $company->currency_id ?? '') }}"
                         ></select>
+                    </div>
+
+                    <div>
+                        <label>Accounting Method <span class="required">*</span></label>
+                        <select name="accounting_method" required>
+                            <option value="Accrual" @selected(old('accounting_method', $company->accounting_method ?? 'Accrual') === 'Accrual')>Accrual</option>
+                            <option value="Cash" @selected(old('accounting_method', $company->accounting_method ?? 'Accrual') === 'Cash')>Cash</option>
+                        </select>
+                        <div class="hint">Default Accrual is recommended for SME reports.</div>
                     </div>
 
                     <div>
@@ -207,6 +226,15 @@
                             value="{{ old('website', $company->website ?? '') }}"
                             placeholder="www.example.com"
                         >
+                    </div>
+
+                    <div>
+                        <label>Company Status <span class="required">*</span></label>
+                        <select name="status" required>
+                            <option value="Active" @selected(old('status', $company->status ?? 'Active') === 'Active')>Active</option>
+                            <option value="Inactive" @selected(old('status', $company->status ?? 'Active') === 'Inactive')>Inactive</option>
+                        </select>
+                        <div class="hint">Inactive company blocks new postings.</div>
                     </div>
                 </div>
             </div>

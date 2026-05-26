@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 Artisan::command('inspire', function () {
@@ -111,3 +112,90 @@ Artisan::command('accounting:backup-files', function () {
 
 Schedule::command('accounting:backup-database')->dailyAt('02:00')->withoutOverlapping();
 Schedule::command('accounting:backup-files')->dailyAt('02:15')->withoutOverlapping();
+
+Artisan::command('srs:phase4-check', function () {
+    try {
+        DB::connection()->getPdo();
+    } catch (\Throwable $exception) {
+        $this->error('Database connection is not ready: ' . $exception->getMessage());
+        $this->line('Run migrations after configuring .env, then execute this command again.');
+        return 1;
+    }
+
+    $checks = [];
+    $requiredTables = [
+        'journal_headers',
+        'journal_lines',
+        'audit_logs',
+        'approval_workflows',
+        'approval_logs',
+        'report_exports',
+    ];
+
+    foreach ($requiredTables as $table) {
+        $checks[] = ["table:{$table}", Schema::hasTable($table)];
+    }
+
+    $requiredRoles = [
+        'Super Admin',
+        'Company Admin',
+        'Accountant',
+        'Data Entry Operator',
+        'Manager / Approver',
+        'Auditor / Viewer',
+        'Business Owner',
+    ];
+
+    foreach ($requiredRoles as $role) {
+        $checks[] = ["role:{$role}", Schema::hasTable('roles') && DB::table('roles')->where('name', $role)->exists()];
+    }
+
+    $requiredPermissions = [
+        'dashboard.view',
+        'transactions.view',
+        'transactions.create',
+        'transactions.journal.create',
+        'transactions.reverse',
+        'approvals.view',
+        'approvals.manage',
+        'audit-trail.view',
+        'reports.view',
+        'reports.full',
+        'api.view',
+        'api.manage',
+    ];
+
+    foreach ($requiredPermissions as $permission) {
+        $checks[] = ["permission:{$permission}", Schema::hasTable('permissions') && DB::table('permissions')->where('name', $permission)->exists()];
+    }
+
+    $routes = collect(app('router')->getRoutes())->map(fn ($route) => $route->getName())->filter()->values();
+    $requiredRoutes = [
+        'approvals.index',
+        'audit-trail.index',
+        'manual-journals.index',
+        'api.srs.accounts.index',
+        'api.srs.transactions.post',
+        'api.srs.manual-journals.post',
+        'api.srs.reports.trial-balance',
+        'api.srs.reports.balance-sheet',
+    ];
+
+    foreach ($requiredRoutes as $route) {
+        $checks[] = ["route:{$route}", $routes->contains($route)];
+    }
+
+    $failed = collect($checks)->filter(fn ($check) => ! $check[1]);
+
+    foreach ($checks as [$name, $passed]) {
+        $this->line(($passed ? '[OK]   ' : '[MISS] ') . $name);
+    }
+
+    if ($failed->isNotEmpty()) {
+        $this->error($failed->count() . ' SRS Phase 4 checks failed. Run migrations/seeders and verify configuration.');
+        return 1;
+    }
+
+    $this->info('All SRS Phase 4 structural checks passed.');
+    return 0;
+})->purpose('Validate Phase 4 SRS roles, routes, audit, approval, and journal/report structure');

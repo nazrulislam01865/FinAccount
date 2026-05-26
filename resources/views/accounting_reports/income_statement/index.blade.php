@@ -19,7 +19,7 @@
         }
     };
 
-    $sections = ['Revenue', 'Cost of Sales', 'Operating Expenses'];
+    $sections = ['Revenue', 'Cost of Services', 'Administrative & Selling Expenses', 'Financial Expenses', 'Other Income / Loss', 'Income Tax Expense'];
     $selectedSection = $filters['section'] ?? 'All';
     $visibleSections = $selectedSection === 'All' ? $sections : [$selectedSection];
     $isProfit = (float) $report['net_profit'] >= 0;
@@ -41,7 +41,7 @@
 
     $ytdRows = [
         ['label' => 'Revenue', 'value' => $money($report['ytd_revenue'])],
-        ['label' => 'Cost of Sales', 'value' => $money($report['ytd_cost'])],
+        ['label' => 'Cost of Services', 'value' => $money($report['ytd_cost'])],
         ['label' => 'Expenses', 'value' => $money($report['ytd_expense'])],
         ['label' => 'Net Profit / Loss', 'value' => $moneySigned($report['ytd_net_profit'])],
     ];
@@ -50,10 +50,10 @@
 <div class="financial-report-page income-statement-page">
     <x-report.page-header
         title="Income Statement"
-        subtitle="Review revenue, cost, expenses, and net profit for the selected period. The report is generated from posted accounting lines only."
+        subtitle="Review revenue, cost, expenses, tax, and net profit for the selected period. The report is generated from posted accounting lines only."
     >
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.income-statement.export', request()->query()) }}">⇩ Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.income-statement.export', array_merge(request()->query(), ['statement_format' => 'management'])) }}">⇩ Export CSV</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.income-statement.index', request()->query()) }}">Generate Report</a>
         </x-slot:actions>
@@ -61,8 +61,8 @@
 
     <div class="report-summary-grid income-template-stats">
         <x-report.stat-card label="Total Revenue" :value="$money($report['revenue'])" note="Income posted in this period" tone="success" />
-        <x-report.stat-card label="Cost of Sales" :value="$money($report['cost'])" note="Direct cost / purchase cost" tone="warning" />
-        <x-report.stat-card label="Operating Expenses" :value="$money($report['expense'])" note="Expense ledgers only" tone="danger" />
+        <x-report.stat-card label="Cost of Services" :value="$money($report['cost'])" note="Direct cost / purchase cost" tone="warning" />
+        <x-report.stat-card label="Administrative & Selling Expenses" :value="$money($report['expense'])" note="Expense ledgers only" tone="danger" />
         <x-report.stat-card label="Net Profit / Loss" :value="$moneySigned($report['net_profit'])" :note="$isProfit ? 'After cost and expenses' : 'Loss after cost and expenses'" :tone="$isProfit ? 'primary' : 'danger'" />
     </div>
 
@@ -77,9 +77,16 @@
         <div>
             <label>Section</label>
             <select name="section">
-                @foreach(['All', 'Revenue', 'Cost of Sales', 'Operating Expenses'] as $section)
+                @foreach(['All', 'Revenue', 'Cost of Services', 'Administrative & Selling Expenses', 'Financial Expenses', 'Other Income / Loss', 'Income Tax Expense'] as $section)
                     <option value="{{ $section }}" @selected(($filters['section'] ?? 'All') === $section)>{{ $section }}</option>
                 @endforeach
+            </select>
+        </div>
+        <div>
+            <label>Statement Format</label>
+            <select name="statement_format">
+                <option value="management" @selected(($filters['statement_format'] ?? 'management') === 'management')>Management View</option>
+                <option value="audit" @selected(($filters['statement_format'] ?? 'management') === 'audit')>Audit Format</option>
             </select>
         </div>
         <div>
@@ -124,8 +131,8 @@
                                     <td class="strong">{{ $row->account_name }}</td>
                                     <td class="code">{{ $row->account_code }}</td>
                                     <td>
-                                        <span class="badge {{ $row->account_type === 'Income' ? 'badge-success' : ($sectionName === 'Cost of Sales' ? 'badge-warning' : 'badge-danger') }}">
-                                            {{ $sectionName === 'Cost of Sales' ? 'Cost of Sales' : $row->account_type }}
+                                        <span class="badge {{ $row->account_type === 'Income' ? 'badge-success' : ($sectionName === 'Cost of Services' ? 'badge-warning' : 'badge-danger') }}">
+                                            {{ $sectionName === 'Cost of Services' ? 'Cost of Services' : $row->account_type }}
                                         </span>
                                     </td>
                                     <td class="amount">{{ $moneySigned($row->amount) }}</td>
@@ -139,7 +146,7 @@
                                 <td class="amount">{{ $moneySigned($rows->sum('amount')) }}</td>
                                 <td class="amount">{{ $moneySigned($rows->sum('ytd_amount')) }}</td>
                             </tr>
-                            @if($sectionName === 'Cost of Sales' || ($selectedSection === 'All' && $sectionName === 'Revenue' && ! $report['groups']->has('Cost of Sales')))
+                            @if($sectionName === 'Cost of Services' || ($selectedSection === 'All' && $sectionName === 'Revenue' && ! $report['groups']->has('Cost of Services')))
                                 <tr class="gross-row">
                                     <td colspan="3">Gross Profit</td>
                                     <td class="amount">{{ $moneySigned($report['gross_profit']) }}</td>

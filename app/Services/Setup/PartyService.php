@@ -59,6 +59,13 @@ class PartyService
         $data['mobile'] = $data['mobile'] ?? null;
         $data['email'] = $data['email'] ?? null;
         $data['address'] = $data['address'] ?? null;
+        $data['credit_limit'] = $this->nullableAmount($data['credit_limit'] ?? null);
+        $data['payment_terms'] = $data['payment_terms'] ?? null;
+        $data['department'] = $data['department'] ?? null;
+        $data['designation'] = $data['designation'] ?? null;
+        $data['salary_amount'] = $this->nullableAmount($data['salary_amount'] ?? null);
+        $data['ownership_percentage'] = $this->nullableAmount($data['ownership_percentage'] ?? null);
+        $data['contact_info'] = $data['contact_info'] ?? null;
         $data['linked_ledger_account_id'] = $ledgerId;
         $data['default_ledger_nature'] = $nature;
         $data['opening_balance'] = $openingBalance;
@@ -92,6 +99,15 @@ class PartyService
     {
         if ($value === null || $value === '') {
             return 0.00;
+        }
+
+        return round((float) str_replace(',', '', (string) $value), 2);
+    }
+
+    private function nullableAmount(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
         }
 
         return round((float) str_replace(',', '', (string) $value), 2);

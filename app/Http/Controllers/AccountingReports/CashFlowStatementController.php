@@ -5,8 +5,9 @@ namespace App\Http\Controllers\AccountingReports;
 use App\AccountingReports\Services\AccountingReportService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccountingReports\CashFlowStatementRequest;
+use App\Services\Reports\NativeReportExportService;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class CashFlowStatementController extends Controller
 {
@@ -27,23 +28,18 @@ class CashFlowStatementController extends Controller
         ]);
     }
 
-    public function export(CashFlowStatementRequest $request): StreamedResponse
+    public function export(CashFlowStatementRequest $request, NativeReportExportService $exporter): SymfonyResponse
     {
         $report = $this->reports->cashFlowStatement($request->filters());
+        $headers = ['Section', 'Date', 'Voucher', 'Cash/Bank Account', 'Reference', 'Inflow', 'Outflow', 'Net'];
+        $rows = collect($report['rows'])->map(fn ($row) => [$row->section, $row->voucher_date, $row->voucher_number, trim($row->cash_account_code . ' - ' . $row->cash_account_name), $row->reference, round((float) $row->cash_inflow, 2), round((float) $row->cash_outflow, 2), round((float) $row->net_cash_flow, 2)])->all();
 
-        return response()->streamDownload(function () use ($report) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['Cash Flow Statement', $report['from_date'] . ' to ' . $report['to_date']]);
-            fputcsv($out, ['Opening Cash', number_format((float) $report['opening_cash'], 2, '.', '')]);
-            fputcsv($out, ['Net Cash Flow', number_format((float) $report['net_cash_flow'], 2, '.', '')]);
-            fputcsv($out, ['Closing Cash', number_format((float) $report['closing_cash'], 2, '.', '')]);
-            fputcsv($out, []);
-            fputcsv($out, ['Section', 'Date', 'Voucher', 'Cash/Bank Account', 'Reference', 'Inflow', 'Outflow', 'Net']);
-
-            foreach ($report['rows'] as $row) {
-                fputcsv($out, [$row->section, $row->voucher_date, $row->voucher_number, trim($row->cash_account_code . ' - ' . $row->cash_account_name), $row->reference, number_format((float) $row->cash_inflow, 2, '.', ''), number_format((float) $row->cash_outflow, 2, '.', ''), number_format((float) $row->net_cash_flow, 2, '.', '')]);
-            }
-            fclose($out);
-        }, 'cash-flow-statement-' . now()->format('Ymd-His') . '.csv', ['Content-Type' => 'text/csv']);
+        return $exporter->download('Cash Flow Statement', $headers, $rows, [
+            'From Date' => $report['from_date'],
+            'To Date' => $report['to_date'],
+            'Opening Cash' => round((float) $report['opening_cash'], 2),
+            'Net Cash Flow' => round((float) $report['net_cash_flow'], 2),
+            'Closing Cash' => round((float) $report['closing_cash'], 2),
+        ], $request->input('format', 'xlsx'), 'cash-flow-statement-' . now()->format('Ymd-His'));
     }
 }

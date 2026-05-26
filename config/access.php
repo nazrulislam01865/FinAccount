@@ -27,6 +27,11 @@ return [
             'description' => 'Reviews and approves/rejects financial transactions.',
             'protected' => false,
         ],
+        'Manager / Approver' => [
+            'level' => 3,
+            'description' => 'SRS role alias for managers who review, approve, and monitor company reports.',
+            'protected' => false,
+        ],
         'Accountant' => [
             'level' => 4,
             'description' => 'Creates and maintains daily accounting entries, ledgers, and basic reports.',
@@ -67,9 +72,19 @@ return [
             'description' => 'Read-only reviewer for vouchers, ledgers, reports, history, and audit trail.',
             'protected' => false,
         ],
+        'Auditor / Viewer' => [
+            'level' => 6,
+            'description' => 'SRS role alias for read-only audit, transaction, report, and audit-trail review.',
+            'protected' => false,
+        ],
         'Management Viewer / Report Viewer' => [
             'level' => 7,
             'description' => 'Read-only viewer for dashboard and management reports.',
+            'protected' => false,
+        ],
+        'Business Owner' => [
+            'level' => 7,
+            'description' => 'SRS owner role with dashboard, transaction visibility, and owner/report review access.',
             'protected' => false,
         ],
         'Viewer' => [
@@ -139,6 +154,9 @@ return [
         'inventory.view' => 'View Inventory Module',
         'inventory.manage' => 'Manage Inventory Module',
         'support.view' => 'View Support Configuration',
+        'api.view' => 'Use SRS API Endpoints',
+        'api.manage' => 'Use SRS API Write Endpoints',
+        'handover.checks.view' => 'Run SRS Handover Checks',
     ],
 
     'role_permissions' => [
@@ -160,7 +178,7 @@ return [
             'due-management.manage',
             'advance-management.view',
             'advance-management.manage',
-            'ledger-report.view',
+            'ledger-report.view', 'api.view',
         ],
         'Approver' => [
             'dashboard.view', 'transactions.view', 'approvals.view', 'approvals.manage', 'audit-trail.view',
@@ -168,6 +186,11 @@ return [
             'due-management.view',
             'advance-management.view',
             'ledger-report.view',
+        ],
+        'Manager / Approver' => [
+            'dashboard.view', 'transactions.view', 'approvals.view', 'approvals.manage', 'audit-trail.view',
+            'reports.view', 'reports.full', 'customer-ledgers.view', 'supplier-ledgers.view', 'cash-bank-book.view',
+            'due-management.view', 'advance-management.view', 'ledger-report.view', 'api.view',
         ],
         'Accountant' => [
             'dashboard.view', 'company.view', 'master-data.view', 'master-data.manage',
@@ -181,7 +204,7 @@ return [
             'cash-bank-book.view', 'reports.view', 'reports.full', 'audit-trail.view',
             'due-management.view', 'due-management.manage',
             'advance-management.view', 'advance-management.manage',
-            'ledger-report.view',
+            'ledger-report.view', 'api.view', 'api.manage', 'handover.checks.view',
         ],
         'Cashier' => [
             'dashboard.view', 'cash-bank.view', 'transactions.view', 'transactions.create',
@@ -237,12 +260,24 @@ return [
             'advance-management.view',
             'ledger-report.view',
         ],
+        'Auditor / Viewer' => [
+            'dashboard.view', 'company.view', 'master-data.view', 'chart-of-accounts.view', 'cash-bank.view',
+            'parties.view', 'transaction-heads.view', 'ledger-mapping.view', 'opening-balances.view',
+            'voucher-numbering.view', 'transactions.view', 'sales-invoices.view', 'purchase-bills.view',
+            'customer-ledgers.view', 'supplier-ledgers.view', 'cash-bank-book.view', 'reports.view', 'reports.full',
+            'audit-trail.view', 'due-management.view', 'advance-management.view', 'ledger-report.view', 'api.view',
+        ],
         'Management Viewer / Report Viewer' => [
             'dashboard.view', 'company.view', 'transactions.view', 'customer-ledgers.view', 'supplier-ledgers.view',
             'cash-bank-book.view', 'reports.view',
             'due-management.view',
             'advance-management.view',
             'ledger-report.view',
+        ],
+        'Business Owner' => [
+            'dashboard.view', 'company.view', 'transactions.view', 'customer-ledgers.view', 'supplier-ledgers.view',
+            'cash-bank-book.view', 'reports.view', 'reports.full', 'due-management.view',
+            'advance-management.view', 'ledger-report.view', 'api.view',
         ],
         'Viewer' => [
             'dashboard.view', 'company.view', 'chart-of-accounts.view', 'cash-bank.view', 'parties.view',
@@ -281,6 +316,7 @@ return [
         'setup.opening-balances' => ['opening-balances.view'],
         'setup.voucher-numbering' => ['voucher-numbering.view'],
         'transactions.create' => ['transactions.create', 'transactions.draft'],
+        'manual-journals.index' => ['transactions.journal.create'],
         'due-management.index' => ['due-management.view', 'customer-ledgers.view', 'supplier-ledgers.view', 'reports.view'],
         'advance-management.index' => ['advance-management.view', 'reports.view', 'customer-ledgers.view', 'supplier-ledgers.view'],
         'ledger-report.index' => ['ledger-report.view', 'reports.view', 'customer-ledgers.view', 'supplier-ledgers.view'],
@@ -315,6 +351,19 @@ return [
         'accounting-reports.expense-report.export' => ['reports.full'],
         'release-notes.index' => ['release-notes.view'],
         'settings.users-roles' => ['users.view', 'roles.manage'],
+        'api.srs.accounts.index' => ['api.view', 'chart-of-accounts.view'],
+        'api.srs.accounts.store' => ['api.manage', 'chart-of-accounts.manage'],
+        'api.srs.voucher-numbering.index' => ['api.view', 'voucher-numbering.view'],
+        'api.srs.transaction-purposes.index' => ['api.view', 'transaction-heads.view'],
+        'api.srs.accounting-rules.store' => ['api.manage', 'ledger-mapping.manage'],
+        'api.srs.vouchers.index' => ['api.view', 'transactions.view'],
+        'api.srs.journal-entries.index' => ['api.view', 'reports.view'],
+        'api.srs.reports.general-ledger' => ['api.view', 'ledger-report.view', 'reports.view'],
+        'api.srs.reports.trial-balance' => ['api.view', 'reports.full'],
+        'api.srs.reports.profit-loss' => ['api.view', 'reports.full'],
+        'api.srs.reports.balance-sheet' => ['api.view', 'reports.full'],
+        'api.srs.reports.customer-due' => ['api.view', 'customer-ledgers.view', 'reports.full'],
+        'api.srs.reports.supplier-due' => ['api.view', 'supplier-ledgers.view', 'reports.full'],
     ],
 
     'manage_permissions' => [
@@ -334,6 +383,7 @@ return [
         'setup.opening-balances' => 'opening-balances.manage',
         'setup.voucher-numbering' => 'voucher-numbering.manage',
         'transactions.create' => ['transactions.create', 'transactions.draft'],
+        'manual-journals.index' => ['transactions.journal.create'],
         'due-management.index' => ['due-management.manage', 'transactions.create'],
         'advance-management.index' => ['advance-management.manage', 'transactions.create'],
         'approvals.index' => 'approvals.manage',

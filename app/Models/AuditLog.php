@@ -20,6 +20,10 @@ class AuditLog extends Model
         'user_id',
         'ip_address',
         'user_agent',
+        'route_name',
+        'request_method',
+        'request_url',
+        'metadata',
         'created_at',
     ];
 
@@ -27,6 +31,7 @@ class AuditLog extends Model
         'company_id' => 'integer',
         'old_values' => 'array',
         'new_values' => 'array',
+        'metadata' => 'array',
         'created_at' => 'datetime',
     ];
 

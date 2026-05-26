@@ -14,9 +14,10 @@
 @endphp
 
 <div class="financial-report-page">
-    <x-report.page-header title="Customer Receivable" subtitle="Customer-wise receivable opening, movement, and closing balance from party-control voucher details.">
+    <x-report.page-header title="Customer Receivable" subtitle="Customer-wise receivable opening, movement, and closing balance from party-control journal lines.">
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.customer-receivables.export', request()->query()) }}">⇩ Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.customer-receivables.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.customer-receivables.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.customer-receivables.index', request()->query()) }}">↻ Refresh</a>
         </x-slot:actions>
@@ -40,13 +41,13 @@
     </form>
 
     <x-report.table-card title="Receivable Ledger" :subtitle="$formatDate($report['from_date']) . ' to ' . $formatDate($report['to_date'])" footer-left="Customer receivable comes from party-control debit minus credit movements." footer-right="Header amount is not used.">
-        <div class="table-wrap"><table class="financial-table"><thead><tr><th>Customer Code</th><th>Customer</th><th>Ledger</th><th class="amount">Opening</th><th class="amount">Debit</th><th class="amount">Credit</th><th class="amount">Closing</th></tr></thead><tbody>
+        <div class="table-wrap"><table class="financial-table"><thead><tr><th>Customer Code</th><th>Customer</th><th>Ledger</th><th class="amount">Opening</th><th class="amount">Sales/Debit</th><th class="amount">Collection/Credit</th><th class="amount">Closing</th><th class="amount">0-30</th><th class="amount">31-60</th><th class="amount">61-90</th><th class="amount">90+</th></tr></thead><tbody>
             @forelse($report['rows'] as $row)
-                <tr><td class="code">{{ $row->party_code }}</td><td class="strong">{{ $row->party_name }}</td><td>{{ trim(($row->account_code ? $row->account_code . ' - ' : '') . $row->account_name) }}</td><td class="amount">{{ $moneyOrDash($row->opening_balance) }}</td><td class="amount">{{ $moneyOrDash($row->debit_movement) }}</td><td class="amount">{{ $moneyOrDash($row->credit_movement) }}</td><td class="amount">{{ $money($row->closing_balance) }}</td></tr>
+                <tr><td class="code">{{ $row->party_code }}</td><td class="strong">{{ $row->party_name }}</td><td>{{ trim(($row->account_code ? $row->account_code . ' - ' : '') . $row->account_name) }}</td><td class="amount">{{ $moneyOrDash($row->opening_balance) }}</td><td class="amount">{{ $moneyOrDash($row->debit_movement) }}</td><td class="amount">{{ $moneyOrDash($row->credit_movement) }}</td><td class="amount">{{ $money($row->closing_balance) }}</td><td class="amount">{{ $moneyOrDash($row->aging_0_30 ?? 0) }}</td><td class="amount">{{ $moneyOrDash($row->aging_31_60 ?? 0) }}</td><td class="amount">{{ $moneyOrDash($row->aging_61_90 ?? 0) }}</td><td class="amount">{{ $moneyOrDash($row->aging_90_plus ?? 0) }}</td></tr>
             @empty
-                <tr data-empty="true"><td colspan="7" class="empty-state">No customer receivable balance found.</td></tr>
+                <tr data-empty="true"><td colspan="11" class="empty-state">No customer receivable balance found.</td></tr>
             @endforelse
-            <tr class="grand-row"><td colspan="3">Grand Total</td><td class="amount">{{ $money($report['total_opening']) }}</td><td class="amount">{{ $money($report['total_debit_movement']) }}</td><td class="amount">{{ $money($report['total_credit_movement']) }}</td><td class="amount">{{ $money($report['total_closing']) }}</td></tr>
+            <tr class="grand-row"><td colspan="3">Grand Total</td><td class="amount">{{ $money($report['total_opening']) }}</td><td class="amount">{{ $money($report['total_debit_movement']) }}</td><td class="amount">{{ $money($report['total_credit_movement']) }}</td><td class="amount">{{ $money($report['total_closing']) }}</td><td class="amount">{{ $money($report['aging_totals']['0_30'] ?? 0) }}</td><td class="amount">{{ $money($report['aging_totals']['31_60'] ?? 0) }}</td><td class="amount">{{ $money($report['aging_totals']['61_90'] ?? 0) }}</td><td class="amount">{{ $money($report['aging_totals']['90_plus'] ?? 0) }}</td></tr>
         </tbody></table></div>
     </x-report.table-card>
 </div>

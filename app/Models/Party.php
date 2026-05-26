@@ -18,6 +18,13 @@ class Party extends Model
         'mobile',
         'email',
         'address',
+        'credit_limit',
+        'payment_terms',
+        'department',
+        'designation',
+        'salary_amount',
+        'ownership_percentage',
+        'contact_info',
         'linked_ledger_account_id',
         'default_ledger_nature',
         'opening_balance',
@@ -30,6 +37,9 @@ class Party extends Model
 
     protected $casts = [
         'opening_balance' => 'decimal:2',
+        'credit_limit' => 'decimal:2',
+        'salary_amount' => 'decimal:2',
+        'ownership_percentage' => 'decimal:2',
     ];
 
     public function company()

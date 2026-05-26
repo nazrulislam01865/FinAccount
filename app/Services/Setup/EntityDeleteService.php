@@ -19,46 +19,33 @@ class EntityDeleteService
             throw new RuntimeException('System ledgers are protected and cannot be deleted. Deactivate the ledger instead if it should not appear in new setup.');
         }
 
-        DB::transaction(function () use ($account) {
-            $accountId = $account->id;
+        $accountId = (int) $account->id;
 
-            DB::table('cash_bank_accounts')
-                ->where('linked_ledger_account_id', $accountId)
-                ->pluck('id')
-                ->each(fn ($id) => $this->deleteCashBankAccountById((int) $id));
+        $this->blockIfExists('chart_of_accounts', 'parent_id', $accountId, 'This account has child accounts. Deactivate it or move child accounts before deleting.');
+        $this->blockIfExists('cash_bank_accounts', 'linked_ledger_account_id', $accountId, 'This account is linked to Cash/Bank Setup and cannot be deleted.');
+        $this->blockIfExists('parties', 'linked_ledger_account_id', $accountId, 'This account is linked to Party/Person Setup and cannot be deleted.');
+        $this->blockIfExists('opening_balances', 'account_id', $accountId, 'This account is used in Opening Balance and cannot be deleted.');
+        $this->blockIfExists('voucher_details', 'account_id', $accountId, 'This account is used in voucher details and cannot be deleted.');
+        $this->blockIfExists('due_register', 'account_id', $accountId, 'This account is used in Due Management and cannot be deleted.');
+        $this->blockIfExists('advance_register', 'account_id', $accountId, 'This account is used in Advance Management and cannot be deleted.');
+        $this->blockIfExists('party_types', 'default_ledger_account_id', $accountId, 'This account is used as a party default ledger and cannot be deleted.');
 
-            DB::table('parties')
-                ->where('linked_ledger_account_id', $accountId)
-                ->pluck('id')
-                ->each(fn ($id) => $this->deletePartyById((int) $id));
+        if (DB::table('ledger_mapping_rules')
+            ->where('debit_account_id', $accountId)
+            ->orWhere('credit_account_id', $accountId)
+            ->orWhere('primary_ledger_id', $accountId)
+            ->orWhere('fixed_counter_ledger_id', $accountId)
+            ->exists()) {
+            throw new RuntimeException('This account is used in Accounting Rules Setup and cannot be deleted. Deactivate it after replacing the rule mapping.');
+        }
 
-            $this->deleteVoucherHeadersForAccount($accountId);
-
-            DB::table('opening_balances')
-                ->where('account_id', $accountId)
-                ->delete();
-
-            DB::table('ledger_mapping_rules')
-                ->where('debit_account_id', $accountId)
-                ->orWhere('credit_account_id', $accountId)
-                ->delete();
-
-            DB::table('party_types')
-                ->where('default_ledger_account_id', $accountId)
-                ->update(['default_ledger_account_id' => null]);
-
-            DB::table('chart_of_accounts')
-                ->where('parent_id', $accountId)
-                ->update(['parent_id' => null]);
-
-            DB::table('chart_of_accounts')
-                ->where('id', $accountId)
-                ->delete();
-        });
+        $account->delete();
     }
 
     public function deleteCashBankAccount(CashBankAccount $account): void
     {
+        $this->blockIfExists('voucher_headers', 'cash_bank_account_id', (int) $account->id, 'This cash/bank account is used by vouchers and cannot be deleted. Deactivate it instead.');
+
         DB::transaction(fn () => $this->deleteCashBankAccountById($account->id));
     }
 
@@ -69,15 +56,12 @@ class EntityDeleteService
 
     public function deleteTransactionHead(TransactionHead $head): void
     {
-        DB::transaction(function () use ($head) {
-            $headId = $head->id;
+        $headId = (int) $head->id;
 
-            $this->deleteVoucherHeadersForTransactionHead($headId);
+        $this->blockIfExists('voucher_headers', 'transaction_head_id', $headId, 'This transaction head is used by vouchers and cannot be deleted. Deactivate it instead.');
+        $this->blockIfExists('ledger_mapping_rules', 'transaction_head_id', $headId, 'This transaction head has accounting rules. Delete or deactivate the rules before deleting the head.');
 
-            DB::table('ledger_mapping_rules')
-                ->where('transaction_head_id', $headId)
-                ->delete();
-
+        DB::transaction(function () use ($headId) {
             DB::table('settlement_type_transaction_head')
                 ->where('transaction_head_id', $headId)
                 ->delete();
@@ -97,6 +81,10 @@ class EntityDeleteService
 
     public function deleteVoucherNumberingRule(VoucherNumberingRule $rule): void
     {
+        if ((int) $rule->last_number > 0) {
+            throw new RuntimeException('This voucher numbering rule has already generated voucher numbers and cannot be deleted. Deactivate it instead.');
+        }
+
         DB::table('voucher_numbering_rules')
             ->where('id', $rule->id)
             ->delete();
@@ -152,30 +140,6 @@ class EntityDeleteService
             ->delete();
     }
 
-    private function deleteVoucherHeadersForTransactionHead(int $transactionHeadId): void
-    {
-        $this->deleteVoucherHeadersByIds(
-            DB::table('voucher_headers')
-                ->where('transaction_head_id', $transactionHeadId)
-                ->pluck('id')
-                ->all()
-        );
-    }
-
-    private function deleteVoucherHeadersForAccount(int $accountId): void
-    {
-        $voucherHeaderIds = collect()
-            ->merge(DB::table('voucher_details')->where('account_id', $accountId)->pluck('voucher_header_id'))
-            ->merge(DB::table('due_register')->where('account_id', $accountId)->pluck('voucher_header_id'))
-            ->merge(DB::table('advance_register')->where('account_id', $accountId)->pluck('voucher_header_id'))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        $this->deleteVoucherHeadersByIds($voucherHeaderIds);
-    }
-
     private function deleteVoucherHeadersByIds(array $ids): void
     {
         $ids = collect($ids)
@@ -191,5 +155,12 @@ class EntityDeleteService
         DB::table('voucher_headers')
             ->whereIn('id', $ids)
             ->delete();
+    }
+
+    private function blockIfExists(string $table, string $column, int $value, string $message): void
+    {
+        if (DB::table($table)->where($column, $value)->exists()) {
+            throw new RuntimeException($message);
+        }
     }
 }

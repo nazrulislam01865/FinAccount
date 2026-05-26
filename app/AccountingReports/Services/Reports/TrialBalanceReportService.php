@@ -6,13 +6,13 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
-class TrialBalanceReportService
+class TrialBalanceReportService extends BaseVoucherDetailReportService
 {
     /**
      * Statuses included in financial reports. Reversed vouchers remain included so
      * opposite reversal lines naturally net the original voucher to zero.
      */
-    private const REPORT_STATUSES = ['Posted', 'POSTED', 'posted', 'Reversed', 'REVERSED', 'reversed'];
+    protected const REPORT_STATUSES = ['Posted', 'POSTED', 'posted', 'Reversed', 'REVERSED', 'reversed'];
 
     public function build(array $filters = []): array
     {
@@ -101,11 +101,7 @@ class TrialBalanceReportService
 
     private function accountMovementQuery(?int $companyId = null): Builder
     {
-        return DB::table('voucher_details as d')
-            ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
-            ->whereIn('v.status', self::REPORT_STATUSES)
-            ->whereNull('v.deleted_at')
-            ->when($companyId, fn (Builder $query) => $query->where('v.company_id', $companyId));
+        return $this->reportLineQuery($companyId);
     }
 
     private function decorateTrialBalanceRow(object $row): object
@@ -139,7 +135,7 @@ class TrialBalanceReportService
         };
     }
 
-    private function accountTypes(): Collection
+    protected function accountTypes(): Collection
     {
         return DB::table('account_types')
             ->where('status', 'Active')

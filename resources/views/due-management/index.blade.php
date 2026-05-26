@@ -156,7 +156,7 @@
             </div>
             <div class="table-footer">
                 <span>Showing {{ $dueRows->count() }} due balance row(s)</span>
-                <span>Source: posted voucher details and due register</span>
+                <span>Source: posted journal lines and due register</span>
             </div>
         </div>
     </div>

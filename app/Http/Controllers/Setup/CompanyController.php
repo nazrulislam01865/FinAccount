@@ -42,6 +42,7 @@ class CompanyController extends Controller
 
         $selectedFinancialYear = FinancialYear::query()->findOrFail((int) $data['financial_year_id']);
         $companyPayload = Arr::except($data, ['financial_year_id']);
+        $companyPayload['default_financial_year_id'] = $selectedFinancialYear->id;
 
         $company = DB::transaction(function () use ($companyPayload, $selectedFinancialYear) {
             $company = Company::query()->first();
@@ -69,6 +70,14 @@ class CompanyController extends Controller
                 'company_id' => $company->id,
                 'is_active' => true,
                 'is_current' => true,
+                'status' => FinancialYear::STATUS_OPEN,
+                'updated_by' => Auth::id(),
+            ])->save();
+
+            $company->forceFill([
+                'default_financial_year_id' => $selectedFinancialYear->id,
+                'financial_year_start' => $selectedFinancialYear->start_date,
+                'financial_year_end' => $selectedFinancialYear->end_date,
                 'updated_by' => Auth::id(),
             ])->save();
 
@@ -85,6 +94,14 @@ class CompanyController extends Controller
 
     private function selectedFinancialYearId(?Company $company): ?int
     {
+        if ($company?->default_financial_year_id) {
+            $selected = FinancialYear::query()->find($company->default_financial_year_id);
+
+            if ($selected) {
+                return (int) $selected->id;
+            }
+        }
+
         if ($company?->financial_year_start && $company?->financial_year_end) {
             $selected = FinancialYear::query()
                 ->whereDate('start_date', $company->financial_year_start->toDateString())

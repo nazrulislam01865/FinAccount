@@ -3,6 +3,7 @@
 namespace App\AccountingReports\Services\Reports;
 
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class PartyBalanceReportService extends BaseVoucherDetailReportService
@@ -64,7 +65,7 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
             ->orderBy('p.party_name')
             ->orderBy('a.account_code')
             ->get()
-            ->map(function (object $row) use ($normalSide) {
+            ->map(function (object $row) use ($normalSide, $companyId, $toDate, $partyKind) {
                 $openingNet = (float) $row->opening_debit - (float) $row->opening_credit;
                 $periodNet = (float) $row->period_debit - (float) $row->period_credit;
                 $closingDebitNet = $openingNet + $periodNet;
@@ -72,6 +73,21 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
                 $row->debit_movement = round((float) $row->period_debit, 2);
                 $row->credit_movement = round((float) $row->period_credit, 2);
                 $row->closing_balance = round($normalSide === 'debit' ? $closingDebitNet : -$closingDebitNet, 2);
+
+                $aging = $this->agingBucketsFor(
+                    companyId: $companyId,
+                    toDate: $toDate,
+                    partyKind: $partyKind,
+                    partyId: (int) $row->party_id,
+                    accountId: (int) $row->account_id,
+                    normalSide: $normalSide
+                );
+
+                $row->aging_0_30 = $aging['0_30'];
+                $row->aging_31_60 = $aging['31_60'];
+                $row->aging_61_90 = $aging['61_90'];
+                $row->aging_90_plus = $aging['90_plus'];
+
                 return $row;
             })
             ->filter(fn (object $row) => $includeZero || abs((float) $row->closing_balance) >= 0.01 || abs((float) $row->debit_movement) >= 0.01 || abs((float) $row->credit_movement) >= 0.01)
@@ -86,6 +102,12 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
             'total_debit_movement' => round((float) $rows->sum('debit_movement'), 2),
             'total_credit_movement' => round((float) $rows->sum('credit_movement'), 2),
             'total_closing' => round((float) $rows->sum('closing_balance'), 2),
+            'aging_totals' => [
+                '0_30' => round((float) $rows->sum('aging_0_30'), 2),
+                '31_60' => round((float) $rows->sum('aging_31_60'), 2),
+                '61_90' => round((float) $rows->sum('aging_61_90'), 2),
+                '90_plus' => round((float) $rows->sum('aging_90_plus'), 2),
+            ],
             'parties' => DB::table('parties as p')
                 ->join('party_types as pt', 'pt.id', '=', 'p.party_type_id')
                 ->whereRaw('LOWER(pt.name) LIKE ?', ['%' . mb_strtolower($partyKind) . '%'])
@@ -95,6 +117,51 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
                 ->select('p.id', 'p.party_code', 'p.party_name')
                 ->get(),
         ];
+    }
+
+    private function agingBucketsFor(?int $companyId, string $toDate, string $partyKind, int $partyId, int $accountId, string $normalSide): array
+    {
+        $buckets = [
+            '0_30' => 0.0,
+            '31_60' => 0.0,
+            '61_90' => 0.0,
+            '90_plus' => 0.0,
+        ];
+
+        $to = Carbon::parse($toDate)->endOfDay();
+
+        $this->partyMovementQuery($companyId, null, $toDate, $partyKind)
+            ->where('d.party_id', $partyId)
+            ->where('d.account_id', $accountId)
+            ->orderBy('v.voucher_date')
+            ->selectRaw('v.voucher_date')
+            ->selectRaw('d.debit')
+            ->selectRaw('d.credit')
+            ->get()
+            ->each(function (object $line) use (&$buckets, $normalSide, $to) {
+                $raw = $normalSide === 'debit'
+                    ? (float) $line->debit - (float) $line->credit
+                    : (float) $line->credit - (float) $line->debit;
+
+                $amount = round(max(0, $raw), 2);
+                if ($amount <= 0) {
+                    return;
+                }
+
+                $age = max(0, Carbon::parse($line->voucher_date)->diffInDays($to, false));
+
+                if ($age <= 30) {
+                    $buckets['0_30'] += $amount;
+                } elseif ($age <= 60) {
+                    $buckets['31_60'] += $amount;
+                } elseif ($age <= 90) {
+                    $buckets['61_90'] += $amount;
+                } else {
+                    $buckets['90_plus'] += $amount;
+                }
+            });
+
+        return array_map(fn (float $amount) => round($amount, 2), $buckets);
     }
 
     private function partyMovementQuery(?int $companyId, ?string $fromDate, ?string $toDate, string $partyKind): Builder

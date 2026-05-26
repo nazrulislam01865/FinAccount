@@ -3,6 +3,7 @@
 namespace App\Services\Approval;
 
 use App\AccountingEngine\Services\AuditTrailService;
+use App\AccountingEngine\Services\JournalPostingService;
 use App\AccountingEngine\Services\PartyRegisterService;
 use App\Models\ApprovalLog;
 use App\Models\ApprovalWorkflow;
@@ -15,7 +16,8 @@ class ApprovalWorkflowService
 {
     public function __construct(
         private readonly PartyRegisterService $partyRegisterService,
-        private readonly AuditTrailService $auditTrailService
+        private readonly AuditTrailService $auditTrailService,
+        private readonly JournalPostingService $journalPostingService
     ) {
     }
 
@@ -134,13 +136,16 @@ class ApprovalWorkflowService
                 'acted_at' => now(),
             ]);
 
-            $this->partyRegisterService->recordIfNeeded($voucher->fresh(['details.account.accountType']), [
+            $freshVoucher = $voucher->fresh(['details.account.accountType', 'details.party']);
+            $this->journalPostingService->createOrSyncFromVoucher($freshVoucher, 'Approved Transaction');
+
+            $this->partyRegisterService->recordIfNeeded($freshVoucher, [
                 'party_ledger_effect' => $voucher->party_ledger_effect,
             ]);
 
-            $this->auditTrailService->recordPostedVoucher($voucher->fresh(['details.account', 'details.party']), $approver->id);
+            $this->auditTrailService->recordPostedVoucher($freshVoucher, $approver->id);
 
-            return $voucher->fresh(['transactionHead', 'party', 'details.account']);
+            return $voucher->fresh(['transactionHead', 'party', 'details.account', 'journalHeader.lines']);
         });
     }
 
@@ -175,6 +180,7 @@ class ApprovalWorkflowService
                 'acted_at' => now(),
             ]);
 
+            $this->journalPostingService->markVoucherJournalStatus($voucher, 'Cancelled');
             $this->auditTrailService->record($voucher, (int) $voucher->id, 'voucher_rejected', null, $voucher->fresh()->toArray(), $approver->id);
 
             return $voucher->fresh(['transactionHead', 'party']);

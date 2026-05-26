@@ -18,10 +18,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 2;
+    private const CACHE_VERSION = 3;
 
     public function __construct(private readonly SetupProgressService $setupProgressService)
     {
@@ -155,6 +156,22 @@ class DashboardService
             return 0.0;
         }
 
+        if ($this->usesJournalLines()) {
+            $posted = DB::table('journal_lines as jl')
+                ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+                ->leftJoin('voucher_headers as v', 'v.id', '=', 'jh.voucher_header_id')
+                ->whereIn('jl.ledger_id', $ledgerIds->all())
+                ->whereIn('jh.status', [VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_REVERSED])
+                ->where(function ($query) {
+                    $query->whereNull('v.id')->orWhereNull('v.deleted_at');
+                })
+                ->when($companyId > 0, fn ($query) => $query->where('jh.company_id', $companyId))
+                ->selectRaw('COALESCE(SUM(jl.debit_amount), 0) - COALESCE(SUM(jl.credit_amount), 0) AS balance')
+                ->value('balance');
+
+            return round((float) $posted, 2);
+        }
+
         $posted = DB::table('voucher_details as d')
             ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
             ->whereIn('d.account_id', $ledgerIds->all())
@@ -172,6 +189,34 @@ class DashboardService
         $select = $creditMinusDebit
             ? 'COALESCE(SUM(d.credit), 0) - COALESCE(SUM(d.debit), 0) AS movement'
             : 'COALESCE(SUM(d.debit), 0) - COALESCE(SUM(d.credit), 0) AS movement';
+
+        if ($this->usesJournalLines()) {
+            $select = $creditMinusDebit
+                ? 'COALESCE(SUM(jl.credit_amount), 0) - COALESCE(SUM(jl.debit_amount), 0) AS movement'
+                : 'COALESCE(SUM(jl.debit_amount), 0) - COALESCE(SUM(jl.credit_amount), 0) AS movement';
+
+            $value = DB::table('journal_lines as jl')
+                ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+                ->leftJoin('voucher_headers as v', 'v.id', '=', 'jh.voucher_header_id')
+                ->join('chart_of_accounts as a', 'a.id', '=', 'jl.ledger_id')
+                ->leftJoin('account_types as at', 'at.id', '=', 'a.account_type_id')
+                ->whereIn('jh.status', [VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_REVERSED])
+                ->where(function ($query) {
+                    $query->whereNull('v.id')->orWhereNull('v.deleted_at');
+                })
+                ->whereDate('jh.journal_date', '>=', $from)
+                ->whereDate('jh.journal_date', '<=', $to)
+                ->when($companyId > 0, fn ($query) => $query->where('jh.company_id', $companyId))
+                ->where(function ($query) use ($accountTypes) {
+                    $query->whereIn('at.name', $accountTypes)
+                        ->orWhereIn('a.account_nature', $accountTypes)
+                        ->orWhereIn('a.ledger_type', $accountTypes);
+                })
+                ->selectRaw($select)
+                ->value('movement');
+
+            return round(max(0, (float) $value), 2);
+        }
 
         $value = DB::table('voucher_details as d')
             ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
@@ -191,6 +236,15 @@ class DashboardService
             ->value('movement');
 
         return round(max(0, (float) $value), 2);
+    }
+
+    private function usesJournalLines(): bool
+    {
+        try {
+            return Schema::hasTable('journal_headers') && Schema::hasTable('journal_lines');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function recentTransactions(int $companyId): Collection

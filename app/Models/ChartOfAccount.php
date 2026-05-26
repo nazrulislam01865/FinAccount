@@ -139,4 +139,10 @@ class ChartOfAccount extends Model
     {
         return $this->hasMany(VoucherDetail::class, 'account_id');
     }
+
+    public function journalLines()
+    {
+        return $this->hasMany(JournalLine::class, 'ledger_id');
+    }
 }
+

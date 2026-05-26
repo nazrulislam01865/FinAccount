@@ -18,7 +18,8 @@
         subtitle="Cash and bank movement generated from posted voucher debit/credit lines."
     >
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.cash-bank-book.export', request()->query()) }}">Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.cash-bank-book.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.cash-bank-book.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
         </x-slot:actions>
     </x-report.page-header>
@@ -142,7 +143,7 @@
             </div>
             <div class="card helper-card">
                 <h3>Report Rule</h3>
-                <p>This screen reads only posted voucher detail rows linked with cash/bank ledger accounts. It does not calculate balances from voucher amount alone.</p>
+                <p>This screen reads only posted journal line rows linked with cash/bank ledger accounts. It does not calculate balances from voucher amount alone.</p>
             </div>
         </aside>
     </div>

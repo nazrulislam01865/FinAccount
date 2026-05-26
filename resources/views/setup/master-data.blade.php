@@ -733,6 +733,26 @@
                                 <td>
                                     <div class="action-cell">
                                         <button class="icon-btn js-master-edit" type="button" data-target="financialYearForm" title="Edit">✎</button>
+
+                                        @if(!($year->is_current || $year->is_active) || $year->status !== 'Open')
+                                            <form method="POST" action="{{ route('api.master-data.financial-years.set-current', $year) }}" onsubmit="return confirm('Set this as the current financial year?')">
+                                                @csrf
+                                                <button class="icon-btn" type="submit" title="Set Current">★</button>
+                                            </form>
+                                        @endif
+
+                                        @if(in_array($year->status, ['Open', 'Active'], true))
+                                            <form method="POST" action="{{ route('api.master-data.financial-years.close', $year) }}" onsubmit="return confirm('Close this financial year and block posting?')">
+                                                @csrf
+                                                <button class="icon-btn" type="submit" title="Close Year">🔒</button>
+                                            </form>
+                                        @else
+                                            <form method="POST" action="{{ route('api.master-data.financial-years.reopen', $year) }}" onsubmit="return confirm('Reopen this financial year?')">
+                                                @csrf
+                                                <button class="icon-btn" type="submit" title="Reopen Year">↻</button>
+                                            </form>
+                                        @endif
+
                                         <form method="POST" action="{{ route('setup.master-data.financial-years.destroy', $year) }}" data-delete-form onsubmit="return confirm('Delete this financial year?')">
                                             @csrf
                                             @method('DELETE')

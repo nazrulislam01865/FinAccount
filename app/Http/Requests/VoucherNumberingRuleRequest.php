@@ -38,7 +38,7 @@ class VoucherNumberingRuleRequest extends FormRequest
                 'integer',
                 Rule::exists('financial_years', 'id')
                     ->where(fn ($query) => $query
-                        ->where('status', 'Active')
+                        ->whereIn('status', ['Open', 'Active'])
                         ->whereNull('deleted_at')),
             ],
 
@@ -129,7 +129,7 @@ class VoucherNumberingRuleRequest extends FormRequest
     {
         return [
             'financial_year_id.required' => 'Financial Year is required.',
-            'financial_year_id.exists' => 'Selected Financial Year is invalid.',
+            'financial_year_id.exists' => 'Selected Financial Year must be Open and available for voucher numbering.',
 
             'voucher_type.required' => 'Voucher Type is required.',
             'voucher_type.unique' => 'This Voucher Type already has a numbering rule for the selected Financial Year.',

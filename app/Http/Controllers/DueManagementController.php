@@ -12,7 +12,9 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -177,7 +179,13 @@ class DueManagementController extends Controller
                 $decreaseRows = $group->where('movement', 'Decrease');
                 $original = round((float) $increaseRows->sum('amount'), 2);
                 $settled = round((float) $decreaseRows->sum('amount'), 2);
-                $balance = round($original - $settled, 2);
+                $registeredBalance = round($original - $settled, 2);
+                $ledgerBalance = $this->currentLedgerDueBalance(
+                    partyId: (int) $first->party_id,
+                    accountId: (int) $first->account_id,
+                    dueType: (string) $first->due_type
+                );
+                $balance = round(max($registeredBalance, $ledgerBalance), 2);
 
                 if ($original <= 0) {
                     return null;
@@ -208,6 +216,7 @@ class DueManagementController extends Controller
                     'settled_amount' => $settled,
                     'balance_due' => max(0, $balance),
                     'raw_balance' => $balance,
+                    'ledger_balance' => $ledgerBalance,
                     'due_date' => $dueDate ? Carbon::parse($dueDate)->toDateString() : null,
                     'status' => $status,
                     'latest_voucher' => $latest?->voucherHeader?->voucher_number,
@@ -280,12 +289,62 @@ class DueManagementController extends Controller
 
     private function currentBalance(int $partyId, int $accountId, string $dueType): float
     {
-        return round((float) DueRegister::query()
+        $registeredBalance = round((float) DueRegister::query()
             ->where('party_id', $partyId)
             ->where('account_id', $accountId)
             ->where('due_type', $dueType)
             ->whereHas('voucherHeader', fn ($query) => $query->where('status', VoucherHeader::STATUS_POSTED))
             ->sum('balance_effect'), 2);
+
+        return round(max($registeredBalance, $this->currentLedgerDueBalance($partyId, $accountId, $dueType)), 2);
+    }
+
+    private function currentLedgerDueBalance(int $partyId, int $accountId, string $dueType): float
+    {
+        if ($this->usesJournalLines()) {
+            $totals = DB::table('journal_lines as jl')
+                ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+                ->leftJoin('voucher_headers as vh', 'vh.id', '=', 'jh.voucher_header_id')
+                ->whereIn('jh.status', [VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_REVERSED])
+                ->where(function ($query) {
+                    $query->whereNull('vh.id')->orWhereNull('vh.deleted_at');
+                })
+                ->where('jl.ledger_id', $accountId)
+                ->where(function ($query) use ($partyId) {
+                    $query->where('jl.party_id', $partyId)
+                        ->orWhere('jh.party_id', $partyId);
+                })
+                ->selectRaw('COALESCE(SUM(jl.debit_amount), 0) AS total_debit')
+                ->selectRaw('COALESCE(SUM(jl.credit_amount), 0) AS total_credit')
+                ->first();
+        } else {
+            $totals = DB::table('voucher_details as vd')
+                ->join('voucher_headers as vh', 'vh.id', '=', 'vd.voucher_header_id')
+                ->where('vh.status', VoucherHeader::STATUS_POSTED)
+                ->whereNull('vh.deleted_at')
+                ->where('vd.account_id', $accountId)
+                ->where(function ($query) use ($partyId) {
+                    $query->where('vd.party_id', $partyId)
+                        ->orWhere('vh.party_id', $partyId);
+                })
+                ->selectRaw('COALESCE(SUM(vd.debit), 0) AS total_debit')
+                ->selectRaw('COALESCE(SUM(vd.credit), 0) AS total_credit')
+                ->first();
+        }
+
+        $debit = (float) ($totals?->total_debit ?? 0);
+        $credit = (float) ($totals?->total_credit ?? 0);
+
+        return round($dueType === 'Payable' ? $credit - $debit : $debit - $credit, 2);
+    }
+
+    private function usesJournalLines(): bool
+    {
+        try {
+            return Schema::hasTable('journal_headers') && Schema::hasTable('journal_lines');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function computedDueStatus(float $balance, float $settled, mixed $dueDate): string

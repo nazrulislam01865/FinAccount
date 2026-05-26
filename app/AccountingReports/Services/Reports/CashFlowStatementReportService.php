@@ -72,9 +72,7 @@ class CashFlowStatementReportService extends BaseVoucherDetailReportService
 
     private function sectionForVoucher(int $voucherId): string
     {
-        $contraTypes = DB::table('voucher_details as d')
-            ->join('chart_of_accounts as a', 'a.id', '=', 'd.account_id')
-            ->leftJoin('account_types as at', 'at.id', '=', 'a.account_type_id')
+        $contraTypes = $this->basePostedLinesQuery(null, null, null)
             ->where('d.voucher_header_id', $voucherId)
             ->where(function (Builder $where) {
                 $where->where('a.is_cash_bank', '<>', 1)

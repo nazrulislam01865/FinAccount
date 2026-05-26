@@ -66,7 +66,8 @@
             <p>View, search, filter, print, export, and manage posted transactions.</p>
         </div>
         <div class="quick-actions">
-            <a class="btn-outline" id="exportBtn" href="{{ route('accounting-reports.transactions.export', request()->query()) }}">⇩ Export</a>
+            <a class="btn-outline" id="exportBtn" href="{{ route('accounting-reports.transactions.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="btn-outline" href="{{ route('accounting-reports.transactions.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" id="printBtn" type="button">Print</button>
             @if(Route::has('transactions.create'))
                 <a class="btn-primary" id="addBtn" href="{{ route('transactions.create') }}">+ Add Transaction</a>

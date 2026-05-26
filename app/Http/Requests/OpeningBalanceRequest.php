@@ -50,7 +50,7 @@ class OpeningBalanceRequest extends FormRequest
                 'integer',
                 Rule::exists('financial_years', 'id')
                     ->where(fn ($query) => $query
-                        ->where('status', 'Active')
+                        ->whereIn('status', ['Open', 'Active'])
                         ->whereNull('deleted_at')),
             ],
 
@@ -80,7 +80,7 @@ class OpeningBalanceRequest extends FormRequest
                 'integer',
                 Rule::exists('parties', 'id')
                     ->where(fn ($query) => $query
-                        ->where('status', 'Active')
+                        ->whereIn('status', ['Open', 'Active'])
                         ->whereNull('deleted_at')),
             ],
 

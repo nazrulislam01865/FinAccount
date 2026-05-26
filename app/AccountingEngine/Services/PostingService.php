@@ -10,6 +10,11 @@ use Illuminate\Http\UploadedFile;
 
 class PostingService
 {
+    public function __construct(
+        private readonly JournalPostingService $journalPostingService
+    ) {
+    }
+
     /**
      * @param array<string, mixed> $data
      * @param array<string, mixed> $preview
@@ -90,11 +95,15 @@ class PostingService
             ]);
         }
 
+        if ($status !== VoucherHeader::STATUS_DRAFT) {
+            $this->journalPostingService->createOrSyncFromVoucher($voucher->fresh('details'), 'Transaction');
+        }
+
         if ($attachment) {
             $this->storeAttachment($voucher, $attachment, $userId);
         }
 
-        return $voucher->fresh(['details.account.accountType', 'details.party', 'attachments']);
+        return $voucher->fresh(['details.account.accountType', 'details.party', 'attachments', 'journalHeader.lines.ledger.accountType', 'journalHeader.lines.party']);
     }
 
     /**

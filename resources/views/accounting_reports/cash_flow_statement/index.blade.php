@@ -15,9 +15,10 @@
 @endphp
 
 <div class="financial-report-page">
-    <x-report.page-header title="Cash Flow Statement" subtitle="Cash movement grouped into operating, investing, and financing activities from cash/bank voucher detail lines.">
+    <x-report.page-header title="Cash Flow Statement" subtitle="Cash movement grouped into operating, investing, and financing activities from cash/bank journal line lines.">
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.cash-flow-statement.export', request()->query()) }}">⇩ Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.cash-flow-statement.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.cash-flow-statement.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.cash-flow-statement.index', request()->query()) }}">↻ Refresh</a>
         </x-slot:actions>

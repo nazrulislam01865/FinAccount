@@ -19,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class MasterDataController extends Controller
@@ -99,7 +100,9 @@ class MasterDataController extends Controller
                 ->orderBy('name')
                 ->get(),
             'financialYears' => FinancialYear::query()
+                ->orderByDesc('is_current')
                 ->orderByDesc('is_active')
+                ->orderByRaw("CASE status WHEN 'Open' THEN 1 WHEN 'Locked' THEN 2 WHEN 'Closed' THEN 3 ELSE 4 END")
                 ->orderByDesc('start_date')
                 ->get(),
             'ledgerAccounts' => ChartOfAccount::query()
@@ -318,6 +321,83 @@ class MasterDataController extends Controller
     }
 
     /**
+     * Mark a financial year as the single current/default posting year for the company.
+     */
+    public function setCurrentFinancialYear(Request $request, FinancialYear $financialYear): JsonResponse|RedirectResponse
+    {
+        $company = Company::query()->first();
+        $userId = $request->user()?->id;
+
+        DB::transaction(function () use ($financialYear, $company, $userId) {
+            FinancialYear::query()
+                ->when($company?->id, function ($query) use ($company) {
+                    $query->where(function ($where) use ($company) {
+                        $where->where('company_id', $company->id)
+                            ->orWhereNull('company_id');
+                    });
+                })
+                ->update([
+                    'is_active' => false,
+                    'is_current' => false,
+                    'updated_by' => $userId,
+                ]);
+
+            $financialYear->forceFill([
+                'company_id' => $company?->id ?: $financialYear->company_id,
+                'status' => FinancialYear::STATUS_OPEN,
+                'is_active' => true,
+                'is_current' => true,
+                'updated_by' => $userId,
+            ])->save();
+
+            if ($company) {
+                $company->forceFill([
+                    'default_financial_year_id' => $financialYear->id,
+                    'financial_year_start' => $financialYear->start_date,
+                    'financial_year_end' => $financialYear->end_date,
+                    'updated_by' => $userId,
+                ])->save();
+            }
+        });
+
+        return $this->statusChanged($request, 'Financial year set as current successfully.');
+    }
+
+    /**
+     * Close a financial year so posting is blocked until an authorized user reopens it.
+     */
+    public function closeFinancialYear(Request $request, FinancialYear $financialYear): JsonResponse|RedirectResponse
+    {
+        $financialYear->forceFill([
+            'status' => FinancialYear::STATUS_CLOSED,
+            'is_active' => false,
+            'is_current' => false,
+            'updated_by' => $request->user()?->id,
+        ])->save();
+
+        $company = Company::query()->where('default_financial_year_id', $financialYear->id)->first();
+
+        if ($company) {
+            $company->forceFill(['default_financial_year_id' => null])->save();
+        }
+
+        return $this->statusChanged($request, 'Financial year closed successfully. Posting is now blocked for this year.');
+    }
+
+    /**
+     * Reopen a closed or locked financial year. Reopen does not automatically make it current.
+     */
+    public function reopenFinancialYear(Request $request, FinancialYear $financialYear): JsonResponse|RedirectResponse
+    {
+        $financialYear->forceFill([
+            'status' => FinancialYear::STATUS_OPEN,
+            'updated_by' => $request->user()?->id,
+        ])->save();
+
+        return $this->statusChanged($request, 'Financial year reopened successfully. Use Set Current if this should be the default posting year.');
+    }
+
+    /**
      * Remove an unused financial year from the database.
      */
     public function destroyFinancialYear(Request $request, FinancialYear $financialYear): JsonResponse|RedirectResponse
@@ -328,6 +408,10 @@ class MasterDataController extends Controller
 
         if (DB::table('voucher_numbering_rules')->where('financial_year_id', $financialYear->id)->exists()) {
             return $this->blocked($request, 'This financial year is used by voucher numbering and cannot be deleted.', 'setup.master-data.financial-years');
+        }
+
+        if (Schema::hasColumn('companies', 'default_financial_year_id') && DB::table('companies')->where('default_financial_year_id', $financialYear->id)->exists()) {
+            return $this->blocked($request, 'This financial year is selected as the company default/current year and cannot be deleted.', 'setup.master-data.financial-years');
         }
 
         $financialYear->forceDelete();
@@ -413,10 +497,32 @@ class MasterDataController extends Controller
 
             $financialYear->save();
 
+            if (($data['is_current'] ?? false) && $company) {
+                $company->forceFill([
+                    'default_financial_year_id' => $financialYear->id,
+                    'financial_year_start' => $financialYear->start_date,
+                    'financial_year_end' => $financialYear->end_date,
+                    'updated_by' => $userId,
+                ])->save();
+            }
+
             return $financialYear->fresh();
         });
     }
     
+
+    private function statusChanged(Request $request, string $message): JsonResponse|RedirectResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'redirect' => route('setup.master-data.financial-years'),
+            ]);
+        }
+
+        return redirect()->route('setup.master-data.financial-years')->with('status', $message);
+    }
 
     private function saved(string $message, object $model, string $redirectRoute): JsonResponse
     {

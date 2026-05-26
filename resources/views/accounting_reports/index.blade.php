@@ -14,7 +14,7 @@
         ],
         [
             'title' => 'Cash / Bank Book',
-            'description' => 'Cash and bank inflow, outflow, and running balance from voucher detail lines.',
+            'description' => 'Cash and bank inflow, outflow, and running balance from journal line lines.',
             'route' => 'accounting-reports.cash-bank-book.index',
             'icon' => '🏦',
             'permission' => 'cash-bank-book.view',
@@ -83,7 +83,7 @@
 <div class="page-title">
     <div>
         <h2>Accounting Reports</h2>
-        <p>Phase 6 reports are standardized on posted voucher detail debit/credit rows, not voucher header amount.</p>
+        <p>Phase 3 reports are standardized on posted journal_lines, not voucher header amount.</p>
     </div>
 </div>
 

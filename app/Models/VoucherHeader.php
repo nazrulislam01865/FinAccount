@@ -94,6 +94,11 @@ class VoucherHeader extends Model
         return $this->hasMany(VoucherDetail::class);
     }
 
+    public function journalHeader()
+    {
+        return $this->hasOne(JournalHeader::class);
+    }
+
     public function attachments()
     {
         return $this->hasMany(VoucherAttachment::class);

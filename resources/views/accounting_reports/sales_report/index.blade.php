@@ -14,9 +14,10 @@
 @endphp
 
 <div class="financial-report-page">
-    <x-report.page-header title="Sales Report" subtitle="Voucher-level sales/income movements from voucher detail ledger lines.">
+    <x-report.page-header title="Sales Report" subtitle="Sales/income movements from posted journal lines.">
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.sales-report.export', request()->query()) }}">⇩ Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.sales-report.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.sales-report.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.sales-report.index', request()->query()) }}">↻ Refresh</a>
         </x-slot:actions>
@@ -28,7 +29,7 @@
         <x-report.stat-card label="Sales Ledgers" :value="$report['by_account']->count()" tone="muted" />
         <x-report.stat-card label="Average Entry" :value="$money($report['entry_count'] ? $report['total_amount'] / max($report['entry_count'], 1) : 0)" tone="primary" />
         <x-report.info-card title="Period" :rows="[['label' => 'From', 'value' => $formatDate($report['from_date'])], ['label' => 'To', 'value' => $formatDate($report['to_date'])]]" />
-        <x-report.info-card title="Source" :rows="[['label' => 'Basis', 'value' => 'Accrual'], ['label' => 'Truth', 'value' => 'voucher_details']]" />
+        <x-report.info-card title="Source" :rows="[['label' => 'Basis', 'value' => 'Accrual'], ['label' => 'Truth', 'value' => 'journal_lines']]" />
     </div>
 
     <form method="GET" action="{{ route('accounting-reports.sales-report.index') }}" class="card report-toolbar report-toolbar-seven accounting-filter-sequence">

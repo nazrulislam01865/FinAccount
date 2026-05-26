@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Audit;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class AuditTrailController extends Controller
@@ -18,13 +19,14 @@ class AuditTrailController extends Controller
                 $where->where('event', $request->input('event'))
                     ->orWhere('action', $request->input('event'));
             }))
+            ->when($request->filled('route') && Schema::hasColumn('audit_logs', 'route_name'), fn ($query) => $query->where('route_name', 'like', '%' . $request->input('route') . '%'))
             ->latest('created_at')
             ->paginate(30)
             ->withQueryString();
 
         return view('audit.index', [
             'logs' => $logs,
-            'filters' => $request->only(['module', 'event']),
+            'filters' => $request->only(['module', 'event', 'route']),
         ]);
     }
 }

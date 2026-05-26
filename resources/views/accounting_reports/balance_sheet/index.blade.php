@@ -16,9 +16,10 @@
 @endphp
 
 <div class="financial-report-page">
-    <x-report.page-header title="Balance Sheet" subtitle="Assets, liabilities, equity and retained profit generated from voucher detail ledger balances.">
+    <x-report.page-header title="Balance Sheet" subtitle="Assets, liabilities, equity and retained profit generated from journal line ledger balances.">
         <x-slot:actions>
-            <a class="button btn-outline" href="{{ route('accounting-reports.balance-sheet.export', request()->query()) }}">⇩ Export CSV</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.balance-sheet.export', array_merge(request()->query(), ['format' => 'xlsx'])) }}">⇩ Export XLSX</a>
+            <a class="button btn-outline" href="{{ route('accounting-reports.balance-sheet.export', array_merge(request()->query(), ['format' => 'pdf'])) }}">⇩ Export PDF</a>
             <button class="btn-ghost" type="button" onclick="window.print()">Print</button>
             <a class="button btn-primary" href="{{ route('accounting-reports.balance-sheet.index', request()->query()) }}">↻ Refresh</a>
         </x-slot:actions>
@@ -53,7 +54,7 @@
         :subtitle="'As of ' . $formatDate($report['as_of_date']) . ' · ' . $report['rows']->count() . ' ledger(s)'"
         :badge="$report['is_balanced'] ? 'Balanced' : 'Difference Found'"
         :badge-class="$report['is_balanced'] ? 'badge-success' : 'badge-warning'"
-        footer-left="Phase 6 source: voucher_details joined with voucher_headers and chart_of_accounts."
+        footer-left="Phase 3 source: journal_lines joined with journal_headers and chart_of_accounts."
         footer-right="Header amount is not used as accounting truth."
     >
         <div class="table-wrap">

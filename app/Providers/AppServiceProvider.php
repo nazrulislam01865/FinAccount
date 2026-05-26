@@ -5,6 +5,13 @@ namespace App\Providers;
 use App\AccountingEngine\AccountingEngine;
 use App\AccountingEngine\Contracts\AccountingEngineContract;
 use App\Models\AccountingRule;
+use App\Models\ReportConfiguration;
+use App\Models\JournalLine;
+use App\Models\JournalHeader;
+use App\Models\DueRegister;
+use App\Models\ApprovalWorkflow;
+use App\Models\ApprovalLog;
+use App\Models\AdvanceRegister;
 use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
@@ -50,6 +57,13 @@ class AppServiceProvider extends ServiceProvider
             OpeningBalance::class,
             VoucherNumberingRule::class,
             VoucherHeader::class,
+            JournalHeader::class,
+            JournalLine::class,
+            DueRegister::class,
+            AdvanceRegister::class,
+            ApprovalWorkflow::class,
+            ApprovalLog::class,
+            ReportConfiguration::class,
             User::class,
             Role::class,
             Permission::class,

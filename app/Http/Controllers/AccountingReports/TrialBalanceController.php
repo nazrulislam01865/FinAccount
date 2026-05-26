@@ -5,8 +5,9 @@ namespace App\Http\Controllers\AccountingReports;
 use App\AccountingReports\Services\AccountingReportService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccountingReports\TrialBalanceRequest;
+use App\Services\Reports\NativeReportExportService;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class TrialBalanceController extends Controller
 {
@@ -28,36 +29,30 @@ class TrialBalanceController extends Controller
         ]);
     }
 
-    public function export(TrialBalanceRequest $request): StreamedResponse
+    public function export(TrialBalanceRequest $request, NativeReportExportService $exporter): SymfonyResponse
     {
         $report = $this->reports->trialBalance(array_merge($request->filters(), ['company_id' => (int) ($request->user()?->company_id ?? 0)]));
-        $fileName = 'trial-balance-' . now()->format('Ymd-His') . '.csv';
+        $headers = ['Code', 'Ledger Account', 'Account Type', 'Opening Debit', 'Opening Credit', 'Period Debit', 'Period Credit', 'Closing Debit', 'Closing Credit'];
+        $rows = collect($report['rows'])->map(fn ($row) => [
+            $row->account_code,
+            $row->account_name,
+            $row->account_type,
+            round((float) $row->opening_debit, 2),
+            round((float) $row->opening_credit, 2),
+            round((float) $row->period_debit, 2),
+            round((float) $row->period_credit, 2),
+            round((float) $row->closing_debit, 2),
+            round((float) $row->closing_credit, 2),
+        ])->push([
+            'TOTAL', '', '', '', '', '', '',
+            round((float) $report['total_debit'], 2),
+            round((float) $report['total_credit'], 2),
+        ])->all();
 
-        return response()->streamDownload(function () use ($report) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['From Date', $report['from_date']]);
-            fputcsv($out, ['To Date', $report['to_date']]);
-            fputcsv($out, ['Total Closing Debit', number_format((float) $report['total_debit'], 2, '.', '')]);
-            fputcsv($out, ['Total Closing Credit', number_format((float) $report['total_credit'], 2, '.', '')]);
-            fputcsv($out, ['Difference', number_format(abs((float) $report['difference']), 2, '.', '')]);
-            fputcsv($out, []);
-            fputcsv($out, ['Code', 'Ledger Account', 'Account Type', 'Opening Debit', 'Opening Credit', 'Period Debit', 'Period Credit', 'Closing Debit', 'Closing Credit']);
-
-            foreach ($report['rows'] as $row) {
-                fputcsv($out, [
-                    $row->account_code,
-                    $row->account_name,
-                    $row->account_type,
-                    number_format((float) $row->opening_debit, 2, '.', ''),
-                    number_format((float) $row->opening_credit, 2, '.', ''),
-                    number_format((float) $row->period_debit, 2, '.', ''),
-                    number_format((float) $row->period_credit, 2, '.', ''),
-                    number_format((float) $row->closing_debit, 2, '.', ''),
-                    number_format((float) $row->closing_credit, 2, '.', ''),
-                ]);
-            }
-
-            fclose($out);
-        }, $fileName, ['Content-Type' => 'text/csv']);
+        return $exporter->download('Trial Balance', $headers, $rows, [
+            'From Date' => $report['from_date'],
+            'To Date' => $report['to_date'],
+            'Difference' => round(abs((float) $report['difference']), 2),
+        ], $request->input('format', 'xlsx'), 'trial-balance-' . now()->format('Ymd-His'));
     }
 }

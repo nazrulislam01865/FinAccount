@@ -52,4 +52,10 @@ class VoucherDetail extends Model
     {
         return $this->belongsTo(AccountingRuleLine::class, 'rule_line_id');
     }
+
+    public function journalLine()
+    {
+        return $this->hasOne(JournalLine::class);
+    }
 }
+

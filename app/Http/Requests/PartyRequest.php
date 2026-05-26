@@ -46,6 +46,13 @@ class PartyRequest extends FormRequest
             'mobile' => $this->blankToNull($this->mobile),
             'email' => $this->blankToNull($this->email),
             'address' => $this->blankToNull($this->address),
+            'credit_limit' => $this->normalizeNullableMoney($this->credit_limit),
+            'payment_terms' => $this->blankToNull($this->payment_terms),
+            'department' => $this->blankToNull($this->department),
+            'designation' => $this->blankToNull($this->designation),
+            'salary_amount' => $this->normalizeNullableMoney($this->salary_amount),
+            'ownership_percentage' => $this->normalizeNullableMoney($this->ownership_percentage),
+            'contact_info' => $this->blankToNull($this->contact_info),
             'sub_type' => $this->blankToNull($this->sub_type),
             'linked_ledger_account_id' => $linkedLedgerId ?: null,
             'default_ledger_nature' => $defaultLedgerNature,
@@ -107,6 +114,49 @@ class PartyRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:1000',
+            ],
+
+            'credit_limit' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
+            'payment_terms' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'department' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'designation' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'salary_amount' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
+            'ownership_percentage' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:100',
+            ],
+
+            'contact_info' => [
+                'nullable',
+                'string',
+                'max:255',
             ],
 
             'linked_ledger_account_id' => [
@@ -219,6 +269,10 @@ class PartyRequest extends FormRequest
             'email.email' => 'Please enter a valid email address.',
             'email.unique' => 'This Email already exists. Please use another email address.',
 
+            'credit_limit.min' => 'Credit Limit cannot be negative.',
+            'salary_amount.min' => 'Salary Amount cannot be negative.',
+            'ownership_percentage.max' => 'Ownership Percentage cannot be greater than 100.',
+
             'linked_ledger_account_id.required' => 'Linked Ledger is required.',
             'linked_ledger_account_id.exists' => 'Selected Linked Ledger must be an active posting ledger.',
 
@@ -244,6 +298,15 @@ class PartyRequest extends FormRequest
     {
         if ($value === null || $value === '') {
             return 0.00;
+        }
+
+        return round((float) str_replace(',', '', (string) $value), 2);
+    }
+
+    private function normalizeNullableMoney(mixed $value): ?float
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
         }
 
         return round((float) str_replace(',', '', (string) $value), 2);

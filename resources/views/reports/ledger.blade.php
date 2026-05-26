@@ -14,7 +14,7 @@
     <div>
         <span class="page-label">Financial Report</span>
         <h2>Ledger Report</h2>
-        <p>Account-wise debit, credit, and running balance. This report is generated from voucher details based on the selected accounting filters.</p>
+        <p>Account-wise debit, credit, and running balance. This report is generated from journal lines based on the selected accounting filters.</p>
     </div>
     <div class="quick-actions">
         <button class="btn-outline" type="button" onclick="window.print()">Print</button>
@@ -218,7 +218,7 @@
         </table>
     </div>
     <div class="table-footer">
-        <span>Ledger report reads voucher_details with the standard accounting filter sequence.</span>
+        <span>Ledger report reads journal_lines with the standard accounting filter sequence.</span>
         <span>Normal Balance: {{ $report['normal_balance'] }}</span>
     </div>
 </div>

@@ -12,10 +12,14 @@ class Company extends Model
         'business_type_id',
         'trade_license_no',
         'tax_id_bin',
+        'bin_vat_registration_no',
+        'tin',
         'currency_id',
+        'accounting_method',
         'time_zone_id',
         'financial_year_start',
         'financial_year_end',
+        'default_financial_year_id',
         'default_branch',
         'address',
         'contact_email',
@@ -26,6 +30,7 @@ class Company extends Model
         'payment_voucher_prefix',
         'receipt_voucher_prefix',
         'enable_multi_branch',
+        'status',
         'created_by',
         'updated_by',
     ];
@@ -35,6 +40,16 @@ class Company extends Model
         'financial_year_end' => 'date',
         'enable_multi_branch' => 'boolean',
     ];
+
+    public function defaultFinancialYear()
+    {
+        return $this->belongsTo(FinancialYear::class, 'default_financial_year_id');
+    }
+
+    public function isActiveForPosting(): bool
+    {
+        return ($this->status ?: 'Active') === 'Active';
+    }
 
     public function businessType()
     {

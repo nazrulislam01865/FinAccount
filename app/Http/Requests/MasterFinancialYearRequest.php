@@ -36,6 +36,10 @@ class MasterFinancialYearRequest extends FormRequest
 
         $isCurrent = filter_var($this->input('is_current', $this->input('is_active', false)), FILTER_VALIDATE_BOOLEAN);
 
+        if (in_array($status, [FinancialYear::STATUS_CLOSED, FinancialYear::STATUS_LOCKED], true)) {
+            $isCurrent = false;
+        }
+
         $this->merge([
             'name' => $name,
             'lock_date' => $this->lock_date ?: null,

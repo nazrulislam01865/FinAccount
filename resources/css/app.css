@@ -2954,3 +2954,93 @@ body.sidebar-navigating .sidebar-backdrop {
         grid-template-columns: 1fr;
     }
 }
+
+/* Phase 4 SRS hardening: consistent controls, responsive cards, and print handover support */
+.filter-bar,
+.report-filter-bar,
+.toolbar[data-table-filter] {
+    align-items: end;
+}
+
+.filter-bar select,
+.filter-bar input,
+.filter-bar button,
+.report-filter-bar select,
+.report-filter-bar input,
+.report-filter-bar button,
+.toolbar[data-table-filter] select,
+.toolbar[data-table-filter] input,
+.toolbar[data-table-filter] button {
+    min-height: 44px;
+}
+
+button[disabled],
+.btn-primary[disabled],
+.btn-ghost[disabled],
+.icon-btn[disabled] {
+    cursor: not-allowed;
+    opacity: .62;
+}
+
+.audit-readonly-banner,
+.srs-phase-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border: 1px solid #dbeafe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+@media print {
+    .sidebar,
+    .topbar,
+    .toolbar,
+    .actions,
+    .form-actions,
+    .pagination,
+    .icon-btn,
+    .btn-primary,
+    .btn-ghost,
+    .no-print {
+        display: none !important;
+    }
+
+    .app,
+    .layout,
+    .layout.wide-form,
+    .content,
+    .left-stack,
+    .right-stack {
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+
+    .card,
+    .table-card {
+        box-shadow: none !important;
+        border: 1px solid #d0d5dd !important;
+        break-inside: avoid;
+    }
+
+    .table-card {
+        overflow: visible !important;
+    }
+
+    .table-card table,
+    table {
+        min-width: 0 !important;
+        width: 100% !important;
+        font-size: 11px;
+    }
+
+    body {
+        background: #fff !important;
+    }
+}

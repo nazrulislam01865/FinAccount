@@ -9,8 +9,10 @@ use App\Models\VoucherDetail;
 use App\Models\VoucherHeader;
 use App\Services\Accounting\FinancialYearService;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -83,31 +85,24 @@ class LedgerReportController extends Controller
         $to = Carbon::parse($filters['to_date'])->toDateString();
 
         $openingDebit = $this->baseLineQuery($account->id, $filters)
-            ->whereDate('voucher_headers.voucher_date', '<', $from)
-            ->sum('voucher_details.debit');
+            ->whereDate('transaction_date', '<', $from)
+            ->sum('debit');
 
         $openingCredit = $this->baseLineQuery($account->id, $filters)
-            ->whereDate('voucher_headers.voucher_date', '<', $from)
-            ->sum('voucher_details.credit');
+            ->whereDate('transaction_date', '<', $from)
+            ->sum('credit');
 
         $periodLines = $this->baseLineQuery($account->id, $filters)
-            ->whereBetween('voucher_headers.voucher_date', [$from, $to])
-            ->with([
-                'voucherHeader.transactionHead',
-                'voucherHeader.settlementType',
-                'voucherHeader.party.partyType',
-                'party.partyType',
-                'account.accountType',
-            ])
-            ->orderBy('voucher_headers.voucher_date')
-            ->orderBy('voucher_details.id')
+            ->whereBetween('transaction_date', [$from, $to])
+            ->orderBy('transaction_date')
+            ->orderBy('line_id')
             ->get();
 
         $runningBalance = $this->signedBalance($account, (float) $openingDebit, (float) $openingCredit);
         $totalDebit = 0.0;
         $totalCredit = 0.0;
 
-        $rows = $periodLines->map(function (VoucherDetail $line) use ($account, &$runningBalance, &$totalDebit, &$totalCredit) {
+        $rows = $periodLines->map(function (object $line) use ($account, &$runningBalance, &$totalDebit, &$totalCredit) {
             $debit = (float) $line->debit;
             $credit = (float) $line->credit;
             $totalDebit += $debit;
@@ -116,15 +111,15 @@ class LedgerReportController extends Controller
             $runningBalance += $this->lineSignedMovement($account, $debit, $credit);
 
             return [
-                'date' => $line->voucherHeader?->voucher_date?->toDateString(),
-                'voucher_number' => $line->voucherHeader?->voucher_number,
-                'voucher_type' => $line->voucherHeader?->voucher_type,
-                'transaction_head' => $line->voucherHeader?->transactionHead?->name,
-                'settlement_type' => $line->voucherHeader?->settlementType?->name,
-                'party_name' => $line->party?->party_name ?: $line->voucherHeader?->party?->party_name,
-                'reference' => $line->voucherHeader?->reference,
-                'status' => $line->voucherHeader?->status,
-                'narration' => $line->narration ?: $line->voucherHeader?->notes,
+                'date' => $line->transaction_date,
+                'voucher_number' => $line->voucher_number,
+                'voucher_type' => $line->voucher_type,
+                'transaction_head' => $line->transaction_head,
+                'settlement_type' => $line->settlement_type,
+                'party_name' => $line->party_name,
+                'reference' => $line->reference,
+                'status' => $line->status,
+                'narration' => $line->narration,
                 'debit' => $debit,
                 'credit' => $credit,
                 'running_balance' => $runningBalance,
@@ -151,14 +146,60 @@ class LedgerReportController extends Controller
         ];
     }
 
-    private function baseLineQuery(int $accountId, array $filters = [])
+    private function baseLineQuery(int $accountId, array $filters = []): Builder
     {
-        $query = VoucherDetail::query()
-            ->select('voucher_details.*')
-            ->join('voucher_headers', 'voucher_headers.id', '=', 'voucher_details.voucher_header_id')
-            ->where('voucher_details.account_id', $accountId)
-            ->whereNull('voucher_headers.deleted_at');
+        $source = $this->usesJournalLines()
+            ? DB::table('journal_lines as jl')
+                ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+                ->leftJoin('voucher_headers as vh', 'vh.id', '=', 'jh.voucher_header_id')
+                ->leftJoin('transaction_heads as th', 'th.id', '=', 'jh.transaction_head_id')
+                ->leftJoin('settlement_types as st', 'st.id', '=', 'vh.settlement_type_id')
+                ->leftJoin('parties as line_party', 'line_party.id', '=', 'jl.party_id')
+                ->leftJoin('parties as header_party', 'header_party.id', '=', 'jh.party_id')
+                ->where('jl.ledger_id', $accountId)
+                ->where(function (Builder $query) {
+                    $query->whereNull('vh.id')->orWhereNull('vh.deleted_at');
+                })
+                ->selectRaw('jl.id AS line_id')
+                ->selectRaw('jh.voucher_header_id AS voucher_id')
+                ->selectRaw('jh.journal_date AS transaction_date')
+                ->selectRaw('jh.voucher_number AS voucher_number')
+                ->selectRaw('jh.voucher_type AS voucher_type')
+                ->selectRaw('th.name AS transaction_head')
+                ->selectRaw('st.name AS settlement_type')
+                ->selectRaw('COALESCE(line_party.party_name, header_party.party_name) AS party_name')
+                ->selectRaw('COALESCE(jl.party_id, jh.party_id) AS party_id')
+                ->selectRaw('vh.reference AS reference')
+                ->selectRaw('jh.status AS status')
+                ->selectRaw('COALESCE(jl.line_narration, jh.narration) AS narration')
+                ->selectRaw('jl.debit_amount AS debit')
+                ->selectRaw('jl.credit_amount AS credit')
+                ->selectRaw('jh.transaction_head_id AS transaction_head_id')
+            : DB::table('voucher_details as vd')
+                ->join('voucher_headers as vh', 'vh.id', '=', 'vd.voucher_header_id')
+                ->leftJoin('transaction_heads as th', 'th.id', '=', 'vh.transaction_head_id')
+                ->leftJoin('settlement_types as st', 'st.id', '=', 'vh.settlement_type_id')
+                ->leftJoin('parties as line_party', 'line_party.id', '=', 'vd.party_id')
+                ->leftJoin('parties as header_party', 'header_party.id', '=', 'vh.party_id')
+                ->where('vd.account_id', $accountId)
+                ->whereNull('vh.deleted_at')
+                ->selectRaw('vd.id AS line_id')
+                ->selectRaw('vh.id AS voucher_id')
+                ->selectRaw('vh.voucher_date AS transaction_date')
+                ->selectRaw('vh.voucher_number AS voucher_number')
+                ->selectRaw('vh.voucher_type AS voucher_type')
+                ->selectRaw('th.name AS transaction_head')
+                ->selectRaw('st.name AS settlement_type')
+                ->selectRaw('COALESCE(line_party.party_name, header_party.party_name) AS party_name')
+                ->selectRaw('COALESCE(vd.party_id, vh.party_id) AS party_id')
+                ->selectRaw('vh.reference AS reference')
+                ->selectRaw('vh.status AS status')
+                ->selectRaw('COALESCE(vd.narration, vh.notes) AS narration')
+                ->selectRaw('vd.debit AS debit')
+                ->selectRaw('vd.credit AS credit')
+                ->selectRaw('vh.transaction_head_id AS transaction_head_id');
 
+        $query = DB::query()->fromSub($source, 'lines');
         $this->applyVoucherFilters($query, $filters);
 
         return $query;
@@ -167,23 +208,28 @@ class LedgerReportController extends Controller
     private function applyVoucherFilters(Builder $query, array $filters): void
     {
         if (! empty($filters['party_id'])) {
-            $partyId = (int) $filters['party_id'];
-            $query->where(function (Builder $where) use ($partyId) {
-                $where->where('voucher_headers.party_id', $partyId)
-                    ->orWhere('voucher_details.party_id', $partyId);
-            });
+            $query->where('party_id', (int) $filters['party_id']);
         }
 
         if (! empty($filters['voucher_type']) && $filters['voucher_type'] !== 'All') {
-            $query->where('voucher_headers.voucher_type', $filters['voucher_type']);
+            $query->where('voucher_type', $filters['voucher_type']);
         }
 
         if (! empty($filters['transaction_head_id'])) {
-            $query->where('voucher_headers.transaction_head_id', (int) $filters['transaction_head_id']);
+            $query->where('transaction_head_id', (int) $filters['transaction_head_id']);
         }
 
         if (! empty($filters['status']) && $filters['status'] !== 'All') {
-            $query->where('voucher_headers.status', $filters['status']);
+            $query->where('status', $filters['status']);
+        }
+    }
+
+    private function usesJournalLines(): bool
+    {
+        try {
+            return Schema::hasTable('journal_headers') && Schema::hasTable('journal_lines');
+        } catch (\Throwable) {
+            return false;
         }
     }
 

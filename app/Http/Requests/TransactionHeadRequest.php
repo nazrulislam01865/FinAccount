@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\ChartOfAccount;
 use App\Models\SettlementType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -113,6 +114,34 @@ class TransactionHeadRequest extends FormRequest
             'developer_note' => ['nullable', 'string', 'max:1000'],
             'status' => ['required', Rule::in(['Active', 'Inactive'])],
         ];
+    }
+
+
+    public function after(): array
+    {
+        return [function ($validator): void {
+            $ledgerId = $this->integer('default_primary_ledger_id');
+
+            if ($ledgerId <= 0) {
+                return;
+            }
+
+            $ledger = ChartOfAccount::query()->find($ledgerId);
+
+            if (! $ledger) {
+                return;
+            }
+
+            $isLevelFour = (int) ($ledger->coa_level ?: ($ledger->account_level === 'Ledger' ? 4 : 0)) === 4;
+
+            if (! $isLevelFour || $ledger->account_level !== 'Ledger' || ! $ledger->posting_allowed) {
+                $validator->errors()->add('default_primary_ledger_id', 'Default Primary Ledger must be an active Level 4 posting ledger.');
+            }
+
+            if ($ledger->status !== 'Active') {
+                $validator->errors()->add('default_primary_ledger_id', 'Default Primary Ledger must be active.');
+            }
+        }];
     }
 
     public function messages(): array

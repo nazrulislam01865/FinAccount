@@ -5,6 +5,7 @@ namespace App\Services\Setup;
 use App\AccountingEngine\Services\AuditTrailService;
 use App\AccountingEngine\Services\FinancialPeriodGuard;
 use App\AccountingEngine\Services\JournalValidator;
+use App\AccountingEngine\Services\JournalPostingService;
 use App\AccountingEngine\Services\PartyRegisterService;
 use App\AccountingEngine\Services\VoucherNumberService;
 use App\Models\ChartOfAccount;
@@ -25,7 +26,8 @@ class OpeningBalanceService
         private readonly VoucherNumberService $voucherNumberService,
         private readonly PartyRegisterService $partyRegisterService,
         private readonly AuditTrailService $auditTrailService,
-        private readonly FinancialPeriodGuard $financialPeriodGuard
+        private readonly FinancialPeriodGuard $financialPeriodGuard,
+        private readonly JournalPostingService $journalPostingService
     ) {
     }
 
@@ -195,6 +197,7 @@ class OpeningBalanceService
         }
 
         $voucher = $voucher->fresh(['details.account.accountType', 'details.party']);
+        $this->journalPostingService->createOrSyncFromVoucher($voucher, 'Opening Balance');
         $this->partyRegisterService->recordOpeningBalance($voucher);
         $this->auditTrailService->recordPostedVoucher($voucher, $userId);
 

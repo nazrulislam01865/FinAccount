@@ -2,11 +2,19 @@
 
 namespace App\AccountingReports\Services;
 
+use App\AccountingEngine\Services\JournalPostingService;
+use App\Models\JournalHeader;
+use App\Models\VoucherHeader;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AccountingReversalService
 {
+    public function __construct(
+        private readonly JournalPostingService $journalPostingService
+    ) {
+    }
+
     private array $postedStatuses = ['Posted', 'POSTED', 'posted'];
     private array $reversedStatuses = ['Reversed', 'REVERSED', 'reversed'];
     private array $cancelledStatuses = ['Cancelled', 'CANCELLED', 'cancelled'];
@@ -118,6 +126,12 @@ class AccountingReversalService
                 throw ValidationException::withMessages(['voucher' => 'Generated reversal voucher is not balanced.']);
             }
 
+            $reversalVoucher = VoucherHeader::query()
+                ->with('details')
+                ->findOrFail($newVoucherId);
+
+            $reversalJournal = $this->journalPostingService->createOrSyncFromVoucher($reversalVoucher, 'Reversal');
+
             DB::table('voucher_headers')
                 ->where('id', $source->id)
                 ->update([
@@ -126,11 +140,16 @@ class AccountingReversalService
                     'updated_at' => $now,
                 ]);
 
+            $sourceVoucher = VoucherHeader::query()->find($source->id);
+            if ($sourceVoucher) {
+                $this->journalPostingService->markVoucherJournalStatus($sourceVoucher, JournalHeader::STATUS_REVERSED);
+            }
+
             return (object) [
                 'voucher_id' => $newVoucherId,
                 'voucher_no' => $reversalVoucherNo,
-                'journal_id' => $newVoucherId,
-                'journal_no' => $reversalVoucherNo,
+                'journal_id' => $reversalJournal?->id ?? $newVoucherId,
+                'journal_no' => $reversalJournal?->journal_no ?? $reversalVoucherNo,
                 'debit_total' => $debitTotal,
                 'credit_total' => $creditTotal,
             ];

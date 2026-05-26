@@ -5,8 +5,9 @@ namespace App\Http\Controllers\AccountingReports;
 use App\AccountingReports\Services\AccountingReportService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccountingReports\AccountMovementReportRequest;
+use App\Services\Reports\NativeReportExportService;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class SalesReportController extends Controller
 {
@@ -27,22 +28,19 @@ class SalesReportController extends Controller
         ]);
     }
 
-    public function export(AccountMovementReportRequest $request): StreamedResponse
+    public function export(AccountMovementReportRequest $request, NativeReportExportService $exporter): SymfonyResponse
     {
         $report = $this->reports->salesReport($request->filters());
-        return $this->download($report, 'sales-report');
+        return $exporter->download($report['title'] ?? 'Sales Report', $this->headers(), $this->rows($report), ['Period' => ($report['from_date'] ?? '') . ' to ' . ($report['to_date'] ?? '')], $request->input('format', 'xlsx'), 'sales-report-' . now()->format('Ymd-His'));
     }
 
-    private function download(array $report, string $prefix): StreamedResponse
+    private function headers(): array
     {
-        return response()->streamDownload(function () use ($report) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, [$report['title'], $report['from_date'] . ' to ' . $report['to_date']]);
-            fputcsv($out, ['Date', 'Voucher', 'Head', 'Party', 'Ledger', 'Reference', 'Debit', 'Credit', 'Amount']);
-            foreach ($report['rows'] as $row) {
-                fputcsv($out, [$row->voucher_date, $row->voucher_number, $row->transaction_head, $row->party_name, trim($row->account_code . ' - ' . $row->account_name), $row->reference, number_format((float) $row->debit, 2, '.', ''), number_format((float) $row->credit, 2, '.', ''), number_format((float) $row->amount, 2, '.', '')]);
-            }
-            fclose($out);
-        }, $prefix . '-' . now()->format('Ymd-His') . '.csv', ['Content-Type' => 'text/csv']);
+        return ['Date', 'Voucher', 'Head', 'Party', 'Ledger', 'Reference', 'Debit', 'Credit', 'Amount'];
+    }
+
+    private function rows(array $report): array
+    {
+        return collect($report['rows'])->map(fn ($row) => [$row->voucher_date, $row->voucher_number, $row->transaction_head, $row->party_name, trim($row->account_code . ' - ' . $row->account_name), $row->reference, round((float) $row->debit, 2), round((float) $row->credit, 2), round((float) $row->amount, 2)])->all();
     }
 }

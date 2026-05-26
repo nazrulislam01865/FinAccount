@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\AccountingEngine\Services\AuditTrailService;
 use App\Http\Controllers\Concerns\RespondsToDelete;
 use App\Http\Controllers\Controller;
 use App\Models\Permission;
@@ -98,6 +99,18 @@ class UserRoleController extends Controller
             return $user;
         });
 
+        $this->auditSecurityChange(
+            'USER_CREATED',
+            null,
+            [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'status' => $user->status,
+                'role_ids' => $roleIds,
+            ],
+            $actor
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'User created successfully.',
@@ -123,6 +136,13 @@ class UserRoleController extends Controller
         $roleIds = $this->authorizedRoleIds($actor, $data['role_ids']);
         $this->guardLastSuperAdmin($user, $roleIds, $data['status']);
 
+        $oldUserAudit = [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'status' => $user->status,
+            'role_ids' => $user->roles()->pluck('roles.id')->map(fn ($id) => (int) $id)->values()->all(),
+        ];
+
         DB::transaction(function () use ($user, $data, $roleIds) {
             $payload = [
                 'name' => $data['name'],
@@ -138,10 +158,24 @@ class UserRoleController extends Controller
             $user->roles()->sync($roleIds);
         });
 
+        $freshUser = $user->fresh('roles');
+
+        $this->auditSecurityChange(
+            'USER_UPDATED',
+            $oldUserAudit,
+            [
+                'user_id' => $freshUser->id,
+                'email' => $freshUser->email,
+                'status' => $freshUser->status,
+                'role_ids' => $freshUser->roles->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+            ],
+            $actor
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'User updated successfully.',
-            'data' => $user->fresh('roles'),
+            'data' => $freshUser,
             'redirect' => route('settings.users-roles'),
         ]);
     }
@@ -155,6 +189,13 @@ class UserRoleController extends Controller
         abort_unless($actor?->canManageUser($user), 403, 'You cannot delete this user because of role hierarchy rules.');
         $this->guardLastSuperAdmin($user, [], 'Inactive', deleting: true);
 
+        $oldUserAudit = [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'status' => $user->status,
+            'role_ids' => $user->roles()->pluck('roles.id')->map(fn ($id) => (int) $id)->values()->all(),
+        ];
+
         try {
             $deleteService->deleteUser($user->id);
         } catch (Throwable $exception) {
@@ -165,6 +206,8 @@ class UserRoleController extends Controller
                 $exception
             );
         }
+
+        $this->auditSecurityChange('USER_DELETED', $oldUserAudit, null, $actor);
 
         return $this->deleteSuccess(
             $request,
@@ -192,6 +235,11 @@ class UserRoleController extends Controller
         $permissionIdsByName = Permission::query()->pluck('id', 'name');
         $allPermissionIds = $permissionIdsByName->values()->map(fn ($id) => (int) $id)->all();
         $configuredPermissionNames = array_keys(config('access.permissions', []));
+        $oldMatrixAudit = $roles
+            ->mapWithKeys(fn (Role $role) => [
+                $role->name => $role->permissions->pluck('name')->sort()->values()->all(),
+            ])
+            ->all();
 
         DB::transaction(function () use ($data, $roles, $permissionIdsByName, $allPermissionIds, $configuredPermissionNames) {
             foreach ($data['permissions'] as $roleId => $permissionPayload) {
@@ -227,11 +275,43 @@ class UserRoleController extends Controller
             }
         });
 
+        $newMatrixAudit = Role::query()
+            ->whereIn('id', $roles->keys())
+            ->with('permissions')
+            ->get()
+            ->mapWithKeys(fn (Role $role) => [
+                $role->name => $role->permissions->pluck('name')->sort()->values()->all(),
+            ])
+            ->all();
+
+        $this->auditSecurityChange('ROLE_PERMISSION_MATRIX_UPDATED', $oldMatrixAudit, $newMatrixAudit, $actor);
+
         return response()->json([
             'success' => true,
             'message' => 'Role permission matrix updated successfully.',
             'redirect' => route('settings.users-roles'),
         ]);
+    }
+
+    /**
+     * @param array<string, mixed>|null $oldValues
+     * @param array<string, mixed>|null $newValues
+     */
+    private function auditSecurityChange(string $action, ?array $oldValues, ?array $newValues, ?User $actor): void
+    {
+        try {
+            app(AuditTrailService::class)->recordAction(
+                'SecurityAccess',
+                $action,
+                $oldValues,
+                $newValues,
+                $actor?->id,
+                ['source' => 'users_roles_matrix'],
+                (int) ($actor?->company_id ?? 0) ?: null
+            );
+        } catch (Throwable) {
+            // Audit logging must not block security administration.
+        }
     }
 
     private function authorizedRoleIds(User $actor, array $requestedRoleIds): array

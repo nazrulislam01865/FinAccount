@@ -12,6 +12,7 @@ use App\AccountingReports\Services\Reports\TrialBalanceReportService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AccountingReportService
 {
@@ -74,7 +75,7 @@ class AccountingReportService
             return;
         }
 
-        $linesByVoucher = DB::table('voucher_details as d')
+        $linesByVoucher = $this->reportLineQuery()
             ->join('chart_of_accounts as a', 'a.id', '=', 'd.account_id')
             ->whereIn('d.voucher_header_id', $voucherIds)
             ->orderBy('d.line_no')
@@ -99,12 +100,12 @@ class AccountingReportService
 
     public function transactionBaseQuery(array $filters = []): Builder
     {
-        $settlementSub = DB::table('voucher_details as sd')
-            ->join('chart_of_accounts as sa', 'sa.id', '=', 'sd.account_id')
+        $settlementSub = $this->reportLineQuery()
+            ->join('chart_of_accounts as sa', 'sa.id', '=', 'd.account_id')
             ->leftJoin('cash_bank_accounts as scb', 'scb.linked_ledger_account_id', '=', 'sa.id')
             ->where('sa.is_cash_bank', 1)
-            ->groupBy('sd.voucher_header_id')
-            ->selectRaw('sd.voucher_header_id')
+            ->groupBy('d.voucher_header_id')
+            ->selectRaw('d.voucher_header_id')
             ->selectRaw("GROUP_CONCAT(DISTINCT COALESCE(scb.cash_bank_name, sa.account_name) ORDER BY COALESCE(scb.cash_bank_name, sa.account_name) SEPARATOR ', ') AS settlement_accounts");
 
         $query = DB::table('voucher_headers as v')
@@ -174,14 +175,23 @@ class AccountingReportService
                     ->first(['id', 'account_type_id']);
             }
 
-            $query->whereExists(function (Builder $exists) use ($accountId, $group) {
-                $exists->selectRaw('1')
-                    ->from('voucher_details as fd')
-                    ->join('chart_of_accounts as fa', 'fa.id', '=', 'fd.account_id')
-                    ->whereColumn('fd.voucher_header_id', 'v.id');
+            $useJournalLines = $this->usesJournalLines();
+            $query->whereExists(function (Builder $exists) use ($accountId, $group, $useJournalLines) {
+                $exists->selectRaw('1');
+
+                if ($useJournalLines) {
+                    $exists->from('journal_lines as fd')
+                        ->join('journal_headers as fjh', 'fjh.id', '=', 'fd.journal_header_id')
+                        ->join('chart_of_accounts as fa', 'fa.id', '=', 'fd.ledger_id')
+                        ->whereColumn('fjh.voucher_header_id', 'v.id');
+                } else {
+                    $exists->from('voucher_details as fd')
+                        ->join('chart_of_accounts as fa', 'fa.id', '=', 'fd.account_id')
+                        ->whereColumn('fd.voucher_header_id', 'v.id');
+                }
 
                 if (! empty($accountId)) {
-                    $exists->where('fd.account_id', (int) $accountId);
+                    $exists->where($useJournalLines ? 'fd.ledger_id' : 'fd.account_id', (int) $accountId);
                 }
 
                 if ($group) {
@@ -199,13 +209,22 @@ class AccountingReportService
 
         if (! empty($filters['party_id'])) {
             $partyId = (int) $filters['party_id'];
-            $query->where(function (Builder $where) use ($partyId) {
+            $useJournalLines = $this->usesJournalLines();
+            $query->where(function (Builder $where) use ($partyId, $useJournalLines) {
                 $where->where('v.party_id', $partyId)
-                    ->orWhereExists(function (Builder $exists) use ($partyId) {
-                        $exists->selectRaw('1')
-                            ->from('voucher_details as pd')
-                            ->whereColumn('pd.voucher_header_id', 'v.id')
-                            ->where('pd.party_id', $partyId);
+                    ->orWhereExists(function (Builder $exists) use ($partyId, $useJournalLines) {
+                        $exists->selectRaw('1');
+
+                        if ($useJournalLines) {
+                            $exists->from('journal_lines as pd')
+                                ->join('journal_headers as pjh', 'pjh.id', '=', 'pd.journal_header_id')
+                                ->whereColumn('pjh.voucher_header_id', 'v.id');
+                        } else {
+                            $exists->from('voucher_details as pd')
+                                ->whereColumn('pd.voucher_header_id', 'v.id');
+                        }
+
+                        $exists->where('pd.party_id', $partyId);
                     });
             });
         }
@@ -240,7 +259,7 @@ class AccountingReportService
 
     public function journalLinesForVoucher(int|string $voucherId): Collection
     {
-        return DB::table('voucher_details as d')
+        return $this->reportLineQuery()
             ->join('chart_of_accounts as a', 'a.id', '=', 'd.account_id')
             ->where('d.voucher_header_id', $voucherId)
             ->orderBy('d.line_no')
@@ -317,14 +336,10 @@ class AccountingReportService
 
     public function cashBankMovementQuery(string $bookType = 'All', int|string|null $accountId = null, ?int $companyId = null): Builder
     {
-        $query = DB::table('voucher_details as d')
-            ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
+        $query = $this->reportLineQuery($companyId)
             ->join('chart_of_accounts as a', 'a.id', '=', 'd.account_id')
             ->leftJoin('cash_bank_accounts as cb', 'cb.linked_ledger_account_id', '=', 'a.id')
             ->where('a.is_cash_bank', 1)
-            ->whereIn('v.status', array_merge($this->postedStatuses, $this->reversedStatuses))
-            ->whereNull('v.deleted_at')
-            ->when($companyId, fn (Builder $query) => $query->where('v.company_id', $companyId))
             ->selectRaw('d.id AS journal_line_id')
             ->selectRaw('v.voucher_date AS journal_date')
             ->selectRaw('v.voucher_type AS journal_no')
@@ -473,6 +488,77 @@ class AccountingReportService
                     ->orWhereRaw('LOWER(COALESCE(cb.cash_bank_name, a.account_name)) NOT LIKE ?', ['%cash%']);
             });
         }
+    }
+
+    private function reportLineQuery(?int $companyId = null): Builder
+    {
+        $query = $this->usesJournalLines()
+            ? $this->journalLineCompatibilityQuery()
+            : DB::table('voucher_details as d')
+                ->join('voucher_headers as v', 'v.id', '=', 'd.voucher_header_id')
+                ->whereNull('v.deleted_at');
+
+        $query->whereIn('v.status', array_merge($this->postedStatuses, $this->reversedStatuses));
+
+        if ($companyId) {
+            $query->where('v.company_id', $companyId);
+        }
+
+        return $query;
+    }
+
+    private function usesJournalLines(): bool
+    {
+        try {
+            return Schema::hasTable('journal_headers') && Schema::hasTable('journal_lines');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function journalLineCompatibilityQuery(): Builder
+    {
+        $detailSub = DB::table('journal_lines as jl')
+            ->join('journal_headers as jh', 'jh.id', '=', 'jl.journal_header_id')
+            ->selectRaw('jl.id AS id')
+            ->selectRaw('COALESCE(jh.voucher_header_id, 0) AS voucher_header_id')
+            ->selectRaw('jl.line_no AS line_no')
+            ->selectRaw('jl.ledger_id AS account_id')
+            ->selectRaw('jl.party_id AS party_id')
+            ->selectRaw('jl.branch_id AS branch_id')
+            ->selectRaw('jl.rule_line_id AS rule_line_id')
+            ->selectRaw('jl.amount_source AS amount_source')
+            ->selectRaw('jl.entry_type AS entry_type')
+            ->selectRaw('jl.debit_amount AS debit')
+            ->selectRaw('jl.credit_amount AS credit')
+            ->selectRaw('jl.line_narration AS narration');
+
+        $headerSub = DB::table('journal_headers as jh')
+            ->leftJoin('voucher_headers as vh', 'vh.id', '=', 'jh.voucher_header_id')
+            ->selectRaw('COALESCE(jh.voucher_header_id, 0) AS id')
+            ->selectRaw('jh.id AS journal_header_id')
+            ->selectRaw('jh.company_id AS company_id')
+            ->selectRaw('jh.financial_year_id AS financial_year_id')
+            ->selectRaw('jh.voucher_number AS voucher_number')
+            ->selectRaw('jh.voucher_type AS voucher_type')
+            ->selectRaw('jh.journal_date AS voucher_date')
+            ->selectRaw('jh.transaction_head_id AS transaction_head_id')
+            ->selectRaw('COALESCE(vh.settlement_type_id, NULL) AS settlement_type_id')
+            ->selectRaw('jh.party_id AS party_id')
+            ->selectRaw('jh.amount AS amount')
+            ->selectRaw('jh.total_debit AS total_debit')
+            ->selectRaw('jh.total_credit AS total_credit')
+            ->selectRaw('COALESCE(vh.party_ledger_effect, NULL) AS party_ledger_effect')
+            ->selectRaw('COALESCE(vh.cash_bank_effect, NULL) AS cash_bank_effect')
+            ->selectRaw('COALESCE(vh.reference, NULL) AS reference')
+            ->selectRaw('COALESCE(vh.notes, jh.narration) AS notes')
+            ->selectRaw('jh.status AS status')
+            ->selectRaw('vh.deleted_at AS deleted_at');
+
+        return DB::query()
+            ->fromSub($detailSub, 'd')
+            ->joinSub($headerSub, 'v', 'v.id', '=', 'd.voucher_header_id')
+            ->whereNull('v.deleted_at');
     }
 
     private function natureSql(): string
