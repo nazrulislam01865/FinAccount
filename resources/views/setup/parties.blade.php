@@ -61,7 +61,7 @@
                         <th>Mobile</th>
                         <th>Email</th>
                         <th>Ledger Nature</th>
-                        <th>Linked Ledger / Opening</th>
+                        <th>Linked Ledger</th>
                         <th>Status</th>
                         <th style="text-align:right">Actions</th>
                     </tr>
@@ -86,8 +86,6 @@
                             data-contact-info="{{ e($party->contact_info) }}"
                             data-linked-ledger="{{ $party->linked_ledger_account_id }}"
                             data-default-ledger-nature="{{ $party->default_ledger_nature }}"
-                            data-opening-balance="{{ number_format((float) $party->opening_balance, 2, '.', '') }}"
-                            data-opening-balance-type="{{ $party->opening_balance_type }}"
                             data-notes="{{ e($party->notes) }}"
                             data-status="{{ $party->status }}"
                             data-update-url="{{ url('/api/parties/' . $party->id) }}"
@@ -124,11 +122,6 @@
                                     {{ $party->default_ledger_nature ?: 'No Effect' }}
                                 </span>
 
-                                @if($party->opening_balance_type)
-                                    <div class="hint" style="margin-top:2px">
-                                        Opening side: {{ $party->opening_balance_type }}
-                                    </div>
-                                @endif
                             </td>
 
                             <td>
@@ -139,9 +132,6 @@
                                         · {{ $party->linkedLedger->normal_balance ?: $party->linkedLedger->accountType->normal_balance }}
                                     </div>
                                 @endif
-                                <span class="hint">
-                                    BDT {{ number_format((float) $party->opening_balance, 2) }}
-                                </span>
                             </td>
 
                             <td>
@@ -222,7 +212,6 @@
 
                 <input type="hidden" name="_method" id="partyFormMethod" value="POST">
                 <input type="hidden" name="default_ledger_nature" id="defaultLedgerNature" value="No Effect">
-                <input type="hidden" name="opening_balance_type" id="openingBalanceType" value="">
 
                 <div>
                     <label>Party Name <span class="required">*</span></label>
@@ -352,20 +341,6 @@
                     <div class="hint">Filtered by party type. Customer/Tenant uses Asset receivable. Supplier/Vendor/Employee uses Liability payable.</div>
                 </div>
 
-                <div>
-                    <label>Opening Balance Note</label>
-                    <div class="currency-row">
-                        <div class="prefix-box">BDT</div>
-                        <input
-                            name="opening_balance"
-                            type="number"
-                            value="0.00"
-                            step="0.01"
-                            min="0"
-                        >
-                    </div>
-                    <div class="hint" id="openingBalanceHint">This setup value only prepares Opening Balance rows. It does not affect reports until Opening Balance Setup posts a balanced OP voucher.</div>
-                </div>
 
                 <div>
                     <label>Notes</label>
@@ -385,7 +360,7 @@
 
                 <div class="hint-box">
                     <strong>Accounting safety rules</strong>
-                    Party setup stores who is involved and which control ledger they belong to. It does not post income, expense, payable, or receivable by itself. Posting happens through transaction rules and Opening Balance Setup.
+                    Party setup stores who is involved and which control ledger they belong to. It does not post income, expense, payable, or receivable by itself. Posting happens through transaction rules.
                 </div>
 
                 <div class="form-actions">
@@ -423,8 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const partyType = document.getElementById('partyType');
     const defaultLedgerNature = document.getElementById('defaultLedgerNature');
     const ledgerNaturePreview = document.getElementById('ledgerNaturePreview');
-    const openingBalanceType = document.getElementById('openingBalanceType');
-    const openingBalanceHint = document.getElementById('openingBalanceHint');
     const subType = form.querySelector('[name="sub_type"]');
     const mobile = form.querySelector('[name="mobile"]');
     const email = form.querySelector('[name="email"]');
@@ -436,7 +409,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const salaryAmount = form.querySelector('[name="salary_amount"]');
     const ownershipPercentage = form.querySelector('[name="ownership_percentage"]');
     const contactInfo = form.querySelector('[name="contact_info"]');
-    const openingBalance = form.querySelector('[name="opening_balance"]');
     const linkedLedger = document.getElementById('linkedLedger');
     const notes = form.querySelector('[name="notes"]');
     const status = form.querySelector('[name="status"]');
@@ -473,30 +445,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return Promise.resolve();
     }
 
-    function openingSideFromNature(nature) {
-        if (nature === 'Receivable' || nature === 'Advance Paid') {
-            return 'Debit';
-        }
-
-        if (nature === 'Payable' || nature === 'Advance Received') {
-            return 'Credit';
-        }
-
-        return '';
-    }
 
     function syncNaturePreview() {
         const option = selectedPartyTypeOption();
         const nature = option?.dataset.defaultLedgerNature || defaultLedgerNature.value || 'No Effect';
-        const openingSide = openingSideFromNature(nature);
 
         defaultLedgerNature.value = nature;
         ledgerNaturePreview.value = nature;
-        openingBalanceType.value = openingSide;
-
-        openingBalanceHint.textContent = openingSide
-            ? `Opening Balance will be prepared as ${openingSide}. It affects reports only after Opening Balance Setup posts a balanced OP voucher.`
-            : 'Opening Balance side will follow the selected ledger normal balance. It affects reports only after Opening Balance Setup posts a balanced OP voucher.';
     }
 
     function syncPartyProfileFields() {
@@ -570,8 +525,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         defaultLedgerNature.value = 'No Effect';
         ledgerNaturePreview.value = 'Select Party Type first';
-        openingBalanceType.value = '';
-        openingBalance.value = '0.00';
         [creditLimit, paymentTerms, department, designation, salaryAmount, ownershipPercentage, contactInfo].forEach((input) => {
             if (input) input.value = '';
         });
@@ -600,8 +553,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ownershipPercentage.value = row.dataset.ownershipPercentage || '';
         contactInfo.value = row.dataset.contactInfo || '';
         defaultLedgerNature.value = row.dataset.defaultLedgerNature || 'No Effect';
-        openingBalance.value = row.dataset.openingBalance || '0.00';
-        openingBalanceType.value = row.dataset.openingBalanceType || '';
         notes.value = row.dataset.notes || '';
         status.value = row.dataset.status || 'Active';
 
@@ -625,7 +576,6 @@ document.addEventListener('DOMContentLoaded', () => {
         reloadLedgerOptions().then(maybeUseDefaultLedger);
     });
 
-    openingBalance.addEventListener('input', syncNaturePreview);
 
     document.querySelectorAll('#partyTable .edit-btn').forEach((button) => {
         button.addEventListener('click', () => loadForEdit(button.closest('tr')));

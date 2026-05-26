@@ -63,7 +63,6 @@
                         <th>Bank / Provider</th>
                         <th>Branch</th>
                         <th>Account / Wallet No.</th>
-                        <th>Opening Balance Note</th>
                         <th>Status</th>
                         <th style="text-align:right">Actions</th>
                     </tr>
@@ -80,7 +79,6 @@
                             data-bank-name="{{ e($account->bank_name ?? $account->bank?->bank_name) }}"
                             data-branch="{{ e($account->branch_name) }}"
                             data-account-number="{{ e($account->account_number) }}"
-                            data-opening-balance="{{ number_format((float) $account->opening_balance, 2, '.', '') }}"
                             data-usage-note="{{ e($account->usage_note) }}"
                             data-status="{{ $account->status }}"
                             data-update-url="{{ url('/api/cash-bank-accounts/' . $account->id) }}"
@@ -118,9 +116,6 @@
                                 {{ $account->account_number ?: '—' }}
                             </td>
 
-                            <td>
-                                BDT {{ number_format((float) $account->opening_balance, 2) }}
-                            </td>
 
                             <td>
                                 <span class="badge {{ $account->status === 'Active' ? 'badge-success' : 'badge-neutral' }}">
@@ -156,7 +151,7 @@
                         </tr>
                     @empty
                         <tr data-empty="true">
-                            <td colspan="10" class="muted" style="text-align:center;padding:24px">
+                            <td colspan="9" class="muted" style="text-align:center;padding:24px">
                                 No cash/bank accounts found. Add your first account using the form on the right.
                             </td>
                         </tr>
@@ -272,22 +267,6 @@
                     </div>
                 </div>
 
-                <div>
-                    <label>Opening Balance Note</label>
-                    <div class="currency-row">
-                        <div class="prefix-box">BDT</div>
-                        <input
-                            name="opening_balance"
-                            type="number"
-                            value="0.00"
-                            step="0.01"
-                            min="0"
-                        >
-                    </div>
-                    <div class="hint">
-                        This setup value does not affect ledger reports until Opening Balance Setup posts a balanced OP voucher.
-                    </div>
-                </div>
 
                 <div>
                     <label>Usage Note</label>
@@ -309,7 +288,6 @@
                 <div class="hint-box">
                     <strong>Accounting safety rules</strong>
                     Cash/Bank setup only links valid Asset cash/bank ledgers. It does not create debit or credit entries.
-                    Opening balances must be posted through Opening Balance Setup.
                 </div>
 
                 <div class="form-actions">
@@ -350,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const bank = form.querySelector('[name="bank_name"]');
     const branch = form.querySelector('[name="branch_name"]');
     const accountNumber = form.querySelector('[name="account_number"]');
-    const openingBalance = form.querySelector('[name="opening_balance"]');
     const usageNote = form.querySelector('[name="usage_note"]');
     const status = form.querySelector('[name="status"]');
     const bankFields = document.getElementById('bankFields');
@@ -511,9 +488,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        if (openingBalance) {
-            openingBalance.value = '0.00';
-        }
 
         if (status) {
             status.value = 'Active';
@@ -558,9 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
             accountNumber.value = row.dataset.accountNumber || '';
         }
 
-        if (openingBalance) {
-            openingBalance.value = row.dataset.openingBalance || '0.00';
-        }
 
         if (usageNote) {
             usageNote.value = row.dataset.usageNote || '';

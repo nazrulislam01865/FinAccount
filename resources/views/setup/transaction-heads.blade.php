@@ -13,7 +13,7 @@
     $screenCount = $transactionHeads->pluck('transaction_screen')->filter()->unique()->count();
 @endphp
 
-<div class="prototype-page">
+<div class="prototype-page transaction-head-page">
     <div class="prototype-hero">
         <div>
             <span class="page-label">Transaction Head Setup</span>

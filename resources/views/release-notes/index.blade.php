@@ -361,7 +361,7 @@
 <style>
     html,body{overflow-x:hidden}
     .release-page{max-width:100%;overflow-x:hidden}
-    .release-page .page-title{align-items:center}
+    .release-page .page-title{align-items:flex-start}
     .quick-actions.release-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
     .release-banner{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:18px 20px;margin-bottom:16px;background:linear-gradient(135deg,#fff,#f8fbff)}
     .release-banner h3{margin:0 0 5px;font-size:18px}.release-banner p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}.release-meta{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.pill{display:inline-flex;align-items:center;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:850;white-space:nowrap;background:#f2f4f7;color:#475467}.pill-blue{background:var(--primary-soft);color:var(--primary)}.pill-green{background:var(--success-soft);color:#067647}.pill-purple{background:var(--purple-soft);color:var(--purple)}

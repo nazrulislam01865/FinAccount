@@ -138,6 +138,10 @@
     @media(max-width:560px){
         .coa-stats{grid-template-columns:1fr;}
     }
+
+
+    /* Unified blue hero heading is controlled globally from resources/css/app.css.
+       This page keeps its logic and form/table behavior unchanged. */
 </style>
 @endpush
 
