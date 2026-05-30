@@ -36,6 +36,8 @@ return [
 
     'inactive_timeout' => (int) env('SESSION_INACTIVE_TIMEOUT', 15),
 
+    'landing_admin_inactive_timeout' => (int) env('LANDING_ADMIN_SESSION_INACTIVE_TIMEOUT', 15),
+
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
     /*
@@ -49,7 +51,7 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    'encrypt' => env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------

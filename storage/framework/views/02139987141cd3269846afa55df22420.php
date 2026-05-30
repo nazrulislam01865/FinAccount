@@ -1,8 +1,6 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Chart of Accounts Setup | HisebGhor'); ?>
 
-@section('title', 'Chart of Accounts Setup | HisebGhor')
-
-@push('styles')
+<?php $__env->startPush('styles'); ?>
 <style>
     .coa-template-page{
         --coa-card:#fff;
@@ -143,10 +141,10 @@
     /* Unified blue hero heading is controlled globally from resources/css/app.css.
        This page keeps its logic and form/table behavior unchanged. */
 </style>
-@endpush
+<?php $__env->stopPush(); ?>
 
-@section('content')
-@php
+<?php $__env->startSection('content'); ?>
+<?php
     $accountRows = $accounts->map(function ($account) use ($coaLevels) {
         $effectiveLevel = (int) ($account->coa_level ?: (($account->account_level ?? 'Ledger') === 'Ledger' ? 4 : 1));
         $levelName = $coaLevels[$effectiveLevel] ?? ($account->account_level ?? 'Ledger');
@@ -191,7 +189,7 @@
             'delete_url' => route('setup.chart-of-accounts.destroy', $account),
         ];
     });
-@endphp
+?>
 
 <div class="coa-template-page">
     <header class="coa-hero">
@@ -210,12 +208,12 @@
     </header>
 
     <section class="coa-stats" aria-label="Chart of Accounts statistics">
-        <div class="coa-stat"><span>Total Accounts</span><strong>{{ $stats['total'] ?? $accountRows->count() }}</strong></div>
-        <div class="coa-stat"><span>Posting Ledgers</span><strong>{{ $stats['posting'] ?? 0 }}</strong></div>
-        <div class="coa-stat"><span>Group Accounts</span><strong>{{ $stats['groups'] ?? 0 }}</strong></div>
-        <div class="coa-stat"><span>Cash/Bank Ledgers</span><strong>{{ $stats['cash_bank'] ?? 0 }}</strong></div>
-        <div class="coa-stat"><span>Party Control</span><strong>{{ $stats['party_control'] ?? 0 }}</strong></div>
-        <div class="coa-stat"><span>Active Accounts</span><strong>{{ $stats['active'] ?? 0 }}</strong></div>
+        <div class="coa-stat"><span>Total Accounts</span><strong><?php echo e($stats['total'] ?? $accountRows->count()); ?></strong></div>
+        <div class="coa-stat"><span>Posting Ledgers</span><strong><?php echo e($stats['posting'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Group Accounts</span><strong><?php echo e($stats['groups'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Cash/Bank Ledgers</span><strong><?php echo e($stats['cash_bank'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Party Control</span><strong><?php echo e($stats['party_control'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Active Accounts</span><strong><?php echo e($stats['active'] ?? 0); ?></strong></div>
     </section>
 
     <section class="coa-main-grid">
@@ -231,8 +229,8 @@
                 <form
                     id="accountForm"
                     data-frontend-form
-                    data-action="{{ route('api.chart-of-accounts.store') }}"
-                    data-store-url="{{ route('api.chart-of-accounts.store') }}"
+                    data-action="<?php echo e(route('api.chart-of-accounts.store')); ?>"
+                    data-store-url="<?php echo e(route('api.chart-of-accounts.store')); ?>"
                     data-method="POST"
                     data-success="Account saved successfully."
                 >
@@ -252,9 +250,9 @@
                             <label for="coaLevel">What are you creating? <span class="required">*</span></label>
                             <select id="coaLevel" name="coa_level" required>
                                 <option value="">Select account type</option>
-                                @foreach($coaLevels as $level => $label)
-                                    <option value="{{ $level }}" @selected((int) $level === 4)>{{ $label }}</option>
-                                @endforeach
+                                <?php $__currentLoopData = $coaLevels; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $level => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                    <option value="<?php echo e($level); ?>" <?php if((int) $level === 4): echo 'selected'; endif; ?>><?php echo e($label); ?></option>
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                             </select>
                         </div>
 
@@ -313,9 +311,9 @@
                         <div class="coa-field">
                             <label for="ledgerType">What type of ledger is this? <span class="required">*</span></label>
                             <select id="ledgerType" name="ledger_type" required>
-                                @foreach($ledgerTypes as $type)
-                                    <option value="{{ $type }}" @selected($type === 'Asset')>{{ $type }}</option>
-                                @endforeach
+                                <?php $__currentLoopData = $ledgerTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $type): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                    <option value="<?php echo e($type); ?>" <?php if($type === 'Asset'): echo 'selected'; endif; ?>><?php echo e($type); ?></option>
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                             </select>
                         </div>
 
@@ -420,28 +418,28 @@
 
             <div id="treeView" data-coa-tab-panel="tree">
                 <div class="coa-tree" id="tree">
-                    @forelse($accountRows as $row)
+                    <?php $__empty_1 = true; $__currentLoopData = $accountRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <div
-                            class="coa-tree-node coa-lvl{{ $row['coa_level'] }}"
-                            data-edit-row-id="{{ $row['id'] }}"
+                            class="coa-tree-node coa-lvl<?php echo e($row['coa_level']); ?>"
+                            data-edit-row-id="<?php echo e($row['id']); ?>"
                             role="button"
                             tabindex="0"
                         >
-                            <div class="coa-tree-name">{{ $row['account_code'] }} · {{ $row['account_name'] }}</div>
-                            <div class="coa-tree-meta">Level {{ $row['coa_level'] }} · {{ $row['level_name'] }}{{ $row['parent_name'] ? ' · Under ' . $row['parent_name'] : '' }}</div>
+                            <div class="coa-tree-name"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
+                            <div class="coa-tree-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?><?php echo e($row['parent_name'] ? ' · Under ' . $row['parent_name'] : ''); ?></div>
                             <div>
-                                <span class="coa-badge {{ $row['posting_allowed'] ? 'posting' : 'group' }}">{{ $row['ledger_type'] ?: 'Group' }}</span>
-                                @if($row['posting_allowed'])<span class="coa-badge posting">Posting</span>@endif
-                                @if($row['ledger_type'] === 'Cash')<span class="coa-badge cash">Cash</span>@endif
-                                @if($row['ledger_type'] === 'Bank')<span class="coa-badge bank">Bank</span>@endif
-                                @if($row['is_party_control'])<span class="coa-badge party">Party Control</span>@endif
-                                @if($row['is_system_ledger'])<span class="coa-badge system">System</span>@endif
-                                <span class="coa-badge {{ $row['status'] === 'Active' ? '' : 'inactive' }}">{{ $row['status'] }}</span>
+                                <span class="coa-badge <?php echo e($row['posting_allowed'] ? 'posting' : 'group'); ?>"><?php echo e($row['ledger_type'] ?: 'Group'); ?></span>
+                                <?php if($row['posting_allowed']): ?><span class="coa-badge posting">Posting</span><?php endif; ?>
+                                <?php if($row['ledger_type'] === 'Cash'): ?><span class="coa-badge cash">Cash</span><?php endif; ?>
+                                <?php if($row['ledger_type'] === 'Bank'): ?><span class="coa-badge bank">Bank</span><?php endif; ?>
+                                <?php if($row['is_party_control']): ?><span class="coa-badge party">Party Control</span><?php endif; ?>
+                                <?php if($row['is_system_ledger']): ?><span class="coa-badge system">System</span><?php endif; ?>
+                                <span class="coa-badge <?php echo e($row['status'] === 'Active' ? '' : 'inactive'); ?>"><?php echo e($row['status']); ?></span>
                             </div>
                         </div>
-                    @empty
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                         <div class="coa-table-empty">No accounts found. Use the guided form to create the first CoA account.</div>
-                    @endforelse
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -466,53 +464,53 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($accountRows->where('posting_allowed', true) as $row)
-                                <tr data-edit-row-id="{{ $row['id'] }}">
-                                    <td class="code">{{ $row['account_code'] }}</td>
-                                    <td><strong>{{ $row['account_name'] }}</strong></td>
-                                    <td>{{ $row['account_class'] ?: '—' }}</td>
-                                    <td>{{ $row['account_group'] ?: '—' }}</td>
-                                    <td>{{ $row['account_sub_group'] ?: '—' }}</td>
-                                    <td><span class="coa-badge posting">{{ $row['ledger_type'] ?: '—' }}</span></td>
-                                    <td>{{ $row['normal_balance'] ?: '—' }}</td>
-                                    <td>{{ $row['is_cash_bank'] ? 'Yes' : 'No' }}</td>
-                                    <td>{{ $row['is_party_control'] ? 'Yes' : 'No' }}</td>
-                                    <td>{{ $row['party_type_name'] ?: '—' }}</td>
-                                    <td>{{ $row['is_user_selectable'] ? 'Yes' : 'No' }}</td>
-                                    <td>{{ $row['status'] }}</td>
-                                    <td><button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="{{ $row['id'] }}">Edit</button></td>
+                            <?php $__empty_1 = true; $__currentLoopData = $accountRows->where('posting_allowed', true); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                <tr data-edit-row-id="<?php echo e($row['id']); ?>">
+                                    <td class="code"><?php echo e($row['account_code']); ?></td>
+                                    <td><strong><?php echo e($row['account_name']); ?></strong></td>
+                                    <td><?php echo e($row['account_class'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['account_group'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['account_sub_group'] ?: '—'); ?></td>
+                                    <td><span class="coa-badge posting"><?php echo e($row['ledger_type'] ?: '—'); ?></span></td>
+                                    <td><?php echo e($row['normal_balance'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['is_cash_bank'] ? 'Yes' : 'No'); ?></td>
+                                    <td><?php echo e($row['is_party_control'] ? 'Yes' : 'No'); ?></td>
+                                    <td><?php echo e($row['party_type_name'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['is_user_selectable'] ? 'Yes' : 'No'); ?></td>
+                                    <td><?php echo e($row['status']); ?></td>
+                                    <td><button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button></td>
                                 </tr>
-                            @empty
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                                 <tr><td colspan="13" class="coa-table-empty">No posting ledgers found.</td></tr>
-                            @endforelse
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
                 <div class="coa-mobile-list">
-                    @foreach($accountRows->where('posting_allowed', true) as $row)
+                    <?php $__currentLoopData = $accountRows->where('posting_allowed', true); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                         <div class="coa-mobile-item">
                             <div class="coa-mobile-top">
                                 <div>
-                                    <div class="coa-mobile-title">{{ $row['account_code'] }} · {{ $row['account_name'] }}</div>
-                                    <div class="coa-mobile-meta">Level {{ $row['coa_level'] }} · {{ $row['level_name'] }}</div>
+                                    <div class="coa-mobile-title"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
+                                    <div class="coa-mobile-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?></div>
                                 </div>
-                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="{{ $row['id'] }}">Edit</button>
+                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
                             </div>
                             <div>
-                                <span class="coa-badge posting">{{ $row['ledger_type'] ?: 'Posting' }}</span>
-                                @if($row['is_cash_bank'])<span class="coa-badge bank">Cash/Bank</span>@endif
-                                @if($row['is_party_control'])<span class="coa-badge party">Party Control</span>@endif
-                                @if($row['is_system_ledger'])<span class="coa-badge system">System</span>@endif
+                                <span class="coa-badge posting"><?php echo e($row['ledger_type'] ?: 'Posting'); ?></span>
+                                <?php if($row['is_cash_bank']): ?><span class="coa-badge bank">Cash/Bank</span><?php endif; ?>
+                                <?php if($row['is_party_control']): ?><span class="coa-badge party">Party Control</span><?php endif; ?>
+                                <?php if($row['is_system_ledger']): ?><span class="coa-badge system">System</span><?php endif; ?>
                             </div>
                             <div class="coa-mobile-lines">
-                                <div><strong>Class:</strong> {{ $row['account_class'] ?: '—' }}</div>
-                                <div><strong>Group:</strong> {{ $row['account_group'] ?: '—' }}</div>
-                                <div><strong>Sub-Group:</strong> {{ $row['account_sub_group'] ?: '—' }}</div>
-                                <div><strong>Party:</strong> {{ $row['party_type_name'] ?: '—' }}</div>
-                                <div><strong>Status:</strong> {{ $row['status'] }}</div>
+                                <div><strong>Class:</strong> <?php echo e($row['account_class'] ?: '—'); ?></div>
+                                <div><strong>Group:</strong> <?php echo e($row['account_group'] ?: '—'); ?></div>
+                                <div><strong>Sub-Group:</strong> <?php echo e($row['account_sub_group'] ?: '—'); ?></div>
+                                <div><strong>Party:</strong> <?php echo e($row['party_type_name'] ?: '—'); ?></div>
+                                <div><strong>Status:</strong> <?php echo e($row['status']); ?></div>
                             </div>
                         </div>
-                    @endforeach
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                 </div>
             </div>
 
@@ -521,21 +519,21 @@
                     <input id="search" type="search" placeholder="Search by code or account name">
                     <select id="fClass">
                         <option value="">All Classes</option>
-                        @foreach($accountRows->pluck('account_class')->filter()->unique()->sort()->values() as $class)
-                            <option value="{{ $class }}">{{ $class }}</option>
-                        @endforeach
+                        <?php $__currentLoopData = $accountRows->pluck('account_class')->filter()->unique()->sort()->values(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $class): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                            <option value="<?php echo e($class); ?>"><?php echo e($class); ?></option>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </select>
                     <select id="fLevel">
                         <option value="">All Levels</option>
-                        @foreach($coaLevels as $level => $label)
-                            <option value="{{ $level }}">Level {{ $level }}</option>
-                        @endforeach
+                        <?php $__currentLoopData = $coaLevels; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $level => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                            <option value="<?php echo e($level); ?>">Level <?php echo e($level); ?></option>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </select>
                     <select id="fLedger">
                         <option value="">All Types</option>
-                        @foreach($ledgerTypes as $type)
-                            <option value="{{ $type }}">{{ $type }}</option>
-                        @endforeach
+                        <?php $__currentLoopData = $ledgerTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $type): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                            <option value="<?php echo e($type); ?>"><?php echo e($type); ?></option>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </select>
                     <select id="fPosting">
                         <option value="">Posting?</option>
@@ -564,83 +562,83 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($accountRows as $row)
+                            <?php $__empty_1 = true; $__currentLoopData = $accountRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                                 <tr
                                     data-full-row
-                                    data-search="{{ strtolower($row['account_code'] . ' ' . $row['account_name'] . ' ' . ($row['parent_name'] ?? '') . ' ' . ($row['account_group'] ?? '') . ' ' . ($row['account_sub_group'] ?? '')) }}"
-                                    data-class="{{ $row['account_class'] }}"
-                                    data-level="{{ $row['coa_level'] }}"
-                                    data-ledger="{{ $row['ledger_type'] }}"
-                                    data-posting="{{ $row['posting_allowed'] ? 'Yes' : 'No' }}"
-                                    data-edit-row-id="{{ $row['id'] }}"
+                                    data-search="<?php echo e(strtolower($row['account_code'] . ' ' . $row['account_name'] . ' ' . ($row['parent_name'] ?? '') . ' ' . ($row['account_group'] ?? '') . ' ' . ($row['account_sub_group'] ?? ''))); ?>"
+                                    data-class="<?php echo e($row['account_class']); ?>"
+                                    data-level="<?php echo e($row['coa_level']); ?>"
+                                    data-ledger="<?php echo e($row['ledger_type']); ?>"
+                                    data-posting="<?php echo e($row['posting_allowed'] ? 'Yes' : 'No'); ?>"
+                                    data-edit-row-id="<?php echo e($row['id']); ?>"
                                 >
-                                    <td class="code">{{ $row['account_code'] }}</td>
+                                    <td class="code"><?php echo e($row['account_code']); ?></td>
                                     <td>
-                                        <strong>{{ $row['account_name'] }}</strong>
-                                        @if($row['description'])<br><span class="coa-hint">{{ $row['description'] }}</span>@endif
+                                        <strong><?php echo e($row['account_name']); ?></strong>
+                                        <?php if($row['description']): ?><br><span class="coa-hint"><?php echo e($row['description']); ?></span><?php endif; ?>
                                     </td>
-                                    <td>{{ $row['coa_level'] }}</td>
-                                    <td>{{ $row['parent_display_name'] ?: '—' }}</td>
-                                    <td>{{ $row['account_class'] ?: '—' }}</td>
-                                    <td>{{ $row['account_group'] ?: '—' }}</td>
-                                    <td>{{ $row['account_sub_group'] ?: '—' }}</td>
-                                    <td>{{ $row['normal_balance'] ?: '—' }}</td>
-                                    <td>{{ $row['posting_allowed'] ? 'Yes' : 'No' }}</td>
-                                    <td><span class="coa-badge {{ $row['posting_allowed'] ? 'posting' : 'group' }}">{{ $row['ledger_type'] ?: '—' }}</span></td>
-                                    <td>{{ $row['party_type_name'] ?: '—' }}</td>
-                                    <td>{{ $row['status'] === 'Active' ? 'Yes' : 'No' }}</td>
+                                    <td><?php echo e($row['coa_level']); ?></td>
+                                    <td><?php echo e($row['parent_display_name'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['account_class'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['account_group'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['account_sub_group'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['normal_balance'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['posting_allowed'] ? 'Yes' : 'No'); ?></td>
+                                    <td><span class="coa-badge <?php echo e($row['posting_allowed'] ? 'posting' : 'group'); ?>"><?php echo e($row['ledger_type'] ?: '—'); ?></span></td>
+                                    <td><?php echo e($row['party_type_name'] ?: '—'); ?></td>
+                                    <td><?php echo e($row['status'] === 'Active' ? 'Yes' : 'No'); ?></td>
                                     <td>
                                         <div class="coa-action-stack">
-                                            <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="{{ $row['id'] }}">Edit</button>
-                                            @if(! $row['is_system_ledger'])
-                                                <form method="POST" action="{{ $row['delete_url'] }}" data-delete-form>
-                                                    @csrf
-                                                    @method('DELETE')
+                                            <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                            <?php if(! $row['is_system_ledger']): ?>
+                                                <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form>
+                                                    <?php echo csrf_field(); ?>
+                                                    <?php echo method_field('DELETE'); ?>
                                                     <button type="submit" class="btn-ghost coa-small-btn delete-btn">Delete</button>
                                                 </form>
-                                            @endif
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>
-                            @empty
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                                 <tr><td colspan="13" class="coa-table-empty">No accounts found.</td></tr>
-                            @endforelse
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
                 <div class="coa-mobile-list" id="fullMobileList">
-                    @foreach($accountRows as $row)
+                    <?php $__currentLoopData = $accountRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                         <div
                             class="coa-mobile-item"
                             data-full-mobile-row
-                            data-search="{{ strtolower($row['account_code'] . ' ' . $row['account_name'] . ' ' . ($row['parent_name'] ?? '') . ' ' . ($row['account_group'] ?? '') . ' ' . ($row['account_sub_group'] ?? '')) }}"
-                            data-class="{{ $row['account_class'] }}"
-                            data-level="{{ $row['coa_level'] }}"
-                            data-ledger="{{ $row['ledger_type'] }}"
-                            data-posting="{{ $row['posting_allowed'] ? 'Yes' : 'No' }}"
+                            data-search="<?php echo e(strtolower($row['account_code'] . ' ' . $row['account_name'] . ' ' . ($row['parent_name'] ?? '') . ' ' . ($row['account_group'] ?? '') . ' ' . ($row['account_sub_group'] ?? ''))); ?>"
+                            data-class="<?php echo e($row['account_class']); ?>"
+                            data-level="<?php echo e($row['coa_level']); ?>"
+                            data-ledger="<?php echo e($row['ledger_type']); ?>"
+                            data-posting="<?php echo e($row['posting_allowed'] ? 'Yes' : 'No'); ?>"
                         >
                             <div class="coa-mobile-top">
                                 <div>
-                                    <div class="coa-mobile-title">{{ $row['account_code'] }} · {{ $row['account_name'] }}</div>
-                                    <div class="coa-mobile-meta">Level {{ $row['coa_level'] }} · {{ $row['level_name'] }}</div>
+                                    <div class="coa-mobile-title"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
+                                    <div class="coa-mobile-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?></div>
                                 </div>
-                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="{{ $row['id'] }}">Edit</button>
+                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
                             </div>
                             <div>
-                                <span class="coa-badge {{ $row['posting_allowed'] ? 'posting' : 'group' }}">{{ $row['ledger_type'] ?: 'Group' }}</span>
-                                @if($row['posting_allowed'])<span class="coa-badge posting">Posting</span>@endif
-                                @if($row['is_party_control'])<span class="coa-badge party">Party Control</span>@endif
-                                @if($row['is_system_ledger'])<span class="coa-badge system">System</span>@endif
+                                <span class="coa-badge <?php echo e($row['posting_allowed'] ? 'posting' : 'group'); ?>"><?php echo e($row['ledger_type'] ?: 'Group'); ?></span>
+                                <?php if($row['posting_allowed']): ?><span class="coa-badge posting">Posting</span><?php endif; ?>
+                                <?php if($row['is_party_control']): ?><span class="coa-badge party">Party Control</span><?php endif; ?>
+                                <?php if($row['is_system_ledger']): ?><span class="coa-badge system">System</span><?php endif; ?>
                             </div>
                             <div class="coa-mobile-lines">
-                                <div><strong>Parent:</strong> {{ $row['parent_display_name'] ?: '—' }}</div>
-                                <div><strong>Class:</strong> {{ $row['account_class'] ?: '—' }}</div>
-                                <div><strong>Normal:</strong> {{ $row['normal_balance'] ?: '—' }}</div>
-                                <div><strong>Posting:</strong> {{ $row['posting_allowed'] ? 'Yes' : 'No' }}</div>
-                                <div><strong>Party:</strong> {{ $row['party_type_name'] ?: '—' }}</div>
+                                <div><strong>Parent:</strong> <?php echo e($row['parent_display_name'] ?: '—'); ?></div>
+                                <div><strong>Class:</strong> <?php echo e($row['account_class'] ?: '—'); ?></div>
+                                <div><strong>Normal:</strong> <?php echo e($row['normal_balance'] ?: '—'); ?></div>
+                                <div><strong>Posting:</strong> <?php echo e($row['posting_allowed'] ? 'Yes' : 'No'); ?></div>
+                                <div><strong>Party:</strong> <?php echo e($row['party_type_name'] ?: '—'); ?></div>
                             </div>
                         </div>
-                    @endforeach
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                 </div>
             </div>
         </div>
@@ -649,8 +647,8 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const accountRows = @json($accountRows->keyBy('id')->toArray());
-    const levelMap = @json($coaLevels);
+    const accountRows = <?php echo json_encode($accountRows->keyBy('id')->toArray(), 15, 512) ?>;
+    const levelMap = <?php echo json_encode($coaLevels, 15, 512) ?>;
     const normalByNature = { Asset: 'Debit', Expense: 'Debit', 'Equity Contra': 'Debit', Liability: 'Credit', Equity: 'Credit', Income: 'Credit', "Owner's Equity": 'Credit', 'Owner’s Equity': 'Credit' };
 
     const form = document.getElementById('accountForm');
@@ -1013,4 +1011,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showTab('tree');
 });
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/chart-of-accounts.blade.php ENDPATH**/ ?>

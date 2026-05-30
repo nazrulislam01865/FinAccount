@@ -60,14 +60,14 @@
             <div class="panel-head" style="padding:18px 18px 0">
                 <div>
                     <h3>Recent Transactions</h3>
-                    <p class="hint" style="margin-top:4px">Shows latest drafts, submitted approvals, and posted vouchers. The table shows 15 rows per page.</p>
+                    <p class="hint" style="margin-top:4px">Shows latest drafts, submitted approvals, and posted vouchers. The table shows 10 rows per page.</p>
                 </div>
                 @if($canOpenTransactionList)
                     <a href="{{ route('accounting-reports.transactions.index') }}" class="button btn-soft">Open List</a>
                 @endif
             </div>
             <div class="table-wrap">
-                <table data-client-pagination="true" data-page-size="15">
+                <table data-client-pagination="true" data-page-size="10">
                     <thead>
                     <tr>
                         <th>Date</th>

@@ -26,7 +26,11 @@ use App\Models\User;
 use App\Models\VoucherHeader;
 use App\Models\VoucherNumberingRule;
 use App\Observers\AuditObserver;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -44,6 +48,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->ensureRuntimeDirectoriesExist();
+        $this->configureRateLimiters();
 
         foreach ([
             Company::class,
@@ -83,6 +88,31 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
     }
+    /**
+     * Named rate limiters keep public forms and isolated Landing Admin login
+     * protected from brute-force and spam without affecting normal accounting
+     * page navigation.
+     */
+    private function configureRateLimiters(): void
+    {
+        RateLimiter::for('landing-inquiry', function (Request $request): Limit {
+            return Limit::perMinute((int) config('security.rate_limits.landing_inquiry_per_minute', 5))
+                ->by($request->ip() ?: 'unknown');
+        });
+
+        RateLimiter::for('landing-admin-login', function (Request $request): Limit {
+            $email = Str::lower((string) $request->input('email', 'guest'));
+
+            return Limit::perMinute((int) config('security.rate_limits.landing_admin_login_per_minute', 5))
+                ->by($email . '|' . ($request->ip() ?: 'unknown'));
+        });
+
+        RateLimiter::for('web-forms', function (Request $request): Limit {
+            return Limit::perMinute((int) config('security.rate_limits.web_forms_per_minute', 30))
+                ->by((string) ($request->user()?->getAuthIdentifier() ?: $request->ip() ?: 'guest'));
+        });
+    }
+
     /**
      * Laravel uses these runtime folders for file sessions, compiled views,
      * cache files, logs, testing artifacts and private/public uploads. ZIP

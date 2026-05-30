@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\EnsureLandingAdminAuthenticated;
 use App\Http\Middleware\SessionTimeout;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -23,9 +24,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'super.admin' => EnsureSuperAdmin::class,
             'landing.admin.auth' => EnsureLandingAdminAuthenticated::class,
             'session.timeout' => SessionTimeout::class,
+            'security.headers' => SecurityHeaders::class,
+            'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         ]);
 
         $middleware->appendToGroup('web', [
+            SecurityHeaders::class,
             SessionTimeout::class,
         ]);
     })

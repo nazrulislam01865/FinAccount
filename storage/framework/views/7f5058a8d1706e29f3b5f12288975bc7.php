@@ -1,8 +1,6 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Party / Person Setup | HisebGhor'); ?>
 
-@section('title', 'Party / Person Setup | HisebGhor')
-
-@section('content')
+<?php $__env->startSection('content'); ?>
 <div class="page-title">
     <div>
         <span class="page-label">Party / Person Setup</span>
@@ -11,7 +9,7 @@
     </div>
 </div>
 
-@include('partials.setup-progress', ['current' => 4])
+<?php echo $__env->make('partials.setup-progress', ['current' => 4], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
 <div class="layout">
     <div class="left-stack">
@@ -68,75 +66,82 @@
                 </thead>
 
                 <tbody>
-                    @forelse($parties as $party)
+                    <?php $__empty_1 = true; $__currentLoopData = $parties; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $party): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <tr
-                            data-id="{{ $party->id }}"
-                            data-name="{{ e($party->party_name) }}"
-                            data-type="{{ $party->party_type_id }}"
-                            data-sub-type="{{ e($party->sub_type) }}"
-                            data-mobile="{{ e($party->mobile) }}"
-                            data-email="{{ e($party->email) }}"
-                            data-address="{{ e($party->address) }}"
-                            data-credit-limit="{{ $party->credit_limit !== null ? number_format((float) $party->credit_limit, 2, '.', '') : '' }}"
-                            data-payment-terms="{{ e($party->payment_terms) }}"
-                            data-department="{{ e($party->department) }}"
-                            data-designation="{{ e($party->designation) }}"
-                            data-salary-amount="{{ $party->salary_amount !== null ? number_format((float) $party->salary_amount, 2, '.', '') : '' }}"
-                            data-ownership-percentage="{{ $party->ownership_percentage !== null ? number_format((float) $party->ownership_percentage, 2, '.', '') : '' }}"
-                            data-contact-info="{{ e($party->contact_info) }}"
-                            data-linked-ledger="{{ $party->linked_ledger_account_id }}"
-                            data-default-ledger-nature="{{ $party->default_ledger_nature }}"
-                            data-notes="{{ e($party->notes) }}"
-                            data-status="{{ $party->status }}"
-                            data-update-url="{{ url('/api/parties/' . $party->id) }}"
+                            data-id="<?php echo e($party->id); ?>"
+                            data-name="<?php echo e(e($party->party_name)); ?>"
+                            data-type="<?php echo e($party->party_type_id); ?>"
+                            data-sub-type="<?php echo e(e($party->sub_type)); ?>"
+                            data-mobile="<?php echo e(e($party->mobile)); ?>"
+                            data-email="<?php echo e(e($party->email)); ?>"
+                            data-address="<?php echo e(e($party->address)); ?>"
+                            data-credit-limit="<?php echo e($party->credit_limit !== null ? number_format((float) $party->credit_limit, 2, '.', '') : ''); ?>"
+                            data-payment-terms="<?php echo e(e($party->payment_terms)); ?>"
+                            data-department="<?php echo e(e($party->department)); ?>"
+                            data-designation="<?php echo e(e($party->designation)); ?>"
+                            data-salary-amount="<?php echo e($party->salary_amount !== null ? number_format((float) $party->salary_amount, 2, '.', '') : ''); ?>"
+                            data-ownership-percentage="<?php echo e($party->ownership_percentage !== null ? number_format((float) $party->ownership_percentage, 2, '.', '') : ''); ?>"
+                            data-contact-info="<?php echo e(e($party->contact_info)); ?>"
+                            data-linked-ledger="<?php echo e($party->linked_ledger_account_id); ?>"
+                            data-default-ledger-nature="<?php echo e($party->default_ledger_nature); ?>"
+                            data-notes="<?php echo e(e($party->notes)); ?>"
+                            data-status="<?php echo e($party->status); ?>"
+                            data-update-url="<?php echo e(url('/api/parties/' . $party->id)); ?>"
                         >
-                            <td class="code">{{ $party->party_code }}</td>
+                            <td class="code"><?php echo e($party->party_code); ?></td>
 
-                            <td class="strong">{{ $party->party_name }}</td>
+                            <td class="strong"><?php echo e($party->party_name); ?></td>
 
-                            <td data-type="{{ $party->party_type_id }}">
+                            <td data-type="<?php echo e($party->party_type_id); ?>">
                                 <span class="badge badge-success">
-                                    {{ $party->partyType?->name ?? '—' }}
+                                    <?php echo e($party->partyType?->name ?? '—'); ?>
+
                                 </span>
                             </td>
 
-                            <td class="{{ $party->mobile ? '' : 'muted' }}">
-                                {{ $party->mobile ?: '—' }}
+                            <td class="<?php echo e($party->mobile ? '' : 'muted'); ?>">
+                                <?php echo e($party->mobile ?: '—'); ?>
+
                             </td>
 
-                            <td class="{{ $party->email ? '' : 'muted' }}">
-                                {{ $party->email ?: '—' }}
-                                @if($party->payment_terms || $party->credit_limit || $party->department || $party->designation || $party->ownership_percentage)
+                            <td class="<?php echo e($party->email ? '' : 'muted'); ?>">
+                                <?php echo e($party->email ?: '—'); ?>
+
+                                <?php if($party->payment_terms || $party->credit_limit || $party->department || $party->designation || $party->ownership_percentage): ?>
                                     <div class="hint" style="margin-top:2px">
-                                        @if($party->credit_limit) Credit limit: BDT {{ number_format((float) $party->credit_limit, 2) }} @endif
-                                        @if($party->payment_terms) Terms: {{ $party->payment_terms }} @endif
-                                        @if($party->department) Dept: {{ $party->department }} @endif
-                                        @if($party->designation) · {{ $party->designation }} @endif
-                                        @if($party->ownership_percentage) Ownership: {{ number_format((float) $party->ownership_percentage, 2) }}% @endif
+                                        <?php if($party->credit_limit): ?> Credit limit: BDT <?php echo e(number_format((float) $party->credit_limit, 2)); ?> <?php endif; ?>
+                                        <?php if($party->payment_terms): ?> Terms: <?php echo e($party->payment_terms); ?> <?php endif; ?>
+                                        <?php if($party->department): ?> Dept: <?php echo e($party->department); ?> <?php endif; ?>
+                                        <?php if($party->designation): ?> · <?php echo e($party->designation); ?> <?php endif; ?>
+                                        <?php if($party->ownership_percentage): ?> Ownership: <?php echo e(number_format((float) $party->ownership_percentage, 2)); ?>% <?php endif; ?>
                                     </div>
-                                @endif
+                                <?php endif; ?>
                             </td>
 
                             <td>
                                 <span class="badge badge-blue">
-                                    {{ $party->default_ledger_nature ?: 'No Effect' }}
+                                    <?php echo e($party->default_ledger_nature ?: 'No Effect'); ?>
+
                                 </span>
 
                             </td>
 
                             <td>
-                                <strong>{{ $party->linkedLedger?->display_name ?? '—' }}</strong>
-                                @if($party->linkedLedger?->accountType)
+                                <strong><?php echo e($party->linkedLedger?->display_name ?? '—'); ?></strong>
+                                <?php if($party->linkedLedger?->accountType): ?>
                                     <div class="hint" style="margin-top:2px">
-                                        {{ $party->linkedLedger->accountType->name }}
-                                        · {{ $party->linkedLedger->normal_balance ?: $party->linkedLedger->accountType->normal_balance }}
+                                        <?php echo e($party->linkedLedger->accountType->name); ?>
+
+                                        · <?php echo e($party->linkedLedger->normal_balance ?: $party->linkedLedger->accountType->normal_balance); ?>
+
                                     </div>
-                                @endif
+                                <?php endif; ?>
                             </td>
 
                             <td>
-                                <span class="badge {{ $party->status === 'Active' ? 'badge-success' : 'badge-neutral' }}">
-                                    {{ $party->status }}
+                                <span class="badge <?php echo e($party->status === 'Active' ? 'badge-success' : 'badge-neutral'); ?>">
+                                    <?php echo e($party->status); ?>
+
                                 </span>
                             </td>
 
@@ -153,11 +158,11 @@
                                     <form
                                         method="POST"
                                         data-delete-form
-                                        action="{{ url('/setup/parties/' . $party->id) }}"
+                                        action="<?php echo e(url('/setup/parties/' . $party->id)); ?>"
                                         onsubmit="return confirm('Delete this party?')"
                                     >
-                                        @csrf
-                                        @method('DELETE')
+                                        <?php echo csrf_field(); ?>
+                                        <?php echo method_field('DELETE'); ?>
 
                                         <button class="icon-btn delete-btn" type="submit" title="Delete">
                                             🗑
@@ -166,18 +171,18 @@
                                 </div>
                             </td>
                         </tr>
-                    @empty
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                         <tr data-empty="true">
                             <td colspan="9" class="muted" style="text-align:center;padding:24px">
                                 No parties found. Add your first party using the form on the right.
                             </td>
                         </tr>
-                    @endforelse
+                    <?php endif; ?>
                 </tbody>
             </table>
 
             <div class="table-footer">
-                <span id="resultCount">Showing {{ $parties->count() }} of {{ $parties->count() }} entries</span>
+                <span id="resultCount">Showing <?php echo e($parties->count()); ?> of <?php echo e($parties->count()); ?> entries</span>
 
                 <div class="pagination">
                     <button class="page-btn" type="button">‹</button>
@@ -204,11 +209,11 @@
                 class="form-grid"
                 id="partyForm"
                 data-frontend-form
-                data-action="{{ route('api.parties.store') }}"
-                data-store-url="{{ route('api.parties.store') }}"
+                data-action="<?php echo e(route('api.parties.store')); ?>"
+                data-store-url="<?php echo e(route('api.parties.store')); ?>"
                 data-success="Party saved successfully."
             >
-                @csrf
+                <?php echo csrf_field(); ?>
 
                 <input type="hidden" name="_method" id="partyFormMethod" value="POST">
                 <input type="hidden" name="default_ledger_nature" id="defaultLedgerNature" value="No Effect">
@@ -596,4 +601,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/parties.blade.php ENDPATH**/ ?>

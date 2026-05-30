@@ -30,7 +30,9 @@ Route::get('/health', HealthController::class)->name('health');
 
 Route::get('/', [LandingPageController::class, 'show'])->name('landing.show');
 Route::get('/landing', [LandingPageController::class, 'show'])->name('landing.public');
-Route::post('/landing-page/inquiry', [LandingPageController::class, 'storeInquiry'])->name('landing.inquiries.store');
+Route::post('/landing-page/inquiry', [LandingPageController::class, 'storeInquiry'])
+    ->middleware('throttle:landing-inquiry')
+    ->name('landing.inquiries.store');
 
 
 /*
@@ -41,7 +43,8 @@ Route::post('/landing-page/inquiry', [LandingPageController::class, 'storeInquir
 | Demo/system users use /login. Landing managers use /landing-admin only.
 */
 Route::get('/landing-admin', [LandingAdminAuthController::class, 'create'])->name('landing-admin.login');
-Route::post('/landing-admin', [LandingAdminAuthController::class, 'store'])->name('landing-admin.login.store');
+Route::post('/landing-admin', [LandingAdminAuthController::class, 'store'])
+    ->name('landing-admin.login.store');
 Route::post('/landing-admin/logout', [LandingAdminAuthController::class, 'destroy'])->name('landing-admin.logout');
 
 Route::middleware(['landing.admin.auth'])->prefix('landing-admin')->name('landing-admin.')->group(function () {

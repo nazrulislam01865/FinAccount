@@ -78,7 +78,7 @@
                 badge-class="badge-primary"
             >
                 <div class="table-wrap">
-                    <table>
+                    <table id="cashBankBookTable" data-client-pagination="true" data-page-size="10">
                         <thead>
                             <tr>
                                 <th>Date</th>

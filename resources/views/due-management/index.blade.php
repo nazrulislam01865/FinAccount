@@ -98,7 +98,7 @@
                 <span class="badge badge-primary">{{ $dueRows->count() }} record(s)</span>
             </div>
             <div class="table-wrap">
-                <table>
+                <table id="dueManagementTable" data-client-pagination="true" data-page-size="10">
                     <thead>
                         <tr>
                             <th>Due Date</th>

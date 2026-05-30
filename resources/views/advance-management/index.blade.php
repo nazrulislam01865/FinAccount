@@ -104,7 +104,7 @@
                 <span class="badge badge-primary">{{ $advanceRows->count() }} record(s)</span>
             </div>
             <div class="table-wrap">
-                <table>
+                <table id="advanceManagementTable" data-client-pagination="true" data-page-size="10">
                     <thead>
                         <tr>
                             <th>Date</th>

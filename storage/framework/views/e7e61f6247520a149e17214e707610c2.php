@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Voucher Numbering Setup | HisebGhor'); ?>
 
-@section('title', 'Voucher Numbering Setup | HisebGhor')
-
-@section('content')
-@php
+<?php $__env->startSection('content'); ?>
+<?php
     $defaultPrefixesForJs = $defaultPrefixes ?? [
         'Payment Voucher' => 'PV',
         'Receipt Voucher' => 'RV',
@@ -28,7 +26,7 @@
         ->values();
 
     $currentYearValue = $currentYear ?? now()->format('Y');
-@endphp
+?>
 
 <div class="page-title">
     <div>
@@ -44,7 +42,7 @@
     </div>
 </div>
 
-@include('partials.setup-progress', ['current' => 8])
+<?php echo $__env->make('partials.setup-progress', ['current' => 8], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
 <div class="layout">
     <div class="left-stack">
@@ -59,9 +57,9 @@
                 <label>Voucher Type</label>
                 <select id="typeFilter">
                     <option>All Types</option>
-                    @foreach($voucherTypeFilterOptions as $type)
-                        <option>{{ $type }}</option>
-                    @endforeach
+                    <?php $__currentLoopData = $voucherTypeFilterOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $type): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <option><?php echo e($type); ?></option>
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                 </select>
             </div>
 
@@ -100,48 +98,53 @@
                     </thead>
 
                     <tbody id="voucherTable">
-                        @forelse($rules as $rule)
+                        <?php $__empty_1 = true; $__currentLoopData = $rules; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $rule): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                             <tr
-                                data-id="{{ $rule->id }}"
-                                data-type="{{ $rule->voucher_type }}"
-                                data-financial-year="{{ $rule->financial_year_id }}"
-                                data-prefix="{{ $rule->prefix }}"
-                                data-format="{{ $rule->format_template }}"
-                                data-first="{{ $rule->starting_number }}"
-                                data-length="{{ $rule->number_length }}"
-                                data-next="{{ $rule->next_number }}"
-                                data-reset="{{ $rule->reset_every_year ? 1 : 0 }}"
-                                data-used="{{ e($rule->used_for) }}"
-                                data-status="{{ $rule->status }}"
-                                data-update-url="{{ url('/api/voucher-numbering/' . $rule->id) }}"
+                                data-id="<?php echo e($rule->id); ?>"
+                                data-type="<?php echo e($rule->voucher_type); ?>"
+                                data-financial-year="<?php echo e($rule->financial_year_id); ?>"
+                                data-prefix="<?php echo e($rule->prefix); ?>"
+                                data-format="<?php echo e($rule->format_template); ?>"
+                                data-first="<?php echo e($rule->starting_number); ?>"
+                                data-length="<?php echo e($rule->number_length); ?>"
+                                data-next="<?php echo e($rule->next_number); ?>"
+                                data-reset="<?php echo e($rule->reset_every_year ? 1 : 0); ?>"
+                                data-used="<?php echo e(e($rule->used_for)); ?>"
+                                data-status="<?php echo e($rule->status); ?>"
+                                data-update-url="<?php echo e(url('/api/voucher-numbering/' . $rule->id)); ?>"
                             >
                                 <td class="type-name">
-                                    {{ $rule->voucher_type }}
+                                    <?php echo e($rule->voucher_type); ?>
+
                                 </td>
 
                                 <td>
-                                    <span class="prefix">{{ $rule->prefix }}</span>
+                                    <span class="prefix"><?php echo e($rule->prefix); ?></span>
                                 </td>
 
                                 <td>
-                                    <span class="format">{{ $rule->format_template }}</span>
+                                    <span class="format"><?php echo e($rule->format_template); ?></span>
                                 </td>
 
                                 <td class="sample">
-                                    {{ $rule->first_voucher_number }}
+                                    <?php echo e($rule->first_voucher_number); ?>
+
                                 </td>
 
                                 <td class="sample">
-                                    {{ $rule->next_voucher_number }}
+                                    <?php echo e($rule->next_voucher_number); ?>
+
                                 </td>
 
                                 <td>
-                                    {{ $rule->used_for }}
+                                    <?php echo e($rule->used_for); ?>
+
                                 </td>
 
                                 <td>
-                                    <span class="badge {{ $rule->status === 'Active' ? 'badge-active' : 'badge-draft' }}">
-                                        {{ $rule->status }}
+                                    <span class="badge <?php echo e($rule->status === 'Active' ? 'badge-active' : 'badge-draft'); ?>">
+                                        <?php echo e($rule->status); ?>
+
                                     </span>
                                 </td>
 
@@ -158,11 +161,11 @@
                                         <form
                                             method="POST"
                                             data-delete-form
-                                            action="{{ url('/setup/voucher-numbering/' . $rule->id) }}"
+                                            action="<?php echo e(url('/setup/voucher-numbering/' . $rule->id)); ?>"
                                             onsubmit="return confirm('Delete this voucher numbering rule?')"
                                         >
-                                            @csrf
-                                            @method('DELETE')
+                                            <?php echo csrf_field(); ?>
+                                            <?php echo method_field('DELETE'); ?>
 
                                             <button class="icon-btn delete-btn" type="submit" title="Delete">
                                                 ⋮
@@ -171,20 +174,20 @@
                                     </div>
                                 </td>
                             </tr>
-                        @empty
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr data-empty="true">
                                 <td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">
                                     No voucher numbering rules found. Add the default voucher formats.
                                 </td>
                             </tr>
-                        @endforelse
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
 
             <div class="table-footer">
                 <span id="footerText">
-                    Showing {{ $rules->count() }} of {{ $rules->count() }} voucher types
+                    Showing <?php echo e($rules->count()); ?> of <?php echo e($rules->count()); ?> voucher types
                 </span>
 
                 <div class="pagination">
@@ -202,12 +205,12 @@
                 <div class="summary-list">
                     <div class="summary-row">
                         <span>Active Formats</span>
-                        <strong id="activeCount">{{ $activeCount }}</strong>
+                        <strong id="activeCount"><?php echo e($activeCount); ?></strong>
                     </div>
 
                     <div class="summary-row">
                         <span>Current Year</span>
-                        <strong>{{ $currentYearValue }}</strong>
+                        <strong><?php echo e($currentYearValue); ?></strong>
                     </div>
 
                     <div class="summary-row">
@@ -217,8 +220,9 @@
 
                     <div class="summary-row">
                         <span>Duplicate Prefix</span>
-                        <strong class="badge {{ $duplicatePrefixIssue ? 'badge-warning' : 'badge-active' }}">
-                            {{ $duplicatePrefixIssue ? 'Issue Found' : 'No Issue' }}
+                        <strong class="badge <?php echo e($duplicatePrefixIssue ? 'badge-warning' : 'badge-active'); ?>">
+                            <?php echo e($duplicatePrefixIssue ? 'Issue Found' : 'No Issue'); ?>
+
                         </strong>
                     </div>
                 </div>
@@ -247,11 +251,11 @@
                 class="form-grid"
                 id="voucherForm"
                 data-frontend-form
-                data-action="{{ url('/api/voucher-numbering') }}"
-                data-store-url="{{ url('/api/voucher-numbering') }}"
+                data-action="<?php echo e(url('/api/voucher-numbering')); ?>"
+                data-store-url="<?php echo e(url('/api/voucher-numbering')); ?>"
                 data-success="Voucher numbering rule saved successfully."
             >
-                @csrf
+                <?php echo csrf_field(); ?>
 
                 <input type="hidden" name="_method" id="formMethod" value="POST">
 
@@ -273,14 +277,15 @@
                 <div>
                     <label>Financial Year <span class="required">*</span></label>
                     <select id="financialYearId" name="financial_year_id" required>
-                        @foreach($financialYears as $financialYear)
+                        <?php $__currentLoopData = $financialYears; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $financialYear): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                             <option
-                                value="{{ $financialYear->id }}"
-                                @selected($currentFinancialYear?->id === $financialYear->id)
+                                value="<?php echo e($financialYear->id); ?>"
+                                <?php if($currentFinancialYear?->id === $financialYear->id): echo 'selected'; endif; ?>
                             >
-                                {{ $financialYear->display_name }}
+                                <?php echo e($financialYear->display_name); ?>
+
                             </option>
-                        @endforeach
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </select>
                 </div>
 
@@ -361,7 +366,7 @@
 
                 <div class="preview-box">
                     <span>Generated Preview</span>
-                    <strong id="previewNo">PV-{{ $currentYearValue }}-00001</strong>
+                    <strong id="previewNo">PV-<?php echo e($currentYearValue); ?>-00001</strong>
                 </div>
 
                 <div>
@@ -408,19 +413,19 @@
 
     </aside>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@push('scripts')
+<?php $__env->startPush('scripts'); ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById('voucherTable');
     const voucherNumberingTable = document.getElementById('voucherNumberingTable');
     const form = document.getElementById('voucherForm');
 
-    const currentYear = '{{ $currentYearValue }}';
+    const currentYear = '<?php echo e($currentYearValue); ?>';
 
-    const defaultPrefixes = @json($defaultPrefixesForJs);
-    const defaultUsedFor = @json($defaultUsedForForJs);
+    const defaultPrefixes = <?php echo json_encode($defaultPrefixesForJs, 15, 512) ?>;
+    const defaultUsedFor = <?php echo json_encode($defaultUsedForForJs, 15, 512) ?>;
 
     const searchInput = document.getElementById('searchInput');
     const typeFilter = document.getElementById('typeFilter');
@@ -832,4 +837,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePreview();
 });
 </script>
-@endpush
+<?php $__env->stopPush(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/voucher-numbering.blade.php ENDPATH**/ ?>

@@ -2,6 +2,13 @@ import './bootstrap';
 
 window.AccountingUI = (() => {
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  const DEFAULT_TABLE_PAGE_SIZE = 10;
+
+  function clientTablePageSize(table) {
+    const value = Number(table?.dataset?.pageSize || document.documentElement.dataset.tablePageSize || DEFAULT_TABLE_PAGE_SIZE);
+
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_TABLE_PAGE_SIZE;
+  }
 
   function showToast(message = 'Saved successfully.') {
     const toast = document.getElementById('toast');
@@ -360,40 +367,41 @@ window.AccountingUI = (() => {
     return Array.from(table.querySelectorAll('tbody tr')).filter((row) => row.dataset.empty !== 'true');
   }
 
+  function tableHasExplicitPagination(table) {
+    return Boolean(table && (table.dataset.clientPagination === 'true' || table.hasAttribute('data-page-size')));
+  }
+
   function tableShouldPaginate(table) {
     if (!table || table.dataset.clientPagination === 'false' || table.dataset.noClientPagination === 'true') {
       return false;
     }
 
-    if (table.closest('[data-no-client-pagination], .no-client-pagination, .transaction-entry-page')) {
+    const isExplicit = tableHasExplicitPagination(table);
+
+    if (!isExplicit && table.closest('[data-no-client-pagination], .no-client-pagination, .transaction-entry-page')) {
       return false;
     }
 
-    if (
-      table.classList.contains('financial-table')
-      || table.classList.contains('ledger-table')
+    const isProtectedReportTable = table.classList.contains('ledger-table')
       || table.classList.contains('audit-table')
-      || table.closest('.financial-report-page')
-      || table.closest('.report-page')
-      || table.closest('.audit-income-page')
-    ) {
+      || table.closest('.audit-income-page');
+
+    if (!isExplicit && isProtectedReportTable) {
       return false;
     }
 
-    const isExplicit = table.dataset.clientPagination === 'true' || table.hasAttribute('data-page-size');
     const isDataCardTable = Boolean(table.closest('.table-card'));
+    const isKnownListingTable = Boolean(table.closest('.prototype-table-wrap, .coa-table-wrap, .balance-card'));
 
-    if (!isExplicit && !isDataCardTable) {
+    if (!isExplicit && !isDataCardTable && !isKnownListingTable) {
       return false;
     }
 
-    const pageSize = Math.max(1, Number(table.dataset.pageSize || 15));
-
-    return tableDataRows(table).length > pageSize;
+    return tableDataRows(table).length > clientTablePageSize(table);
   }
 
   function getOrCreatePaginationFooter(table) {
-    const card = table.closest('.table-card') || table.parentElement;
+    const card = table.closest('.table-card, .prototype-card, .balance-card, .coa-card, .card') || table.closest('.table-wrap')?.parentElement || table.parentElement;
 
     if (!card) {
       return null;
@@ -453,6 +461,65 @@ window.AccountingUI = (() => {
     return Array.from(pages).sort((a, b) => a - b);
   }
 
+  function updateLinkedCountTargets(table, text) {
+    if (!table || !text) {
+      return;
+    }
+
+    const targets = new Set();
+    const tableId = table.id;
+
+    if (tableId) {
+      document.querySelectorAll('[data-table-filter]').forEach((filterRoot) => {
+        if (filterRoot.dataset.tableFilter !== `#${tableId}`) {
+          return;
+        }
+
+        const selector = filterRoot.dataset.countTarget;
+
+        if (!selector) {
+          return;
+        }
+
+        document.querySelectorAll(selector).forEach((target) => targets.add(target));
+      });
+    }
+
+    const targetSelector = table.dataset.countTarget;
+
+    if (targetSelector) {
+      document.querySelectorAll(targetSelector).forEach((target) => targets.add(target));
+    }
+
+    targets.forEach((target) => {
+      target.textContent = text;
+    });
+  }
+
+  function resetPaginationFooter(table, rows) {
+    const card = table.closest('.table-card, .prototype-card, .balance-card, .coa-card, .card') || table.closest('.table-wrap')?.parentElement || table.parentElement;
+    const footer = card?.querySelector(':scope > .table-footer[data-client-pagination-footer], :scope > .table-footer');
+
+    if (!footer) {
+      return;
+    }
+
+    const visibleRows = rows.filter((row) => row.style.display !== 'none');
+    const text = `Showing ${visibleRows.length ? 1 : 0}-${visibleRows.length} of ${visibleRows.length} entries`;
+    const info = footer.querySelector('[data-client-pagination-info]') || footer.querySelector('[data-pagination-info]') || footer.querySelector('#resultCount') || footer.querySelector('span');
+    const controls = footer.querySelector('[data-client-pagination-controls]') || footer.querySelector('.pagination');
+
+    if (info) {
+      info.textContent = text;
+    }
+
+    if (controls) {
+      controls.hidden = true;
+    }
+
+    updateLinkedCountTargets(table, text);
+  }
+
   function renderPaginationButtons(table, controls, currentPage, pageCount) {
     controls.innerHTML = '';
 
@@ -499,16 +566,23 @@ window.AccountingUI = (() => {
   }
 
   function refreshClientTablePagination(table, resetPage = false) {
+    const rows = tableDataRows(table);
+
     if (!tableShouldPaginate(table)) {
-      tableDataRows(table).forEach((row) => {
-        row.hidden = false;
+      rows.forEach((row) => {
+        row.hidden = row.style.display === 'none';
       });
+
+      if (tableHasExplicitPagination(table) || table.dataset.paginationReady === '1') {
+        table.dataset.clientPagination = 'true';
+        table.dataset.paginationReady = '1';
+        resetPaginationFooter(table, rows);
+      }
 
       return;
     }
 
-    const pageSize = Math.max(1, Number(table.dataset.pageSize || 15));
-    const rows = tableDataRows(table);
+    const pageSize = clientTablePageSize(table);
     const visibleRows = rows.filter((row) => row.style.display !== 'none');
     const pageCount = Math.max(1, Math.ceil(visibleRows.length / pageSize));
     const requestedPage = resetPage ? 1 : Number(table.dataset.currentPage || 1);
@@ -534,7 +608,9 @@ window.AccountingUI = (() => {
       const total = visibleRows.length;
       const from = total === 0 ? 0 : start + 1;
       const to = Math.min(end, total);
-      parts.info.textContent = `Showing ${from}-${to} of ${total} entries`;
+      const text = `Showing ${from}-${to} of ${total} entries`;
+      parts.info.textContent = text;
+      updateLinkedCountTargets(table, text);
     }
 
     if (parts.controls) {
@@ -545,7 +621,7 @@ window.AccountingUI = (() => {
 
   function bindClientTablePagination(scope = document) {
     scope.querySelectorAll('table').forEach((table) => {
-      if (!tableShouldPaginate(table)) {
+      if (!tableHasExplicitPagination(table) && !tableShouldPaginate(table)) {
         return;
       }
 
@@ -1050,6 +1126,11 @@ window.AccountingUI = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  window.AccountingTablePagination = {
+    refresh: refreshClientTablePagination,
+    init: bindClientTablePagination,
+  };
 
   return {
     showToast,

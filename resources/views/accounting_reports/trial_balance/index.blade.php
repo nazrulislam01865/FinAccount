@@ -96,7 +96,7 @@
             footer-right="Draft and cancelled vouchers are excluded."
         >
             <div class="table-wrap">
-                <table class="financial-table trial-table">
+                <table id="trialBalanceTable" class="financial-table trial-table" data-client-pagination="true" data-page-size="10">
                     <thead>
                         <tr>
                             <th>Code</th>

@@ -1,8 +1,6 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Cash / Bank Account Setup | HisebGhor'); ?>
 
-@section('title', 'Cash / Bank Account Setup | HisebGhor')
-
-@section('content')
+<?php $__env->startSection('content'); ?>
 <div class="page-title">
     <div>
         <span class="page-label">Cash / Bank Account Setup</span>
@@ -11,7 +9,7 @@
     </div>
 </div>
 
-@include('partials.setup-progress', ['current' => 3])
+<?php echo $__env->make('partials.setup-progress', ['current' => 3], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
 <div class="layout">
     <div class="left-stack">
@@ -69,57 +67,65 @@
                 </thead>
 
                 <tbody>
-                    @forelse($accounts as $account)
+                    <?php $__empty_1 = true; $__currentLoopData = $accounts; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $account): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <tr
-                            data-id="{{ $account->id }}"
-                            data-code="{{ e($account->cash_bank_code) }}"
-                            data-name="{{ e($account->cash_bank_name) }}"
-                            data-type="{{ $account->type }}"
-                            data-linked-ledger="{{ $account->linked_ledger_account_id }}"
-                            data-bank-name="{{ e($account->bank_name ?? $account->bank?->bank_name) }}"
-                            data-branch="{{ e($account->branch_name) }}"
-                            data-account-number="{{ e($account->account_number) }}"
-                            data-usage-note="{{ e($account->usage_note) }}"
-                            data-status="{{ $account->status }}"
-                            data-update-url="{{ url('/api/cash-bank-accounts/' . $account->id) }}"
+                            data-id="<?php echo e($account->id); ?>"
+                            data-code="<?php echo e(e($account->cash_bank_code)); ?>"
+                            data-name="<?php echo e(e($account->cash_bank_name)); ?>"
+                            data-type="<?php echo e($account->type); ?>"
+                            data-linked-ledger="<?php echo e($account->linked_ledger_account_id); ?>"
+                            data-bank-name="<?php echo e(e($account->bank_name ?? $account->bank?->bank_name)); ?>"
+                            data-branch="<?php echo e(e($account->branch_name)); ?>"
+                            data-account-number="<?php echo e(e($account->account_number)); ?>"
+                            data-usage-note="<?php echo e(e($account->usage_note)); ?>"
+                            data-status="<?php echo e($account->status); ?>"
+                            data-update-url="<?php echo e(url('/api/cash-bank-accounts/' . $account->id)); ?>"
                         >
-                            <td class="{{ $account->cash_bank_code ? 'code' : 'muted' }}">
-                                {{ $account->cash_bank_code ?: '—' }}
+                            <td class="<?php echo e($account->cash_bank_code ? 'code' : 'muted'); ?>">
+                                <?php echo e($account->cash_bank_code ?: '—'); ?>
+
                             </td>
 
-                            <td class="strong">{{ $account->cash_bank_name }}</td>
+                            <td class="strong"><?php echo e($account->cash_bank_name); ?></td>
 
                             <td>
-                                <span class="badge badge-blue">{{ $account->type }}</span>
+                                <span class="badge badge-blue"><?php echo e($account->type); ?></span>
                             </td>
 
                             <td>
-                                {{ $account->linkedLedger?->display_name ?? '—' }}
+                                <?php echo e($account->linkedLedger?->display_name ?? '—'); ?>
 
-                                @if($account->linkedLedger?->accountType)
+
+                                <?php if($account->linkedLedger?->accountType): ?>
                                     <div class="hint" style="margin-top:2px">
-                                        {{ $account->linkedLedger->accountType->name }}
-                                        · {{ $account->linkedLedger->normal_balance ?: $account->linkedLedger->accountType->normal_balance }}
+                                        <?php echo e($account->linkedLedger->accountType->name); ?>
+
+                                        · <?php echo e($account->linkedLedger->normal_balance ?: $account->linkedLedger->accountType->normal_balance); ?>
+
                                     </div>
-                                @endif
+                                <?php endif; ?>
                             </td>
 
-                            <td class="{{ ($account->bank_name ?? $account->bank?->bank_name) ? '' : 'muted' }}">
-                                {{ $account->bank_name ?? $account->bank?->display_name ?? $account->bank?->bank_name ?? '—' }}
+                            <td class="<?php echo e(($account->bank_name ?? $account->bank?->bank_name) ? '' : 'muted'); ?>">
+                                <?php echo e($account->bank_name ?? $account->bank?->display_name ?? $account->bank?->bank_name ?? '—'); ?>
+
                             </td>
 
-                            <td class="{{ $account->branch_name ? '' : 'muted' }}">
-                                {{ $account->branch_name ?: '—' }}
+                            <td class="<?php echo e($account->branch_name ? '' : 'muted'); ?>">
+                                <?php echo e($account->branch_name ?: '—'); ?>
+
                             </td>
 
-                            <td class="{{ $account->account_number ? '' : 'muted' }}">
-                                {{ $account->account_number ?: '—' }}
+                            <td class="<?php echo e($account->account_number ? '' : 'muted'); ?>">
+                                <?php echo e($account->account_number ?: '—'); ?>
+
                             </td>
 
 
                             <td>
-                                <span class="badge {{ $account->status === 'Active' ? 'badge-success' : 'badge-neutral' }}">
-                                    {{ $account->status }}
+                                <span class="badge <?php echo e($account->status === 'Active' ? 'badge-success' : 'badge-neutral'); ?>">
+                                    <?php echo e($account->status); ?>
+
                                 </span>
                             </td>
 
@@ -136,11 +142,11 @@
                                     <form
                                         method="POST"
                                         data-delete-form
-                                        action="{{ url('/setup/cash-bank-accounts/' . $account->id) }}"
+                                        action="<?php echo e(url('/setup/cash-bank-accounts/' . $account->id)); ?>"
                                         onsubmit="return confirm('Delete this cash/bank account?')"
                                     >
-                                        @csrf
-                                        @method('DELETE')
+                                        <?php echo csrf_field(); ?>
+                                        <?php echo method_field('DELETE'); ?>
 
                                         <button class="icon-btn delete-btn" type="submit" title="Delete">
                                             🗑
@@ -149,18 +155,18 @@
                                 </div>
                             </td>
                         </tr>
-                    @empty
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                         <tr data-empty="true">
                             <td colspan="9" class="muted" style="text-align:center;padding:24px">
                                 No cash/bank accounts found. Add your first account using the form on the right.
                             </td>
                         </tr>
-                    @endforelse
+                    <?php endif; ?>
                 </tbody>
             </table>
 
             <div class="table-footer">
-                <span id="resultCount">Showing {{ $accounts->count() }} of {{ $accounts->count() }} entries</span>
+                <span id="resultCount">Showing <?php echo e($accounts->count()); ?> of <?php echo e($accounts->count()); ?> entries</span>
 
                 <div class="pagination">
                     <button class="page-btn" type="button">‹</button>
@@ -182,11 +188,11 @@
                 class="form-grid"
                 id="cashBankForm"
                 data-frontend-form
-                data-action="{{ route('api.cash-bank-accounts.store') }}"
-                data-store-url="{{ route('api.cash-bank-accounts.store') }}"
+                data-action="<?php echo e(route('api.cash-bank-accounts.store')); ?>"
+                data-store-url="<?php echo e(route('api.cash-bank-accounts.store')); ?>"
                 data-success="Cash / Bank account saved successfully."
             >
-                @csrf
+                <?php echo csrf_field(); ?>
 
                 <input type="hidden" name="_method" id="cashBankFormMethod" value="POST">
 
@@ -576,4 +582,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-@endsection
+<?php $__env->stopSection(); ?>
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/cash-bank-accounts.blade.php ENDPATH**/ ?>

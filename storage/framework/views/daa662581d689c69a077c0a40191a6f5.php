@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Accounting Rule Setup | HisebGhor'); ?>
 
-@section('title', 'Accounting Rule Setup | HisebGhor')
-
-@section('content')
-@php
+<?php $__env->startSection('content'); ?>
+<?php
     $activeRules = $rules->where('status', 'Active')->count();
     $draftRules = $rules->whereIn('status', ['Draft', 'Pending Review'])->count();
     $cashBankRules = $rules->where('cash_bank_ledger_required', true)->count();
@@ -12,7 +10,7 @@
     $userSelectedCounterRules = $rules->filter(fn ($rule) => ($rule->counter_selection_method ?: '') === 'User Selected')->count();
     $headsCovered = $rules->pluck('transaction_head_id')->filter()->unique()->count();
     $pendingReviewRules = $rules->where('status', 'Pending Review')->count();
-@endphp
+?>
 
 <div class="prototype-page accounting-rule-page">
     <div class="prototype-hero">
@@ -28,17 +26,17 @@
         </div>
     </div>
 
-    @include('partials.setup-progress', ['current' => 6])
+    <?php echo $__env->make('partials.setup-progress', ['current' => 6], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
     <div class="prototype-stats eight">
-        <div class="card prototype-stat"><span>Total Rules</span><strong>{{ $rules->count() }}</strong><small>Posting mappings</small></div>
-        <div class="card prototype-stat"><span>Active Rules</span><strong>{{ $activeRules }}</strong><small>Used by transaction entry</small></div>
-        <div class="card prototype-stat"><span>Cash/Bank Rules</span><strong>{{ $cashBankRules }}</strong><small>Requires payment ledger</small></div>
-        <div class="card prototype-stat"><span>Party Rules</span><strong>{{ $partyRules }}</strong><small>Uses party/sub-ledger</small></div>
-        <div class="card prototype-stat"><span>Fixed Counter</span><strong>{{ $fixedCounterRules }}</strong><small>Counter ledger fixed</small></div>
-        <div class="card prototype-stat"><span>User Selected</span><strong>{{ $userSelectedCounterRules }}</strong><small>User chooses counter</small></div>
-        <div class="card prototype-stat"><span>Heads Covered</span><strong>{{ $headsCovered }}</strong><small>Transaction heads mapped</small></div>
-        <div class="card prototype-stat"><span>Pending Review</span><strong>{{ $pendingReviewRules }}</strong><small>Needs activation</small></div>
+        <div class="card prototype-stat"><span>Total Rules</span><strong><?php echo e($rules->count()); ?></strong><small>Posting mappings</small></div>
+        <div class="card prototype-stat"><span>Active Rules</span><strong><?php echo e($activeRules); ?></strong><small>Used by transaction entry</small></div>
+        <div class="card prototype-stat"><span>Cash/Bank Rules</span><strong><?php echo e($cashBankRules); ?></strong><small>Requires payment ledger</small></div>
+        <div class="card prototype-stat"><span>Party Rules</span><strong><?php echo e($partyRules); ?></strong><small>Uses party/sub-ledger</small></div>
+        <div class="card prototype-stat"><span>Fixed Counter</span><strong><?php echo e($fixedCounterRules); ?></strong><small>Counter ledger fixed</small></div>
+        <div class="card prototype-stat"><span>User Selected</span><strong><?php echo e($userSelectedCounterRules); ?></strong><small>User chooses counter</small></div>
+        <div class="card prototype-stat"><span>Heads Covered</span><strong><?php echo e($headsCovered); ?></strong><small>Transaction heads mapped</small></div>
+        <div class="card prototype-stat"><span>Pending Review</span><strong><?php echo e($pendingReviewRules); ?></strong><small>Needs activation</small></div>
     </div>
 
     <div class="prototype-grid accounting-rule-redesign-grid">
@@ -56,11 +54,11 @@
                     id="ruleForm"
                     class="prototype-form"
                     data-frontend-form
-                    data-action="{{ route('api.accounting-rules-setup.store') }}"
-                    data-store-url="{{ route('api.accounting-rules-setup.store') }}"
+                    data-action="<?php echo e(route('api.accounting-rules-setup.store')); ?>"
+                    data-store-url="<?php echo e(route('api.accounting-rules-setup.store')); ?>"
                     data-success="Accounting rule saved successfully."
                 >
-                    @csrf
+                    <?php echo csrf_field(); ?>
                     <input type="hidden" name="_method" id="ruleFormMethod" value="POST">
                     <input type="hidden" name="debit_account_id" id="debitAccountId">
                     <input type="hidden" name="credit_account_id" id="creditAccountId">
@@ -86,24 +84,24 @@
                                 <label for="transactionHead">Transaction Head <span class="required">*</span></label>
                                 <select id="transactionHead" name="transaction_head_id" required>
                                     <option value="">Select transaction head</option>
-                                    @foreach($transactionHeads as $head)
+                                    <?php $__currentLoopData = $transactionHeads; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $head): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                         <option
-                                            value="{{ $head->id }}"
-                                            data-screen="{{ e($head->transaction_screen ?: 'Transaction Entry') }}"
-                                            data-category="{{ e($head->category ?: $head->nature) }}"
-                                            data-payment-required="{{ $head->payment_method_required ? 1 : 0 }}"
-                                            data-party-mode="{{ e($head->party_required_mode ?: ($head->requires_party ? 'Required' : 'No')) }}"
-                                            data-settlements='@json($head->settlementTypes->pluck('id')->map(fn ($id) => (string) $id)->values())'
-                                        >{{ $head->head_code ? $head->head_code . ' - ' : '' }}{{ $head->name }}</option>
-                                    @endforeach
+                                            value="<?php echo e($head->id); ?>"
+                                            data-screen="<?php echo e(e($head->transaction_screen ?: 'Transaction Entry')); ?>"
+                                            data-category="<?php echo e(e($head->category ?: $head->nature)); ?>"
+                                            data-payment-required="<?php echo e($head->payment_method_required ? 1 : 0); ?>"
+                                            data-party-mode="<?php echo e(e($head->party_required_mode ?: ($head->requires_party ? 'Required' : 'No'))); ?>"
+                                            data-settlements='<?php echo json_encode($head->settlementTypes->pluck('id')->map(fn ($id) => (string) $id)->values(), 15, 512) ?>'
+                                        ><?php echo e($head->head_code ? $head->head_code . ' - ' : ''); ?><?php echo e($head->name); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
                             <div class="hidden" hidden aria-hidden="true">
                                 <select id="settlementType" name="settlement_type_id">
                                     <option value="">Select settlement type</option>
-                                    @foreach($settlementTypes as $settlementType)
-                                        <option value="{{ $settlementType->id }}" data-code="{{ e($settlementType->code) }}">{{ $settlementType->name }}</option>
-                                    @endforeach
+                                    <?php $__currentLoopData = $settlementTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $settlementType): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                        <option value="<?php echo e($settlementType->id); ?>" data-code="<?php echo e(e($settlementType->code)); ?>"><?php echo e($settlementType->name); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
                             <div class="prototype-field">
@@ -211,16 +209,16 @@
                                 <label for="primaryLedger">Primary Ledger / CoA Code <span class="required">*</span></label>
                                 <select id="primaryLedger" name="primary_ledger_id" required>
                                     <option value="">Select ledger</option>
-                                    @foreach($accounts as $account)
+                                    <?php $__currentLoopData = $accounts; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $account): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                         <option
-                                            value="{{ $account->id }}"
-                                            data-code="{{ e($account->account_code) }}"
-                                            data-name="{{ e($account->account_name) }}"
-                                            data-type="{{ e($account->accountType?->name) }}"
-                                            data-normal="{{ e($account->normal_balance ?: $account->accountType?->normal_balance) }}"
-                                            data-cash-bank="{{ $account->is_cash_bank ? 1 : 0 }}"
-                                        >{{ $account->display_name }}</option>
-                                    @endforeach
+                                            value="<?php echo e($account->id); ?>"
+                                            data-code="<?php echo e(e($account->account_code)); ?>"
+                                            data-name="<?php echo e(e($account->account_name)); ?>"
+                                            data-type="<?php echo e(e($account->accountType?->name)); ?>"
+                                            data-normal="<?php echo e(e($account->normal_balance ?: $account->accountType?->normal_balance)); ?>"
+                                            data-cash-bank="<?php echo e($account->is_cash_bank ? 1 : 0); ?>"
+                                        ><?php echo e($account->display_name); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
                             <div class="prototype-field">
@@ -281,16 +279,16 @@
                                 <label for="fixedCounterLedger">Fixed Counter Ledger / CoA Code <span class="required">*</span></label>
                                 <select id="fixedCounterLedger" name="fixed_counter_ledger_id" required>
                                     <option value="">Select counter ledger</option>
-                                    @foreach($accounts as $account)
+                                    <?php $__currentLoopData = $accounts; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $account): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                         <option
-                                            value="{{ $account->id }}"
-                                            data-code="{{ e($account->account_code) }}"
-                                            data-name="{{ e($account->account_name) }}"
-                                            data-type="{{ e($account->accountType?->name) }}"
-                                            data-normal="{{ e($account->normal_balance ?: $account->accountType?->normal_balance) }}"
-                                            data-cash-bank="{{ $account->is_cash_bank ? 1 : 0 }}"
-                                        >{{ $account->display_name }}</option>
-                                    @endforeach
+                                            value="<?php echo e($account->id); ?>"
+                                            data-code="<?php echo e(e($account->account_code)); ?>"
+                                            data-name="<?php echo e(e($account->account_name)); ?>"
+                                            data-type="<?php echo e(e($account->accountType?->name)); ?>"
+                                            data-normal="<?php echo e(e($account->normal_balance ?: $account->accountType?->normal_balance)); ?>"
+                                            data-cash-bank="<?php echo e($account->is_cash_bank ? 1 : 0); ?>"
+                                        ><?php echo e($account->display_name); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
                             <div class="prototype-field">
@@ -397,7 +395,7 @@
                 <h3>Accounting Rule List</h3>
                 <p>Search, filter, edit, and test available posting rules.</p>
             </div>
-            <span class="badge badge-neutral" id="ruleResultCount">Showing {{ $rules->count() }} of {{ $rules->count() }} entries</span>
+            <span class="badge badge-neutral" id="ruleResultCount">Showing <?php echo e($rules->count()); ?> of <?php echo e($rules->count()); ?> entries</span>
         </div>
         <div class="prototype-card-body">
             <div class="prototype-filter-grid" data-table-filter="#ruleTable" data-count-target="#ruleResultCount">
@@ -426,8 +424,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($rules as $rule)
-                            @php
+                        <?php $__empty_1 = true; $__currentLoopData = $rules; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $rule): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                            <?php
                                 $primary = $rule->primaryLedger ?: $rule->debitAccount;
                                 $counter = $rule->fixedCounterLedger ?: $rule->creditAccount;
                                 $partyMode = $rule->party_required_mode ?: $rule->party_required;
@@ -474,78 +472,78 @@
                                 $debitLineCount = $ruleLinePayload->where('side', 'Debit')->count();
                                 $creditLineCount = $ruleLinePayload->where('side', 'Credit')->count();
                                 $lineSummary = $debitLineCount . ' Dr / ' . $creditLineCount . ' Cr';
-                            @endphp
+                            ?>
                             <tr
-                                data-id="{{ $rule->id }}"
-                                data-text="{{ e(trim(($rule->rule_code ? $rule->rule_code . ' ' : '') . ($rule->rule_name ?: '') . ' ' . ($rule->transactionHead?->name ?: '') . ' ' . ($primary?->display_name ?: '') . ' ' . ($counter?->display_name ?: ''))) }}"
-                                data-screen="{{ e($rule->transaction_screen) }}"
-                                data-status="{{ e($rule->status) }}"
-                                data-rule-code="{{ e($rule->rule_code) }}"
-                                data-rule-name="{{ e($rule->rule_name) }}"
-                                data-transaction-head-id="{{ $rule->transaction_head_id }}"
-                                data-settlement-type-id="{{ $rule->settlement_type_id }}"
-                                data-transaction-screen="{{ e($rule->transaction_screen) }}"
-                                data-rule-trigger="{{ e($rule->rule_trigger ?: 'Transaction Head selected') }}"
-                                data-rule-status="{{ e($rule->status) }}"
-                                data-amount-required="{{ $rule->amount_required ? 1 : 0 }}"
-                                data-payment-method-required="{{ $rule->payment_method_required ? 1 : 0 }}"
-                                data-allowed-payment-method="{{ e($rule->allowed_payment_method ?: 'N/A') }}"
-                                data-cash-bank-ledger-required="{{ $rule->cash_bank_ledger_required ? 1 : 0 }}"
-                                data-party-required-mode="{{ e($partyMode ?: 'No') }}"
-                                data-party-sub-ledger-type="{{ e($rule->party_sub_ledger_type ?: 'None') }}"
-                                data-other-required-input="{{ e($rule->other_required_input) }}"
-                                data-primary-ledger-source="{{ e($rule->primary_ledger_source ?: 'Fixed Ledger') }}"
-                                data-primary-ledger-id="{{ $rule->primary_ledger_id ?: $rule->debit_account_id }}"
-                                data-primary-ledger-movement="{{ e($rule->primary_ledger_movement ?: 'Increase') }}"
-                                data-primary-posting-side="{{ e($rule->primary_posting_side ?: 'Debit') }}"
-                                data-primary-explanation="{{ e($rule->primary_explanation) }}"
-                                data-counter-ledger-source="{{ e($rule->counter_ledger_source ?: 'Fixed Ledger') }}"
-                                data-counter-selection-method="{{ e($rule->counter_selection_method ?: 'Fixed by Rule') }}"
-                                data-fixed-counter-ledger-id="{{ $rule->fixed_counter_ledger_id ?: $rule->credit_account_id }}"
-                                data-allowed-counter-ledger-type="{{ e($rule->allowed_counter_ledger_type ?: 'N/A') }}"
-                                data-counter-ledger-movement="{{ e($rule->counter_ledger_movement ?: 'Decrease') }}"
-                                data-counter-posting-side="{{ e($rule->counter_posting_side ?: 'Credit') }}"
-                                data-counter-explanation="{{ e($rule->counter_explanation) }}"
-                                data-party-ledger-effect="{{ e($rule->party_ledger_effect) }}"
-                                data-description="{{ e($rule->description) }}"
-                                data-rule-lines="{{ e($ruleLinePayload->toJson()) }}"
-                                data-update-url="{{ route('api.accounting-rules-setup.update', $rule) }}"
+                                data-id="<?php echo e($rule->id); ?>"
+                                data-text="<?php echo e(e(trim(($rule->rule_code ? $rule->rule_code . ' ' : '') . ($rule->rule_name ?: '') . ' ' . ($rule->transactionHead?->name ?: '') . ' ' . ($primary?->display_name ?: '') . ' ' . ($counter?->display_name ?: '')))); ?>"
+                                data-screen="<?php echo e(e($rule->transaction_screen)); ?>"
+                                data-status="<?php echo e(e($rule->status)); ?>"
+                                data-rule-code="<?php echo e(e($rule->rule_code)); ?>"
+                                data-rule-name="<?php echo e(e($rule->rule_name)); ?>"
+                                data-transaction-head-id="<?php echo e($rule->transaction_head_id); ?>"
+                                data-settlement-type-id="<?php echo e($rule->settlement_type_id); ?>"
+                                data-transaction-screen="<?php echo e(e($rule->transaction_screen)); ?>"
+                                data-rule-trigger="<?php echo e(e($rule->rule_trigger ?: 'Transaction Head selected')); ?>"
+                                data-rule-status="<?php echo e(e($rule->status)); ?>"
+                                data-amount-required="<?php echo e($rule->amount_required ? 1 : 0); ?>"
+                                data-payment-method-required="<?php echo e($rule->payment_method_required ? 1 : 0); ?>"
+                                data-allowed-payment-method="<?php echo e(e($rule->allowed_payment_method ?: 'N/A')); ?>"
+                                data-cash-bank-ledger-required="<?php echo e($rule->cash_bank_ledger_required ? 1 : 0); ?>"
+                                data-party-required-mode="<?php echo e(e($partyMode ?: 'No')); ?>"
+                                data-party-sub-ledger-type="<?php echo e(e($rule->party_sub_ledger_type ?: 'None')); ?>"
+                                data-other-required-input="<?php echo e(e($rule->other_required_input)); ?>"
+                                data-primary-ledger-source="<?php echo e(e($rule->primary_ledger_source ?: 'Fixed Ledger')); ?>"
+                                data-primary-ledger-id="<?php echo e($rule->primary_ledger_id ?: $rule->debit_account_id); ?>"
+                                data-primary-ledger-movement="<?php echo e(e($rule->primary_ledger_movement ?: 'Increase')); ?>"
+                                data-primary-posting-side="<?php echo e(e($rule->primary_posting_side ?: 'Debit')); ?>"
+                                data-primary-explanation="<?php echo e(e($rule->primary_explanation)); ?>"
+                                data-counter-ledger-source="<?php echo e(e($rule->counter_ledger_source ?: 'Fixed Ledger')); ?>"
+                                data-counter-selection-method="<?php echo e(e($rule->counter_selection_method ?: 'Fixed by Rule')); ?>"
+                                data-fixed-counter-ledger-id="<?php echo e($rule->fixed_counter_ledger_id ?: $rule->credit_account_id); ?>"
+                                data-allowed-counter-ledger-type="<?php echo e(e($rule->allowed_counter_ledger_type ?: 'N/A')); ?>"
+                                data-counter-ledger-movement="<?php echo e(e($rule->counter_ledger_movement ?: 'Decrease')); ?>"
+                                data-counter-posting-side="<?php echo e(e($rule->counter_posting_side ?: 'Credit')); ?>"
+                                data-counter-explanation="<?php echo e(e($rule->counter_explanation)); ?>"
+                                data-party-ledger-effect="<?php echo e(e($rule->party_ledger_effect)); ?>"
+                                data-description="<?php echo e(e($rule->description)); ?>"
+                                data-rule-lines="<?php echo e(e($ruleLinePayload->toJson())); ?>"
+                                data-update-url="<?php echo e(route('api.accounting-rules-setup.update', $rule)); ?>"
                             >
-                                <td class="code">{{ $rule->rule_code ?: '—' }}</td>
-                                <td class="strong">{{ $rule->rule_name ?: $rule->description ?: 'Accounting Rule' }}</td>
-                                <td>{{ $rule->transactionHead?->name ?? '—' }}</td>
-                                <td>{{ $primary?->display_name ?? '—' }}</td>
-                                <td><span class="badge badge-primary">{{ $rule->primary_posting_side ?: 'Debit' }}</span></td>
-                                <td>{{ $rule->counter_ledger_source ?: 'Fixed Ledger' }}</td>
-                                <td>{{ $rule->counter_selection_method ?: 'Fixed by Rule' }}</td>
-                                <td><span class="badge badge-purple">{{ $rule->counter_posting_side ?: 'Credit' }}</span></td>
-                                <td>{{ $partyMode ?: 'No' }}</td>
-                                <td>{{ $rule->payment_method_required ? 'Yes' : 'No' }}</td>
-                                <td>{{ $rule->transaction_screen ?: $rule->transactionHead?->transaction_screen ?: 'Transaction Entry' }}</td>
-                                <td><span class="badge {{ $rule->status === 'Active' ? 'badge-success' : 'badge-neutral' }}">{{ $rule->status }}</span></td>
+                                <td class="code"><?php echo e($rule->rule_code ?: '—'); ?></td>
+                                <td class="strong"><?php echo e($rule->rule_name ?: $rule->description ?: 'Accounting Rule'); ?></td>
+                                <td><?php echo e($rule->transactionHead?->name ?? '—'); ?></td>
+                                <td><?php echo e($primary?->display_name ?? '—'); ?></td>
+                                <td><span class="badge badge-primary"><?php echo e($rule->primary_posting_side ?: 'Debit'); ?></span></td>
+                                <td><?php echo e($rule->counter_ledger_source ?: 'Fixed Ledger'); ?></td>
+                                <td><?php echo e($rule->counter_selection_method ?: 'Fixed by Rule'); ?></td>
+                                <td><span class="badge badge-purple"><?php echo e($rule->counter_posting_side ?: 'Credit'); ?></span></td>
+                                <td><?php echo e($partyMode ?: 'No'); ?></td>
+                                <td><?php echo e($rule->payment_method_required ? 'Yes' : 'No'); ?></td>
+                                <td><?php echo e($rule->transaction_screen ?: $rule->transactionHead?->transaction_screen ?: 'Transaction Entry'); ?></td>
+                                <td><span class="badge <?php echo e($rule->status === 'Active' ? 'badge-success' : 'badge-neutral'); ?>"><?php echo e($rule->status); ?></span></td>
                                 <td>
                                     <div class="action-cell">
                                         <button type="button" class="icon-btn edit-btn" title="Edit">✎</button>
-                                        <form method="POST" data-delete-form action="{{ route('setup.accounting-rules-setup.destroy', $rule) }}" onsubmit="return confirm('Delete this accounting rule?')">
-                                            @csrf
-                                            @method('DELETE')
+                                        <form method="POST" data-delete-form action="<?php echo e(route('setup.accounting-rules-setup.destroy', $rule)); ?>" onsubmit="return confirm('Delete this accounting rule?')">
+                                            <?php echo csrf_field(); ?>
+                                            <?php echo method_field('DELETE'); ?>
                                             <button class="icon-btn delete-btn" type="submit" title="Delete">🗑</button>
                                         </form>
                                     </div>
                                 </td>
                             </tr>
-                        @empty
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr data-empty="true"><td colspan="13" class="muted" style="text-align:center;padding:24px">No accounting rules found.</td></tr>
-                        @endforelse
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </section>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@push('scripts')
+<?php $__env->startPush('scripts'); ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('ruleForm');
@@ -973,4 +971,6 @@ document.addEventListener('DOMContentLoaded', () => {
     resetForm();
 });
 </script>
-@endpush
+<?php $__env->stopPush(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/accounting-rules-setup.blade.php ENDPATH**/ ?>

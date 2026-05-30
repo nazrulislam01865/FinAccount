@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Transaction Head Setup | HisebGhor'); ?>
 
-@section('title', 'Transaction Head Setup | HisebGhor')
-
-@section('content')
-@php
+<?php $__env->startSection('content'); ?>
+<?php
     $activeHeads = $transactionHeads->where('status', 'Active')->count();
     $systemHeads = $transactionHeads->where('is_system_default', true)->count();
     $partyHeads = $transactionHeads->filter(fn ($head) => ($head->party_required_mode ?: ($head->requires_party ? 'Required' : 'No')) !== 'No')->count();
@@ -11,7 +9,7 @@
     $salesHeads = $transactionHeads->filter(fn ($head) => str_contains(strtolower((string) ($head->category ?: $head->nature ?: $head->name)), 'sales'))->count();
     $expenseHeads = $transactionHeads->filter(fn ($head) => str_contains(strtolower((string) ($head->category ?: $head->nature ?: $head->name)), 'expense'))->count();
     $screenCount = $transactionHeads->pluck('transaction_screen')->filter()->unique()->count();
-@endphp
+?>
 
 <div class="prototype-page transaction-head-page">
     <div class="prototype-hero">
@@ -28,15 +26,15 @@
         </div>
     </div>
 
-    @include('partials.setup-progress', ['current' => 5])
+    <?php echo $__env->make('partials.setup-progress', ['current' => 5], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
     <div class="prototype-stats six">
-        <div class="card prototype-stat"><span>Total Transaction Heads</span><strong>{{ $transactionHeads->count() }}</strong><small>Business activities</small></div>
-        <div class="card prototype-stat"><span>Payment Required</span><strong>{{ $paymentHeads }}</strong><small>Needs cash/bank input</small></div>
-        <div class="card prototype-stat"><span>Party Required</span><strong>{{ $partyHeads }}</strong><small>Customer / supplier / employee</small></div>
-        <div class="card prototype-stat"><span>Sales Heads</span><strong>{{ $salesHeads }}</strong><small>Sales / income activity</small></div>
-        <div class="card prototype-stat"><span>Expense Heads</span><strong>{{ $expenseHeads }}</strong><small>Payment / expense activity</small></div>
-        <div class="card prototype-stat"><span>Active Heads</span><strong>{{ $activeHeads }}</strong><small>Visible in transaction entry</small></div>
+        <div class="card prototype-stat"><span>Total Transaction Heads</span><strong><?php echo e($transactionHeads->count()); ?></strong><small>Business activities</small></div>
+        <div class="card prototype-stat"><span>Payment Required</span><strong><?php echo e($paymentHeads); ?></strong><small>Needs cash/bank input</small></div>
+        <div class="card prototype-stat"><span>Party Required</span><strong><?php echo e($partyHeads); ?></strong><small>Customer / supplier / employee</small></div>
+        <div class="card prototype-stat"><span>Sales Heads</span><strong><?php echo e($salesHeads); ?></strong><small>Sales / income activity</small></div>
+        <div class="card prototype-stat"><span>Expense Heads</span><strong><?php echo e($expenseHeads); ?></strong><small>Payment / expense activity</small></div>
+        <div class="card prototype-stat"><span>Active Heads</span><strong><?php echo e($activeHeads); ?></strong><small>Visible in transaction entry</small></div>
     </div>
 
     <div class="prototype-grid transaction-head-redesign-grid">
@@ -54,11 +52,11 @@
                     id="headForm"
                     class="prototype-form"
                     data-frontend-form
-                    data-action="{{ route('api.transaction-heads.store') }}"
-                    data-store-url="{{ route('api.transaction-heads.store') }}"
+                    data-action="<?php echo e(route('api.transaction-heads.store')); ?>"
+                    data-store-url="<?php echo e(route('api.transaction-heads.store')); ?>"
                     data-success="Transaction head saved successfully."
                 >
-                    @csrf
+                    <?php echo csrf_field(); ?>
                     <input type="hidden" name="_method" id="headFormMethod" value="POST">
                     <input type="hidden" name="nature" id="headNature" value="Payment">
                     <input type="hidden" name="requires_party" id="requiresParty" value="0">
@@ -107,9 +105,9 @@
                             <label for="defaultLedger">Which ledger is mainly affected?</label>
                             <select id="defaultLedger" name="default_primary_ledger_id">
                                 <option value="">Rule-selected / user-selected</option>
-                                @foreach($postingLedgers as $ledger)
-                                    <option value="{{ $ledger->id }}">{{ $ledger->display_name }}</option>
-                                @endforeach
+                                <?php $__currentLoopData = $postingLedgers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ledger): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                    <option value="<?php echo e($ledger->id); ?>"><?php echo e($ledger->display_name); ?></option>
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                             </select>
                         </div>
 
@@ -182,11 +180,12 @@
                         <div class="prototype-field full">
                             <label>Allowed Settlement Types <span class="required">*</span></label>
                             <div class="multi-select prototype-chip-box" id="settlementTypeChips" data-selected-count="0">
-                                @foreach($settlementTypes as $settlementType)
-                                    <span class="select-chip" tabindex="0" role="button" data-id="{{ $settlementType->id }}" data-value="{{ $settlementType->id }}" data-name="{{ e($settlementType->name) }}" data-code="{{ e($settlementType->code) }}">
-                                        {{ $settlementType->name }}
+                                <?php $__currentLoopData = $settlementTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $settlementType): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                    <span class="select-chip" tabindex="0" role="button" data-id="<?php echo e($settlementType->id); ?>" data-value="<?php echo e($settlementType->id); ?>" data-name="<?php echo e(e($settlementType->name)); ?>" data-code="<?php echo e(e($settlementType->code)); ?>">
+                                        <?php echo e($settlementType->name); ?>
+
                                     </span>
-                                @endforeach
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                             </div>
                             <div class="hint">Choose the payment/settlement modes that can be used with this head.</div>
                         </div>
@@ -235,7 +234,7 @@
                 <h3>Transaction Head List</h3>
                 <p>Search, filter, edit, and review available business activities.</p>
             </div>
-            <span class="badge badge-neutral" id="resultCount">Showing {{ $transactionHeads->count() }} of {{ $transactionHeads->count() }} entries</span>
+            <span class="badge badge-neutral" id="resultCount">Showing <?php echo e($transactionHeads->count()); ?> of <?php echo e($transactionHeads->count()); ?> entries</span>
         </div>
 
         <div class="prototype-card-body">
@@ -287,72 +286,73 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($transactionHeads as $head)
-                            @php
+                        <?php $__empty_1 = true; $__currentLoopData = $transactionHeads; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $head): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                            <?php
                                 $partyMode = $head->party_required_mode ?: ($head->requires_party ? 'Required' : 'No');
                                 $category = $head->category ?: $head->nature;
                                 $settlementIds = $head->settlementTypes->pluck('id')->map(fn ($id) => (string) $id)->values();
-                            @endphp
+                            ?>
                             <tr
-                                data-id="{{ $head->id }}"
-                                data-text="{{ e(trim(($head->head_code ? $head->head_code . ' ' : '') . $head->name . ' ' . $category . ' ' . ($head->transaction_screen ?: ''))) }}"
-                                data-head-code="{{ e($head->head_code) }}"
-                                data-name="{{ e($head->name) }}"
-                                data-nature="{{ e($head->nature) }}"
-                                data-category="{{ e($category) }}"
-                                data-default-primary-ledger-id="{{ $head->default_primary_ledger_id }}"
-                                data-default-movement="{{ e($head->default_movement ?: 'Increase') }}"
-                                data-payment-method-required="{{ $head->payment_method_required ? 1 : 0 }}"
-                                data-party-required-mode="{{ e($partyMode) }}"
-                                data-default-party-type-id="{{ $head->default_party_type_id }}"
-                                data-requires-reference="{{ $head->requires_reference ? 1 : 0 }}"
-                                data-transaction-screen="{{ e($head->transaction_screen) }}"
-                                data-description="{{ e($head->description) }}"
-                                data-help-text="{{ e($head->help_text) }}"
-                                data-developer-note="{{ e($head->developer_note) }}"
-                                data-is-system-default="{{ $head->is_system_default ? 1 : 0 }}"
-                                data-is-user-selectable="{{ $head->is_user_selectable ? 1 : 0 }}"
-                                data-sort-order="{{ $head->sort_order }}"
-                                data-linked-accounting-rule-code="{{ e($head->linked_accounting_rule_code) }}"
-                                data-settlement-ids='@json($settlementIds)'
-                                data-status="{{ e($head->status) }}"
-                                data-update-url="{{ route('api.transaction-heads.update', $head) }}"
+                                data-id="<?php echo e($head->id); ?>"
+                                data-text="<?php echo e(e(trim(($head->head_code ? $head->head_code . ' ' : '') . $head->name . ' ' . $category . ' ' . ($head->transaction_screen ?: '')))); ?>"
+                                data-head-code="<?php echo e(e($head->head_code)); ?>"
+                                data-name="<?php echo e(e($head->name)); ?>"
+                                data-nature="<?php echo e(e($head->nature)); ?>"
+                                data-category="<?php echo e(e($category)); ?>"
+                                data-default-primary-ledger-id="<?php echo e($head->default_primary_ledger_id); ?>"
+                                data-default-movement="<?php echo e(e($head->default_movement ?: 'Increase')); ?>"
+                                data-payment-method-required="<?php echo e($head->payment_method_required ? 1 : 0); ?>"
+                                data-party-required-mode="<?php echo e(e($partyMode)); ?>"
+                                data-default-party-type-id="<?php echo e($head->default_party_type_id); ?>"
+                                data-requires-reference="<?php echo e($head->requires_reference ? 1 : 0); ?>"
+                                data-transaction-screen="<?php echo e(e($head->transaction_screen)); ?>"
+                                data-description="<?php echo e(e($head->description)); ?>"
+                                data-help-text="<?php echo e(e($head->help_text)); ?>"
+                                data-developer-note="<?php echo e(e($head->developer_note)); ?>"
+                                data-is-system-default="<?php echo e($head->is_system_default ? 1 : 0); ?>"
+                                data-is-user-selectable="<?php echo e($head->is_user_selectable ? 1 : 0); ?>"
+                                data-sort-order="<?php echo e($head->sort_order); ?>"
+                                data-linked-accounting-rule-code="<?php echo e(e($head->linked_accounting_rule_code)); ?>"
+                                data-settlement-ids='<?php echo json_encode($settlementIds, 15, 512) ?>'
+                                data-status="<?php echo e(e($head->status)); ?>"
+                                data-update-url="<?php echo e(route('api.transaction-heads.update', $head)); ?>"
                             >
-                                <td class="code">{{ $head->head_code ?: '—' }}</td>
-                                <td class="strong">{{ $head->name }}</td>
-                                <td><span class="badge badge-primary">{{ $category }}</span></td>
-                                <td class="{{ $head->defaultPrimaryLedger ? '' : 'muted' }}">
-                                    {{ $head->defaultPrimaryLedger?->display_name ?? 'Rule-selected' }}
+                                <td class="code"><?php echo e($head->head_code ?: '—'); ?></td>
+                                <td class="strong"><?php echo e($head->name); ?></td>
+                                <td><span class="badge badge-primary"><?php echo e($category); ?></span></td>
+                                <td class="<?php echo e($head->defaultPrimaryLedger ? '' : 'muted'); ?>">
+                                    <?php echo e($head->defaultPrimaryLedger?->display_name ?? 'Rule-selected'); ?>
+
                                 </td>
-                                <td>{{ $head->default_movement ?: 'Increase' }}</td>
-                                <td>{{ $head->payment_method_required ? 'Yes' : 'No' }}</td>
-                                <td>{{ $partyMode }}</td>
-                                <td>{{ $head->defaultPartyType?->name ?? '—' }}</td>
-                                <td>{{ $head->transaction_screen ?: 'Transaction Entry' }}</td>
-                                <td><span class="badge {{ $head->status === 'Active' ? 'badge-success' : 'badge-neutral' }}">{{ $head->status }}</span></td>
+                                <td><?php echo e($head->default_movement ?: 'Increase'); ?></td>
+                                <td><?php echo e($head->payment_method_required ? 'Yes' : 'No'); ?></td>
+                                <td><?php echo e($partyMode); ?></td>
+                                <td><?php echo e($head->defaultPartyType?->name ?? '—'); ?></td>
+                                <td><?php echo e($head->transaction_screen ?: 'Transaction Entry'); ?></td>
+                                <td><span class="badge <?php echo e($head->status === 'Active' ? 'badge-success' : 'badge-neutral'); ?>"><?php echo e($head->status); ?></span></td>
                                 <td>
                                     <div class="action-cell">
                                         <button class="icon-btn edit-btn" type="button" title="Edit">✎</button>
-                                        <form method="POST" data-delete-form action="{{ route('setup.transaction-heads.destroy', $head) }}" onsubmit="return confirm('Delete this transaction head?')">
-                                            @csrf
-                                            @method('DELETE')
+                                        <form method="POST" data-delete-form action="<?php echo e(route('setup.transaction-heads.destroy', $head)); ?>" onsubmit="return confirm('Delete this transaction head?')">
+                                            <?php echo csrf_field(); ?>
+                                            <?php echo method_field('DELETE'); ?>
                                             <button class="icon-btn delete-btn" type="submit" title="Delete">🗑</button>
                                         </form>
                                     </div>
                                 </td>
                             </tr>
-                        @empty
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr data-empty="true"><td colspan="11" class="muted" style="text-align:center;padding:24px">No transaction heads found.</td></tr>
-                        @endforelse
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </section>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@push('scripts')
+<?php $__env->startPush('scripts'); ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('headForm');
@@ -631,4 +631,6 @@ document.addEventListener('DOMContentLoaded', () => {
     syncDerivedFields();
 });
 </script>
-@endpush
+<?php $__env->stopPush(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/transaction-heads.blade.php ENDPATH**/ ?>

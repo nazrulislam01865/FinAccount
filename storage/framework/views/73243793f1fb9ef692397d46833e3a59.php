@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Opening Balance Setup | HisebGhor'); ?>
 
-@section('title', 'Opening Balance Setup | HisebGhor')
-
-@section('content')
-@php
+<?php $__env->startSection('content'); ?>
+<?php
     $hasSavedOpeningRows = $openingBalances->isNotEmpty();
     $canManageOpeningBalances = $canManageOpeningBalances ?? (auth()->user()?->hasAnyPermission(['opening-balances.manage']) === true);
     $openingCanEdit = !$openingIsFinal && $canManageOpeningBalances;
@@ -77,7 +75,7 @@
 
         return trim(($party->party_code ? $party->party_code . ' - ' : '') . $party->party_name);
     };
-@endphp
+?>
 
 <div class="page-title">
     <div>
@@ -87,38 +85,40 @@
     </div>
 </div>
 
-@include('partials.setup-progress', ['current' => 7])
+<?php echo $__env->make('partials.setup-progress', ['current' => 7], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
-@if($openingIsFinal)
+<?php if($openingIsFinal): ?>
     <div class="card hint-box" style="margin-bottom:16px">
         <strong>Opening balance is finalized.</strong>
         Posted opening balances cannot be edited directly. Use a reversal or adjustment voucher if correction is required.
 
-        @if($postedOpeningVoucher)
+        <?php if($postedOpeningVoucher): ?>
             <div style="margin-top:6px">
                 Posted Voucher:
-                <strong>{{ $postedOpeningVoucher->voucher_number }}</strong>
-                · Total: BDT {{ number_format((float) $postedOpeningVoucher->total_debit, 2) }}
-                · Date: {{ optional($postedOpeningVoucher->voucher_date)->format('d M Y') }}
-            </div>
-        @endif
-    </div>
-@endif
+                <strong><?php echo e($postedOpeningVoucher->voucher_number); ?></strong>
+                · Total: BDT <?php echo e(number_format((float) $postedOpeningVoucher->total_debit, 2)); ?>
 
-@if(!$openingCanEdit && !$openingIsFinal)
+                · Date: <?php echo e(optional($postedOpeningVoucher->voucher_date)->format('d M Y')); ?>
+
+            </div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
+<?php if(!$openingCanEdit && !$openingIsFinal): ?>
     <div class="card hint-box" style="margin-bottom:16px;border-color:#fed7aa;background:#fff7ed;color:#9a3412">
         <strong>Read-only access.</strong> Your role can view Opening Balance Setup, but edit/save controls are locked.
     </div>
-@endif
+<?php endif; ?>
 
 <form
     id="openingBalanceForm"
-    data-action="{{ route('api.opening-balances.store') }}"
+    data-action="<?php echo e(route('api.opening-balances.store')); ?>"
     data-success="Opening balance saved."
-    data-opening-can-edit="{{ $openingCanEdit ? '1' : '0' }}"
-    data-opening-locked-message="{{ $openingEditLockedMessage }}"
+    data-opening-can-edit="<?php echo e($openingCanEdit ? '1' : '0'); ?>"
+    data-opening-locked-message="<?php echo e($openingEditLockedMessage); ?>"
 >
-    @csrf
+    <?php echo csrf_field(); ?>
 
     <input type="hidden" name="status" id="openingStatus" value="Draft">
 
@@ -145,18 +145,19 @@
                 <div>
                     <label>Financial Year <span class="required">*</span></label>
 
-                    <select name="financial_year_id" id="financialYearId" required @disabled($openingIsFinal)>
+                    <select name="financial_year_id" id="financialYearId" required <?php if($openingIsFinal): echo 'disabled'; endif; ?>>
                         <option value="">Select Financial Year</option>
 
-                        @foreach($financialYears as $financialYear)
+                        <?php $__currentLoopData = $financialYears; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $financialYear): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                             <option
-                                value="{{ $financialYear->id }}"
-                                @selected($currentFinancialYear?->id === $financialYear->id)
+                                value="<?php echo e($financialYear->id); ?>"
+                                <?php if($currentFinancialYear?->id === $financialYear->id): echo 'selected'; endif; ?>
                             >
-                                {{ $financialYear->name }}
-                                ({{ optional($financialYear->start_date)->format('d M Y') }} - {{ optional($financialYear->end_date)->format('d M Y') }})
+                                <?php echo e($financialYear->name); ?>
+
+                                (<?php echo e(optional($financialYear->start_date)->format('d M Y')); ?> - <?php echo e(optional($financialYear->end_date)->format('d M Y')); ?>)
                             </option>
-                        @endforeach
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </select>
                 </div>
 
@@ -166,24 +167,25 @@
                         type="date"
                         name="balance_date"
                         id="balanceDate"
-                        value="{{ $balanceDate }}"
+                        value="<?php echo e($balanceDate); ?>"
                         required
-                        @disabled($openingIsFinal)
+                        <?php if($openingIsFinal): echo 'disabled'; endif; ?>
                     >
                 </div>
 
                 <div>
                     <label>Branch / Location</label>
-                    <select name="branch_location" id="branchLocation" @disabled($openingIsFinal)>
-                        @foreach($branches as $branch)
-                            <option value="{{ $branch }}" @selected($branchLocation === $branch)>
-                                {{ $branch }}
+                    <select name="branch_location" id="branchLocation" <?php if($openingIsFinal): echo 'disabled'; endif; ?>>
+                        <?php $__currentLoopData = $branches; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $branch): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                            <option value="<?php echo e($branch); ?>" <?php if($branchLocation === $branch): echo 'selected'; endif; ?>>
+                                <?php echo e($branch); ?>
+
                             </option>
-                        @endforeach
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </select>
                 </div>
 
-                <button class="btn-outline" id="importBtn" type="button" @disabled(!$openingCanEdit)>
+                <button class="btn-outline" id="importBtn" type="button" <?php if(!$openingCanEdit): echo 'disabled'; endif; ?>>
                     ⇧ Import from Excel
                 </button>
 
@@ -226,108 +228,110 @@
                         </thead>
 
                         <tbody id="balanceTable">
-                            @forelse($rows as $index => $row)
-                                @php
+                            <?php $__empty_1 = true; $__currentLoopData = $rows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                <?php
                                     $account = $row['account'];
                                     $type = $account?->accountType?->name ?? 'Asset';
                                     $normalBalance = $account?->normal_balance ?: $account?->accountType?->normal_balance ?: 'Debit';
                                     $debit = (float) ($row['debit_opening'] ?? 0);
                                     $credit = (float) ($row['credit_opening'] ?? 0);
                                     $net = $debit - $credit;
-                                @endphp
+                                ?>
 
                                 <tr
                                     class="opening-view-row"
                                     data-mode="view"
-                                    data-type="{{ $type }}"
-                                    data-normal-balance="{{ $normalBalance }}"
+                                    data-type="<?php echo e($type); ?>"
+                                    data-normal-balance="<?php echo e($normalBalance); ?>"
                                 >
-                                    <td>{{ $index + 1 }}</td>
+                                    <td><?php echo e($index + 1); ?></td>
 
                                     <td>
-                                        <span class="view-only-value code-display">{{ $account?->account_code ?: '—' }}</span>
+                                        <span class="view-only-value code-display"><?php echo e($account?->account_code ?: '—'); ?></span>
                                         <input
                                             type="hidden"
                                             class="item-account"
-                                            name="items[{{ $index }}][account_id]"
-                                            value="{{ $account?->id }}"
+                                            name="items[<?php echo e($index); ?>][account_id]"
+                                            value="<?php echo e($account?->id); ?>"
                                         >
                                     </td>
 
                                     <td>
-                                        <span class="view-only-value account-display">{{ $accountLabel($account) }}</span>
+                                        <span class="view-only-value account-display"><?php echo e($accountLabel($account)); ?></span>
                                     </td>
 
                                     <td>
-                                        <span class="badge account-type {{ $badgeClass($type) }}">
-                                            {{ $type }}
+                                        <span class="badge account-type <?php echo e($badgeClass($type)); ?>">
+                                            <?php echo e($type); ?>
+
                                         </span>
                                     </td>
 
                                     <td>
-                                        <span class="view-only-value party-display">{{ $partyLabel($row['party_id']) }}</span>
+                                        <span class="view-only-value party-display"><?php echo e($partyLabel($row['party_id'])); ?></span>
                                         <input
                                             type="hidden"
                                             class="item-party"
-                                            name="items[{{ $index }}][party_id]"
-                                            value="{{ $row['party_id'] }}"
+                                            name="items[<?php echo e($index); ?>][party_id]"
+                                            value="<?php echo e($row['party_id']); ?>"
                                         >
                                     </td>
 
                                     <td class="amount-cell">
-                                        <span class="view-only-value">{{ number_format($debit, 2) }}</span>
+                                        <span class="view-only-value"><?php echo e(number_format($debit, 2)); ?></span>
                                         <input
                                             type="hidden"
                                             class="money-input debit"
-                                            name="items[{{ $index }}][debit_opening]"
-                                            value="{{ number_format($debit, 2, '.', '') }}"
+                                            name="items[<?php echo e($index); ?>][debit_opening]"
+                                            value="<?php echo e(number_format($debit, 2, '.', '')); ?>"
                                         >
                                     </td>
 
                                     <td class="amount-cell">
-                                        <span class="view-only-value">{{ number_format($credit, 2) }}</span>
+                                        <span class="view-only-value"><?php echo e(number_format($credit, 2)); ?></span>
                                         <input
                                             type="hidden"
                                             class="money-input credit"
-                                            name="items[{{ $index }}][credit_opening]"
-                                            value="{{ number_format($credit, 2, '.', '') }}"
+                                            name="items[<?php echo e($index); ?>][credit_opening]"
+                                            value="<?php echo e(number_format($credit, 2, '.', '')); ?>"
                                         >
                                     </td>
 
-                                    <td class="{{ $net >= 0 ? 'net-dr' : 'net-cr' }} net-balance">
-                                        {{ number_format(abs($net), 2) }} {{ $net >= 0 ? 'Dr' : 'Cr' }}
+                                    <td class="<?php echo e($net >= 0 ? 'net-dr' : 'net-cr'); ?> net-balance">
+                                        <?php echo e(number_format(abs($net), 2)); ?> <?php echo e($net >= 0 ? 'Dr' : 'Cr'); ?>
+
                                     </td>
 
                                     <td>
-                                        <span class="view-only-value remarks-display">{{ $row['remarks'] ?: '—' }}</span>
+                                        <span class="view-only-value remarks-display"><?php echo e($row['remarks'] ?: '—'); ?></span>
                                         <input
                                             type="hidden"
                                             class="item-remarks"
-                                            name="items[{{ $index }}][remarks]"
-                                            value="{{ $row['remarks'] }}"
+                                            name="items[<?php echo e($index); ?>][remarks]"
+                                            value="<?php echo e($row['remarks']); ?>"
                                         >
                                     </td>
 
                                     <td class="action-cell">
                                         <button
-                                            class="icon-btn edit-opening-row {{ $openingCanEdit ? '' : 'is-locked' }}"
+                                            class="icon-btn edit-opening-row <?php echo e($openingCanEdit ? '' : 'is-locked'); ?>"
                                             type="button"
                                             data-opening-action="edit"
-                                            title="{{ $openingCanEdit ? 'Edit opening balance row' : $openingEditLockedMessage }}"
-                                            data-opening-locked-message="{{ $openingEditLockedMessage }}"
-                                            aria-disabled="{{ $openingCanEdit ? 'false' : 'true' }}"
+                                            title="<?php echo e($openingCanEdit ? 'Edit opening balance row' : $openingEditLockedMessage); ?>"
+                                            data-opening-locked-message="<?php echo e($openingEditLockedMessage); ?>"
+                                            aria-disabled="<?php echo e($openingCanEdit ? 'false' : 'true'); ?>"
                                         >
                                             ✎
                                         </button>
                                     </td>
                                 </tr>
-                            @empty
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                                 <tr data-empty="true">
                                     <td colspan="10" class="opening-empty">
                                         No opening balance rows yet. Click <strong>+ Add New Row</strong> to enter an opening balance.
                                     </td>
                                 </tr>
-                            @endforelse
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -336,7 +340,7 @@
                     class="add-row"
                     id="addRowBtn"
                     type="button"
-                    @disabled(!$openingCanEdit)
+                    <?php if(!$openingCanEdit): echo 'disabled'; endif; ?>
                 >
                     + Add New Row
                 </button>
@@ -369,11 +373,11 @@
                     </button>
 
                     <div>
-                        <button class="btn-outline" id="saveDraftBtn" type="submit" @disabled(!$openingCanEdit)>
+                        <button class="btn-outline" id="saveDraftBtn" type="submit" <?php if(!$openingCanEdit): echo 'disabled'; endif; ?>>
                             Save Draft
                         </button>
 
-                        <button class="btn-primary" id="finishBtn" type="submit" @disabled(!$openingCanEdit)>
+                        <button class="btn-primary" id="finishBtn" type="submit" <?php if(!$openingCanEdit): echo 'disabled'; endif; ?>>
                             Post Opening Balance
                         </button>
                     </div>
@@ -383,9 +387,9 @@
 
     </div>
 </form>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@push('styles')
+<?php $__env->startPush('styles'); ?>
 <style>
     .opening-summary-cards {
         display: grid;
@@ -476,16 +480,16 @@
         min-width: 120px;
     }
 </style>
-@endpush
+<?php $__env->stopPush(); ?>
 
-@push('scripts')
+<?php $__env->startPush('scripts'); ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const accounts = @json($accountPayload);
-    const parties = @json($partyPayload);
-    const openingIsFinal = @json($openingIsFinal);
-    const hasSavedOpeningRows = @json($hasSavedOpeningRows);
-    const openingCanEdit = @json($openingCanEdit);
+    const accounts = <?php echo json_encode($accountPayload, 15, 512) ?>;
+    const parties = <?php echo json_encode($partyPayload, 15, 512) ?>;
+    const openingIsFinal = <?php echo json_encode($openingIsFinal, 15, 512) ?>;
+    const hasSavedOpeningRows = <?php echo json_encode($hasSavedOpeningRows, 15, 512) ?>;
+    const openingCanEdit = <?php echo json_encode($openingCanEdit, 15, 512) ?>;
 
     const tbody = document.getElementById('balanceTable');
     const form = document.getElementById('openingBalanceForm');
@@ -1348,4 +1352,5 @@ document.addEventListener('DOMContentLoaded', () => {
     recalc();
 });
 </script>
-@endpush
+<?php $__env->stopPush(); ?>
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/opening-balances.blade.php ENDPATH**/ ?>

@@ -199,3 +199,37 @@ Artisan::command('srs:phase4-check', function () {
     $this->info('All SRS Phase 4 structural checks passed.');
     return 0;
 })->purpose('Validate Phase 4 SRS roles, routes, audit, approval, and journal/report structure');
+
+Artisan::command('app:production-check', function () {
+    $checks = [
+        ['APP_ENV production', app()->environment('production'), 'Set APP_ENV=production on the droplet.'],
+        ['APP_DEBUG disabled', ! config('app.debug'), 'Set APP_DEBUG=false before public use.'],
+        ['APP_KEY present', filled(config('app.key')), 'Run php artisan key:generate once if APP_KEY is empty.'],
+        ['Configuration cached', app()->configurationIsCached(), 'Run php artisan config:cache after deployment.'],
+        ['Storage writable', is_writable(storage_path()) && is_writable(storage_path('app')), 'Fix ownership/permissions for storage.'],
+        ['Session driver persistent', in_array(config('session.driver'), ['database', 'redis', 'memcached'], true), 'Use SESSION_DRIVER=database or redis.'],
+        ['Session encryption enabled', (bool) config('session.encrypt'), 'Use SESSION_ENCRYPT=true.'],
+        ['Cache driver persistent', in_array(config('cache.default'), ['database', 'redis', 'memcached'], true), 'Use CACHE_STORE=database or redis.'],
+        ['Queue not sync', config('queue.default') !== 'sync', 'Use QUEUE_CONNECTION=database or redis and run a worker.'],
+        ['Security headers enabled', (bool) config('security.headers.enabled'), 'Use SECURITY_HEADERS_ENABLED=true.'],
+    ];
+
+    $failed = 0;
+
+    foreach ($checks as [$label, $passed, $hint]) {
+        $this->line(($passed ? '[OK]   ' : '[WARN] ') . $label);
+
+        if (! $passed) {
+            $this->line('       ' . $hint);
+            $failed++;
+        }
+    }
+
+    if ($failed > 0) {
+        $this->warn($failed . ' production checks need attention.');
+        return 1;
+    }
+
+    $this->info('All production readiness checks passed.');
+    return 0;
+})->purpose('Check production optimization, session, cache, queue, and security settings');

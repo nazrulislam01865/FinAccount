@@ -32,7 +32,7 @@ class LandingPageContent
             Cache::forget(self::CACHE_KEY);
         }
 
-        return Cache::rememberForever(self::CACHE_KEY, function () {
+        return Cache::remember(self::CACHE_KEY, now()->addSeconds((int) config('performance.cache.landing_page_ttl_seconds', 86400)), function () {
             $defaults = self::defaults();
             $record = self::record();
 

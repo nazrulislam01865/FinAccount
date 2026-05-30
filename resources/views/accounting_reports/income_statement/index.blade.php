@@ -112,7 +112,7 @@
             class="income-template-card"
         >
             <div class="table-wrap">
-                <table class="financial-table income-table income-statement-template-table">
+                <table id="incomeStatementTable" class="financial-table income-table income-statement-template-table" data-client-pagination="true" data-page-size="10">
                     <thead>
                         <tr>
                             <th>Particulars</th>

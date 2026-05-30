@@ -36,7 +36,10 @@ class DashboardService
         $companyId = $this->resolveCompanyId($user);
         $today = now()->toDateString();
 
-        return Cache::remember($this->cacheKey($companyId, $user?->id, $today), now()->addMinutes(5), function () use ($companyId): array {
+        return Cache::remember(
+            $this->cacheKey($companyId, $user?->id, $today),
+            now()->addSeconds((int) config('performance.cache.dashboard_ttl_seconds', 120)),
+            function () use ($companyId): array {
             $monthStart = now()->startOfMonth()->toDateString();
             $monthEnd = now()->endOfMonth()->toDateString();
             $setupSteps = $this->setupProgressService->steps();
@@ -255,7 +258,7 @@ class DashboardService
             ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
             ->latest('voucher_date')
             ->latest('id')
-            ->limit(75)
+            ->limit(50)
             ->get();
     }
 

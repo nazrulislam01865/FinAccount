@@ -3,7 +3,7 @@
 return [
     'route_prefix' => env('ACCOUNTING_REPORTS_ROUTE_PREFIX', 'accounting/reports'),
     'currency' => env('ACCOUNTING_REPORTS_CURRENCY', 'BDT'),
-    'per_page' => 25,
+    'per_page' => (int) env('ACCOUNTING_REPORTS_PER_PAGE', env('PERF_REPORT_ROWS', 10)),
     'add_transaction_route' => 'transactions.create',
 
     'permissions' => [
