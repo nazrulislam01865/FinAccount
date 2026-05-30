@@ -15,6 +15,19 @@
 
     $isEnabled = fn (string $key) => (bool) data_get($landing, $key.'.enabled', true);
     $defaultLang = data_get($landing, 'meta.default_lang', 'bn') === 'en' ? 'en' : 'bn';
+    $loginUrl = route('login');
+    $isDemoLink = function ($href = null, $label = null) use ($txt): bool {
+        $href = trim((string) $href);
+        $bn = strtolower($txt($label, 'bn'));
+        $en = strtolower($txt($label, 'en'));
+
+        return $href === '#contact'
+            || str_contains($bn, 'ডেমো')
+            || str_contains($en, 'demo');
+    };
+    $landingHref = fn ($href = null, $label = null) => $isDemoLink($href, $label)
+        ? $loginUrl
+        : ((string) ($href ?: '#'));
 @endphp
 <!DOCTYPE html>
 <html lang="{{ $defaultLang }}">

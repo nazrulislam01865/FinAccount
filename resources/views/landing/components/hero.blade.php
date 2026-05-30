@@ -6,7 +6,7 @@
       <p data-bn="{{ $txt(data_get($landing, 'hero.subtitle'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'hero.subtitle'), 'en') }}">{{ $txt(data_get($landing, 'hero.subtitle'), $defaultLang) }}</p>
       <div class="hero-buttons">
         @foreach(data_get($landing, 'hero.buttons', []) as $button)
-          <a class="{{ $buttonClass(data_get($button, 'style')) }}" href="{{ data_get($button, 'href', '#contact') }}" data-bn="{{ $txt(data_get($button, 'label'), 'bn') }}" data-en="{{ $txt(data_get($button, 'label'), 'en') }}">{{ $txt(data_get($button, 'label'), $defaultLang) }}</a>
+          <a class="{{ $buttonClass(data_get($button, 'style')) }}" href="{{ $landingHref(data_get($button, 'href', '#contact'), data_get($button, 'label')) }}" data-bn="{{ $txt(data_get($button, 'label'), 'bn') }}" data-en="{{ $txt(data_get($button, 'label'), 'en') }}">{{ $txt(data_get($button, 'label'), $defaultLang) }}</a>
         @endforeach
       </div>
       <div class="trust-row">

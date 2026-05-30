@@ -11,6 +11,10 @@ class SessionTimeout
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->is('landing-admin*')) {
+            return $next($request);
+        }
+
         if (! Auth::check()) {
             return $next($request);
         }

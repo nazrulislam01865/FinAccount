@@ -1,6 +1,6 @@
-@extends('layouts.app')
+@extends('layouts.landing-admin')
 
-@section('title', 'Landing Page Control | HisebGhor')
+@section('title', 'Landing Page Editor | HisebGhor')
 
 @push('styles')
 <style>
@@ -57,7 +57,7 @@
     <div>
         <span class="page-label">Landing Page</span>
         <h2>HisebGhor Landing Page Control</h2>
-        <p>Admin-controlled cards for every public landing-page section. Use the Landing Page submenu in the left sidebar to open each section, then save without touching accounting logic.</p>
+        <p>Admin-controlled cards for every public landing-page section. Use the dedicated Landing Admin dashboard menu to open each section, then save without touching accounting logic.</p>
         @if($updatedAt)
             <p class="hint" style="margin-top:6px">Last updated {{ $updatedAt->format('d M Y h:i A') }}@if($updatedBy) by {{ $updatedBy->name }}@endif.</p>
         @endif
@@ -88,7 +88,7 @@
 <div class="landing-admin-grid">
     <div class="landing-editor-layout">
         <div class="landing-editor-main">
-        <form method="POST" action="{{ route('landing-page.admin.update', ['section' => $activeSection]) }}" class="landing-form" data-frontend-form>
+        <form method="POST" action="{{ route('landing-admin.update', ['section' => $activeSection]) }}" class="landing-form" data-frontend-form>
             @csrf
             @method('PUT')
             <input type="hidden" name="active_section" id="landingActiveSection" value="{{ $activeSection }}">
@@ -131,7 +131,7 @@
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'nav' ? 'is-active' : '' }}" id="nav" data-section-panel="nav">
                 <div class="landing-card-head">
-                    <div><h3>Navigation & Header Buttons</h3><p>Add menu items and set top-right CTA/login buttons.</p></div>
+                    <div><h3>Landing Navigation</h3><p>Add or edit public landing-page menu items. Login/admin buttons are intentionally hidden from the public landing page; Landing Admin uses the direct URL.</p></div>
                     <button type="button" class="button btn-outline btn-small" data-add="nav_links">Add Menu</button>
                 </div>
                 <div class="landing-card-body">
@@ -146,17 +146,7 @@
                                 </div>
                             </div>
                         @endforeach
-                    </div>
-                    <div class="muted-divider"></div>
-                    <div class="landing-grid">
-                        <div><label>Primary Button Bangla</label><input name="cta[primary][label][bn]" value="{{ $trans('cta.primary.label', 'bn') }}"></div>
-                        <div><label>Primary Button English</label><input name="cta[primary][label][en]" value="{{ $trans('cta.primary.label', 'en') }}"></div>
-                        <div><label>Primary Link</label><input name="cta[primary][href]" value="{{ $value('cta.primary.href', '#contact') }}"></div>
-                        <div><label>Secondary/Login Link</label><input name="cta[secondary][href]" value="{{ $value('cta.secondary.href', '/login') }}"></div>
-                        <div><label>Secondary Button Bangla</label><input name="cta[secondary][label][bn]" value="{{ $trans('cta.secondary.label', 'bn') }}"></div>
-                        <div><label>Secondary Button English</label><input name="cta[secondary][label][en]" value="{{ $trans('cta.secondary.label', 'en') }}"></div>
-                    </div>
-                </div>
+                    </div>                </div>
             </section>
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'hero' ? 'is-active' : '' }}" id="hero" data-section-panel="hero">
@@ -330,7 +320,7 @@
                     <div><label>Phone</label><input name="contact[phone]" value="{{ $value('contact.phone') }}"></div><div><label>Email</label><input type="email" name="contact[email]" value="{{ $value('contact.email') }}"></div>
                     <div><label>Phone Note Bangla</label><input name="contact[phone_note][bn]" value="{{ $trans('contact.phone_note', 'bn') }}"></div><div><label>Phone Note English</label><input name="contact[phone_note][en]" value="{{ $trans('contact.phone_note', 'en') }}"></div>
                     <div><label>Email Note Bangla</label><input name="contact[email_note][bn]" value="{{ $trans('contact.email_note', 'bn') }}"></div><div><label>Email Note English</label><input name="contact[email_note][en]" value="{{ $trans('contact.email_note', 'en') }}"></div>
-                    <div class="full"><div class="code-help">These labels control the public demo request form. Demo requests still save into landing inquiries below.</div></div>
+                    <div class="full"><div class="code-help">These labels control the public contact/demo area. Demo CTA clicks on the public landing page redirect to the system login page.</div></div>
                     <div><label>Name Placeholder Bangla</label><input name="contact[form][name][bn]" value="{{ $trans('contact.form.name', 'bn') }}"></div><div><label>Name Placeholder English</label><input name="contact[form][name][en]" value="{{ $trans('contact.form.name', 'en') }}"></div>
                     <div><label>Business Placeholder Bangla</label><input name="contact[form][business_name][bn]" value="{{ $trans('contact.form.business_name', 'bn') }}"></div><div><label>Business Placeholder English</label><input name="contact[form][business_name][en]" value="{{ $trans('contact.form.business_name', 'en') }}"></div>
                     <div><label>Mobile Placeholder Bangla</label><input name="contact[form][mobile][bn]" value="{{ $trans('contact.form.mobile', 'bn') }}"></div><div><label>Mobile Placeholder English</label><input name="contact[form][mobile][en]" value="{{ $trans('contact.form.mobile', 'en') }}"></div>
@@ -360,7 +350,7 @@
     <aside class="right-stack">
         <div class="card info-card">
             <h3>Admin Control</h3>
-            <p class="hint">This editor now uses the left sidebar Landing Page submenu, matching the Master Setup submenu pattern. Admins open one section at a time without editing JSON.</p>
+            <p class="hint">This editor now uses a fully separate Landing Admin sidebar. Admins open one section at a time without editing JSON or entering the accounting dashboard.</p>
             <div class="step-list">
                 <div class="step-row"><div class="nav-icon">1</div><div><strong>Edit Cards</strong><small>Change labels, headings, packages, FAQ, buttons and contact form text.</small></div></div>
                 <div class="step-row"><div class="nav-icon">2</div><div><strong>Add Details</strong><small>Use Add buttons to add cards, options, package features, FAQ or testimonials.</small></div></div>
@@ -371,7 +361,7 @@
         <div class="card info-card">
             <h3>Reset Default</h3>
             <p class="hint">Restore the uploaded HisebGhor landing-page content and default green theme.</p>
-            <form method="POST" action="{{ route('landing-page.admin.reset') }}" onsubmit="return confirm('Reset landing page to default HisebGhor content?')" data-frontend-form>
+            <form method="POST" action="{{ route('landing-admin.reset') }}" onsubmit="return confirm('Reset landing page to default HisebGhor content?')" data-frontend-form>
                 @csrf
                 <button type="submit" class="button btn-ghost" style="width:100%;margin-top:12px">Reset to Default</button>
             </form>
@@ -381,8 +371,8 @@
             <h3>Route Summary</h3>
             <div class="step-list">
                 <div class="step-row"><div class="nav-icon">/</div><div><strong>Public Landing</strong><small>Always opens landing first, whether user is logged in or logged out.</small></div></div>
-                <div class="step-row"><div class="nav-icon">A</div><div><strong>Admin Editor</strong><small>Protected by landing-page permissions.</small></div></div>
-                <div class="step-row"><div class="nav-icon">D</div><div><strong>Demo Requests</strong><small>Stored as landing inquiries below.</small></div></div>
+                <div class="step-row"><div class="nav-icon">A</div><div><strong>Admin Editor</strong><small>Protected by the separate Landing Admin login.</small></div></div>
+                <div class="step-row"><div class="nav-icon">D</div><div><strong>Demo Requests</strong><small>Historical inquiries remain available below.</small></div></div>
             </div>
         </div>
     </aside>
@@ -402,8 +392,8 @@
             @forelse($inquiries as $inquiry)
                 <tr>
                     <td>{{ $inquiry->created_at?->format('d M Y') }}</td><td class="strong">{{ $inquiry->name }}</td><td>{{ $inquiry->business_name ?: '—' }}</td><td>{{ $inquiry->mobile ?: '—' }}</td><td>{{ $inquiry->email ?: '—' }}</td><td style="min-width:260px;white-space:normal">{{ $inquiry->message ?: '—' }}</td>
-                    <td><form method="POST" action="{{ route('landing-page.inquiries.update', $inquiry) }}" data-frontend-form>@csrf @method('PUT')<select name="status" onchange="this.form.submit()" style="min-width:140px">@foreach($statuses as $status)<option value="{{ $status }}" @selected($inquiry->status === $status)>{{ $status }}</option>@endforeach</select></form></td>
-                    <td><form method="POST" action="{{ route('landing-page.inquiries.destroy', $inquiry) }}" data-delete-form>@csrf @method('DELETE')<button type="submit" class="button btn-ghost" onclick="return confirm('Delete this inquiry?')">Delete</button></form></td>
+                    <td><form method="POST" action="{{ route('landing-admin.inquiries.update', $inquiry) }}" data-frontend-form>@csrf @method('PUT')<select name="status" onchange="this.form.submit()" style="min-width:140px">@foreach($statuses as $status)<option value="{{ $status }}" @selected($inquiry->status === $status)>{{ $status }}</option>@endforeach</select></form></td>
+                    <td><form method="POST" action="{{ route('landing-admin.inquiries.destroy', $inquiry) }}" data-delete-form>@csrf @method('DELETE')<button type="submit" class="button btn-ghost" onclick="return confirm('Delete this inquiry?')">Delete</button></form></td>
                 </tr>
             @empty
                 <tr data-empty="true"><td colspan="8" class="muted">No demo inquiry found yet.</td></tr>

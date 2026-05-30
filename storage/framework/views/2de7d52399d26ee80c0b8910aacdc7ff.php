@@ -1,16 +1,16 @@
 <style>
   :root{
-    --green:{{ data_get($landing, 'theme.green', '#00a86b') }};
-    --green-dark:{{ data_get($landing, 'theme.green_dark', '#087a52') }};
-    --green-soft:{{ data_get($landing, 'theme.green_soft', '#e9fff5') }};
+    --green:<?php echo e(data_get($landing, 'theme.green', '#00a86b')); ?>;
+    --green-dark:<?php echo e(data_get($landing, 'theme.green_dark', '#087a52')); ?>;
+    --green-soft:<?php echo e(data_get($landing, 'theme.green_soft', '#e9fff5')); ?>;
     --red:#ef4444;
-    --blue:{{ data_get($landing, 'theme.blue', '#2563eb') }};
+    --blue:<?php echo e(data_get($landing, 'theme.blue', '#2563eb')); ?>;
     --blue-soft:#eef4ff;
-    --gold:{{ data_get($landing, 'theme.gold', '#f59e0b') }};
-    --ink:{{ data_get($landing, 'theme.ink', '#101828') }};
-    --muted:{{ data_get($landing, 'theme.muted', '#667085') }};
+    --gold:<?php echo e(data_get($landing, 'theme.gold', '#f59e0b')); ?>;
+    --ink:<?php echo e(data_get($landing, 'theme.ink', '#101828')); ?>;
+    --muted:<?php echo e(data_get($landing, 'theme.muted', '#667085')); ?>;
     --line:#e5e7eb;
-    --bg:{{ data_get($landing, 'theme.bg', '#f8fafc') }};
+    --bg:<?php echo e(data_get($landing, 'theme.bg', '#f8fafc')); ?>;
     --white:#fff;
     --shadow:0 20px 50px rgba(16,24,40,.08);
     --radius:24px;
@@ -49,3 +49,4 @@
   @media(max-width:1000px){.navlinks{display:none}.mobile-menu-toggle{display:flex}.hero-grid,.for-grid,.contact-grid{grid-template-columns:1fr}.hero h1{font-size:46px}.grid-3,.packages,.testimonials,.screen-grid{grid-template-columns:1fr 1fr}}
   @media(max-width:720px){.mobile-nav-actions{grid-template-columns:1fr}.container{width:min(100% - 24px,1180px)}.hero{padding:46px 0}.hero h1{font-size:38px}.section{padding:54px 0}.section-title h2{font-size:32px}.grid-3,.packages,.testimonials,.screen-grid,.audience-list{grid-template-columns:1fr}.package.popular{transform:none}.footer-grid{display:grid}.actions .btn-primary{display:none}.mock-stats{grid-template-columns:1fr}.nav{height:68px}.brand strong{font-size:19px}.actions .btn-outline{display:none}}
 </style>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/landing/components/styles.blade.php ENDPATH**/ ?>

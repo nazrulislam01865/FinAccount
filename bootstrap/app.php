@@ -3,6 +3,7 @@
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureSuperAdmin;
+use App\Http\Middleware\EnsureLandingAdminAuthenticated;
 use App\Http\Middleware\SessionTimeout;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => CheckPermission::class,
             'active.user' => EnsureUserIsActive::class,
             'super.admin' => EnsureSuperAdmin::class,
+            'landing.admin.auth' => EnsureLandingAdminAuthenticated::class,
             'session.timeout' => SessionTimeout::class,
         ]);
 

@@ -17,6 +17,48 @@ class LandingPageAdminController extends Controller
 {
     use RespondsToDelete;
 
+    public function dashboard(Request $request): View
+    {
+        $record = LandingPageContent::record();
+        $landing = LandingPageContent::current(true);
+
+        $statusCounts = LandingPageInquiry::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->all();
+
+        $totalInquiries = array_sum(array_map('intval', $statusCounts));
+        $latestInquiries = LandingPageInquiry::query()
+            ->latest()
+            ->limit(8)
+            ->get();
+
+        $sections = [
+            'hero' => data_get($landing, 'hero.enabled', true),
+            'why' => data_get($landing, 'why.enabled', true),
+            'features' => data_get($landing, 'features.enabled', true),
+            'audience' => data_get($landing, 'audience.enabled', true),
+            'pricing' => data_get($landing, 'pricing.enabled', true),
+            'testimonials' => data_get($landing, 'testimonials_section.enabled', true),
+            'faq' => data_get($landing, 'faq_section.enabled', true),
+            'contact' => data_get($landing, 'contact.enabled', true),
+        ];
+
+        return view('landing.admin.dashboard', [
+            'landing' => $landing,
+            'isPublished' => $record?->is_published ?? true,
+            'updatedBy' => $record?->updater,
+            'updatedAt' => $record?->updated_at,
+            'statusCounts' => $statusCounts,
+            'totalInquiries' => $totalInquiries,
+            'latestInquiries' => $latestInquiries,
+            'enabledSections' => collect($sections)->filter()->count(),
+            'totalSections' => count($sections),
+            'statuses' => LandingPageInquiry::STATUSES,
+        ]);
+    }
+
     public function edit(Request $request): View
     {
         $record = LandingPageContent::record();
@@ -115,10 +157,10 @@ class LandingPageAdminController extends Controller
             ],
         ];
 
-        LandingPageContent::save($content, $request->boolean('is_published'), $request->user()?->id);
+        LandingPageContent::save($content, $request->boolean('is_published'), null);
 
         return redirect()
-            ->route('landing-page.admin.edit', [
+            ->route('landing-admin.edit', [
                 'section' => $this->landingSection($request->input('active_section', $request->query('section', 'basic'))),
             ])
             ->with('status', 'Landing page updated successfully.');
@@ -126,10 +168,10 @@ class LandingPageAdminController extends Controller
 
     public function reset(Request $request): RedirectResponse
     {
-        LandingPageContent::reset($request->user()?->id);
+        LandingPageContent::reset(null);
 
         return redirect()
-            ->route('landing-page.admin.edit', ['section' => 'basic'])
+            ->route('landing-admin.edit', ['section' => 'basic'])
             ->with('status', 'Landing page reset to the HisebGhor default landing content.');
     }
 
@@ -146,14 +188,12 @@ class LandingPageAdminController extends Controller
 
     public function destroyInquiry(Request $request, LandingPageInquiry $inquiry): JsonResponse|RedirectResponse
     {
-        abort_unless($request->user()?->hasPermission('landing-page.manage'), 403, 'You are not allowed to delete landing inquiries.');
-
         try {
             $inquiry->delete();
         } catch (Throwable $exception) {
             return $this->deleteFailure(
                 $request,
-                'landing-page.admin.edit',
+                'landing-admin.edit',
                 'This landing inquiry could not be deleted. Please try again.',
                 $exception
             );
@@ -161,7 +201,7 @@ class LandingPageAdminController extends Controller
 
         return $this->deleteSuccess(
             $request,
-            'landing-page.admin.edit',
+            'landing-admin.edit',
             'Landing inquiry deleted successfully.'
         );
     }

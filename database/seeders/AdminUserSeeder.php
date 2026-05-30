@@ -41,6 +41,7 @@ class AdminUserSeeder extends Seeder
                 $seededAdmin->roles()->syncWithoutDetaching([$superAdmin->id]);
             }
         }
+
     }
 
     private function createInitialAdminFromEnvironment(): ?User

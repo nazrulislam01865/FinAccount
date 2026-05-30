@@ -18,12 +18,12 @@ use App\Http\Controllers\Setup\VoucherNumberingController;
 use App\Http\Controllers\AdvanceManagementController;
 use App\Http\Controllers\DueManagementController;
 use App\Http\Controllers\LedgerReportController;
+use App\Http\Controllers\Landing\LandingAdminAuthController;
 use App\Http\Controllers\Landing\LandingPageAdminController;
 use App\Http\Controllers\Landing\LandingPageController;
 use App\Http\Controllers\ManualJournalController;
 use App\Http\Controllers\ReleaseNoteController;
 use App\Http\Controllers\TransactionController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class)->name('health');
@@ -31,6 +31,27 @@ Route::get('/health', HealthController::class)->name('health');
 Route::get('/', [LandingPageController::class, 'show'])->name('landing.show');
 Route::get('/landing', [LandingPageController::class, 'show'])->name('landing.public');
 Route::post('/landing-page/inquiry', [LandingPageController::class, 'storeInquiry'])->name('landing.inquiries.store');
+
+
+/*
+|--------------------------------------------------------------------------
+| Separate Landing Page Admin Authentication
+|--------------------------------------------------------------------------
+| /landing-admin is isolated from the normal /login accounting-system guard.
+| Demo/system users use /login. Landing managers use /landing-admin only.
+*/
+Route::get('/landing-admin', [LandingAdminAuthController::class, 'create'])->name('landing-admin.login');
+Route::post('/landing-admin', [LandingAdminAuthController::class, 'store'])->name('landing-admin.login.store');
+Route::post('/landing-admin/logout', [LandingAdminAuthController::class, 'destroy'])->name('landing-admin.logout');
+
+Route::middleware(['landing.admin.auth'])->prefix('landing-admin')->name('landing-admin.')->group(function () {
+    Route::get('/dashboard', [LandingPageAdminController::class, 'dashboard'])->name('dashboard');
+    Route::get('/page', [LandingPageAdminController::class, 'edit'])->name('edit');
+    Route::put('/page', [LandingPageAdminController::class, 'update'])->name('update');
+    Route::post('/page/reset', [LandingPageAdminController::class, 'reset'])->name('reset');
+    Route::put('/inquiries/{inquiry}', [LandingPageAdminController::class, 'updateInquiry'])->name('inquiries.update');
+    Route::delete('/inquiries/{inquiry}', [LandingPageAdminController::class, 'destroyInquiry'])->name('inquiries.destroy');
+});
 
 Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/dashboard', DashboardController::class)
@@ -129,33 +150,6 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])
             ->middleware('permission:release-notes.manage')
             ->name('destroy');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Landing Page Control
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('landing-page')->name('landing-page.')->group(function () {
-        Route::get('/admin', [LandingPageAdminController::class, 'edit'])
-            ->middleware('permission:landing-page.view|landing-page.manage')
-            ->name('admin.edit');
-
-        Route::put('/admin', [LandingPageAdminController::class, 'update'])
-            ->middleware('permission:landing-page.manage')
-            ->name('admin.update');
-
-        Route::post('/admin/reset', [LandingPageAdminController::class, 'reset'])
-            ->middleware('permission:landing-page.manage')
-            ->name('admin.reset');
-
-        Route::put('/inquiries/{inquiry}', [LandingPageAdminController::class, 'updateInquiry'])
-            ->middleware('permission:landing-page.manage')
-            ->name('inquiries.update');
-
-        Route::delete('/inquiries/{inquiry}', [LandingPageAdminController::class, 'destroyInquiry'])
-            ->middleware('permission:landing-page.manage')
-            ->name('inquiries.destroy');
     });
 
     /*

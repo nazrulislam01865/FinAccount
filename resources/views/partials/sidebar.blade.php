@@ -35,23 +35,6 @@
         ['label' => 'Financial Years', 'route' => 'setup.master-data.financial-years'],
     ];
 
-    $landingSectionLinks = [
-        ['label' => 'Basic Setup', 'section' => 'basic'],
-        ['label' => 'Navigation', 'section' => 'nav'],
-        ['label' => 'Hero Section', 'section' => 'hero'],
-        ['label' => 'Why Section', 'section' => 'why'],
-        ['label' => 'Feature Screens', 'section' => 'features'],
-        ['label' => 'Audience', 'section' => 'audience'],
-        ['label' => 'Pricing', 'section' => 'pricing'],
-        ['label' => 'Testimonials', 'section' => 'testimonials'],
-        ['label' => 'FAQ', 'section' => 'faq'],
-        ['label' => 'Contact', 'section' => 'contact'],
-        ['label' => 'Footer', 'section' => 'footer'],
-    ];
-
-    $isLandingPageRoute = request()->routeIs('landing-page.admin.*') || request()->routeIs('landing-page.inquiries.*');
-    $landingActiveSection = request()->query('section', 'basic');
-    $landingActiveSection = collect($landingSectionLinks)->contains(fn ($link) => $link['section'] === $landingActiveSection) ? $landingActiveSection : 'basic';
 @endphp
 
 <aside class="sidebar" id="appSidebar">
@@ -197,44 +180,13 @@
     @endif
 
 
-    @if($canRoute('release-notes.index') || $canRoute('landing-page.admin.edit'))
+    @if($canRoute('release-notes.index'))
         <div class="nav-title">System</div>
 
-        @if($canRoute('landing-page.admin.edit'))
-            <details class="nav-group landing-page-nav-group" {{ $isLandingPageRoute ? 'open' : '' }}>
-                <summary
-                    class="nav-item nav-parent {{ $isLandingPageRoute ? 'active' : '' }}"
-                    data-sidebar-group-summary
-                    aria-controls="landingPageSubmenu"
-                >
-                    <div class="nav-icon">LP</div>
-                    <span>Landing Page</span>
-                    <span class="nav-arrow" aria-hidden="true">⌄</span>
-                </summary>
-
-                <div
-                    class="nav-submenu {{ $isLandingPageRoute ? 'is-open' : '' }}"
-                    id="landingPageSubmenu"
-                    aria-label="Landing Page Submenu"
-                >
-                    @foreach($landingSectionLinks as $landingLink)
-                        <a
-                            href="{{ route('landing-page.admin.edit', ['section' => $landingLink['section']]) }}"
-                            class="nav-subitem {{ $isLandingPageRoute && $landingActiveSection === $landingLink['section'] ? 'active' : '' }}"
-                        >
-                            <span>{{ $landingLink['label'] }}</span>
-                        </a>
-                    @endforeach
-                </div>
-            </details>
-        @endif
-
-        @if($canRoute('release-notes.index'))
-            <a href="{{ route('release-notes.index') }}" class="nav-item {{ $isActive('release-notes.index') }}">
-                <div class="nav-icon">🚀</div>
-                <span>Release Tracker</span>
-            </a>
-        @endif
+        <a href="{{ route('release-notes.index') }}" class="nav-item {{ $isActive('release-notes.index') }}">
+            <div class="nav-icon">🚀</div>
+            <span>Release Tracker</span>
+        </a>
     @endif
 
     @if($canRoute('settings.users-roles'))

@@ -2,10 +2,10 @@
 (function () {
   const bnBtn = document.getElementById('bnBtn');
   const enBtn = document.getElementById('enBtn');
-  const loginUrl = @json($loginUrl);
+  const loginUrl = <?php echo json_encode($loginUrl, 15, 512) ?>;
   const successText = {
-    bn: @json($txt(data_get($landing, 'contact.form.success'), 'bn')),
-    en: @json($txt(data_get($landing, 'contact.form.success'), 'en'))
+    bn: <?php echo json_encode($txt(data_get($landing, 'contact.form.success'), 'bn')) ?>,
+    en: <?php echo json_encode($txt(data_get($landing, 'contact.form.success'), 'en')) ?>
   };
 
   function setLang(lang) {
@@ -81,3 +81,4 @@
   });
 })();
 </script>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/landing/components/scripts.blade.php ENDPATH**/ ?>

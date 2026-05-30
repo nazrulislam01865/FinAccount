@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\LandingAdminUser;
 use App\Models\User;
 
 return [
@@ -42,6 +43,11 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        'landing_admin' => [
+            'driver' => 'session',
+            'provider' => 'landing_admin_users',
+        ],
     ],
 
     /*
@@ -65,6 +71,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', User::class),
+        ],
+
+        'landing_admin_users' => [
+            'driver' => 'eloquent',
+            'model' => LandingAdminUser::class,
         ],
 
         // 'users' => [
