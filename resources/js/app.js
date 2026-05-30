@@ -342,6 +342,8 @@ window.AccountingUI = (() => {
         if (countTarget) {
           countTarget.textContent = `Showing ${visible} of ${rows.length} entries`;
         }
+
+        refreshClientTablePagination(table, true);
       };
 
       controls.forEach((control) => {
@@ -350,6 +352,204 @@ window.AccountingUI = (() => {
       });
 
       apply();
+    });
+  }
+
+
+  function tableDataRows(table) {
+    return Array.from(table.querySelectorAll('tbody tr')).filter((row) => row.dataset.empty !== 'true');
+  }
+
+  function tableShouldPaginate(table) {
+    if (!table || table.dataset.clientPagination === 'false' || table.dataset.noClientPagination === 'true') {
+      return false;
+    }
+
+    if (table.closest('[data-no-client-pagination], .no-client-pagination, .transaction-entry-page')) {
+      return false;
+    }
+
+    if (
+      table.classList.contains('financial-table')
+      || table.classList.contains('ledger-table')
+      || table.classList.contains('audit-table')
+      || table.closest('.financial-report-page')
+      || table.closest('.report-page')
+      || table.closest('.audit-income-page')
+    ) {
+      return false;
+    }
+
+    const isExplicit = table.dataset.clientPagination === 'true' || table.hasAttribute('data-page-size');
+    const isDataCardTable = Boolean(table.closest('.table-card'));
+
+    if (!isExplicit && !isDataCardTable) {
+      return false;
+    }
+
+    const pageSize = Math.max(1, Number(table.dataset.pageSize || 15));
+
+    return tableDataRows(table).length > pageSize;
+  }
+
+  function getOrCreatePaginationFooter(table) {
+    const card = table.closest('.table-card') || table.parentElement;
+
+    if (!card) {
+      return null;
+    }
+
+    let footer = card.querySelector(':scope > .table-footer[data-client-pagination-footer]')
+      || card.querySelector(':scope > .table-footer');
+
+    if (!footer) {
+      footer = document.createElement('div');
+      footer.className = 'table-footer';
+      card.appendChild(footer);
+    }
+
+    footer.dataset.clientPaginationFooter = 'true';
+
+    let info = footer.querySelector('[data-client-pagination-info]');
+
+    if (!info) {
+      info = footer.querySelector('#resultCount') || footer.querySelector('[data-pagination-info]') || document.createElement('span');
+      info.dataset.clientPaginationInfo = 'true';
+
+      if (!info.parentElement) {
+        footer.appendChild(info);
+      }
+    }
+
+    let controls = footer.querySelector('[data-client-pagination-controls]') || footer.querySelector('.pagination');
+
+    if (!controls) {
+      controls = document.createElement('div');
+      controls.className = 'pagination';
+      footer.appendChild(controls);
+    }
+
+    controls.dataset.clientPaginationControls = 'true';
+    controls.classList.add('table-client-pagination');
+
+    return { footer, info, controls };
+  }
+
+  function pageWindow(currentPage, pageCount) {
+    if (pageCount <= 7) {
+      return Array.from({ length: pageCount }, (_, index) => index + 1);
+    }
+
+    const pages = new Set([1, pageCount, currentPage]);
+
+    for (let offset = -1; offset <= 1; offset++) {
+      const page = currentPage + offset;
+
+      if (page > 1 && page < pageCount) {
+        pages.add(page);
+      }
+    }
+
+    return Array.from(pages).sort((a, b) => a - b);
+  }
+
+  function renderPaginationButtons(table, controls, currentPage, pageCount) {
+    controls.innerHTML = '';
+
+    const makeButton = (label, page, options = {}) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = options.pageNumber ? 'page-btn' : 'button btn-soft table-page-action';
+      button.textContent = label;
+      button.disabled = Boolean(options.disabled);
+
+      if (options.active) {
+        button.classList.add('active');
+        button.setAttribute('aria-current', 'page');
+      }
+
+      button.addEventListener('click', () => {
+        if (button.disabled) {
+          return;
+        }
+
+        table.dataset.currentPage = String(page);
+        refreshClientTablePagination(table, false);
+      });
+
+      return button;
+    };
+
+    controls.appendChild(makeButton('Prev', Math.max(1, currentPage - 1), { disabled: currentPage <= 1 }));
+
+    let previous = 0;
+    pageWindow(currentPage, pageCount).forEach((page) => {
+      if (previous && page - previous > 1) {
+        const dots = document.createElement('span');
+        dots.className = 'table-page-ellipsis';
+        dots.textContent = '…';
+        controls.appendChild(dots);
+      }
+
+      controls.appendChild(makeButton(String(page), page, { active: page === currentPage, pageNumber: true }));
+      previous = page;
+    });
+
+    controls.appendChild(makeButton('Next', Math.min(pageCount, currentPage + 1), { disabled: currentPage >= pageCount }));
+  }
+
+  function refreshClientTablePagination(table, resetPage = false) {
+    if (!tableShouldPaginate(table)) {
+      tableDataRows(table).forEach((row) => {
+        row.hidden = false;
+      });
+
+      return;
+    }
+
+    const pageSize = Math.max(1, Number(table.dataset.pageSize || 15));
+    const rows = tableDataRows(table);
+    const visibleRows = rows.filter((row) => row.style.display !== 'none');
+    const pageCount = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+    const requestedPage = resetPage ? 1 : Number(table.dataset.currentPage || 1);
+    const currentPage = Math.min(Math.max(1, Number.isFinite(requestedPage) ? requestedPage : 1), pageCount);
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const visiblePageRows = new Set(visibleRows.slice(start, end));
+    const parts = getOrCreatePaginationFooter(table);
+
+    table.dataset.clientPagination = 'true';
+    table.dataset.paginationReady = '1';
+    table.dataset.currentPage = String(currentPage);
+
+    rows.forEach((row) => {
+      row.hidden = row.style.display === 'none' || !visiblePageRows.has(row);
+    });
+
+    if (!parts) {
+      return;
+    }
+
+    if (parts.info) {
+      const total = visibleRows.length;
+      const from = total === 0 ? 0 : start + 1;
+      const to = Math.min(end, total);
+      parts.info.textContent = `Showing ${from}-${to} of ${total} entries`;
+    }
+
+    if (parts.controls) {
+      parts.controls.hidden = pageCount <= 1;
+      renderPaginationButtons(table, parts.controls, currentPage, pageCount);
+    }
+  }
+
+  function bindClientTablePagination(scope = document) {
+    scope.querySelectorAll('table').forEach((table) => {
+      if (!tableShouldPaginate(table)) {
+        return;
+      }
+
+      refreshClientTablePagination(table, true);
     });
   }
 
@@ -837,6 +1037,7 @@ window.AccountingUI = (() => {
 
   function init() {
     bindTableFilters();
+    bindClientTablePagination();
     bindParentAccountDropdown();
     bindBankTypeFields();
     bindSwitches();
@@ -854,6 +1055,8 @@ window.AccountingUI = (() => {
     showToast,
     loadSelect,
     loadAllDropdowns,
+    refreshTablePagination: refreshClientTablePagination,
+    bindClientTablePagination,
     init,
   };
 })();

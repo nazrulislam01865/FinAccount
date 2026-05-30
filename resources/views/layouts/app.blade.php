@@ -155,7 +155,12 @@
 
             if (row) {
                 row.remove();
-                refreshResultCount(table);
+
+                if (window.AccountingUI?.refreshTablePagination && table) {
+                    window.AccountingUI.refreshTablePagination(table, true);
+                } else {
+                    refreshResultCount(table);
+                }
             } else {
                 window.location.reload();
                 return;

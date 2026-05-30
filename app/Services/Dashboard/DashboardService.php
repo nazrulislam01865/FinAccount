@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 3;
+    private const CACHE_VERSION = 4;
 
     public function __construct(private readonly SetupProgressService $setupProgressService)
     {
@@ -255,7 +255,7 @@ class DashboardService
             ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
             ->latest('voucher_date')
             ->latest('id')
-            ->limit(8)
+            ->limit(75)
             ->get();
     }
 
