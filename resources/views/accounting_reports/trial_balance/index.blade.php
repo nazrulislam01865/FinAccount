@@ -156,6 +156,6 @@
             </div>
         </x-report.table-card>
     </div>
-    <div class="print-note">Trial Balance report printed from FinAcco Accounting System.</div>
+    <div class="print-note">Trial Balance report printed from HisebGhor Accounting System.</div>
 </div>
 @endsection

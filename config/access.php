@@ -101,6 +101,8 @@ return [
 
     'permissions' => [
         'dashboard.view' => 'View Dashboard',
+        'landing-page.view' => 'View Landing Page Control',
+        'landing-page.manage' => 'Manage Landing Page Content',
         'company.view' => 'View Company Setup',
         'company.manage' => 'Manage Company Setup',
         'master-data.view' => 'View Master Data',
@@ -300,6 +302,11 @@ return [
 
     'route_permissions' => [
         'dashboard' => ['dashboard.view'],
+        'landing-page.admin.edit' => ['landing-page.view', 'landing-page.manage'],
+        'landing-page.admin.update' => ['landing-page.manage'],
+        'landing-page.admin.reset' => ['landing-page.manage'],
+        'landing-page.inquiries.update' => ['landing-page.manage'],
+        'landing-page.inquiries.destroy' => ['landing-page.manage'],
         'setup.company' => ['company.view'],
         'setup.master-data' => ['master-data.view'],
         'setup.master-data.business-types' => ['master-data.view'],
@@ -367,6 +374,11 @@ return [
     ],
 
     'manage_permissions' => [
+        'landing-page.admin.edit' => 'landing-page.manage',
+        'landing-page.admin.update' => 'landing-page.manage',
+        'landing-page.admin.reset' => 'landing-page.manage',
+        'landing-page.inquiries.update' => 'landing-page.manage',
+        'landing-page.inquiries.destroy' => 'landing-page.manage',
         'setup.company' => 'company.manage',
         'setup.master-data' => 'master-data.manage',
         'setup.master-data.business-types' => 'master-data.manage',

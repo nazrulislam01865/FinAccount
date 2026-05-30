@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Master Data Setup | Accounting System')
+@section('title', 'Master Data Setup | HisebGhor')
 
 @push('styles')
 <style>

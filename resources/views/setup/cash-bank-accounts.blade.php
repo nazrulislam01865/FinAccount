@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Cash / Bank Account Setup | Accounting System')
+@section('title', 'Cash / Bank Account Setup | HisebGhor')
 
 @section('content')
 <div class="page-title">

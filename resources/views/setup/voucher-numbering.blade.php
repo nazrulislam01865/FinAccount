@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Voucher Numbering Setup | FinAcco')
+@section('title', 'Voucher Numbering Setup | HisebGhor')
 
 @section('content')
 @php

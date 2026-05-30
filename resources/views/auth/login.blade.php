@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Accounting System</title>
+    <title>Login | HisebGhor</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>
 <div class="auth-shell">
     <div class="auth-card">
         <a href="{{ url('/') }}" class="brand brand-home" style="border-bottom:0;padding:0;margin-bottom:20px;justify-content:center" aria-label="Go to home">
-            <div class="brand-mark">▥</div>
-            <div><h1>FinAcco</h1><p>Accounting System</p></div>
+            <div class="brand-mark">হি</div>
+            <div><h1>HisebGhor</h1><p>Accounting System</p></div>
         </a>
         <span class="page-label auth-page-label">Login</span>
         <h2 class="auth-title">Login</h2>

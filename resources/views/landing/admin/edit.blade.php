@@ -1,0 +1,550 @@
+@extends('layouts.app')
+
+@section('title', 'Landing Page Control | HisebGhor')
+
+@push('styles')
+<style>
+    .landing-admin-grid{display:grid;grid-template-columns:minmax(0,1fr)340px;gap:22px;align-items:start}
+    .landing-editor-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
+    .landing-section-menu{display:none}
+    .landing-section-menu-head{padding:16px 18px;border-bottom:1px solid #eef2f7;background:linear-gradient(180deg,#fff,#fbfcfd)}
+    .landing-section-menu-head h3{margin:0;font-size:16px;color:#101828}.landing-section-menu-head p{margin:5px 0 0;color:#667085;font-size:12px;line-height:1.45}
+    .landing-section-list{display:grid;padding:10px;gap:6px}.landing-section-link{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;border-radius:14px;padding:11px 12px;text-align:left;font:inherit;font-weight:850;color:#475467;cursor:pointer;transition:.16s ease}.landing-section-link:hover{background:#f0fdf4;color:#087a52}.landing-section-link.is-active{background:#00a86b;color:#fff;box-shadow:0 10px 22px rgba(0,168,107,.18)}.section-count{margin-left:auto;min-width:24px;height:24px;border-radius:999px;background:#f2f4f7;color:#475467;display:inline-grid;place-items:center;font-size:12px;font-weight:900}.landing-section-link.is-active .section-count{background:rgba(255,255,255,.2);color:#fff}
+    .landing-form{display:grid;gap:18px}.landing-section-panel{display:none}.landing-section-panel.is-active{display:block}.landing-card{background:#fff;border:1px solid #e5e7eb;border-radius:22px;box-shadow:0 10px 28px rgba(16,24,40,.05);overflow:hidden}
+    .landing-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid #eef2f7;background:linear-gradient(180deg,#fff,#fbfcfd)}
+    .landing-card-head h3{margin:0;font-size:18px;color:#101828}.landing-card-head p{margin:6px 0 0;color:#667085;font-size:13px;line-height:1.55}
+    .landing-card-body{padding:20px}.landing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.landing-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.landing-grid .full{grid-column:1/-1}
+    .landing-admin-grid label{display:block;font-weight:850;font-size:13px;color:#344054;margin-bottom:7px}.landing-admin-grid input,.landing-admin-grid textarea,.landing-admin-grid select{width:100%;border:1px solid #d8dee9;border-radius:14px;padding:12px 13px;background:#fff;font:inherit;color:#101828}.landing-admin-grid textarea{min-height:92px;resize:vertical}.landing-admin-grid textarea.tall{min-height:150px}.landing-admin-grid small,.landing-admin-grid .hint{color:#667085;font-size:12px;line-height:1.45}.required{color:#dc2626}.section-toggle{display:flex;align-items:center;gap:8px;font-weight:900;color:#344054;white-space:nowrap}.section-toggle input{width:auto}
+    .repeat-list{display:grid;gap:14px}.repeat-card{border:1px solid #e5e7eb;border-radius:18px;background:#fbfcfd;padding:16px;transition:box-shadow .2s ease,border-color .2s ease,background .2s ease}.repeat-card-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.repeat-card-title{font-weight:900;color:#101828}.new-repeat-card-highlight{border-color:#00a86b!important;background:#f0fdf4!important;box-shadow:0 0 0 4px rgba(0,168,107,.12),0 14px 30px rgba(16,24,40,.08)}
+    .button-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.btn-small{padding:9px 12px!important;border-radius:999px!important;font-size:13px!important}.danger-link{border:1px solid #fecaca!important;background:#fff!important;color:#b42318!important}.muted-divider{height:1px;background:#eef2f7;margin:18px 0}.right-stack{display:grid;gap:18px;position:sticky;top:90px}.form-actions.sticky-actions{position:sticky;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border:1px solid #e5e7eb;border-radius:18px;padding:14px;z-index:3}.code-help{background:#f8fafc;border:1px dashed #d8dee9;border-radius:14px;padding:12px;color:#475467;font-size:12px;line-height:1.55}
+    @media(max-width:1250px){.landing-admin-grid{grid-template-columns:1fr}.right-stack{position:static}.landing-editor-layout{grid-template-columns:1fr}}
+    @media(max-width:900px){.landing-editor-layout{grid-template-columns:1fr}.landing-section-menu{position:static}.landing-section-list{grid-template-columns:repeat(2,minmax(0,1fr))}.landing-grid,.landing-grid.three{grid-template-columns:1fr}}
+    @media(max-width:640px){.landing-section-list{grid-template-columns:1fr}}
+</style>
+@endpush
+
+@section('content')
+@php
+    $value = fn (string $path, $default = '') => old($path, data_get($landing, $path, $default));
+    $trans = fn (string $path, string $lang = 'bn', $default = '') => old($path.'.'.$lang, data_get($landing, $path.'.'.$lang, $default));
+    $items = fn (string $path, $default = []) => old($path, data_get($landing, $path, $default)) ?: [];
+    $lines = function ($rows, string $lang): string {
+        $output = [];
+        foreach (($rows ?: []) as $row) {
+            $output[] = is_array($row) ? (string) ($row[$lang] ?? '') : (string) $row;
+        }
+        return implode(PHP_EOL, $output);
+    };
+
+    $navLinks = $items('nav_links');
+    $heroButtons = $items('hero.buttons');
+    $trustItems = $items('trust_items');
+    $dashboardStats = $items('hero.dashboard.stats');
+    $dashboardRows = $items('hero.dashboard.rows');
+    $whyCards = $items('why_cards');
+    $screens = $items('screens');
+    $audiences = $items('audiences');
+    $packages = $items('packages');
+    $pricingNotes = $items('pricing_notes');
+    $testimonials = $items('testimonials');
+    $faqs = $items('faqs');
+    $landingSectionKeys = ['basic','nav','hero','why','features','audience','pricing','testimonials','faq','contact','footer'];
+    $requestedSection = old('active_section', request('section', 'basic'));
+    $activeSection = in_array($requestedSection, $landingSectionKeys, true) ? $requestedSection : 'basic';
+@endphp
+
+<div class="page-title">
+    <div>
+        <span class="page-label">Landing Page</span>
+        <h2>HisebGhor Landing Page Control</h2>
+        <p>Admin-controlled cards for every public landing-page section. Use the Landing Page submenu in the left sidebar to open each section, then save without touching accounting logic.</p>
+        @if($updatedAt)
+            <p class="hint" style="margin-top:6px">Last updated {{ $updatedAt->format('d M Y h:i A') }}@if($updatedBy) by {{ $updatedBy->name }}@endif.</p>
+        @endif
+    </div>
+    <div class="actions" style="border-top:0;padding-top:0">
+        <a href="{{ route('landing.show', ['preview' => 1]) }}" target="_blank" class="button btn-ghost">Preview</a>
+        <a href="{{ route('landing.public') }}" target="_blank" class="button btn-outline">Open Public Page</a>
+    </div>
+</div>
+
+@if(session('status'))
+    <div class="card" style="padding:14px 18px;margin-bottom:18px;border-color:#bbf7d0;background:#f0fdf4;color:#067647;font-weight:850">
+        {{ session('status') }}
+    </div>
+@endif
+
+@if($errors->any())
+    <div class="card" style="padding:14px 18px;margin-bottom:18px;border-color:#fecaca;background:#fef2f2;color:#b42318;font-weight:750">
+        <strong>Please fix the following:</strong>
+        <ul style="margin:8px 0 0;padding-left:20px">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+
+<div class="landing-admin-grid">
+    <div class="landing-editor-layout">
+        <div class="landing-editor-main">
+        <form method="POST" action="{{ route('landing-page.admin.update', ['section' => $activeSection]) }}" class="landing-form" data-frontend-form>
+            @csrf
+            @method('PUT')
+            <input type="hidden" name="active_section" id="landingActiveSection" value="{{ $activeSection }}">
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'basic' ? 'is-active' : '' }}" id="basic" data-section-panel="basic">
+                <div class="landing-card-head">
+                    <div><h3>Basic, Brand & Theme</h3><p>Control publish status, SEO title, project name, language and public theme colors.</p></div>
+                </div>
+                <div class="landing-card-body landing-grid">
+                    <div>
+                        <label>Published Status</label>
+                        <select name="is_published">
+                            <option value="1" @selected(old('is_published', $isPublished ? '1' : '0') === '1')>Published</option>
+                            <option value="0" @selected(old('is_published', $isPublished ? '1' : '0') === '0')>Unpublished / Preview only</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Default Language</label>
+                        <select name="meta[default_lang]">
+                            <option value="bn" @selected($value('meta.default_lang', 'bn') === 'bn')>Bangla first</option>
+                            <option value="en" @selected($value('meta.default_lang', 'bn') === 'en')>English first</option>
+                        </select>
+                    </div>
+                    <div class="full"><label>Browser Title <span class="required">*</span></label><input name="meta[title]" value="{{ $value('meta.title') }}" required></div>
+                    <div class="full"><label>Meta Description</label><textarea name="meta[description]">{{ $value('meta.description') }}</textarea></div>
+                    <div><label>Brand Name <span class="required">*</span></label><input name="brand[name]" value="{{ $value('brand.name', 'HisebGhor') }}" required></div>
+                    <div><label>Logo Text <span class="required">*</span></label><input name="brand[logo_text]" value="{{ $value('brand.logo_text', 'হি') }}" required></div>
+                    <div><label>Tagline Bangla</label><input name="brand[tagline][bn]" value="{{ $trans('brand.tagline', 'bn') }}"></div>
+                    <div><label>Tagline English</label><input name="brand[tagline][en]" value="{{ $trans('brand.tagline', 'en') }}"></div>
+                    <div><label>Primary Green</label><input name="theme[green]" value="{{ $value('theme.green', '#00a86b') }}"></div>
+                    <div><label>Dark Green</label><input name="theme[green_dark]" value="{{ $value('theme.green_dark', '#087a52') }}"></div>
+                    <div><label>Soft Green</label><input name="theme[green_soft]" value="{{ $value('theme.green_soft', '#e9fff5') }}"></div>
+                    <div><label>Blue Accent</label><input name="theme[blue]" value="{{ $value('theme.blue', '#2563eb') }}"></div>
+                    <div><label>Gold Accent</label><input name="theme[gold]" value="{{ $value('theme.gold', '#f59e0b') }}"></div>
+                    <div><label>Background</label><input name="theme[bg]" value="{{ $value('theme.bg', '#f8fafc') }}"></div>
+                    <div><label>Text Color</label><input name="theme[ink]" value="{{ $value('theme.ink', '#101828') }}"></div>
+                    <div><label>Muted Text</label><input name="theme[muted]" value="{{ $value('theme.muted', '#667085') }}"></div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'nav' ? 'is-active' : '' }}" id="nav" data-section-panel="nav">
+                <div class="landing-card-head">
+                    <div><h3>Navigation & Header Buttons</h3><p>Add menu items and set top-right CTA/login buttons.</p></div>
+                    <button type="button" class="button btn-outline btn-small" data-add="nav_links">Add Menu</button>
+                </div>
+                <div class="landing-card-body">
+                    <div class="repeat-list" data-repeater="nav_links">
+                        @foreach(array_values($navLinks) as $index => $link)
+                            <div class="repeat-card" data-repeat-item>
+                                <div class="repeat-card-head"><div class="repeat-card-title">Menu Item</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
+                                <div class="landing-grid three">
+                                    <div><label>Bangla Label</label><input name="nav_links[{{ $index }}][label][bn]" value="{{ data_get($link, 'label.bn') }}"></div>
+                                    <div><label>English Label</label><input name="nav_links[{{ $index }}][label][en]" value="{{ data_get($link, 'label.en') }}"></div>
+                                    <div><label>Link / Section ID</label><input name="nav_links[{{ $index }}][href]" value="{{ data_get($link, 'href', '#') }}"></div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-grid">
+                        <div><label>Primary Button Bangla</label><input name="cta[primary][label][bn]" value="{{ $trans('cta.primary.label', 'bn') }}"></div>
+                        <div><label>Primary Button English</label><input name="cta[primary][label][en]" value="{{ $trans('cta.primary.label', 'en') }}"></div>
+                        <div><label>Primary Link</label><input name="cta[primary][href]" value="{{ $value('cta.primary.href', '#contact') }}"></div>
+                        <div><label>Secondary/Login Link</label><input name="cta[secondary][href]" value="{{ $value('cta.secondary.href', '/login') }}"></div>
+                        <div><label>Secondary Button Bangla</label><input name="cta[secondary][label][bn]" value="{{ $trans('cta.secondary.label', 'bn') }}"></div>
+                        <div><label>Secondary Button English</label><input name="cta[secondary][label][en]" value="{{ $trans('cta.secondary.label', 'en') }}"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'hero' ? 'is-active' : '' }}" id="hero" data-section-panel="hero">
+                <div class="landing-card-head">
+                    <div><h3>Hero Section</h3><p>Top headline, buttons, trust labels and live dashboard preview.</p></div>
+                    <label class="section-toggle"><input type="hidden" name="hero[enabled]" value="0"><input type="checkbox" name="hero[enabled]" value="1" @checked($value('hero.enabled', true))> Enabled</label>
+                </div>
+                <div class="landing-card-body">
+                    <div class="landing-grid">
+                        <div><label>Eyebrow Bangla</label><input name="hero[eyebrow][bn]" value="{{ $trans('hero.eyebrow', 'bn') }}"></div>
+                        <div><label>Eyebrow English</label><input name="hero[eyebrow][en]" value="{{ $trans('hero.eyebrow', 'en') }}"></div>
+                        <div class="full"><label>Hero Title Bangla <span class="required">*</span></label><input name="hero[title][bn]" value="{{ $trans('hero.title', 'bn') }}" required></div>
+                        <div class="full"><label>Hero Title English <span class="required">*</span></label><input name="hero[title][en]" value="{{ $trans('hero.title', 'en') }}" required></div>
+                        <div><label>Hero Subtitle Bangla</label><textarea name="hero[subtitle][bn]" class="tall">{{ $trans('hero.subtitle', 'bn') }}</textarea></div>
+                        <div><label>Hero Subtitle English</label><textarea name="hero[subtitle][en]" class="tall">{{ $trans('hero.subtitle', 'en') }}</textarea></div>
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Hero Buttons</h3><p>Admin can add more buttons or links.</p></div><button type="button" class="button btn-outline btn-small" data-add="hero_buttons">Add Button</button></div>
+                    <div class="repeat-list" data-repeater="hero_buttons">
+                        @foreach(array_values($heroButtons) as $index => $button)
+                            <div class="repeat-card" data-repeat-item>
+                                <div class="repeat-card-head"><div class="repeat-card-title">Hero Button</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
+                                <div class="landing-grid three">
+                                    <div><label>Bangla Label</label><input name="hero[buttons][{{ $index }}][label][bn]" value="{{ data_get($button, 'label.bn') }}"></div>
+                                    <div><label>English Label</label><input name="hero[buttons][{{ $index }}][label][en]" value="{{ data_get($button, 'label.en') }}"></div>
+                                    <div><label>Style</label><select name="hero[buttons][{{ $index }}][style]"><option value="primary" @selected(data_get($button, 'style') === 'primary')>Primary</option><option value="outline" @selected(data_get($button, 'style') === 'outline')>Outline</option><option value="dark" @selected(data_get($button, 'style') === 'dark')>Dark</option></select></div>
+                                    <div class="full"><label>Link</label><input name="hero[buttons][{{ $index }}][href]" value="{{ data_get($button, 'href', '#contact') }}"></div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Trust Items</h3><p>Small check-mark labels below the hero button group.</p></div><button type="button" class="button btn-outline btn-small" data-add="trust_items">Add Trust Item</button></div>
+                    <div class="repeat-list" data-repeater="trust_items">
+                        @foreach(array_values($trustItems) as $index => $trust)
+                            <div class="repeat-card" data-repeat-item>
+                                <div class="repeat-card-head"><div class="repeat-card-title">Trust Item</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
+                                <div class="landing-grid"><div><label>Bangla</label><input name="trust_items[{{ $index }}][bn]" value="{{ data_get($trust, 'bn') }}"></div><div><label>English</label><input name="trust_items[{{ $index }}][en]" value="{{ data_get($trust, 'en') }}"></div></div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="muted-divider"></div>
+                    <h3 class="section-title">Dashboard Preview</h3>
+                    <div class="landing-grid">
+                        <div><label>Dashboard Title Bangla</label><input name="hero[dashboard][title][bn]" value="{{ $trans('hero.dashboard.title', 'bn') }}"></div>
+                        <div><label>Dashboard Title English</label><input name="hero[dashboard][title][en]" value="{{ $trans('hero.dashboard.title', 'en') }}"></div>
+                        <div><label>Dashboard Subtitle Bangla</label><input name="hero[dashboard][subtitle][bn]" value="{{ $trans('hero.dashboard.subtitle', 'bn') }}"></div>
+                        <div><label>Dashboard Subtitle English</label><input name="hero[dashboard][subtitle][en]" value="{{ $trans('hero.dashboard.subtitle', 'en') }}"></div>
+                        <div><label>Status Chip Bangla</label><input name="hero[dashboard][chip][bn]" value="{{ $trans('hero.dashboard.chip', 'bn') }}"></div>
+                        <div><label>Status Chip English</label><input name="hero[dashboard][chip][en]" value="{{ $trans('hero.dashboard.chip', 'en') }}"></div>
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Dashboard Counters</h3></div><button type="button" class="button btn-outline btn-small" data-add="dashboard_stats">Add Counter</button></div>
+                    <div class="repeat-list" data-repeater="dashboard_stats">
+                        @foreach(array_values($dashboardStats) as $index => $stat)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Counter</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid three"><div><label>Bangla Label</label><input name="hero[dashboard][stats][{{ $index }}][label][bn]" value="{{ data_get($stat, 'label.bn') }}"></div><div><label>English Label</label><input name="hero[dashboard][stats][{{ $index }}][label][en]" value="{{ data_get($stat, 'label.en') }}"></div><div><label>Value</label><input name="hero[dashboard][stats][{{ $index }}][value]" value="{{ data_get($stat, 'value') }}"></div></div></div>
+                        @endforeach
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Dashboard Transaction Rows</h3></div><button type="button" class="button btn-outline btn-small" data-add="dashboard_rows">Add Row</button></div>
+                    <div class="repeat-list" data-repeater="dashboard_rows">
+                        @foreach(array_values($dashboardRows) as $index => $row)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Mock Row</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name Bangla</label><input name="hero[dashboard][rows][{{ $index }}][name][bn]" value="{{ data_get($row, 'name.bn') }}"></div><div><label>Name English</label><input name="hero[dashboard][rows][{{ $index }}][name][en]" value="{{ data_get($row, 'name.en') }}"></div><div><label>Debit</label><input name="hero[dashboard][rows][{{ $index }}][debit]" value="{{ data_get($row, 'debit') }}"></div><div><label>Credit</label><input name="hero[dashboard][rows][{{ $index }}][credit]" value="{{ data_get($row, 'credit') }}"></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'why' ? 'is-active' : '' }}" id="why" data-section-panel="why">
+                <div class="landing-card-head"><div><h3>Why HisebGhor Section</h3><p>Section title and the feature cards below it.</p></div><label class="section-toggle"><input type="hidden" name="why[enabled]" value="0"><input type="checkbox" name="why[enabled]" value="1" @checked($value('why.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body">
+                    <div class="landing-grid">
+                        <div><label>Mini Bangla</label><input name="why[mini][bn]" value="{{ $trans('why.mini', 'bn') }}"></div><div><label>Mini English</label><input name="why[mini][en]" value="{{ $trans('why.mini', 'en') }}"></div>
+                        <div><label>Title Bangla</label><textarea name="why[title][bn]">{{ $trans('why.title', 'bn') }}</textarea></div><div><label>Title English</label><textarea name="why[title][en]">{{ $trans('why.title', 'en') }}</textarea></div>
+                        <div><label>Subtitle Bangla</label><textarea name="why[subtitle][bn]">{{ $trans('why.subtitle', 'bn') }}</textarea></div><div><label>Subtitle English</label><textarea name="why[subtitle][en]">{{ $trans('why.subtitle', 'en') }}</textarea></div>
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Why Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="why_cards">Add Card</button></div>
+                    <div class="repeat-list" data-repeater="why_cards">
+                        @foreach(array_values($whyCards) as $index => $card)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Feature Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Icon</label><input name="why_cards[{{ $index }}][icon]" value="{{ data_get($card, 'icon', '✓') }}"></div><div></div><div><label>Title Bangla</label><input name="why_cards[{{ $index }}][title][bn]" value="{{ data_get($card, 'title.bn') }}"></div><div><label>Title English</label><input name="why_cards[{{ $index }}][title][en]" value="{{ data_get($card, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="why_cards[{{ $index }}][body][bn]">{{ data_get($card, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="why_cards[{{ $index }}][body][en]">{{ data_get($card, 'body.en') }}</textarea></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'features' ? 'is-active' : '' }}" id="features" data-section-panel="features">
+                <div class="landing-card-head"><div><h3>Screenshots & Feature Screens</h3><p>Each screen card can have multiple badges. Put one badge per line.</p></div><label class="section-toggle"><input type="hidden" name="features[enabled]" value="0"><input type="checkbox" name="features[enabled]" value="1" @checked($value('features.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body">
+                    <div class="landing-grid"><div><label>Mini Bangla</label><input name="features[mini][bn]" value="{{ $trans('features.mini', 'bn') }}"></div><div><label>Mini English</label><input name="features[mini][en]" value="{{ $trans('features.mini', 'en') }}"></div><div><label>Title Bangla</label><textarea name="features[title][bn]">{{ $trans('features.title', 'bn') }}</textarea></div><div><label>Title English</label><textarea name="features[title][en]">{{ $trans('features.title', 'en') }}</textarea></div><div><label>Subtitle Bangla</label><textarea name="features[subtitle][bn]">{{ $trans('features.subtitle', 'bn') }}</textarea></div><div><label>Subtitle English</label><textarea name="features[subtitle][en]">{{ $trans('features.subtitle', 'en') }}</textarea></div></div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Screen Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="screens">Add Screen</button></div>
+                    <div class="repeat-list" data-repeater="screens">
+                        @foreach(array_values($screens) as $index => $screen)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Screen Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Badges Bangla <small>one per line</small></label><textarea name="screens[{{ $index }}][badges_bn]">{{ data_get($screen, 'badges_bn', $lines(data_get($screen, 'badges', []), 'bn')) }}</textarea></div><div><label>Badges English <small>one per line</small></label><textarea name="screens[{{ $index }}][badges_en]">{{ data_get($screen, 'badges_en', $lines(data_get($screen, 'badges', []), 'en')) }}</textarea></div><div><label>Title Bangla</label><input name="screens[{{ $index }}][title][bn]" value="{{ data_get($screen, 'title.bn') }}"></div><div><label>Title English</label><input name="screens[{{ $index }}][title][en]" value="{{ data_get($screen, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="screens[{{ $index }}][body][bn]">{{ data_get($screen, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="screens[{{ $index }}][body][en]">{{ data_get($screen, 'body.en') }}</textarea></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'audience' ? 'is-active' : '' }}" id="audience" data-section-panel="audience">
+                <div class="landing-card-head"><div><h3>Audience Section</h3><p>Who the system is for and the audience detail cards.</p></div><label class="section-toggle"><input type="hidden" name="audience[enabled]" value="0"><input type="checkbox" name="audience[enabled]" value="1" @checked($value('audience.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body">
+                    <div class="landing-grid"><div><label>Icon</label><input name="audience[icon]" value="{{ $value('audience.icon', '🏪') }}"></div><div></div><div><label>Title Bangla</label><input name="audience[title][bn]" value="{{ $trans('audience.title', 'bn') }}"></div><div><label>Title English</label><input name="audience[title][en]" value="{{ $trans('audience.title', 'en') }}"></div><div><label>Body Bangla</label><textarea name="audience[body][bn]">{{ $trans('audience.body', 'bn') }}</textarea></div><div><label>Body English</label><textarea name="audience[body][en]">{{ $trans('audience.body', 'en') }}</textarea></div></div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Audience Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="audiences">Add Audience</button></div>
+                    <div class="repeat-list" data-repeater="audiences">
+                        @foreach(array_values($audiences) as $index => $audience)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Audience Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="audiences[{{ $index }}][title][bn]" value="{{ data_get($audience, 'title.bn') }}"></div><div><label>Title English</label><input name="audiences[{{ $index }}][title][en]" value="{{ data_get($audience, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="audiences[{{ $index }}][body][bn]">{{ data_get($audience, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="audiences[{{ $index }}][body][en]">{{ data_get($audience, 'body.en') }}</textarea></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'pricing' ? 'is-active' : '' }}" id="pricing" data-section-panel="pricing">
+                <div class="landing-card-head"><div><h3>Pricing & Packages</h3><p>Admins can add packages and package features without editing JSON.</p></div><label class="section-toggle"><input type="hidden" name="pricing[enabled]" value="0"><input type="checkbox" name="pricing[enabled]" value="1" @checked($value('pricing.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body">
+                    <div class="landing-grid"><div><label>Mini Bangla</label><input name="pricing[mini][bn]" value="{{ $trans('pricing.mini', 'bn') }}"></div><div><label>Mini English</label><input name="pricing[mini][en]" value="{{ $trans('pricing.mini', 'en') }}"></div><div><label>Title Bangla</label><textarea name="pricing[title][bn]">{{ $trans('pricing.title', 'bn') }}</textarea></div><div><label>Title English</label><textarea name="pricing[title][en]">{{ $trans('pricing.title', 'en') }}</textarea></div><div><label>Subtitle Bangla</label><textarea name="pricing[subtitle][bn]">{{ $trans('pricing.subtitle', 'bn') }}</textarea></div><div><label>Subtitle English</label><textarea name="pricing[subtitle][en]">{{ $trans('pricing.subtitle', 'en') }}</textarea></div></div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Package Cards</h3><p>For features, write one feature per line in Bangla and English.</p></div><button type="button" class="button btn-outline btn-small" data-add="packages">Add Package</button></div>
+                    <div class="repeat-list" data-repeater="packages">
+                        @foreach(array_values($packages) as $index => $package)
+                            @php($pkgFeaturesBn = data_get($package, 'features_bn', $lines(data_get($package, 'features', []), 'bn')))
+                            @php($pkgFeaturesEn = data_get($package, 'features_en', $lines(data_get($package, 'features', []), 'en')))
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Package Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name Bangla</label><input name="packages[{{ $index }}][name][bn]" value="{{ data_get($package, 'name.bn') }}"></div><div><label>Name English</label><input name="packages[{{ $index }}][name][en]" value="{{ data_get($package, 'name.en') }}"></div><div><label>Price</label><input name="packages[{{ $index }}][price]" value="{{ data_get($package, 'price') }}"></div><div><label>Popular?</label><select name="packages[{{ $index }}][popular]"><option value="0" @selected(!data_get($package, 'popular'))>No</option><option value="1" @selected(data_get($package, 'popular'))>Yes</option></select></div><div><label>Popular Tag Bangla</label><input name="packages[{{ $index }}][tag][bn]" value="{{ data_get($package, 'tag.bn') }}"></div><div><label>Popular Tag English</label><input name="packages[{{ $index }}][tag][en]" value="{{ data_get($package, 'tag.en') }}"></div><div><label>Suffix Bangla</label><input name="packages[{{ $index }}][suffix][bn]" value="{{ data_get($package, 'suffix.bn') }}"></div><div><label>Suffix English</label><input name="packages[{{ $index }}][suffix][en]" value="{{ data_get($package, 'suffix.en') }}"></div><div><label>Body Bangla</label><textarea name="packages[{{ $index }}][body][bn]">{{ data_get($package, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="packages[{{ $index }}][body][en]">{{ data_get($package, 'body.en') }}</textarea></div><div><label>Features Bangla</label><textarea name="packages[{{ $index }}][features_bn]" class="tall">{{ $pkgFeaturesBn }}</textarea></div><div><label>Features English</label><textarea name="packages[{{ $index }}][features_en]" class="tall">{{ $pkgFeaturesEn }}</textarea></div><div><label>Button Bangla</label><input name="packages[{{ $index }}][button][label][bn]" value="{{ data_get($package, 'button.label.bn') }}"></div><div><label>Button English</label><input name="packages[{{ $index }}][button][label][en]" value="{{ data_get($package, 'button.label.en') }}"></div><div><label>Button Link</label><input name="packages[{{ $index }}][button][href]" value="{{ data_get($package, 'button.href', '#contact') }}"></div><div><label>Button Style</label><select name="packages[{{ $index }}][button][style]"><option value="primary" @selected(data_get($package, 'button.style') === 'primary')>Primary</option><option value="outline" @selected(data_get($package, 'button.style') === 'outline')>Outline</option><option value="dark" @selected(data_get($package, 'button.style') === 'dark')>Dark</option></select></div></div></div>
+                        @endforeach
+                    </div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Pricing Note Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="pricing_notes">Add Note</button></div>
+                    <div class="repeat-list" data-repeater="pricing_notes">
+                        @foreach(array_values($pricingNotes) as $index => $note)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Pricing Note</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="pricing_notes[{{ $index }}][title][bn]" value="{{ data_get($note, 'title.bn') }}"></div><div><label>Title English</label><input name="pricing_notes[{{ $index }}][title][en]" value="{{ data_get($note, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="pricing_notes[{{ $index }}][body][bn]">{{ data_get($note, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="pricing_notes[{{ $index }}][body][en]">{{ data_get($note, 'body.en') }}</textarea></div><div><label>Button Bangla</label><input name="pricing_notes[{{ $index }}][button][label][bn]" value="{{ data_get($note, 'button.label.bn') }}"></div><div><label>Button English</label><input name="pricing_notes[{{ $index }}][button][label][en]" value="{{ data_get($note, 'button.label.en') }}"></div><div class="full"><label>Button Link</label><input name="pricing_notes[{{ $index }}][button][href]" value="{{ data_get($note, 'button.href', '#contact') }}"></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'testimonials' ? 'is-active' : '' }}" id="testimonials" data-section-panel="testimonials">
+                <div class="landing-card-head"><div><h3>Testimonials</h3><p>Control testimonial section and customer quote cards.</p></div><label class="section-toggle"><input type="hidden" name="testimonials_section[enabled]" value="0"><input type="checkbox" name="testimonials_section[enabled]" value="1" @checked($value('testimonials_section.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body">
+                    <div class="landing-grid"><div><label>Mini Bangla</label><input name="testimonials_section[mini][bn]" value="{{ $trans('testimonials_section.mini', 'bn') }}"></div><div><label>Mini English</label><input name="testimonials_section[mini][en]" value="{{ $trans('testimonials_section.mini', 'en') }}"></div><div><label>Title Bangla</label><input name="testimonials_section[title][bn]" value="{{ $trans('testimonials_section.title', 'bn') }}"></div><div><label>Title English</label><input name="testimonials_section[title][en]" value="{{ $trans('testimonials_section.title', 'en') }}"></div></div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Testimonial Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="testimonials">Add Testimonial</button></div>
+                    <div class="repeat-list" data-repeater="testimonials">
+                        @foreach(array_values($testimonials) as $index => $testimonial)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Testimonial</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name</label><input name="testimonials[{{ $index }}][name]" value="{{ data_get($testimonial, 'name') }}"></div><div><label>Avatar Text</label><input name="testimonials[{{ $index }}][avatar]" value="{{ data_get($testimonial, 'avatar') }}"></div><div><label>Role Bangla</label><input name="testimonials[{{ $index }}][role][bn]" value="{{ data_get($testimonial, 'role.bn') }}"></div><div><label>Role English</label><input name="testimonials[{{ $index }}][role][en]" value="{{ data_get($testimonial, 'role.en') }}"></div><div><label>Quote Bangla</label><textarea name="testimonials[{{ $index }}][quote][bn]">{{ data_get($testimonial, 'quote.bn') }}</textarea></div><div><label>Quote English</label><textarea name="testimonials[{{ $index }}][quote][en]">{{ data_get($testimonial, 'quote.en') }}</textarea></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'faq' ? 'is-active' : '' }}" id="faq" data-section-panel="faq">
+                <div class="landing-card-head"><div><h3>FAQ Section</h3><p>Add as many frequently asked questions as needed.</p></div><label class="section-toggle"><input type="hidden" name="faq_section[enabled]" value="0"><input type="checkbox" name="faq_section[enabled]" value="1" @checked($value('faq_section.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body">
+                    <div class="landing-grid"><div><label>Mini Bangla</label><input name="faq_section[mini][bn]" value="{{ $trans('faq_section.mini', 'bn') }}"></div><div><label>Mini English</label><input name="faq_section[mini][en]" value="{{ $trans('faq_section.mini', 'en') }}"></div><div><label>Title Bangla</label><input name="faq_section[title][bn]" value="{{ $trans('faq_section.title', 'bn') }}"></div><div><label>Title English</label><input name="faq_section[title][en]" value="{{ $trans('faq_section.title', 'en') }}"></div></div>
+                    <div class="muted-divider"></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>FAQ Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="faqs">Add FAQ</button></div>
+                    <div class="repeat-list" data-repeater="faqs">
+                        @foreach(array_values($faqs) as $index => $faq)
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">FAQ</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Question Bangla</label><input name="faqs[{{ $index }}][question][bn]" value="{{ data_get($faq, 'question.bn') }}"></div><div><label>Question English</label><input name="faqs[{{ $index }}][question][en]" value="{{ data_get($faq, 'question.en') }}"></div><div><label>Answer Bangla</label><textarea name="faqs[{{ $index }}][answer][bn]">{{ data_get($faq, 'answer.bn') }}</textarea></div><div><label>Answer English</label><textarea name="faqs[{{ $index }}][answer][en]">{{ data_get($faq, 'answer.en') }}</textarea></div><div class="full"><label class="section-toggle"><input type="hidden" name="faqs[{{ $index }}][open]" value="0"><input type="checkbox" name="faqs[{{ $index }}][open]" value="1" @checked(data_get($faq, 'open'))> Open by default</label></div></div></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'contact' ? 'is-active' : '' }}" id="contact" data-section-panel="contact">
+                <div class="landing-card-head"><div><h3>Contact & Demo Form</h3><p>Manage public contact details and form labels.</p></div><label class="section-toggle"><input type="hidden" name="contact[enabled]" value="0"><input type="checkbox" name="contact[enabled]" value="1" @checked($value('contact.enabled', true))> Enabled</label></div>
+                <div class="landing-card-body landing-grid">
+                    <div><label>Title Bangla</label><input name="contact[title][bn]" value="{{ $trans('contact.title', 'bn') }}"></div><div><label>Title English</label><input name="contact[title][en]" value="{{ $trans('contact.title', 'en') }}"></div>
+                    <div><label>Body Bangla</label><textarea name="contact[body][bn]">{{ $trans('contact.body', 'bn') }}</textarea></div><div><label>Body English</label><textarea name="contact[body][en]">{{ $trans('contact.body', 'en') }}</textarea></div>
+                    <div><label>Phone</label><input name="contact[phone]" value="{{ $value('contact.phone') }}"></div><div><label>Email</label><input type="email" name="contact[email]" value="{{ $value('contact.email') }}"></div>
+                    <div><label>Phone Note Bangla</label><input name="contact[phone_note][bn]" value="{{ $trans('contact.phone_note', 'bn') }}"></div><div><label>Phone Note English</label><input name="contact[phone_note][en]" value="{{ $trans('contact.phone_note', 'en') }}"></div>
+                    <div><label>Email Note Bangla</label><input name="contact[email_note][bn]" value="{{ $trans('contact.email_note', 'bn') }}"></div><div><label>Email Note English</label><input name="contact[email_note][en]" value="{{ $trans('contact.email_note', 'en') }}"></div>
+                    <div class="full"><div class="code-help">These labels control the public demo request form. Demo requests still save into landing inquiries below.</div></div>
+                    <div><label>Name Placeholder Bangla</label><input name="contact[form][name][bn]" value="{{ $trans('contact.form.name', 'bn') }}"></div><div><label>Name Placeholder English</label><input name="contact[form][name][en]" value="{{ $trans('contact.form.name', 'en') }}"></div>
+                    <div><label>Business Placeholder Bangla</label><input name="contact[form][business_name][bn]" value="{{ $trans('contact.form.business_name', 'bn') }}"></div><div><label>Business Placeholder English</label><input name="contact[form][business_name][en]" value="{{ $trans('contact.form.business_name', 'en') }}"></div>
+                    <div><label>Mobile Placeholder Bangla</label><input name="contact[form][mobile][bn]" value="{{ $trans('contact.form.mobile', 'bn') }}"></div><div><label>Mobile Placeholder English</label><input name="contact[form][mobile][en]" value="{{ $trans('contact.form.mobile', 'en') }}"></div>
+                    <div><label>Email Placeholder Bangla</label><input name="contact[form][email][bn]" value="{{ $trans('contact.form.email', 'bn') }}"></div><div><label>Email Placeholder English</label><input name="contact[form][email][en]" value="{{ $trans('contact.form.email', 'en') }}"></div>
+                    <div><label>Message Placeholder Bangla</label><textarea name="contact[form][message][bn]">{{ $trans('contact.form.message', 'bn') }}</textarea></div><div><label>Message Placeholder English</label><textarea name="contact[form][message][en]">{{ $trans('contact.form.message', 'en') }}</textarea></div>
+                    <div><label>Submit Button Bangla</label><input name="contact[form][button][bn]" value="{{ $trans('contact.form.button', 'bn') }}"></div><div><label>Submit Button English</label><input name="contact[form][button][en]" value="{{ $trans('contact.form.button', 'en') }}"></div>
+                    <div><label>Success Message Bangla</label><input name="contact[form][success][bn]" value="{{ $trans('contact.form.success', 'bn') }}"></div><div><label>Success Message English</label><input name="contact[form][success][en]" value="{{ $trans('contact.form.success', 'en') }}"></div>
+                </div>
+            </section>
+
+            <section class="landing-card landing-section-panel {{ $activeSection === 'footer' ? 'is-active' : '' }}" id="footer" data-section-panel="footer">
+                <div class="landing-card-head"><div><h3>Footer</h3><p>Control footer descriptive text.</p></div></div>
+                <div class="landing-card-body landing-grid">
+                    <div><label>Footer Text Bangla</label><textarea name="footer[text][bn]">{{ $trans('footer.text', 'bn') }}</textarea></div>
+                    <div><label>Footer Text English</label><textarea name="footer[text][en]">{{ $trans('footer.text', 'en') }}</textarea></div>
+                </div>
+            </section>
+
+            <div class="form-actions sticky-actions">
+                <button type="submit" class="button btn-primary">Save Landing Page</button>
+                <a href="{{ route('landing.show', ['preview' => 1]) }}" target="_blank" class="button btn-outline">Preview</a>
+            </div>
+        </form>
+        </div>
+    </div>
+
+    <aside class="right-stack">
+        <div class="card info-card">
+            <h3>Admin Control</h3>
+            <p class="hint">This editor now uses the left sidebar Landing Page submenu, matching the Master Setup submenu pattern. Admins open one section at a time without editing JSON.</p>
+            <div class="step-list">
+                <div class="step-row"><div class="nav-icon">1</div><div><strong>Edit Cards</strong><small>Change labels, headings, packages, FAQ, buttons and contact form text.</small></div></div>
+                <div class="step-row"><div class="nav-icon">2</div><div><strong>Add Details</strong><small>Use Add buttons to add cards, options, package features, FAQ or testimonials.</small></div></div>
+                <div class="step-row"><div class="nav-icon">3</div><div><strong>Preview</strong><small>Review unpublished content before publishing.</small></div></div>
+            </div>
+        </div>
+
+        <div class="card info-card">
+            <h3>Reset Default</h3>
+            <p class="hint">Restore the uploaded HisebGhor landing-page content and default green theme.</p>
+            <form method="POST" action="{{ route('landing-page.admin.reset') }}" onsubmit="return confirm('Reset landing page to default HisebGhor content?')" data-frontend-form>
+                @csrf
+                <button type="submit" class="button btn-ghost" style="width:100%;margin-top:12px">Reset to Default</button>
+            </form>
+        </div>
+
+        <div class="card info-card">
+            <h3>Route Summary</h3>
+            <div class="step-list">
+                <div class="step-row"><div class="nav-icon">/</div><div><strong>Public Landing</strong><small>Always opens landing first, whether user is logged in or logged out.</small></div></div>
+                <div class="step-row"><div class="nav-icon">A</div><div><strong>Admin Editor</strong><small>Protected by landing-page permissions.</small></div></div>
+                <div class="step-row"><div class="nav-icon">D</div><div><strong>Demo Requests</strong><small>Stored as landing inquiries below.</small></div></div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<div class="card table-card" style="margin-top:22px">
+    <div class="panel-head" style="padding:18px 18px 0">
+        <div>
+            <h3>Latest Demo Inquiries</h3>
+            <p class="hint" style="margin-top:4px">The landing contact form stores requests here for admin follow-up.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Date</th><th>Name</th><th>Business</th><th>Mobile</th><th>Email</th><th>Message</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>
+            @forelse($inquiries as $inquiry)
+                <tr>
+                    <td>{{ $inquiry->created_at?->format('d M Y') }}</td><td class="strong">{{ $inquiry->name }}</td><td>{{ $inquiry->business_name ?: '—' }}</td><td>{{ $inquiry->mobile ?: '—' }}</td><td>{{ $inquiry->email ?: '—' }}</td><td style="min-width:260px;white-space:normal">{{ $inquiry->message ?: '—' }}</td>
+                    <td><form method="POST" action="{{ route('landing-page.inquiries.update', $inquiry) }}" data-frontend-form>@csrf @method('PUT')<select name="status" onchange="this.form.submit()" style="min-width:140px">@foreach($statuses as $status)<option value="{{ $status }}" @selected($inquiry->status === $status)>{{ $status }}</option>@endforeach</select></form></td>
+                    <td><form method="POST" action="{{ route('landing-page.inquiries.destroy', $inquiry) }}" data-delete-form>@csrf @method('DELETE')<button type="submit" class="button btn-ghost" onclick="return confirm('Delete this inquiry?')">Delete</button></form></td>
+                </tr>
+            @empty
+                <tr data-empty="true"><td colspan="8" class="muted">No demo inquiry found yet.</td></tr>
+            @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<template data-template="nav_links"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Menu Item</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid three"><div><label>Bangla Label</label><input name="nav_links[__INDEX__][label][bn]"></div><div><label>English Label</label><input name="nav_links[__INDEX__][label][en]"></div><div><label>Link / Section ID</label><input name="nav_links[__INDEX__][href]" value="#contact"></div></div></div></template>
+<template data-template="hero_buttons"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Hero Button</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid three"><div><label>Bangla Label</label><input name="hero[buttons][__INDEX__][label][bn]"></div><div><label>English Label</label><input name="hero[buttons][__INDEX__][label][en]"></div><div><label>Style</label><select name="hero[buttons][__INDEX__][style]"><option value="primary">Primary</option><option value="outline">Outline</option><option value="dark">Dark</option></select></div><div class="full"><label>Link</label><input name="hero[buttons][__INDEX__][href]" value="#contact"></div></div></div></template>
+<template data-template="trust_items"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Trust Item</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Bangla</label><input name="trust_items[__INDEX__][bn]"></div><div><label>English</label><input name="trust_items[__INDEX__][en]"></div></div></div></template>
+<template data-template="dashboard_stats"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Counter</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid three"><div><label>Bangla Label</label><input name="hero[dashboard][stats][__INDEX__][label][bn]"></div><div><label>English Label</label><input name="hero[dashboard][stats][__INDEX__][label][en]"></div><div><label>Value</label><input name="hero[dashboard][stats][__INDEX__][value]"></div></div></div></template>
+<template data-template="dashboard_rows"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Mock Row</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name Bangla</label><input name="hero[dashboard][rows][__INDEX__][name][bn]"></div><div><label>Name English</label><input name="hero[dashboard][rows][__INDEX__][name][en]"></div><div><label>Debit</label><input name="hero[dashboard][rows][__INDEX__][debit]"></div><div><label>Credit</label><input name="hero[dashboard][rows][__INDEX__][credit]"></div></div></div></template>
+<template data-template="why_cards"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Feature Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Icon</label><input name="why_cards[__INDEX__][icon]" value="✓"></div><div></div><div><label>Title Bangla</label><input name="why_cards[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="why_cards[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="why_cards[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="why_cards[__INDEX__][body][en]"></textarea></div></div></div></template>
+<template data-template="screens"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Screen Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Badges Bangla <small>one per line</small></label><textarea name="screens[__INDEX__][badges_bn]"></textarea></div><div><label>Badges English <small>one per line</small></label><textarea name="screens[__INDEX__][badges_en]"></textarea></div><div><label>Title Bangla</label><input name="screens[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="screens[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="screens[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="screens[__INDEX__][body][en]"></textarea></div></div></div></template>
+<template data-template="audiences"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Audience Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="audiences[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="audiences[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="audiences[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="audiences[__INDEX__][body][en]"></textarea></div></div></div></template>
+<template data-template="packages"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Package Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name Bangla</label><input name="packages[__INDEX__][name][bn]"></div><div><label>Name English</label><input name="packages[__INDEX__][name][en]"></div><div><label>Price</label><input name="packages[__INDEX__][price]"></div><div><label>Popular?</label><select name="packages[__INDEX__][popular]"><option value="0">No</option><option value="1">Yes</option></select></div><div><label>Popular Tag Bangla</label><input name="packages[__INDEX__][tag][bn]"></div><div><label>Popular Tag English</label><input name="packages[__INDEX__][tag][en]"></div><div><label>Suffix Bangla</label><input name="packages[__INDEX__][suffix][bn]"></div><div><label>Suffix English</label><input name="packages[__INDEX__][suffix][en]"></div><div><label>Body Bangla</label><textarea name="packages[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="packages[__INDEX__][body][en]"></textarea></div><div><label>Features Bangla</label><textarea name="packages[__INDEX__][features_bn]" class="tall"></textarea></div><div><label>Features English</label><textarea name="packages[__INDEX__][features_en]" class="tall"></textarea></div><div><label>Button Bangla</label><input name="packages[__INDEX__][button][label][bn]"></div><div><label>Button English</label><input name="packages[__INDEX__][button][label][en]"></div><div><label>Button Link</label><input name="packages[__INDEX__][button][href]" value="#contact"></div><div><label>Button Style</label><select name="packages[__INDEX__][button][style]"><option value="primary">Primary</option><option value="outline" selected>Outline</option><option value="dark">Dark</option></select></div></div></div></template>
+<template data-template="pricing_notes"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Pricing Note</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="pricing_notes[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="pricing_notes[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="pricing_notes[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="pricing_notes[__INDEX__][body][en]"></textarea></div><div><label>Button Bangla</label><input name="pricing_notes[__INDEX__][button][label][bn]"></div><div><label>Button English</label><input name="pricing_notes[__INDEX__][button][label][en]"></div><div class="full"><label>Button Link</label><input name="pricing_notes[__INDEX__][button][href]" value="#contact"></div></div></div></template>
+<template data-template="testimonials"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Testimonial</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name</label><input name="testimonials[__INDEX__][name]"></div><div><label>Avatar Text</label><input name="testimonials[__INDEX__][avatar]"></div><div><label>Role Bangla</label><input name="testimonials[__INDEX__][role][bn]"></div><div><label>Role English</label><input name="testimonials[__INDEX__][role][en]"></div><div><label>Quote Bangla</label><textarea name="testimonials[__INDEX__][quote][bn]"></textarea></div><div><label>Quote English</label><textarea name="testimonials[__INDEX__][quote][en]"></textarea></div></div></div></template>
+<template data-template="faqs"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">FAQ</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Question Bangla</label><input name="faqs[__INDEX__][question][bn]"></div><div><label>Question English</label><input name="faqs[__INDEX__][question][en]"></div><div><label>Answer Bangla</label><textarea name="faqs[__INDEX__][answer][bn]"></textarea></div><div><label>Answer English</label><textarea name="faqs[__INDEX__][answer][en]"></textarea></div><div class="full"><label class="section-toggle"><input type="hidden" name="faqs[__INDEX__][open]" value="0"><input type="checkbox" name="faqs[__INDEX__][open]" value="1"> Open by default</label></div></div></div></template>
+@endsection
+
+@push('scripts')
+<script>
+(function () {
+    let counter = Date.now();
+
+    const sectionLinks = Array.from(document.querySelectorAll('[data-section-target]'));
+    const sectionPanels = Array.from(document.querySelectorAll('[data-section-panel]'));
+
+    function activateSection(sectionId, updateUrl = true) {
+        if (!sectionId || !document.querySelector('[data-section-panel="' + sectionId + '"]')) {
+            sectionId = 'basic';
+        }
+
+        sectionLinks.forEach(function (link) {
+            link.classList.toggle('is-active', link.getAttribute('data-section-target') === sectionId);
+        });
+
+        sectionPanels.forEach(function (panel) {
+            panel.classList.toggle('is-active', panel.getAttribute('data-section-panel') === sectionId);
+        });
+
+        const activeInput = document.getElementById('landingActiveSection');
+        if (activeInput) {
+            activeInput.value = sectionId;
+        }
+
+        const form = document.querySelector('.landing-form');
+        if (form) {
+            const actionUrl = new URL(form.getAttribute('action'), window.location.origin);
+            actionUrl.searchParams.set('section', sectionId);
+            form.setAttribute('action', actionUrl.pathname + actionUrl.search);
+        }
+
+        if (updateUrl) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('section', sectionId);
+            history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+    }
+
+    function sectionForRepeater(key) {
+        const map = {
+            nav_links: 'nav',
+            hero_buttons: 'hero',
+            trust_items: 'hero',
+            dashboard_stats: 'hero',
+            dashboard_rows: 'hero',
+            why_cards: 'why',
+            screens: 'features',
+            audiences: 'audience',
+            packages: 'pricing',
+            pricing_notes: 'pricing',
+            testimonials: 'testimonials',
+            faqs: 'faq'
+        };
+
+        return map[key] || 'basic';
+    }
+
+    function revealNewCard(card) {
+        if (!card) {
+            return;
+        }
+
+        card.classList.add('new-repeat-card-highlight');
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const firstControl = card.querySelector('input:not([type="hidden"]), textarea, select');
+        if (firstControl) {
+            setTimeout(function () { firstControl.focus(); }, 350);
+        }
+
+        setTimeout(function () {
+            card.classList.remove('new-repeat-card-highlight');
+        }, 3500);
+    }
+
+    document.addEventListener('click', function (event) {
+        const sectionButton = event.target.closest('[data-section-target]');
+        const addButton = event.target.closest('[data-add]');
+        const removeButton = event.target.closest('[data-remove-card]');
+
+        if (sectionButton) {
+            activateSection(sectionButton.getAttribute('data-section-target'));
+            const activePanel = document.querySelector('[data-section-panel].is-active');
+            if (activePanel) {
+                activePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        if (addButton) {
+            const key = addButton.getAttribute('data-add');
+            const sectionId = sectionForRepeater(key);
+            activateSection(sectionId);
+
+            const target = document.querySelector('[data-repeater="' + key + '"]');
+            const template = document.querySelector('template[data-template="' + key + '"]');
+
+            if (!target || !template) {
+                return;
+            }
+
+            counter += 1;
+            target.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__INDEX__', String(counter)));
+            revealNewCard(target.querySelector('[data-repeat-item]:last-child'));
+        }
+
+        if (removeButton) {
+            const card = removeButton.closest('[data-repeat-item]');
+            if (card) {
+                card.remove();
+            }
+        }
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const initialSection = params.get('section') || (window.location.hash ? window.location.hash.substring(1) : '{{ $activeSection }}');
+    activateSection(initialSection, false);
+})();
+</script>
+@endpush

@@ -3449,3 +3449,20 @@ select::-ms-expand {
     display: none !important;
 }
 
+
+/* Stable sidebar submenus: stop submenu flash/re-open animation during page changes. */
+.nav-submenu,
+.nav-submenu.is-open,
+.nav-group[open] > .nav-submenu,
+body.sidebar-booting .nav-submenu,
+body.sidebar-navigating .nav-submenu {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+
+.nav-group[open] > .nav-submenu,
+.nav-submenu.is-open {
+    display: grid !important;
+}

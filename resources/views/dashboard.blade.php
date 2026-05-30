@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Dashboard | Accounting System')
+@section('title', 'Dashboard | HisebGhor')
 @section('content')
 @php
     $dashboard = $dashboard ?? [];
@@ -12,6 +12,7 @@
     $canViewReports = $user?->canViewRoute('accounting-reports.index') ?? false;
     $canOpenTransactionList = $user?->canViewRoute('accounting-reports.transactions.index') ?? false;
     $canReviewApprovals = $user?->hasAnyPermission(['approvals.view', 'approvals.manage']) ?? false;
+    $canManageLandingPage = $user?->canViewRoute('landing-page.admin.edit') ?? false;
     $money = fn ($value) => $currency.' '.number_format((float) $value, 2);
     $statusClass = fn ($status) => match ($status) {
         \App\Models\VoucherHeader::STATUS_POSTED => 'badge-success',
@@ -27,7 +28,7 @@
         <h2>Business Overview</h2>
         <p>Real-time cash, bank, receivable, payable, profit/loss, setup progress, and approval status from posted accounting records.</p>
     </div>
-    @if($canAddTransaction || $canViewReports)
+    @if($canAddTransaction || $canViewReports || $canManageLandingPage)
         <div class="actions" style="border-top:0;padding-top:0">
             @if($canAddTransaction)
                 <a href="{{ route('transactions.create') }}" class="button btn-primary">Add Transaction</a>
@@ -35,6 +36,10 @@
 
             @if($canViewReports)
                 <a href="{{ route('accounting-reports.index') }}" class="button btn-ghost">View Reports</a>
+            @endif
+
+            @if($canManageLandingPage)
+                <a href="{{ route('landing-page.admin.edit') }}" class="button btn-ghost">Landing Page</a>
             @endif
         </div>
     @endif

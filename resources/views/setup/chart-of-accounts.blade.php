@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Chart of Accounts Setup | Accounting System')
+@section('title', 'Chart of Accounts Setup | HisebGhor')
 
 @push('styles')
 <style>

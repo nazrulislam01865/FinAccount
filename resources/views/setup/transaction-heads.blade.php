@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Transaction Head Setup | Accounting System')
+@section('title', 'Transaction Head Setup | HisebGhor')
 
 @section('content')
 @php
