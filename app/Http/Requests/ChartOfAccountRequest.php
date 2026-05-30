@@ -190,9 +190,6 @@ class ChartOfAccountRequest extends FormRequest
                 return;
             }
 
-            if ($this->filled('normal_balance') && $this->input('normal_balance') !== $accountType->normal_balance) {
-                $validator->errors()->add('normal_balance', 'Normal Balance must match the selected Account Class.');
-            }
 
             if ($isGroup && $postingAllowed) {
                 $validator->errors()->add('posting_allowed', 'Only Level 4 Ledger Head accounts can be used for posting.');

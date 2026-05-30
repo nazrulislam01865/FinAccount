@@ -42,8 +42,8 @@ class ChartOfAccountService
         $data['coa_level'] = $coaLevel;
         $data['account_level'] = $isPostingLevel ? 'Ledger' : 'Group';
         $data['account_nature'] = $accountType?->name ?? $data['account_nature'] ?? null;
-        $data['normal_balance'] = $accountType?->normal_balance
-            ?? $data['normal_balance']
+        $data['normal_balance'] = $data['normal_balance']
+            ?? $accountType?->normal_balance
             ?? null;
         $data['ledger_type'] = $ledgerType;
 

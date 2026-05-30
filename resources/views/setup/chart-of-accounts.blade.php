@@ -691,6 +691,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const messages = document.getElementById('messages');
     const advancedFields = document.getElementById('advancedFields');
     const guidanceText = document.getElementById('guidanceText');
+    let normalBalanceManuallyChanged = false;
 
     function selectedOption(select) {
         return select?.selectedOptions?.[0] || null;
@@ -744,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function syncSmartFields() {
+    function syncSmartFields(options = {}) {
         const level = Number(coaLevel.value || 4);
         const isPostingLevel = level === 4;
         const typeName = selectedTypeName();
@@ -763,7 +764,9 @@ document.addEventListener('DOMContentLoaded', () => {
         postingPreview.value = isPostingLevel ? '1' : '0';
         ledgerType.value = normalizedLedgerType;
         ledgerType.disabled = !isPostingLevel;
-        normalBalance.value = balance || normalBalance.value || 'Debit';
+        if (options.forceNormalBalance || !normalBalanceManuallyChanged || !normalBalance.value) {
+            normalBalance.value = balance || normalBalance.value || 'Debit';
+        }
         accountNatureHidden.value = typeName;
 
         isCashBank.value = cashBank ? '1' : '0';
@@ -803,21 +806,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setDropdownValue(select, value) {
-        if (!select) return;
+        if (!select) return Promise.resolve();
         select.dataset.selected = value || '';
         select.value = value || '';
 
         if (select.dataset.dropdown && window.AccountingUI?.loadSelect) {
-            window.AccountingUI.loadSelect(select).then(() => {
+            return window.AccountingUI.loadSelect(select).then(() => {
                 select.value = value || '';
                 select.dispatchEvent(new Event('change', { bubbles: true }));
                 syncSmartFields();
             });
-            return;
         }
 
         select.dispatchEvent(new Event('change', { bubbles: true }));
         syncSmartFields();
+        return Promise.resolve();
     }
 
     function showMessages(errors) {
@@ -850,6 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
         form.dataset.action = form.dataset.storeUrl;
         methodInput.value = 'POST';
         formTitle.textContent = 'Guided Account Setup';
+        normalBalanceManuallyChanged = false;
         coaLevel.value = '4';
         parentAccount.dataset.selected = '';
         parentAccount.dataset.excludeId = '';
@@ -875,12 +879,15 @@ document.addEventListener('DOMContentLoaded', () => {
         methodInput.value = 'PUT';
         formTitle.textContent = 'Edit Account';
 
+        const rowNormalBalance = row.normal_balance || 'Debit';
+        normalBalanceManuallyChanged = true;
+
         accountCode.value = row.account_code || '';
         accountName.value = row.account_name || '';
         coaLevel.value = String(row.coa_level || 4);
         ledgerType.disabled = false;
         ledgerType.value = row.ledger_type || 'Asset';
-        normalBalance.value = row.normal_balance || 'Debit';
+        normalBalance.value = rowNormalBalance;
         statusSelect.value = row.status || 'Active';
         userSelectableSelect.disabled = false;
         userSelectableSelect.value = row.is_user_selectable ? '1' : '0';
@@ -894,7 +901,11 @@ document.addEventListener('DOMContentLoaded', () => {
         parentAccount.dataset.selected = row.parent_id || '';
         partyType.dataset.selected = row.party_type_id || '';
 
-        setDropdownValue(accountType, row.account_type_id || '');
+        setDropdownValue(accountType, row.account_type_id || '').then(() => {
+            normalBalance.value = rowNormalBalance;
+            normalBalanceManuallyChanged = true;
+            syncSmartFields();
+        });
         reloadParentDropdown(row.parent_id || '');
         setDropdownValue(partyType, row.party_type_id || '');
 
@@ -946,9 +957,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     coaLevel.addEventListener('change', () => { reloadParentDropdown(''); syncSmartFields(); });
-    accountType.addEventListener('change', () => { reloadParentDropdown(parentAccount.value || ''); syncSmartFields(); });
+    accountType.addEventListener('change', () => {
+        normalBalanceManuallyChanged = false;
+        reloadParentDropdown(parentAccount.value || '');
+        syncSmartFields({ forceNormalBalance: true });
+    });
     ledgerType.addEventListener('change', syncSmartFields);
-    normalBalance.addEventListener('change', syncSmartFields);
+    normalBalance.addEventListener('change', () => {
+        normalBalanceManuallyChanged = true;
+        syncSmartFields();
+    });
     userSelectableSelect.addEventListener('change', syncSmartFields);
     systemLedgerSelect.addEventListener('change', syncSmartFields);
 
