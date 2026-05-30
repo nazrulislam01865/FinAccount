@@ -16,6 +16,7 @@
     .landing-card-body{padding:20px}.landing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.landing-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.landing-grid .full{grid-column:1/-1}
     .landing-admin-grid label{display:block;font-weight:850;font-size:13px;color:#344054;margin-bottom:7px}.landing-admin-grid input,.landing-admin-grid textarea,.landing-admin-grid select{width:100%;border:1px solid #d8dee9;border-radius:14px;padding:12px 13px;background:#fff;font:inherit;color:#101828}.landing-admin-grid textarea{min-height:92px;resize:vertical}.landing-admin-grid textarea.tall{min-height:150px}.landing-admin-grid small,.landing-admin-grid .hint{color:#667085;font-size:12px;line-height:1.45}.required{color:#dc2626}.section-toggle{display:flex;align-items:center;gap:8px;font-weight:900;color:#344054;white-space:nowrap}.section-toggle input{width:auto}
     .repeat-list{display:grid;gap:14px}.repeat-card{border:1px solid #e5e7eb;border-radius:18px;background:#fbfcfd;padding:16px;transition:box-shadow .2s ease,border-color .2s ease,background .2s ease}.repeat-card-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.repeat-card-title{font-weight:900;color:#101828}.new-repeat-card-highlight{border-color:#00a86b!important;background:#f0fdf4!important;box-shadow:0 0 0 4px rgba(0,168,107,.12),0 14px 30px rgba(16,24,40,.08)}
+    .landing-validation-summary{display:none;padding:14px 18px;margin-bottom:18px;border:1px solid #fecaca;background:#fef2f2;color:#b42318;border-radius:18px;font-weight:750}.landing-validation-summary.show{display:block}.landing-validation-summary ul{margin:8px 0 0;padding-left:20px}.landing-validation-invalid{border-color:#dc2626!important;background:#fff7f7!important;box-shadow:0 0 0 3px rgba(220,38,38,.10)!important}.landing-validation-error{display:block;margin-top:6px;color:#b42318;font-size:12px;font-weight:800}.required-auto{color:#dc2626;font-weight:900;margin-left:3px}.repeat-list.landing-validation-invalid-list{border:1px dashed #dc2626;border-radius:18px;padding:10px;background:#fff7f7}
     .button-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.btn-small{padding:9px 12px!important;border-radius:999px!important;font-size:13px!important}.danger-link{border:1px solid #fecaca!important;background:#fff!important;color:#b42318!important}.muted-divider{height:1px;background:#eef2f7;margin:18px 0}.right-stack{display:grid;gap:18px;position:sticky;top:90px}.form-actions.sticky-actions{position:sticky;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border:1px solid #e5e7eb;border-radius:18px;padding:14px;z-index:3}.code-help{background:#f8fafc;border:1px dashed #d8dee9;border-radius:14px;padding:12px;color:#475467;font-size:12px;line-height:1.55}
     @media(max-width:1250px){.landing-admin-grid{grid-template-columns:1fr}.right-stack{position:static}.landing-editor-layout{grid-template-columns:1fr}}
     @media(max-width:900px){.landing-editor-layout{grid-template-columns:1fr}.landing-section-menu{position:static}.landing-section-list{grid-template-columns:repeat(2,minmax(0,1fr))}.landing-grid,.landing-grid.three{grid-template-columns:1fr}}
@@ -85,10 +86,12 @@
     </div>
 @endif
 
+<div id="landingClientValidationSummary" class="landing-validation-summary" role="alert" aria-live="polite"></div>
+
 <div class="landing-admin-grid">
     <div class="landing-editor-layout">
         <div class="landing-editor-main">
-        <form method="POST" action="{{ route('landing-admin.update', ['section' => $activeSection]) }}" class="landing-form" data-frontend-form>
+        <form method="POST" action="{{ route('landing-admin.update', ['section' => $activeSection]) }}" class="landing-form" data-frontend-form novalidate>
             @csrf
             @method('PUT')
             <input type="hidden" name="active_section" id="landingActiveSection" value="{{ $activeSection }}">
@@ -531,6 +534,190 @@
             }
         }
     });
+
+    function humanizeName(name) {
+        return String(name || '')
+            .replace(/\\?[\[\]]+/g, ' ')
+            .replace(/_/g, ' ')
+            .replace(/\s+/g, ' ')
+            .replace(/\b(bn|en)\b/g, function (match) { return match === 'bn' ? 'Bangla' : 'English'; })
+            .replace(/\b\w/g, function (letter) { return letter.toUpperCase(); })
+            .trim();
+    }
+
+    function controlLabel(control) {
+        const wrapper = control.closest('div');
+        const label = wrapper ? wrapper.querySelector('label') : null;
+        return label ? label.textContent.replace('*', '').trim() : humanizeName(control.name);
+    }
+
+    function validationControls(form) {
+        return Array.from(form.querySelectorAll('input, textarea, select')).filter(function (control) {
+            if (!control.name || control.disabled) {
+                return false;
+            }
+
+            const type = (control.getAttribute('type') || '').toLowerCase();
+            return !['hidden', 'checkbox', 'radio', 'submit', 'button'].includes(type);
+        });
+    }
+
+    function clearValidationState(form) {
+        form.querySelectorAll('.landing-validation-invalid').forEach(function (control) {
+            control.classList.remove('landing-validation-invalid');
+        });
+        form.querySelectorAll('.landing-validation-error').forEach(function (message) {
+            message.remove();
+        });
+        form.querySelectorAll('.landing-validation-invalid-list').forEach(function (list) {
+            list.classList.remove('landing-validation-invalid-list');
+        });
+    }
+
+    function cssEscapeValue(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(value);
+        }
+
+        return String(value).replace(/[^a-zA-Z0-9_-]/g, function (character) {
+            return '\\' + character;
+        });
+    }
+
+    function showControlError(control, message) {
+        control.classList.add('landing-validation-invalid');
+
+        const existing = control.parentElement ? control.parentElement.querySelector('.landing-validation-error[data-for="' + cssEscapeValue(control.name) + '"]') : null;
+        if (existing) {
+            existing.textContent = message;
+            return;
+        }
+
+        const error = document.createElement('span');
+        error.className = 'landing-validation-error';
+        error.dataset.for = control.name;
+        error.textContent = message;
+        control.insertAdjacentElement('afterend', error);
+    }
+
+    function showSummary(errors) {
+        const summary = document.getElementById('landingClientValidationSummary');
+        if (!summary) {
+            return;
+        }
+
+        if (!errors.length) {
+            summary.classList.remove('show');
+            summary.innerHTML = '';
+            return;
+        }
+
+        summary.innerHTML = '<strong>Please fill all required landing-page admin fields before saving.</strong><ul>' +
+            errors.slice(0, 12).map(function (error) { return '<li>' + error.message + '</li>'; }).join('') +
+            (errors.length > 12 ? '<li>And ' + (errors.length - 12) + ' more required field(s).</li>' : '') +
+            '</ul>';
+        summary.classList.add('show');
+    }
+
+    function validateLandingForm(form) {
+        clearValidationState(form);
+
+        const errors = [];
+        const requiredRepeaters = [
+            'nav_links', 'hero_buttons', 'trust_items', 'dashboard_stats', 'dashboard_rows', 'why_cards',
+            'screens', 'audiences', 'packages', 'pricing_notes', 'testimonials', 'faqs'
+        ];
+
+        requiredRepeaters.forEach(function (key) {
+            const list = form.querySelector('[data-repeater="' + key + '"]');
+            if (list && !list.querySelector('[data-repeat-item]')) {
+                list.classList.add('landing-validation-invalid-list');
+                errors.push({
+                    control: list,
+                    section: sectionForRepeater(key),
+                    message: humanizeName(key) + ' must have at least one card/item.'
+                });
+            }
+        });
+
+        validationControls(form).forEach(function (control) {
+            const value = String(control.value || '').trim();
+            const label = controlLabel(control);
+
+            if (value === '') {
+                const message = label + ' is required.';
+                showControlError(control, message);
+                errors.push({
+                    control: control,
+                    section: (control.closest('[data-section-panel]') ? control.closest('[data-section-panel]').getAttribute('data-section-panel') : 'basic'),
+                    message: message
+                });
+                return;
+            }
+
+            if ((control.getAttribute('type') || '').toLowerCase() === 'email') {
+                const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                if (!validEmail) {
+                    const message = label + ' must be a valid email address.';
+                    showControlError(control, message);
+                    errors.push({
+                        control: control,
+                        section: (control.closest('[data-section-panel]') ? control.closest('[data-section-panel]').getAttribute('data-section-panel') : 'basic'),
+                        message: message
+                    });
+                }
+            }
+        });
+
+        showSummary(errors);
+
+        if (errors.length > 0) {
+            const first = errors[0];
+            activateSection(first.section || 'basic');
+            setTimeout(function () {
+                if (first.control && typeof first.control.focus === 'function') {
+                    first.control.focus({ preventScroll: true });
+                }
+                if (first.control && typeof first.control.scrollIntoView === 'function') {
+                    first.control.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 120);
+            return false;
+        }
+
+        return true;
+    }
+
+    const form = document.querySelector('.landing-form');
+    if (form) {
+        validationControls(form).forEach(function (control) {
+            const wrapper = control.closest('div');
+            const label = wrapper ? wrapper.querySelector('label') : null;
+            if (label && !label.querySelector('.required-auto')) {
+                label.insertAdjacentHTML('beforeend', ' <span class="required-auto">*</span>');
+            }
+        });
+
+        form.addEventListener('input', function (event) {
+            const control = event.target.closest('input, textarea, select');
+            if (!control) {
+                return;
+            }
+
+            control.classList.remove('landing-validation-invalid');
+            const error = control.parentElement ? control.parentElement.querySelector('.landing-validation-error[data-for="' + cssEscapeValue(control.name) + '"]') : null;
+            if (error) {
+                error.remove();
+            }
+        });
+
+        form.addEventListener('submit', function (event) {
+            if (!validateLandingForm(form)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+    }
 
     const params = new URLSearchParams(window.location.search);
     const initialSection = params.get('section') || (window.location.hash ? window.location.hash.substring(1) : '{{ $activeSection }}');

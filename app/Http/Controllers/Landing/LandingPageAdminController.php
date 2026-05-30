@@ -82,34 +82,11 @@ class LandingPageAdminController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'is_published' => ['nullable', 'boolean'],
-            'meta.title' => ['required', 'string', 'max:220'],
-            'meta.description' => ['nullable', 'string', 'max:500'],
-            'meta.default_lang' => ['required', Rule::in(['bn', 'en'])],
-            'brand.name' => ['required', 'string', 'max:120'],
-            'brand.logo_text' => ['required', 'string', 'max:20'],
-            'brand.tagline.bn' => ['nullable', 'string', 'max:180'],
-            'brand.tagline.en' => ['nullable', 'string', 'max:180'],
-            'theme.green' => ['nullable', 'string', 'max:20'],
-            'theme.green_dark' => ['nullable', 'string', 'max:20'],
-            'theme.green_soft' => ['nullable', 'string', 'max:20'],
-            'theme.blue' => ['nullable', 'string', 'max:20'],
-            'theme.gold' => ['nullable', 'string', 'max:20'],
-            'theme.ink' => ['nullable', 'string', 'max:20'],
-            'theme.muted' => ['nullable', 'string', 'max:20'],
-            'theme.bg' => ['nullable', 'string', 'max:20'],
-            'cta.primary.label.bn' => ['nullable', 'string', 'max:120'],
-            'cta.primary.label.en' => ['nullable', 'string', 'max:120'],
-            'cta.primary.href' => ['nullable', 'string', 'max:220'],
-            'cta.secondary.label.bn' => ['nullable', 'string', 'max:120'],
-            'cta.secondary.label.en' => ['nullable', 'string', 'max:120'],
-            'cta.secondary.href' => ['nullable', 'string', 'max:220'],
-            'hero.title.bn' => ['required', 'string', 'max:220'],
-            'hero.title.en' => ['required', 'string', 'max:220'],
-            'contact.email' => ['nullable', 'email', 'max:160'],
-            'contact.phone' => ['nullable', 'string', 'max:40'],
-        ]);
+        $validated = $request->validate(
+            $this->landingValidationRules(),
+            $this->landingValidationMessages(),
+            $this->landingValidationAttributes()
+        );
 
         $current = LandingPageContent::current(true);
 
@@ -204,6 +181,232 @@ class LandingPageAdminController extends Controller
             'landing-admin.edit',
             'Landing inquiry deleted successfully.'
         );
+    }
+
+    private function landingValidationRules(): array
+    {
+        $requiredText = ['required', 'string'];
+        $requiredShortText = ['required', 'string', 'max:120'];
+        $requiredMediumText = ['required', 'string', 'max:220'];
+        $requiredLongText = ['required', 'string', 'max:1200'];
+        $requiredColor = ['required', 'string', 'max:40'];
+
+        return [
+            'active_section' => ['required', Rule::in(['basic', 'nav', 'hero', 'why', 'features', 'audience', 'pricing', 'testimonials', 'faq', 'contact', 'footer'])],
+            'is_published' => ['required', 'boolean'],
+
+            'meta.title' => $requiredMediumText,
+            'meta.description' => ['required', 'string', 'max:500'],
+            'meta.default_lang' => ['required', Rule::in(['bn', 'en'])],
+
+            'brand.name' => ['required', 'string', 'max:120'],
+            'brand.logo_text' => ['required', 'string', 'max:20'],
+            'brand.tagline.bn' => ['required', 'string', 'max:180'],
+            'brand.tagline.en' => ['required', 'string', 'max:180'],
+
+            'theme.green' => $requiredColor,
+            'theme.green_dark' => $requiredColor,
+            'theme.green_soft' => $requiredColor,
+            'theme.blue' => $requiredColor,
+            'theme.gold' => $requiredColor,
+            'theme.ink' => $requiredColor,
+            'theme.muted' => $requiredColor,
+            'theme.bg' => $requiredColor,
+
+            'nav_links' => ['required', 'array', 'min:1'],
+            'nav_links.*.label.bn' => $requiredShortText,
+            'nav_links.*.label.en' => $requiredShortText,
+            'nav_links.*.href' => ['required', 'string', 'max:220'],
+
+            'hero.enabled' => ['required', 'boolean'],
+            'hero.eyebrow.bn' => $requiredMediumText,
+            'hero.eyebrow.en' => $requiredMediumText,
+            'hero.title.bn' => $requiredMediumText,
+            'hero.title.en' => $requiredMediumText,
+            'hero.subtitle.bn' => $requiredLongText,
+            'hero.subtitle.en' => $requiredLongText,
+            'hero.buttons' => ['required', 'array', 'min:1'],
+            'hero.buttons.*.label.bn' => $requiredShortText,
+            'hero.buttons.*.label.en' => $requiredShortText,
+            'hero.buttons.*.style' => ['required', Rule::in(['primary', 'outline', 'dark'])],
+            'hero.buttons.*.href' => ['required', 'string', 'max:220'],
+            'trust_items' => ['required', 'array', 'min:1'],
+            'trust_items.*.bn' => $requiredShortText,
+            'trust_items.*.en' => $requiredShortText,
+            'hero.dashboard.title.bn' => $requiredShortText,
+            'hero.dashboard.title.en' => $requiredShortText,
+            'hero.dashboard.subtitle.bn' => $requiredShortText,
+            'hero.dashboard.subtitle.en' => $requiredShortText,
+            'hero.dashboard.chip.bn' => $requiredShortText,
+            'hero.dashboard.chip.en' => $requiredShortText,
+            'hero.dashboard.stats' => ['required', 'array', 'min:1'],
+            'hero.dashboard.stats.*.label.bn' => $requiredShortText,
+            'hero.dashboard.stats.*.label.en' => $requiredShortText,
+            'hero.dashboard.stats.*.value' => $requiredShortText,
+            'hero.dashboard.rows' => ['required', 'array', 'min:1'],
+            'hero.dashboard.rows.*.name.bn' => $requiredShortText,
+            'hero.dashboard.rows.*.name.en' => $requiredShortText,
+            'hero.dashboard.rows.*.debit' => $requiredShortText,
+            'hero.dashboard.rows.*.credit' => $requiredShortText,
+
+            'why.enabled' => ['required', 'boolean'],
+            'why.mini.bn' => $requiredShortText,
+            'why.mini.en' => $requiredShortText,
+            'why.title.bn' => $requiredLongText,
+            'why.title.en' => $requiredLongText,
+            'why.subtitle.bn' => $requiredLongText,
+            'why.subtitle.en' => $requiredLongText,
+            'why_cards' => ['required', 'array', 'min:1'],
+            'why_cards.*.icon' => ['required', 'string', 'max:20'],
+            'why_cards.*.title.bn' => $requiredShortText,
+            'why_cards.*.title.en' => $requiredShortText,
+            'why_cards.*.body.bn' => $requiredLongText,
+            'why_cards.*.body.en' => $requiredLongText,
+
+            'features.enabled' => ['required', 'boolean'],
+            'features.mini.bn' => $requiredShortText,
+            'features.mini.en' => $requiredShortText,
+            'features.title.bn' => $requiredLongText,
+            'features.title.en' => $requiredLongText,
+            'features.subtitle.bn' => $requiredLongText,
+            'features.subtitle.en' => $requiredLongText,
+            'screens' => ['required', 'array', 'min:1'],
+            'screens.*.badges_bn' => ['required', 'string', 'max:1000'],
+            'screens.*.badges_en' => ['required', 'string', 'max:1000'],
+            'screens.*.title.bn' => $requiredShortText,
+            'screens.*.title.en' => $requiredShortText,
+            'screens.*.body.bn' => $requiredLongText,
+            'screens.*.body.en' => $requiredLongText,
+
+            'audience.enabled' => ['required', 'boolean'],
+            'audience.icon' => ['required', 'string', 'max:20'],
+            'audience.title.bn' => $requiredShortText,
+            'audience.title.en' => $requiredShortText,
+            'audience.body.bn' => $requiredLongText,
+            'audience.body.en' => $requiredLongText,
+            'audiences' => ['required', 'array', 'min:1'],
+            'audiences.*.title.bn' => $requiredShortText,
+            'audiences.*.title.en' => $requiredShortText,
+            'audiences.*.body.bn' => $requiredLongText,
+            'audiences.*.body.en' => $requiredLongText,
+
+            'pricing.enabled' => ['required', 'boolean'],
+            'pricing.mini.bn' => $requiredShortText,
+            'pricing.mini.en' => $requiredShortText,
+            'pricing.title.bn' => $requiredLongText,
+            'pricing.title.en' => $requiredLongText,
+            'pricing.subtitle.bn' => $requiredLongText,
+            'pricing.subtitle.en' => $requiredLongText,
+            'packages' => ['required', 'array', 'min:1'],
+            'packages.*.name.bn' => $requiredShortText,
+            'packages.*.name.en' => $requiredShortText,
+            'packages.*.price' => $requiredShortText,
+            'packages.*.popular' => ['required', 'boolean'],
+            'packages.*.tag.bn' => $requiredShortText,
+            'packages.*.tag.en' => $requiredShortText,
+            'packages.*.suffix.bn' => $requiredShortText,
+            'packages.*.suffix.en' => $requiredShortText,
+            'packages.*.body.bn' => $requiredLongText,
+            'packages.*.body.en' => $requiredLongText,
+            'packages.*.features_bn' => ['required', 'string', 'max:4000'],
+            'packages.*.features_en' => ['required', 'string', 'max:4000'],
+            'packages.*.button.label.bn' => $requiredShortText,
+            'packages.*.button.label.en' => $requiredShortText,
+            'packages.*.button.href' => ['required', 'string', 'max:220'],
+            'packages.*.button.style' => ['required', Rule::in(['primary', 'outline', 'dark'])],
+            'pricing_notes' => ['required', 'array', 'min:1'],
+            'pricing_notes.*.title.bn' => $requiredShortText,
+            'pricing_notes.*.title.en' => $requiredShortText,
+            'pricing_notes.*.body.bn' => $requiredLongText,
+            'pricing_notes.*.body.en' => $requiredLongText,
+            'pricing_notes.*.button.label.bn' => $requiredShortText,
+            'pricing_notes.*.button.label.en' => $requiredShortText,
+            'pricing_notes.*.button.href' => ['required', 'string', 'max:220'],
+
+            'testimonials_section.enabled' => ['required', 'boolean'],
+            'testimonials_section.mini.bn' => $requiredShortText,
+            'testimonials_section.mini.en' => $requiredShortText,
+            'testimonials_section.title.bn' => $requiredLongText,
+            'testimonials_section.title.en' => $requiredLongText,
+            'testimonials' => ['required', 'array', 'min:1'],
+            'testimonials.*.name' => $requiredShortText,
+            'testimonials.*.avatar' => ['required', 'string', 'max:10'],
+            'testimonials.*.role.bn' => $requiredShortText,
+            'testimonials.*.role.en' => $requiredShortText,
+            'testimonials.*.quote.bn' => $requiredLongText,
+            'testimonials.*.quote.en' => $requiredLongText,
+
+            'faq_section.enabled' => ['required', 'boolean'],
+            'faq_section.mini.bn' => $requiredShortText,
+            'faq_section.mini.en' => $requiredShortText,
+            'faq_section.title.bn' => $requiredLongText,
+            'faq_section.title.en' => $requiredLongText,
+            'faqs' => ['required', 'array', 'min:1'],
+            'faqs.*.question.bn' => $requiredLongText,
+            'faqs.*.question.en' => $requiredLongText,
+            'faqs.*.answer.bn' => $requiredLongText,
+            'faqs.*.answer.en' => $requiredLongText,
+            'faqs.*.open' => ['nullable', 'boolean'],
+
+            'contact.enabled' => ['required', 'boolean'],
+            'contact.title.bn' => $requiredShortText,
+            'contact.title.en' => $requiredShortText,
+            'contact.body.bn' => $requiredLongText,
+            'contact.body.en' => $requiredLongText,
+            'contact.phone' => ['required', 'string', 'max:40'],
+            'contact.email' => ['required', 'email', 'max:160'],
+            'contact.phone_note.bn' => $requiredShortText,
+            'contact.phone_note.en' => $requiredShortText,
+            'contact.email_note.bn' => $requiredShortText,
+            'contact.email_note.en' => $requiredShortText,
+            'contact.form.name.bn' => $requiredShortText,
+            'contact.form.name.en' => $requiredShortText,
+            'contact.form.business_name.bn' => $requiredShortText,
+            'contact.form.business_name.en' => $requiredShortText,
+            'contact.form.mobile.bn' => $requiredShortText,
+            'contact.form.mobile.en' => $requiredShortText,
+            'contact.form.email.bn' => $requiredShortText,
+            'contact.form.email.en' => $requiredShortText,
+            'contact.form.message.bn' => $requiredLongText,
+            'contact.form.message.en' => $requiredLongText,
+            'contact.form.button.bn' => $requiredShortText,
+            'contact.form.button.en' => $requiredShortText,
+            'contact.form.success.bn' => $requiredLongText,
+            'contact.form.success.en' => $requiredLongText,
+
+            'footer.text.bn' => $requiredLongText,
+            'footer.text.en' => $requiredLongText,
+        ];
+    }
+
+    private function landingValidationMessages(): array
+    {
+        return [
+            '*.required' => ':attribute is required and cannot be empty.',
+            '*.min' => ':attribute must contain at least one item.',
+            '*.email' => ':attribute must be a valid email address.',
+            '*.max' => ':attribute is too long.',
+            '*.in' => ':attribute has an invalid option.',
+            '*.boolean' => ':attribute has an invalid yes/no value.',
+        ];
+    }
+
+    private function landingValidationAttributes(): array
+    {
+        return [
+            'nav_links' => 'Navigation menu',
+            'hero.buttons' => 'Hero buttons',
+            'trust_items' => 'Trust items',
+            'hero.dashboard.stats' => 'Dashboard counters',
+            'hero.dashboard.rows' => 'Dashboard transaction rows',
+            'why_cards' => 'Why section cards',
+            'screens' => 'Feature screen cards',
+            'audiences' => 'Audience cards',
+            'packages' => 'Pricing packages',
+            'pricing_notes' => 'Pricing note cards',
+            'testimonials' => 'Testimonials',
+            'faqs' => 'FAQ cards',
+        ];
     }
 
     private function landingSection(?string $section): string
