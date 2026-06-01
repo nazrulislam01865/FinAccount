@@ -29,6 +29,7 @@
     </div>
 </div>
 
+<div class="advance-page setup-record-flow">
 <div class="stats-grid advance-stats">
     <div class="card stat-card">
         <small>Advance Paid Balance</small>
@@ -51,6 +52,106 @@
         <span class="muted">Balance already cleared</span>
     </div>
 </div>
+
+        <form
+            class="card form-card"
+            id="advanceForm"
+            action="{{ route('api.advance-management.store') }}"
+            method="POST"
+            data-new-rules='@json($newAdvanceRules->values())'
+            data-adjustment-rules='@json($adjustmentRules->values())'
+        >
+            @csrf
+            <h3 class="section-title">Advance Entry / Adjustment</h3>
+
+            <input type="hidden" name="party_id" id="advancePartyId">
+            <input type="hidden" name="account_id" id="advanceAccountId">
+            <input type="hidden" name="settlement_type_id" id="advanceSettlementTypeId">
+
+            <div class="form-grid">
+                <div>
+                    <label>Entry Mode <span class="required">*</span></label>
+                    <select name="entry_mode" id="entryMode" required>
+                        <option>New Advance</option>
+                        <option>Advance Adjustment</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Advance Type <span class="required">*</span></label>
+                    <select name="advance_type" id="advanceType" required>
+                        <option value="Paid">Advance Paid</option>
+                        <option value="Received">Advance Received</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Party / Person <span class="required">*</span></label>
+                    <select id="advancePartySelect" required>
+                        <option value="">Select Party</option>
+                        @foreach($parties as $party)
+                            <option value="{{ $party->id }}">{{ $party->party_name }}{{ $party->partyType?->name ? ' - ' . $party->partyType?->name : '' }}</option>
+                        @endforeach
+                    </select>
+                    <div class="hint">Connected with Party / Person Setup. Select an existing advance row for adjustment.</div>
+                </div>
+                <div class="two-col">
+                    <div>
+                        <label>Date <span class="required">*</span></label>
+                        <input type="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
+                    </div>
+                    <div>
+                        <label>Available Advance</label>
+                        <input id="availableBalanceText" value="BDT 0.00" readonly>
+                    </div>
+                </div>
+                <div id="linkedDueBalanceWrap" style="display:none">
+                    <label id="linkedDueBalanceLabel">Current Payable / Receivable Due</label>
+                    <input id="linkedDueBalanceText" value="BDT 0.00" readonly>
+                    <div class="hint">For adjustment, the allowed amount is the smaller of available advance and current payable/receivable due.</div>
+                    <div id="adjustmentLimitNotice" class="advance-limit-notice" style="display:none"></div>
+                </div>
+                <div class="two-col">
+                    <div>
+                        <label>Amount <span class="required">*</span></label>
+                        <input type="number" step="0.01" min="0.01" name="amount" id="advanceAmount" required>
+                    </div>
+                    <div>
+                        <label>Cash / Bank Account</label>
+                        <select name="cash_bank_account_id" id="cashBankAccountId">
+                            <option value="">Select Cash / Bank</option>
+                            @foreach($cashBankAccounts as $account)
+                                <option value="{{ $account->id }}">{{ $account->cash_bank_name }} - {{ $account->linkedLedger?->account_name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label>Accounting Rule <span class="required">*</span></label>
+                    <select name="transaction_head_id" id="advanceRuleHead" required>
+                        <option value="">Select rule</option>
+                    </select>
+                    <div class="hint">Rules are loaded from Transaction Head Setup + Accounting Rules Setup.</div>
+                </div>
+                <div>
+                    <label>Reference</label>
+                    <input name="reference" id="advanceReference" placeholder="Advance reference, bill no, adjustment note...">
+                </div>
+                <div>
+                    <label>Notes</label>
+                    <textarea name="notes" id="advanceNotes" placeholder="Advance paid/received or adjustment note"></textarea>
+                </div>
+                <div class="ledger-preview-box" id="advanceLedgerPreview">
+                    <strong>Accounting rule</strong>
+                    Select entry mode and type to see the Dr/Cr preview.
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn-ghost" type="reset">Clear</button>
+                @if($canManageAdvance)
+                    <button class="btn-primary" type="submit" id="advanceSubmitButton">Post Advance</button>
+                @endif
+            </div>
+        </form>
 
 <form class="card toolbar advance-toolbar" method="GET" action="{{ route('advance-management.index') }}" style="margin-top:18px">
     <div class="field search-field">
@@ -172,120 +273,109 @@
         </div>
     </div>
 
-    <aside class="right-stack">
-        <form
-            class="card form-card"
-            id="advanceForm"
-            action="{{ route('api.advance-management.store') }}"
-            method="POST"
-            data-new-rules='@json($newAdvanceRules->values())'
-            data-adjustment-rules='@json($adjustmentRules->values())'
-        >
-            @csrf
-            <h3 class="section-title">Advance Entry / Adjustment</h3>
-
-            <input type="hidden" name="party_id" id="advancePartyId">
-            <input type="hidden" name="account_id" id="advanceAccountId">
-            <input type="hidden" name="settlement_type_id" id="advanceSettlementTypeId">
-
-            <div class="form-grid">
-                <div>
-                    <label>Entry Mode <span class="required">*</span></label>
-                    <select name="entry_mode" id="entryMode" required>
-                        <option>New Advance</option>
-                        <option>Advance Adjustment</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Advance Type <span class="required">*</span></label>
-                    <select name="advance_type" id="advanceType" required>
-                        <option value="Paid">Advance Paid</option>
-                        <option value="Received">Advance Received</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Party / Person <span class="required">*</span></label>
-                    <select id="advancePartySelect" required>
-                        <option value="">Select Party</option>
-                        @foreach($parties as $party)
-                            <option value="{{ $party->id }}">{{ $party->party_name }}{{ $party->partyType?->name ? ' - ' . $party->partyType?->name : '' }}</option>
-                        @endforeach
-                    </select>
-                    <div class="hint">Connected with Party / Person Setup. Select an existing advance row for adjustment.</div>
-                </div>
-                <div class="two-col">
-                    <div>
-                        <label>Date <span class="required">*</span></label>
-                        <input type="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
-                    </div>
-                    <div>
-                        <label>Available Advance</label>
-                        <input id="availableBalanceText" value="BDT 0.00" readonly>
-                    </div>
-                </div>
-                <div id="linkedDueBalanceWrap" style="display:none">
-                    <label id="linkedDueBalanceLabel">Current Payable / Receivable Due</label>
-                    <input id="linkedDueBalanceText" value="BDT 0.00" readonly>
-                    <div class="hint">For adjustment, the allowed amount is the smaller of available advance and current payable/receivable due.</div>
-                    <div id="adjustmentLimitNotice" class="advance-limit-notice" style="display:none"></div>
-                </div>
-                <div class="two-col">
-                    <div>
-                        <label>Amount <span class="required">*</span></label>
-                        <input type="number" step="0.01" min="0.01" name="amount" id="advanceAmount" required>
-                    </div>
-                    <div>
-                        <label>Cash / Bank Account</label>
-                        <select name="cash_bank_account_id" id="cashBankAccountId">
-                            <option value="">Select Cash / Bank</option>
-                            @foreach($cashBankAccounts as $account)
-                                <option value="{{ $account->id }}">{{ $account->cash_bank_name }} - {{ $account->linkedLedger?->account_name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label>Accounting Rule <span class="required">*</span></label>
-                    <select name="transaction_head_id" id="advanceRuleHead" required>
-                        <option value="">Select rule</option>
-                    </select>
-                    <div class="hint">Rules are loaded from Transaction Head Setup + Accounting Rules Setup.</div>
-                </div>
-                <div>
-                    <label>Reference</label>
-                    <input name="reference" id="advanceReference" placeholder="Advance reference, bill no, adjustment note...">
-                </div>
-                <div>
-                    <label>Notes</label>
-                    <textarea name="notes" id="advanceNotes" placeholder="Advance paid/received or adjustment note"></textarea>
-                </div>
-                <div class="ledger-preview-box" id="advanceLedgerPreview">
-                    <strong>Accounting rule</strong>
-                    Select entry mode and type to see the Dr/Cr preview.
-                </div>
-            </div>
-
-            <div class="actions">
-                <button class="btn-ghost" type="reset">Clear</button>
-                @if($canManageAdvance)
-                    <button class="btn-primary" type="submit" id="advanceSubmitButton">Post Advance</button>
-                @endif
-            </div>
-        </form>
-
+</div>
         <div class="card helper-card">
             <h3>Accounting Control</h3>
             <p><strong>Advance paid:</strong> Dr Advance to Supplier / Employee, Cr Cash/Bank.</p>
             <p><strong>Advance received:</strong> Dr Cash/Bank, Cr Advance from Customer.</p>
             <p><strong>Adjustment:</strong> clears advance and reduces related AP/AR due without re-recording cash movement.</p>
         </div>
-    </aside>
 </div>
 @endsection
 
 @push('styles')
 <style>
-    .advance-toolbar{grid-template-columns:minmax(220px,1fr)170px 185px 150px 150px 120px}.advance-layout{grid-template-columns:minmax(0,1fr)390px}.advance-tabs{display:flex;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px rgba(16,24,40,.04);flex-wrap:wrap}.advance-tab{padding:10px 14px;border-radius:12px;background:#fff;color:#475467;border:0;font-size:13px;font-weight:850;min-height:38px}.advance-tab.active{background:var(--primary);color:#fff}.money-cell{text-align:right;font-weight:800;white-space:nowrap}.red-text{color:#dc2626!important}.green-text{color:#067647!important}.orange-text{color:#b54708!important}.advance-stats .stat-card span{display:block;font-size:12px}.ledger-preview-box{border:1px solid var(--line);border-radius:14px;background:#fbfcfd;padding:14px;font-size:13px;line-height:1.55}.ledger-preview-box strong{display:block;margin-bottom:6px}.advance-limit-notice{margin-top:10px;padding:10px 12px;border-radius:12px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:12px;line-height:1.45}.advance-limit-notice.success{background:#ecfdf3;color:#067647;border-color:#bbf7d0}.advance-layout .form-card{position:sticky;top:98px}.advance-layout .helper-card p{font-size:13px;line-height:1.45;color:#475467}@media(max-width:1320px){.advance-layout{grid-template-columns:1fr}.advance-toolbar{grid-template-columns:1fr 1fr 1fr}.right-stack{grid-template-columns:1fr 1fr}.advance-layout .form-card{position:static}}@media(max-width:880px){.advance-toolbar,.right-stack{grid-template-columns:1fr}.advance-layout{grid-template-columns:1fr}.advance-tabs{display:grid}.advance-tab{text-align:left}}
+    .setup-record-flow {
+        display: grid;
+        gap: 18px;
+    }
+
+    .setup-record-flow .stats-grid {
+        order: 1;
+    }
+
+    .setup-record-flow .advance-layout {
+        order: 5;
+        display: grid;
+        grid-template-columns: 1fr !important;
+        margin-top: 0 !important;
+    }
+
+    .setup-record-flow #advanceForm {
+        order: 2;
+        width: 100%;
+        position: static;
+    }
+
+    .setup-record-flow .advance-toolbar {
+        order: 3;
+        margin-top: 0 !important;
+        grid-template-columns: minmax(220px, 1fr) 170px 185px 150px 150px 120px;
+        width: 100%;
+    }
+
+    .setup-record-flow .advance-tabs {
+        order: 4;
+        margin-top: 0 !important;
+    }
+
+    .setup-record-flow .advance-layout > .left-stack {
+        width: 100%;
+    }
+
+    .setup-record-flow .helper-card {
+        order: 6;
+        width: 100%;
+    }
+
+    .setup-record-flow #advanceForm .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    .setup-record-flow #advanceForm .form-grid > .two-col,
+    .setup-record-flow #advanceForm .ledger-preview-box,
+    .setup-record-flow #advanceForm .actions {
+        grid-column: 1 / -1;
+    }
+
+    .setup-record-flow .table-card,
+    .setup-record-flow .table-wrap {
+        width: 100%;
+    }
+
+    .setup-record-flow .table-wrap {
+        overflow-x: scroll;
+        scrollbar-gutter: stable both-edges;
+    }
+
+    .advance-tabs { display: flex; gap: 8px; padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 24px rgba(16,24,40,.04); flex-wrap: wrap; }
+    .advance-tab { padding: 10px 14px; border-radius: 12px; background: #fff; color: #475467; border: 0; font-size: 13px; font-weight: 850; min-height: 38px; }
+    .advance-tab.active { background: var(--primary); color: #fff; }
+    .money-cell { text-align: right; font-weight: 800; white-space: nowrap; }
+    .red-text { color: #dc2626 !important; }
+    .green-text { color: #067647 !important; }
+    .orange-text { color: #b54708 !important; }
+    .advance-stats .stat-card span { display: block; font-size: 12px; }
+    .ledger-preview-box { border: 1px solid var(--line); border-radius: 14px; background: #fbfcfd; padding: 14px; font-size: 13px; line-height: 1.55; }
+    .ledger-preview-box strong { display: block; margin-bottom: 6px; }
+    .advance-limit-notice { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; font-size: 12px; line-height: 1.45; }
+    .advance-limit-notice.success { background: #ecfdf3; color: #067647; border-color: #bbf7d0; }
+    .advance-layout .helper-card p { font-size: 13px; line-height: 1.45; color: #475467; }
+
+    @media (max-width: 1320px) {
+        .setup-record-flow .advance-toolbar { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    @media (max-width: 880px) {
+        .setup-record-flow .advance-toolbar,
+        .setup-record-flow #advanceForm .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .advance-tabs { display: grid; }
+        .advance-tab { text-align: left; }
+    }
 </style>
 @endpush
 

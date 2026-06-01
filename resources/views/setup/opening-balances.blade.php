@@ -387,6 +387,34 @@
 
 @push('styles')
 <style>
+
+    .opening-balance-main-layout {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        width: 100% !important;
+    }
+
+    .opening-balance-main-layout .opening-balance-full-stack,
+    .opening-balance-main-layout .balance-card,
+    .opening-balance-main-layout .opening-toolbar,
+    .opening-balance-main-layout .table-wrap {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .opening-balance-main-layout .opening-toolbar {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
+        align-items: end;
+    }
+
+    .opening-balance-main-layout .opening-toolbar button {
+        width: 100%;
+    }
+
+    .opening-balance-main-layout .balance-card {
+        overflow: hidden;
+    }
+
     .opening-summary-cards {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -414,7 +442,35 @@
     }
 
     @media (max-width: 980px) {
-        .opening-summary-cards {
+    
+    .opening-balance-main-layout {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        width: 100% !important;
+    }
+
+    .opening-balance-main-layout .opening-balance-full-stack,
+    .opening-balance-main-layout .balance-card,
+    .opening-balance-main-layout .opening-toolbar,
+    .opening-balance-main-layout .table-wrap {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .opening-balance-main-layout .opening-toolbar {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
+        align-items: end;
+    }
+
+    .opening-balance-main-layout .opening-toolbar button {
+        width: 100%;
+    }
+
+    .opening-balance-main-layout .balance-card {
+        overflow: hidden;
+    }
+
+    .opening-summary-cards {
             grid-template-columns: 1fr;
         }
     }

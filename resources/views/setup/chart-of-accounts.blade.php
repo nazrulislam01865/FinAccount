@@ -35,6 +35,11 @@
     .coa-quick-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
     .coa-btn-light{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.22);box-shadow:none;}
     .coa-btn-light:hover{background:rgba(255,255,255,.24);transform:translateY(-1px);}
+    .coa-import-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}
+    .coa-import-form input[type=file]{max-width:230px;min-height:42px;padding:7px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff;}
+    .coa-import-form input[type=file]::file-selector-button{border:0;border-radius:10px;padding:7px 10px;margin-right:8px;font-weight:800;color:#1d2939;}
+    .coa-alert{margin-bottom:16px;padding:12px 14px;border-radius:14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#067647;font-weight:750;}
+    .coa-alert.error{border-color:#fecaca;background:#fef2f2;color:#991b1b;}
 
     .coa-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px;}
     .coa-stat{background:#fff;border:1px solid var(--coa-line);border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(16,24,40,.06);min-width:0;}
@@ -140,6 +145,112 @@
     }
 
 
+
+
+    /* CoA header and list rendering fixes */
+    .content .coa-template-page .coa-hero{
+        flex-direction:column!important;
+        align-items:flex-start!important;
+        justify-content:flex-start!important;
+        gap:22px!important;
+        padding:34px 36px!important;
+    }
+    .content .coa-template-page .coa-hero .coa-hero-brand{
+        width:100%!important;
+        max-width:720px!important;
+        flex:0 1 auto!important;
+    }
+    .content .coa-template-page .coa-hero h1{
+        max-width:720px!important;
+        margin:0 0 10px!important;
+        font-size:clamp(28px,2.7vw,44px)!important;
+        line-height:1.12!important;
+        overflow-wrap:anywhere!important;
+    }
+    .content .coa-template-page .coa-hero p{
+        max-width:760px!important;
+        font-size:17px!important;
+        line-height:1.45!important;
+    }
+    .content .coa-template-page .coa-quick-actions{
+        width:100%!important;
+        display:flex!important;
+        align-items:center!important;
+        justify-content:flex-start!important;
+        gap:10px!important;
+        flex-wrap:wrap!important;
+    }
+    .content .coa-template-page .coa-hero :is(.coa-btn-light,.button,button){
+        min-height:46px!important;
+        height:46px!important;
+        padding:0 18px!important;
+        border-radius:14px!important;
+        font-size:14px!important;
+        font-weight:800!important;
+        line-height:1!important;
+    }
+    .content .coa-template-page .coa-import-form{
+        display:flex!important;
+        align-items:center!important;
+        gap:8px!important;
+        flex:1 1 420px!important;
+        min-width:min(100%,360px)!important;
+        max-width:640px!important;
+        margin:0!important;
+    }
+    .content .coa-template-page .coa-import-form input[type=file]{
+        flex:1 1 220px!important;
+        min-width:200px!important;
+        max-width:100%!important;
+        height:46px!important;
+        min-height:46px!important;
+        padding:7px 10px!important;
+        border-radius:14px!important;
+        font-size:14px!important;
+    }
+    .coa-view-toolbar{
+        display:flex;
+        align-items:end;
+        justify-content:space-between;
+        gap:14px;
+        flex-wrap:wrap;
+        margin:0 0 14px;
+        padding:12px 14px;
+        border:1px solid var(--coa-line);
+        border-radius:16px;
+        background:#f8fbff;
+    }
+    .coa-load-control{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .coa-load-control label{margin:0;font-size:12px;font-weight:850;color:#344054;}
+    .coa-load-control select{width:150px;min-height:42px;height:42px;padding-top:8px;padding-bottom:8px;}
+    .coa-list-summary{color:var(--coa-muted);font-size:12px;font-weight:750;}
+    .coa-tree{
+        max-height:560px;
+        overflow-y:auto;
+        overflow-x:hidden;
+        padding-right:6px;
+        scrollbar-gutter:stable;
+    }
+    .coa-tree::-webkit-scrollbar,
+    .coa-table-wrap::-webkit-scrollbar{width:12px;height:12px;}
+    .coa-tree::-webkit-scrollbar-track,
+    .coa-table-wrap::-webkit-scrollbar-track{background:#f2f4f7;border-radius:999px;}
+    .coa-tree::-webkit-scrollbar-thumb,
+    .coa-table-wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px;border:3px solid #f2f4f7;}
+    .coa-tree-node{padding:9px 11px;border-radius:13px;}
+    .coa-tree-name{font-size:15px;font-weight:700;line-height:1.35;letter-spacing:-.01em;}
+    .coa-tree-meta{font-size:12px;line-height:1.45;font-weight:500;}
+    .coa-tree .coa-badge{font-size:10px;font-weight:700;padding:4px 8px;}
+    .coa-table-wrap{max-height:580px;overflow:auto;}
+    .coa-template-page thead th{position:sticky;top:0;z-index:2;}
+    @media(max-width:720px){
+        .content .coa-template-page .coa-import-form{flex:1 1 100%;}
+        .content .coa-template-page .coa-hero :is(.coa-btn-light,.button,button){width:100%!important;}
+        .content .coa-template-page .coa-import-form input[type=file]{width:100%!important;}
+        .coa-view-toolbar{align-items:stretch;}
+        .coa-load-control,.coa-load-control select{width:100%;}
+    }
+
     /* Unified blue hero heading is controlled globally from resources/css/app.css.
        This page keeps its logic and form/table behavior unchanged. */
 </style>
@@ -204,10 +315,31 @@
         </div>
         <div class="coa-quick-actions">
             <button class="coa-btn-light" type="button" id="newAccountHeroBtn">+ Add New Account</button>
+            <a class="coa-btn-light button" href="{{ route('setup.chart-of-accounts.export') }}">Export Excel</a>
             <button class="coa-btn-light" type="button" data-coa-tab-button="tree">View CoA Tree</button>
             <button class="coa-btn-light" type="button" data-coa-tab-button="posting">Posting Ledgers</button>
+            <form class="coa-import-form" method="POST" action="{{ route('setup.chart-of-accounts.import') }}" enctype="multipart/form-data">
+                @csrf
+                <input type="file" name="coa_file" accept=".xlsx,.xlsm,.csv,.txt" required>
+                <button class="coa-btn-light" type="submit">Import Excel</button>
+            </form>
         </div>
     </header>
+
+    @if(session('status'))
+        <div class="coa-alert">{{ session('status') }}</div>
+    @endif
+
+    @if(session('import_errors'))
+        <div class="coa-alert error">
+            <strong>Some rows were skipped:</strong>
+            <ul style="margin:8px 0 0 18px">
+                @foreach(session('import_errors') as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     <section class="coa-stats" aria-label="Chart of Accounts statistics">
         <div class="coa-stat"><span>Total Accounts</span><strong>{{ $stats['total'] ?? $accountRows->count() }}</strong></div>
@@ -418,11 +550,26 @@
                 <button class="coa-tab" type="button" data-coa-tab-button="full" id="tabFull">Full CoA List</button>
             </div>
 
+            <div class="coa-view-toolbar" aria-label="CoA list loading controls">
+                <div class="coa-load-control">
+                    <label for="coaLoadSize">Load records at once</label>
+                    <select id="coaLoadSize">
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="150">150</option>
+                        <option value="200">200</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <div class="coa-list-summary" id="coaVisibleSummary">Showing records as you scroll.</div>
+            </div>
+
             <div id="treeView" data-coa-tab-panel="tree">
                 <div class="coa-tree" id="tree">
                     @forelse($accountRows as $row)
                         <div
                             class="coa-tree-node coa-lvl{{ $row['coa_level'] }}"
+                            data-coa-tree-row
                             data-edit-row-id="{{ $row['id'] }}"
                             role="button"
                             tabindex="0"
@@ -447,7 +594,7 @@
 
             <div id="postingView" class="coa-hidden" data-coa-tab-panel="posting">
                 <div class="coa-table-wrap">
-                    <table id="postingCoaTable" data-client-pagination="true" data-page-size="10">
+                    <table id="postingCoaTable" data-no-client-pagination="true">
                         <thead>
                             <tr>
                                 <th>CoA Code</th>
@@ -467,7 +614,7 @@
                         </thead>
                         <tbody>
                             @forelse($accountRows->where('posting_allowed', true) as $row)
-                                <tr data-edit-row-id="{{ $row['id'] }}">
+                                <tr data-posting-row data-edit-row-id="{{ $row['id'] }}">
                                     <td class="code">{{ $row['account_code'] }}</td>
                                     <td><strong>{{ $row['account_name'] }}</strong></td>
                                     <td>{{ $row['account_class'] ?: '—' }}</td>
@@ -490,7 +637,7 @@
                 </div>
                 <div class="coa-mobile-list">
                     @foreach($accountRows->where('posting_allowed', true) as $row)
-                        <div class="coa-mobile-item">
+                        <div class="coa-mobile-item" data-posting-mobile-row>
                             <div class="coa-mobile-top">
                                 <div>
                                     <div class="coa-mobile-title">{{ $row['account_code'] }} · {{ $row['account_name'] }}</div>
@@ -545,7 +692,7 @@
                 </div>
 
                 <div class="coa-table-wrap">
-                    <table id="fullCoaTable" data-client-pagination="true" data-page-size="10">
+                    <table id="fullCoaTable" data-no-client-pagination="true">
                         <thead>
                             <tr>
                                 <th>CoA Code</th>
@@ -928,17 +1075,92 @@ document.addEventListener('DOMContentLoaded', () => {
         form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
+    let activeCoaTab = 'tree';
+    let visibleLimit = Number(document.getElementById('coaLoadSize')?.value || 50);
+
+    function selectedLoadSize() {
+        const value = document.getElementById('coaLoadSize')?.value || '50';
+        return value === 'all' ? Infinity : Number(value || 50);
+    }
+
+    function activeRowsFor(tabName = activeCoaTab) {
+        const useMobileList = window.matchMedia('(max-width: 720px)').matches;
+
+        if (tabName === 'tree') {
+            return Array.from(document.querySelectorAll('[data-coa-tree-row]'));
+        }
+
+        if (tabName === 'posting') {
+            return Array.from(document.querySelectorAll(useMobileList ? '[data-posting-mobile-row]' : '[data-posting-row]'));
+        }
+
+        return Array.from(document.querySelectorAll(useMobileList ? '[data-full-mobile-row]' : '[data-full-row]'))
+            .filter((row) => row.dataset.filterMatch !== '0');
+    }
+
+    function scrollContainersFor(tabName = activeCoaTab) {
+        if (tabName === 'tree') return [document.getElementById('tree')].filter(Boolean);
+        if (tabName === 'posting') return Array.from(document.querySelectorAll('#postingView .coa-table-wrap, #postingView .coa-mobile-list'));
+        return Array.from(document.querySelectorAll('#fullView .coa-table-wrap, #fullView .coa-mobile-list'));
+    }
+
+    function updateVisibleSummary(shown, total) {
+        const summary = document.getElementById('coaVisibleSummary');
+        if (!summary) return;
+        summary.textContent = total
+            ? `Showing ${Math.min(shown, total)} of ${total} record${total === 1 ? '' : 's'}. Scroll to load more.`
+            : 'No records match the current view.';
+    }
+
+    function applyProgressiveLimit(reset = false) {
+        const batchSize = selectedLoadSize();
+        const rows = activeRowsFor();
+
+        if (reset) visibleLimit = batchSize;
+        if (batchSize === Infinity) visibleLimit = Infinity;
+        if (!Number.isFinite(visibleLimit) || visibleLimit < batchSize) visibleLimit = batchSize;
+
+        rows.forEach((row, index) => {
+            row.style.display = index < visibleLimit ? '' : 'none';
+        });
+
+        updateVisibleSummary(Math.min(visibleLimit, rows.length), rows.length);
+    }
+
+    function loadMoreVisibleRows() {
+        const batchSize = selectedLoadSize();
+        if (batchSize === Infinity) return;
+        const rows = activeRowsFor();
+        if (visibleLimit >= rows.length) return;
+        visibleLimit += batchSize;
+        applyProgressiveLimit(false);
+    }
+
+    function bindProgressiveScroll() {
+        scrollContainersFor().forEach((container) => {
+            if (container.dataset.coaScrollBound === '1') return;
+            container.dataset.coaScrollBound = '1';
+            container.addEventListener('scroll', () => {
+                const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 80;
+                if (nearBottom) loadMoreVisibleRows();
+            });
+        });
+    }
+
     function showTab(name) {
+        activeCoaTab = name;
         document.querySelectorAll('[data-coa-tab-panel]').forEach((panel) => {
             panel.classList.toggle('coa-hidden', panel.dataset.coaTabPanel !== name);
         });
         document.querySelectorAll('[data-coa-tab-button]').forEach((button) => {
             button.classList.toggle('active', button.dataset.coaTabButton === name);
         });
-        if (name === 'full') applyFullFilters();
+        if (name === 'full') applyFullFilters(false);
+        bindProgressiveScroll();
+        applyProgressiveLimit(true);
     }
 
-    function applyFullFilters() {
+    function applyFullFilters(resetLimit = true) {
         const search = String(document.getElementById('search')?.value || '').toLowerCase().trim();
         const selectedClass = document.getElementById('fClass')?.value || '';
         const selectedLevel = document.getElementById('fLevel')?.value || '';
@@ -952,10 +1174,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 && (!selectedLedger || row.dataset.ledger === selectedLedger)
                 && (!selectedPosting || row.dataset.posting === selectedPosting);
 
-            row.style.display = show ? '' : 'none';
+            row.dataset.filterMatch = show ? '1' : '0';
+            if (!show) row.style.display = 'none';
         });
 
-        window.AccountingTablePagination?.refresh(document.getElementById('fullCoaTable'), true);
+        if (activeCoaTab === 'full') applyProgressiveLimit(resetLimit);
     }
 
     coaLevel.addEventListener('change', () => { reloadParentDropdown(''); syncSmartFields(); });
@@ -1005,8 +1228,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     ['search', 'fClass', 'fLevel', 'fLedger', 'fPosting'].forEach((id) => {
-        document.getElementById(id)?.addEventListener('input', applyFullFilters);
-        document.getElementById(id)?.addEventListener('change', applyFullFilters);
+        document.getElementById(id)?.addEventListener('input', () => applyFullFilters(true));
+        document.getElementById(id)?.addEventListener('change', () => applyFullFilters(true));
+    });
+
+    document.getElementById('coaLoadSize')?.addEventListener('change', () => {
+        if (activeCoaTab === 'full') applyFullFilters(true);
+        applyProgressiveLimit(true);
+    });
+
+    window.addEventListener('resize', () => {
+        if (activeCoaTab === 'full') applyFullFilters(false);
+        applyProgressiveLimit(true);
     });
 
     resetForm(false);

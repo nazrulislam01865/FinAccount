@@ -2,6 +2,7 @@
 
 namespace App\AccountingReports\Services;
 
+use App\AccountingEngine\Services\AuditTrailService;
 use App\AccountingEngine\Services\JournalPostingService;
 use App\Models\JournalHeader;
 use App\Models\VoucherHeader;
@@ -11,7 +12,8 @@ use Illuminate\Validation\ValidationException;
 class AccountingReversalService
 {
     public function __construct(
-        private readonly JournalPostingService $journalPostingService
+        private readonly JournalPostingService $journalPostingService,
+        private readonly AuditTrailService $auditTrailService
     ) {
     }
 
@@ -140,9 +142,18 @@ class AccountingReversalService
                     'updated_at' => $now,
                 ]);
 
-            $sourceVoucher = VoucherHeader::query()->find($source->id);
+            $sourceVoucher = VoucherHeader::query()
+                ->with(['details.account', 'details.party'])
+                ->find($source->id);
+
             if ($sourceVoucher) {
                 $this->journalPostingService->markVoucherJournalStatus($sourceVoucher, JournalHeader::STATUS_REVERSED);
+                $this->auditTrailService->recordVoucherReversal(
+                    $sourceVoucher,
+                    $reversalVoucher->fresh(['details.account', 'details.party']) ?? $reversalVoucher,
+                    $userId,
+                    ['debit_total' => $debitTotal, 'credit_total' => $creditTotal]
+                );
             }
 
             return (object) [

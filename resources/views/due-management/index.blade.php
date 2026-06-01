@@ -31,6 +31,7 @@
     </div>
 </div>
 
+<div class="due-page setup-record-flow">
 <div class="stats-grid due-stats">
     <div class="card stat-card">
         <small>Total Payable Due</small>
@@ -53,6 +54,83 @@
         <span class="muted">Payment/collection started</span>
     </div>
 </div>
+
+        <form
+            class="card form-card"
+            id="dueSettlementForm"
+            action="{{ route('api.due-management.settle') }}"
+            method="POST"
+            data-settlement-rules='@json($rulePayload)'
+        >
+            @csrf
+            <h3 class="section-title">Due Payment / Collection</h3>
+
+            <input type="hidden" name="party_id" id="settlePartyId">
+            <input type="hidden" name="account_id" id="settleAccountId">
+            <input type="hidden" name="due_type" id="settleDueType">
+
+            <div class="form-grid">
+                <div>
+                    <label>Selected Party</label>
+                    <input id="selectedPartyText" value="Select a due row" readonly>
+                </div>
+                <div>
+                    <label>Due Ledger</label>
+                    <input id="selectedAccountText" value="-" readonly>
+                </div>
+                <div class="two-col">
+                    <div>
+                        <label>Balance Due</label>
+                        <input id="selectedBalanceText" value="BDT 0.00" readonly>
+                    </div>
+                    <div>
+                        <label>Pay / Collect <span class="required">*</span></label>
+                        <input type="number" step="0.01" min="0.01" name="amount" id="settleAmount" required>
+                    </div>
+                </div>
+                <div>
+                    <label>Payment / Collection Rule <span class="required">*</span></label>
+                    <select name="transaction_head_id" id="settleRuleHead" required>
+                        <option value="">Select due row first</option>
+                    </select>
+                    <input type="hidden" name="settlement_type_id" id="settleRuleSettlement">
+                    <div class="hint">Rules are loaded from Setup &gt; Accounting Rules Setup.</div>
+                </div>
+                <div>
+                    <label>Cash / Bank Account <span class="required">*</span></label>
+                    <select name="cash_bank_account_id" required>
+                        <option value="">Select Cash / Bank</option>
+                        @foreach($cashBankAccounts as $account)
+                            <option value="{{ $account->id }}">{{ $account->cash_bank_name }} - {{ $account->linkedLedger?->account_name }}</option>
+                        @endforeach
+                    </select>
+                    <div class="hint">Connected with Cash / Bank Setup.</div>
+                </div>
+                <div>
+                    <label>Payment Date <span class="required">*</span></label>
+                    <input type="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
+                </div>
+                <div>
+                    <label>Reference</label>
+                    <input name="reference" placeholder="Receipt no, cheque no, note...">
+                </div>
+                <div>
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Settlement note"></textarea>
+                </div>
+                <div class="hint-box" id="settlementPreview">
+                    <strong>Accounting rule</strong>
+                    Select a due row to see whether the system will post payable payment or receivable collection.
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn-ghost" type="reset">Clear</button>
+                @if($canSettleDue)
+                    <button class="btn-primary" type="submit">Post Settlement</button>
+                @endif
+            </div>
+        </form>
 
 <form class="card toolbar due-toolbar" method="GET" action="{{ route('due-management.index') }}" style="margin-top:18px">
     <div class="field search-field">
@@ -161,97 +239,93 @@
         </div>
     </div>
 
-    <aside class="right-stack">
-        <form
-            class="card form-card"
-            id="dueSettlementForm"
-            action="{{ route('api.due-management.settle') }}"
-            method="POST"
-            data-settlement-rules='@json($rulePayload)'
-        >
-            @csrf
-            <h3 class="section-title">Due Payment / Collection</h3>
-
-            <input type="hidden" name="party_id" id="settlePartyId">
-            <input type="hidden" name="account_id" id="settleAccountId">
-            <input type="hidden" name="due_type" id="settleDueType">
-
-            <div class="form-grid">
-                <div>
-                    <label>Selected Party</label>
-                    <input id="selectedPartyText" value="Select a due row" readonly>
-                </div>
-                <div>
-                    <label>Due Ledger</label>
-                    <input id="selectedAccountText" value="-" readonly>
-                </div>
-                <div class="two-col">
-                    <div>
-                        <label>Balance Due</label>
-                        <input id="selectedBalanceText" value="BDT 0.00" readonly>
-                    </div>
-                    <div>
-                        <label>Pay / Collect <span class="required">*</span></label>
-                        <input type="number" step="0.01" min="0.01" name="amount" id="settleAmount" required>
-                    </div>
-                </div>
-                <div>
-                    <label>Payment / Collection Rule <span class="required">*</span></label>
-                    <select name="transaction_head_id" id="settleRuleHead" required>
-                        <option value="">Select due row first</option>
-                    </select>
-                    <input type="hidden" name="settlement_type_id" id="settleRuleSettlement">
-                    <div class="hint">Rules are loaded from Setup &gt; Accounting Rules Setup.</div>
-                </div>
-                <div>
-                    <label>Cash / Bank Account <span class="required">*</span></label>
-                    <select name="cash_bank_account_id" required>
-                        <option value="">Select Cash / Bank</option>
-                        @foreach($cashBankAccounts as $account)
-                            <option value="{{ $account->id }}">{{ $account->cash_bank_name }} - {{ $account->linkedLedger?->account_name }}</option>
-                        @endforeach
-                    </select>
-                    <div class="hint">Connected with Cash / Bank Setup.</div>
-                </div>
-                <div>
-                    <label>Payment Date <span class="required">*</span></label>
-                    <input type="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
-                </div>
-                <div>
-                    <label>Reference</label>
-                    <input name="reference" placeholder="Receipt no, cheque no, note...">
-                </div>
-                <div>
-                    <label>Notes</label>
-                    <textarea name="notes" placeholder="Settlement note"></textarea>
-                </div>
-                <div class="hint-box" id="settlementPreview">
-                    <strong>Accounting rule</strong>
-                    Select a due row to see whether the system will post payable payment or receivable collection.
-                </div>
-            </div>
-
-            <div class="actions">
-                <button class="btn-ghost" type="reset">Clear</button>
-                @if($canSettleDue)
-                    <button class="btn-primary" type="submit">Post Settlement</button>
-                @endif
-            </div>
-        </form>
-
+</div>
         <div class="card helper-card">
             <h3>Accounting Control</h3>
             <p><strong>Payable settlement:</strong> Dr Accounts Payable, Cr Cash/Bank.</p>
             <p><strong>Receivable collection:</strong> Dr Cash/Bank, Cr Accounts Receivable.</p>
             <p class="muted" style="margin-top:10px">Expense and income are not recorded again when a previous due is paid or collected.</p>
         </div>
-    </aside>
 </div>
 @endsection
 
 @push('styles')
 <style>
-    .due-toolbar{grid-template-columns:minmax(220px,1fr)150px 170px 150px 150px 120px}.due-layout{grid-template-columns:minmax(0,1fr)380px}.money-cell{text-align:right;font-weight:800;white-space:nowrap}.red-text{color:#dc2626!important}.green-text{color:#067647!important}.orange-text{color:#b54708!important}.due-stats .stat-card span{display:block;font-size:12px}@media(max-width:1320px){.due-layout{grid-template-columns:1fr}.due-toolbar{grid-template-columns:1fr 1fr 1fr}.right-stack{grid-template-columns:1fr 1fr}}@media(max-width:880px){.due-toolbar,.right-stack{grid-template-columns:1fr}.due-layout{grid-template-columns:1fr}}
+    .setup-record-flow {
+        display: grid;
+        gap: 18px;
+    }
+
+    .setup-record-flow .stats-grid {
+        order: 1;
+    }
+
+    .setup-record-flow .due-layout {
+        order: 4;
+        display: grid;
+        grid-template-columns: 1fr !important;
+        margin-top: 0 !important;
+    }
+
+    .setup-record-flow #dueSettlementForm {
+        order: 2;
+        width: 100%;
+        position: static;
+    }
+
+    .setup-record-flow .due-toolbar {
+        order: 3;
+        margin-top: 0 !important;
+        grid-template-columns: minmax(220px, 1fr) 150px 170px 150px 150px 120px;
+        width: 100%;
+    }
+
+    .setup-record-flow .due-layout > .left-stack {
+        width: 100%;
+    }
+
+    .setup-record-flow .helper-card {
+        order: 5;
+        width: 100%;
+    }
+
+    .setup-record-flow #dueSettlementForm .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    .setup-record-flow #dueSettlementForm .form-grid > .two-col,
+    .setup-record-flow #dueSettlementForm .hint-box,
+    .setup-record-flow #dueSettlementForm .actions {
+        grid-column: 1 / -1;
+    }
+
+    .setup-record-flow .table-card,
+    .setup-record-flow .table-wrap {
+        width: 100%;
+    }
+
+    .setup-record-flow .table-wrap {
+        overflow-x: scroll;
+        scrollbar-gutter: stable both-edges;
+    }
+
+    .money-cell { text-align: right; font-weight: 800; white-space: nowrap; }
+    .red-text { color: #dc2626 !important; }
+    .green-text { color: #067647 !important; }
+    .orange-text { color: #b54708 !important; }
+    .due-stats .stat-card span { display: block; font-size: 12px; }
+
+    @media (max-width: 1320px) {
+        .setup-record-flow .due-toolbar { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    @media (max-width: 880px) {
+        .setup-record-flow .due-toolbar,
+        .setup-record-flow #dueSettlementForm .form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 @endpush
 

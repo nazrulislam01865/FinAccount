@@ -9,6 +9,22 @@ class TransactionHead extends Model
 {
     use SoftDeletes;
 
+    public const TRANSACTION_CATEGORIES = [
+        'Sales',
+        'Purchase',
+        'Receipt',
+        'Payment',
+        'Banking',
+        'Expense',
+        'Income',
+        'Owner / Equity',
+        'Asset',
+        'Loan',
+        'Employee',
+        'Opening',
+        'Adjustment',
+    ];
+
     protected $fillable = [
         'company_id',
         'head_code',
@@ -44,6 +60,96 @@ class TransactionHead extends Model
         'sort_order' => 'integer',
     ];
 
+    public static function transactionCategories(): array
+    {
+        return self::TRANSACTION_CATEGORIES;
+    }
+
+    public static function normaliseCategory(?string $category, ?string $name = null, ?string $nature = null): string
+    {
+        $raw = trim((string) ($category ?: $nature ?: ''));
+        $haystack = strtolower(trim($raw . ' ' . (string) $name . ' ' . (string) $nature));
+
+        if ($raw === 'Owner / Equity') {
+            return 'Owner / Equity';
+        }
+
+        foreach (self::TRANSACTION_CATEGORIES as $allowedCategory) {
+            if (strcasecmp($raw, $allowedCategory) === 0) {
+                return $allowedCategory;
+            }
+        }
+
+        if (str_contains($haystack, 'opening')) {
+            return 'Opening';
+        }
+
+        if (str_contains($haystack, 'employee') || str_contains($haystack, 'salary')) {
+            return 'Employee';
+        }
+
+        if (str_contains($haystack, 'loan')) {
+            return 'Loan';
+        }
+
+        if (str_contains($haystack, 'owner') || str_contains($haystack, 'equity') || str_contains($haystack, 'capital') || str_contains($haystack, 'withdrawal') || str_contains($haystack, 'drawing')) {
+            return 'Owner / Equity';
+        }
+
+        if (str_contains($haystack, 'asset')) {
+            return 'Asset';
+        }
+
+        if (str_contains($haystack, 'bank') || str_contains($haystack, 'transfer') || str_contains($haystack, 'charge') || str_contains($haystack, 'interest')) {
+            return 'Banking';
+        }
+
+        if (str_contains($haystack, 'income') || str_contains($haystack, 'service')) {
+            return 'Income';
+        }
+
+        if (str_contains($haystack, 'expense') || str_contains($haystack, 'rent') || str_contains($haystack, 'utility') || str_contains($haystack, 'office')) {
+            return 'Expense';
+        }
+
+        if (str_contains($haystack, 'purchase') || str_contains($haystack, 'supplier due') || str_contains($haystack, 'payable')) {
+            return 'Purchase';
+        }
+
+        if (str_contains($haystack, 'sales') || str_contains($haystack, 'sale') || str_contains($haystack, 'customer due') || str_contains($haystack, 'receivable')) {
+            return 'Sales';
+        }
+
+        if (str_contains($haystack, 'receipt') || str_contains($haystack, 'collection') || str_contains($haystack, 'received')) {
+            return 'Receipt';
+        }
+
+        if (str_contains($haystack, 'payment') || str_contains($haystack, 'paid')) {
+            return 'Payment';
+        }
+
+        if (str_contains($haystack, 'adjust') || str_contains($haystack, 'journal') || str_contains($haystack, 'other')) {
+            return 'Adjustment';
+        }
+
+        return 'Payment';
+    }
+
+    public static function natureFromCategory(?string $category): string
+    {
+        return match (self::normaliseCategory($category)) {
+            'Sales', 'Receipt', 'Income' => 'Receipt',
+            'Purchase' => 'Purchase',
+            'Expense', 'Payment', 'Employee' => 'Payment',
+            'Banking' => 'Adjustment',
+            'Owner / Equity' => 'Equity',
+            'Asset' => 'Asset',
+            'Loan' => 'Loan',
+            'Opening', 'Adjustment' => 'Adjustment',
+            default => 'Payment',
+        };
+    }
+
     public function company()
     {
         return $this->belongsTo(Company::class);
@@ -68,10 +174,12 @@ class TransactionHead extends Model
             'settlement_type_id'
         )->withTimestamps();
     }
+
     public function ledgerMappingRules()
     {
         return $this->hasMany(LedgerMappingRule::class);
     }
+
     public function vouchers()
     {
         return $this->hasMany(VoucherHeader::class);

@@ -11,11 +11,15 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    protected $fillable = ['name', 'email', 'password', 'status'];
+    protected $fillable = ['name', 'email', 'password', 'status', 'uses_direct_permissions'];
 
     protected $hidden = ['password', 'remember_token'];
 
     private ?array $permissionNameCache = null;
+
+    private ?array $directPermissionNameCache = null;
+
+    private ?bool $directPermissionModeCache = null;
 
     private ?bool $superAdminCache = null;
 
@@ -28,6 +32,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'uses_direct_permissions' => 'boolean',
         ];
     }
 
@@ -39,6 +44,11 @@ class User extends Authenticatable
     public function activeRoles()
     {
         return $this->roles()->where('status', 'Active');
+    }
+
+    public function directPermissions()
+    {
+        return $this->belongsToMany(Permission::class, 'permission_user')->withTimestamps();
     }
 
     public function hasRole(string $role): bool
@@ -116,13 +126,15 @@ class User extends Authenticatable
             return true;
         }
 
-        // Fixed full-access roles are intentionally protected so core administrators
-        // cannot be locked out from the editable role matrix.
+        // Fixed full-access users are intentionally protected so core administrators
+        // cannot be locked out from the editable user access matrix.
         if ($this->hasFixedFullAccessRole()) {
             return true;
         }
 
-        $allowed = $this->permissionNames();
+        $allowed = $this->usesDirectPermissionMatrix()
+            ? $this->directPermissionNames()
+            : $this->permissionNames();
 
         foreach ($permissions as $permission) {
             if (isset($allowed[$permission])) {
@@ -177,6 +189,35 @@ class User extends Authenticatable
         return $this->permissionNameCache;
     }
 
+    private function directPermissionNames(): array
+    {
+        if ($this->directPermissionNameCache !== null) {
+            return $this->directPermissionNameCache;
+        }
+
+        $this->loadMissing('directPermissions');
+
+        $this->directPermissionNameCache = $this->directPermissions
+            ->pluck('name')
+            ->filter()
+            ->unique()
+            ->mapWithKeys(fn (string $permission) => [$permission => true])
+            ->all();
+
+        return $this->directPermissionNameCache;
+    }
+
+    private function usesDirectPermissionMatrix(): bool
+    {
+        if ($this->directPermissionModeCache !== null) {
+            return $this->directPermissionModeCache;
+        }
+
+        $this->directPermissionModeCache = (bool) ($this->uses_direct_permissions ?? false);
+
+        return $this->directPermissionModeCache;
+    }
+
     private function activeRoleCollection()
     {
         $this->loadMissing('roles');
@@ -189,10 +230,13 @@ class User extends Authenticatable
     public function flushAccessCache(): void
     {
         $this->permissionNameCache = null;
+        $this->directPermissionNameCache = null;
+        $this->directPermissionModeCache = null;
         $this->superAdminCache = null;
         $this->fixedFullAccessRoleCache = null;
         $this->roleLevelCache = null;
         $this->unsetRelation('roles');
+        $this->unsetRelation('directPermissions');
     }
 
     public function canViewRoute(?string $routeName): bool

@@ -7,6 +7,57 @@
 
     <title><?php echo $__env->yieldContent('title', 'HisebGhor'); ?></title>
 
+    <script>
+        (function () {
+            var nativeFetch = window.fetch;
+
+            if (!nativeFetch || window.__accountingSessionFetchPatched) {
+                return;
+            }
+
+            window.__accountingSessionFetchPatched = true;
+
+            function loginUrl(url) {
+                return url || '<?php echo e(route('login', ['session_expired' => 1])); ?>';
+            }
+
+            function redirectToLogin(message, url) {
+                try {
+                    var toast = document.getElementById('toast');
+                    if (toast) {
+                        toast.textContent = message || 'Your current session expired, please login.';
+                        toast.classList.add('show');
+                    }
+                } catch (error) {}
+
+                window.setTimeout(function () {
+                    window.location.href = loginUrl(url);
+                }, 250);
+            }
+
+            window.fetch = function () {
+                return nativeFetch.apply(this, arguments).then(function (response) {
+                    var responseUrl = String(response.url || '');
+                    var expired = response.status === 401 || response.status === 419;
+                    var loginRedirect = (response.redirected && responseUrl.indexOf('/login') !== -1)
+                        || responseUrl.endsWith('/login')
+                        || responseUrl.indexOf('/login?') !== -1;
+
+                    if (!expired && !loginRedirect) {
+                        return response;
+                    }
+
+                    response.clone().json().then(function (payload) {
+                        redirectToLogin(payload.message, payload.redirect);
+                    }).catch(function () {
+                        redirectToLogin('Your current session expired, please login.');
+                    });
+
+                    return response;
+                });
+            };
+        })();
+    </script>
 
     <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css', 'resources/js/app.js']); ?>
 

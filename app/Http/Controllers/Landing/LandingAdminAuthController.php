@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Landing;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -32,9 +32,7 @@ class LandingAdminAuthController extends Controller
 
         $this->ensureIsNotRateLimited($request);
 
-        $remember = (bool) $request->boolean('remember');
-
-        if (! Auth::guard('landing_admin')->attempt($credentials, $remember)) {
+        if (! Auth::guard('landing_admin')->attempt($credentials, $request->boolean('remember'))) {
             $this->hitLoginLimiter($request);
 
             throw ValidationException::withMessages([
@@ -58,8 +56,19 @@ class LandingAdminAuthController extends Controller
         }
 
         $request->session()->regenerate();
+        $request->session()->put('landing_admin_last_activity_at', time());
 
         return redirect()->intended(route('landing-admin.dashboard', absolute: false));
+    }
+
+    public function destroy(Request $request): RedirectResponse
+    {
+        Auth::guard('landing_admin')->logout();
+
+        $request->session()->forget('landing_admin_last_activity_at');
+        $request->session()->regenerateToken();
+
+        return redirect()->route('landing-admin.login');
     }
 
     private function ensureIsNotRateLimited(Request $request): void
@@ -90,9 +99,7 @@ class LandingAdminAuthController extends Controller
 
         RateLimiter::hit($this->throttleKey($request), $this->lockSeconds());
 
-        $remaining = RateLimiter::retriesLeft($this->throttleKey($request), $this->maxAttempts());
-
-        if ($remaining <= 0) {
+        if (RateLimiter::retriesLeft($this->throttleKey($request), $this->maxAttempts()) <= 0) {
             $this->flashLockoutCountdown($request, RateLimiter::availableIn($this->throttleKey($request)));
         }
     }
@@ -128,10 +135,8 @@ class LandingAdminAuthController extends Controller
 
     private function flashLockoutCountdown(Request $request, int $seconds): void
     {
-        $seconds = max(1, $seconds);
-
-        $request->session()->flash('landing_admin_lockout_seconds', $seconds);
-        $request->session()->flash('landing_admin_lockout_until', now()->addSeconds($seconds)->timestamp);
+        $request->session()->flash('landing_admin_lockout_seconds', max(1, $seconds));
+        $request->session()->flash('landing_admin_lockout_until', now()->addSeconds(max(1, $seconds))->timestamp);
     }
 
     private function formatSeconds(int $seconds): string
@@ -150,14 +155,5 @@ class LandingAdminAuthController extends Controller
         }
 
         return sprintf('%d second%s', $remainingSeconds, $remainingSeconds === 1 ? '' : 's');
-    }
-
-    public function destroy(Request $request): RedirectResponse
-    {
-        Auth::guard('landing_admin')->logout();
-
-        $request->session()->regenerateToken();
-
-        return redirect()->route('landing-admin.login');
     }
 }

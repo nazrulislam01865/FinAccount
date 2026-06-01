@@ -4,13 +4,38 @@
 
 @section('content')
 @php
+    use App\Models\TransactionHead;
+
     $money = fn ($value) => number_format((float) $value, 2);
+
+    $transactionCategories = collect(TransactionHead::transactionCategories())->map(fn ($category) => [
+        'name' => $category,
+        'example' => match ($category) {
+            'Sales' => 'Cash Sales, Credit Sales',
+            'Purchase' => 'Cash Purchase, Credit Purchase',
+            'Receipt' => 'Customer Collection, Advance Received',
+            'Payment' => 'Supplier Payment, Rent Payment, Salary Payment',
+            'Banking' => 'Bank Interest Income, Bank Charge, Bank Transfer',
+            'Expense' => 'Rent, Utility, Office Expense',
+            'Income' => 'Service Income, Other Income',
+            'Owner / Equity' => 'Owner Investment, Owner Withdrawal',
+            'Asset' => 'Asset Purchase, Asset Sale',
+            'Loan' => 'Loan Received, Loan Repayment',
+            'Employee' => 'Salary Payment, Advance to Employee',
+            'Opening' => 'Opening Balance Entry',
+            'Adjustment' => 'Journal Adjustment',
+            default => 'General Transaction',
+        },
+    ])->values();
 
     $headPayload = $transactionHeads->map(fn ($head) => [
         'id' => $head->id,
+        'head_code' => $head->head_code,
         'name' => $head->name,
+        'display_name' => trim(($head->head_code ? $head->head_code . ' - ' : '') . $head->name),
         'nature' => $head->nature,
-        'category' => $head->category ?: $head->nature,
+        'category' => TransactionHead::normaliseCategory($head->category, $head->name, $head->nature),
+        'raw_category' => $head->category ?: $head->nature,
         'transaction_screen' => $head->transaction_screen ?: 'Transaction Entry',
         'default_party_type_id' => $head->default_party_type_id,
         'default_party_type_name' => $head->defaultPartyType?->name,
@@ -23,6 +48,7 @@
             'id' => $settlement->id,
             'name' => $settlement->name,
             'code' => $settlement->code,
+            'display_name' => $settlement->name,
         ])->values(),
     ])->values();
 
@@ -57,7 +83,7 @@
         <div>
             <span class="page-label">Transaction Entry</span>
             <h2>Transaction Entry</h2>
-            <p>Record business transactions without accounting complexity. The Accounting Engine prepares debit and credit automatically.</p>
+            <p>Record business transactions without accounting complexity. The Accounting Engine prepares debit and credit automatically from setup rules.</p>
         </div>
         <div class="prototype-actions">
             <button class="btn-outline" id="newBtn" type="button">+ New Transaction</button>
@@ -78,7 +104,7 @@
             <div class="prototype-card-header">
                 <div>
                     <h3>Record a Transaction</h3>
-                    <p>Enter what happened. HisebGhor will prepare the accounting entry.</p>
+                    <p>First choose the business category, then choose the exact transaction head under that category.</p>
                 </div>
                 <span class="badge badge-primary">Rule Based</span>
             </div>
@@ -98,61 +124,61 @@
                 >
                     @csrf
                     <input type="hidden" id="statusInput" name="status" value="{{ $isDraftOnlyTransactionUser ? 'Draft' : 'Posted' }}">
+                    <input type="hidden" id="transactionCategory" name="transaction_category" value="">
+                    <input type="hidden" id="screen" value="">
 
                     <div class="prototype-guidance inline-guidance">
                         <div class="prototype-guidance-icon">💡</div>
                         <div>
                             <strong>Simple entry. Accounting happens behind the screen.</strong>
-                            <p id="guidanceText">Select a transaction type to see what information is needed.</p>
+                            <p id="guidanceText">Select a Transaction Category to load matching Transaction Heads only.</p>
                         </div>
                     </div>
 
                     <div class="prototype-form-grid two">
                         <div class="prototype-field">
                             <label for="date">Date <span class="required">*</span></label>
-                            <input type="date" id="date" name="voucher_date" value="{{ now()->toDateString() }}" required>
+                            <input type="date" id="date" name="voucher_date" value="{{ $defaultVoucherDate ?? now()->toDateString() }}" required>
                         </div>
 
-                        <div class="prototype-field">
-                            <label for="screen">Transaction screen / category</label>
-                            <input type="text" id="screen" readonly class="readonly-field" placeholder="Auto-filled after selecting transaction type">
-                            <div class="hint">The category is decided from the transaction type.</div>
+                        <div class="prototype-field full transaction-category-field">
+                            <label>Transaction Category <span class="required">*</span></label>
+                            <div class="tx-category-selector" id="transactionCategorySelector" role="group" aria-label="Transaction Category">
+                                @foreach($transactionCategories as $category)
+                                    <button
+                                        type="button"
+                                        class="tx-category-option"
+                                        data-category="{{ $category['name'] }}"
+                                        title="{{ $category['example'] }}"
+                                    >
+                                        <span>{{ $category['name'] }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                            <div class="hint" id="categoryHint">This is the high-level grouping, for example: Sales, Purchase, Receipt, Payment, Banking, Expense, Income, Owner / Equity, Asset, Loan, Employee, Opening, and Adjustment.</div>
                         </div>
 
                         <div class="prototype-field full">
-                            <label for="head">What type of transaction is this? <span class="required">*</span></label>
-                            <select id="head" name="transaction_head_id" required>
-                                <option value="">Loading Transaction Heads...</option>
+                            <label for="headSearch">Transaction Head <span class="required">*</span></label>
+                            <div class="tx-head-combobox" id="headCombobox">
+                                <input
+                                    type="search"
+                                    id="headSearch"
+                                    class="tx-head-search"
+                                    placeholder="Search transaction head after selecting category"
+                                    autocomplete="off"
+                                    role="combobox"
+                                    aria-autocomplete="list"
+                                    aria-expanded="false"
+                                    aria-controls="headSuggestionList"
+                                    disabled
+                                >
+                                <div class="tx-head-suggestions tx-hidden" id="headSuggestionList" role="listbox" aria-label="Transaction Head suggestions"></div>
+                            </div>
+                            <select id="head" name="transaction_head_id" class="tx-head-value-select" aria-hidden="true" tabindex="-1" disabled>
+                                <option value="">Select Transaction Category first</option>
                             </select>
-                            <div class="hint">Example: Rent Payment, Customer Collection, Cash Sales.</div>
-                        </div>
-
-                        <div class="prototype-field" id="partyTypeWrap">
-                            <label for="partyType">Who is involved?</label>
-                            <input type="text" id="partyType" readonly class="readonly-field" placeholder="Auto from transaction type">
-                        </div>
-
-                        <div class="prototype-field" id="partyWrap">
-                            <label for="party">Select person / business <span class="required" id="partyRequired">*</span></label>
-                            <select id="party" name="party_id">
-                                <option value="">Select saved Party / Person</option>
-                            </select>
-                        </div>
-
-                        <div class="prototype-field" id="paymentWrap">
-                            <label for="settlement">How was the payment made? <span class="required">*</span></label>
-                            <select id="settlement" name="settlement_type_id" required>
-                                <option value="">Select payment / settlement method</option>
-                            </select>
-                            <div class="hint" id="settlementHint">Only settlement types with active accounting rules are shown.</div>
-                        </div>
-
-                        <div class="prototype-field" id="cashBankWrap">
-                            <label for="cashBank">Which cash/bank account?</label>
-                            <select id="cashBank" name="cash_bank_account_id">
-                                <option value="">Select cash/bank account</option>
-                            </select>
-                            <div class="hint">Only active cash/bank accounts are shown here.</div>
+                            <div class="hint" id="headHint">Only transaction heads mapped under the selected category will be shown.</div>
                         </div>
 
                         <div class="prototype-field money-wrap">
@@ -161,18 +187,47 @@
                             <input type="number" id="amount" name="amount" value="10000" min="0.01" step="0.01" required>
                         </div>
 
-                        <div class="prototype-field">
-                            <label for="reference">Reference number</label>
-                            <input id="reference" name="reference" placeholder="Example: BILL-1029">
-                            <div class="hint" id="referenceHint">Optional unless transaction head requires it.</div>
+                        <div class="prototype-field tx-dynamic-field tx-hidden" id="partyTypeWrap">
+                            <label for="partyType">Person / party type</label>
+                            <input type="text" id="partyType" readonly class="readonly-field" placeholder="Auto from selected head and settlement rule">
                         </div>
 
-                        <div class="prototype-field full">
-                            <label for="notes">Note / narration</label>
-                            <textarea id="notes" name="notes" placeholder="Write a short note, if needed"></textarea>
+                        <div class="prototype-field tx-dynamic-field tx-hidden" id="partyWrap">
+                            <label for="party" id="partyLabel">Select person / business <span class="required" id="partyRequired">*</span></label>
+                            <select id="party" name="party_id">
+                                <option value="">Select saved Party / Person</option>
+                            </select>
+                            <div class="hint" id="partyHint">Shown only when the selected setup rule needs a customer, supplier, employee, owner, or other party.</div>
                         </div>
 
-                        <div class="prototype-field full">
+                        <div class="prototype-field tx-dynamic-field tx-hidden" id="paymentWrap">
+                            <label for="settlement">Payment / Settlement Method <span class="required">*</span></label>
+                            <select id="settlement" name="settlement_type_id" required>
+                                <option value="">Select transaction head first</option>
+                            </select>
+                            <div class="hint" id="settlementHint">Only settlement types mapped with the selected Transaction Head are shown.</div>
+                        </div>
+
+                        <div class="prototype-field tx-dynamic-field tx-hidden" id="cashBankWrap">
+                            <label for="cashBank">Cash / Bank Account</label>
+                            <select id="cashBank" name="cash_bank_account_id">
+                                <option value="">Select cash/bank account</option>
+                            </select>
+                            <div class="hint">Shown only when the selected settlement needs a cash or bank account.</div>
+                        </div>
+
+                        <div class="prototype-field tx-dynamic-field tx-hidden" id="referenceWrap">
+                            <label for="reference">Reference number <span class="required" id="referenceRequired" style="display:none">*</span></label>
+                            <input id="reference" name="reference" placeholder="Example: BILL-1029, CHQ-889, INV-1005">
+                            <div class="hint" id="referenceHint">Optional unless the selected Transaction Head requires it.</div>
+                        </div>
+
+                        <div class="prototype-field full tx-dynamic-field tx-hidden" id="notesWrap">
+                            <label for="notes">Narration</label>
+                            <textarea id="notes" name="notes" placeholder="Write what happened in normal business language"></textarea>
+                        </div>
+
+                        <div class="prototype-field full tx-dynamic-field tx-hidden" id="attachmentWrap">
                             <label for="attachment">Attach document / receipt</label>
                             <input type="file" id="attachment" name="attachment">
                             <div class="hint">Receipt, bill, invoice, or proof. Maximum 5 MB.</div>
@@ -233,10 +288,10 @@
                 <div class="prototype-guidance-icon">✓</div>
                 <strong>How this screen helps non-accounting users</strong>
                 <ul>
-                    <li>You enter normal business information.</li>
+                    <li>Choose the category first to avoid a long Transaction Head list.</li>
+                    <li>Enter normal business information only.</li>
                     <li>You do not choose debit or credit manually.</li>
-                    <li>The accounting rule decides the journal entry.</li>
-                    <li>You can review the entry before saving.</li>
+                    <li>The accounting rule setup decides the posting entry.</li>
                 </ul>
             </div>
         </aside>
@@ -290,9 +345,128 @@
 </div>
 @endsection
 
+@push('styles')
+<style>
+    .transaction-entry-page .transaction-entry-grid {
+        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr) !important;
+        gap: 18px;
+    }
+    .transaction-entry-page .prototype-side-stack { min-width: 0; }
+    .transaction-category-field label { margin-bottom: 10px; }
+    .tx-category-selector {
+        border: 1px solid #cfd9e8;
+        border-radius: 18px;
+        padding: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        background: #fff;
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.03);
+    }
+    .tx-category-option {
+        border: 1px solid #d7e2f1;
+        border-radius: 10px;
+        background: #f8fbff;
+        color: #43546a;
+        font-weight: 800;
+        padding: 12px 16px;
+        min-height: 44px;
+        cursor: pointer;
+        transition: all .16s ease;
+    }
+    .tx-category-option:hover {
+        border-color: #94b5e8;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .tx-category-option.is-active {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+        box-shadow: 0 10px 18px rgba(37, 99, 235, .18);
+    }
+    .tx-head-combobox {
+        position: relative;
+        width: 100%;
+    }
+    .tx-head-search {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    .tx-head-value-select {
+        display: none !important;
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    .tx-head-suggestions {
+        position: absolute;
+        z-index: 40;
+        top: calc(100% - 4px);
+        left: 0;
+        right: 0;
+        max-height: 280px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #cfd9e8;
+        border-radius: 14px;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, .18);
+        padding: 8px;
+    }
+    .tx-head-suggestion {
+        width: 100%;
+        border: 0;
+        background: #fff;
+        text-align: left;
+        cursor: pointer;
+        padding: 11px 12px;
+        border-radius: 10px;
+        color: #25364d;
+        font-weight: 700;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .tx-head-suggestion:hover,
+    .tx-head-suggestion.is-active {
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .tx-head-suggestion-code {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .tx-head-no-result {
+        padding: 12px;
+        color: #64748b;
+        font-weight: 700;
+    }
+    .tx-hidden { display: none !important; }
+    .prototype-field.soft-required label { color: #b45309; }
+    @media (max-width: 1320px) {
+        .transaction-entry-page .transaction-entry-grid { grid-template-columns: 1fr !important; }
+    }
+    @media (max-width: 768px) {
+        .tx-category-option { width: 100%; text-align: left; }
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const categoryDefinitions = @json($transactionCategories);
     const fallbackHeads = @json($headPayload);
     const fallbackParties = @json($partyPayload);
     const fallbackCashBanks = @json($cashBankPayload);
@@ -304,17 +478,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const date = document.getElementById('date');
     const screen = document.getElementById('screen');
+    const transactionCategory = document.getElementById('transactionCategory');
+    const categorySelector = document.getElementById('transactionCategorySelector');
+    const categoryHint = document.getElementById('categoryHint');
+    const headSearch = document.getElementById('headSearch');
     const head = document.getElementById('head');
+    const headHint = document.getElementById('headHint');
+    const headSuggestionList = document.getElementById('headSuggestionList');
     const partyType = document.getElementById('partyType');
     const party = document.getElementById('party');
-    const partyRequired = document.getElementById('partyRequired');
+    const partyLabel = document.getElementById('partyLabel');
+    const partyRequiredElement = () => document.getElementById('partyRequired');
     const amount = document.getElementById('amount');
     const settlement = document.getElementById('settlement');
     const settlementHint = document.getElementById('settlementHint');
     const cashBank = document.getElementById('cashBank');
     const reference = document.getElementById('reference');
+    const referenceRequired = document.getElementById('referenceRequired');
     const referenceHint = document.getElementById('referenceHint');
     const notes = document.getElementById('notes');
+    const attachment = document.getElementById('attachment');
     const statusInput = document.getElementById('statusInput');
     const guidanceText = document.getElementById('guidanceText');
 
@@ -327,6 +510,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const partyEffect = document.getElementById('partyEffect');
     const cashEffect = document.getElementById('cashEffect');
     const summaryStatus = document.getElementById('summaryStatus');
+
+    const dynamicWraps = {
+        partyType: document.getElementById('partyTypeWrap'),
+        party: document.getElementById('partyWrap'),
+        payment: document.getElementById('paymentWrap'),
+        cashBank: document.getElementById('cashBankWrap'),
+        reference: document.getElementById('referenceWrap'),
+        notes: document.getElementById('notesWrap'),
+        attachment: document.getElementById('attachmentWrap'),
+    };
 
     let heads = [];
     let cashBanks = fallbackCashBanks;
@@ -370,6 +563,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'No';
     }
 
+    function normaliseCategory(category, name = '', natureValue = '') {
+        const raw = String(category || natureValue || '').trim();
+        const haystack = `${raw} ${name || ''} ${natureValue || ''}`.toLowerCase();
+        const allowed = categoryDefinitions.map((item) => item.name);
+        const exact = allowed.find((item) => item.toLowerCase() === raw.toLowerCase());
+        if (exact) return exact;
+        if (haystack.includes('opening')) return 'Opening';
+        if (haystack.includes('employee') || haystack.includes('salary')) return 'Employee';
+        if (haystack.includes('loan')) return 'Loan';
+        if (haystack.includes('owner') || haystack.includes('equity') || haystack.includes('capital') || haystack.includes('withdrawal') || haystack.includes('drawing')) return 'Owner / Equity';
+        if (haystack.includes('asset')) return 'Asset';
+        if (haystack.includes('bank') || haystack.includes('transfer') || haystack.includes('charge') || haystack.includes('interest')) return 'Banking';
+        if (haystack.includes('income') || haystack.includes('service')) return 'Income';
+        if (haystack.includes('expense') || haystack.includes('rent') || haystack.includes('utility') || haystack.includes('office')) return 'Expense';
+        if (haystack.includes('purchase') || haystack.includes('supplier due') || haystack.includes('payable')) return 'Purchase';
+        if (haystack.includes('sales') || haystack.includes('sale') || haystack.includes('customer due') || haystack.includes('receivable')) return 'Sales';
+        if (haystack.includes('receipt') || haystack.includes('collection') || haystack.includes('received')) return 'Receipt';
+        if (haystack.includes('payment') || haystack.includes('paid')) return 'Payment';
+        if (haystack.includes('adjust') || haystack.includes('journal') || haystack.includes('other')) return 'Adjustment';
+        return 'Payment';
+    }
+
     function endpoint(baseUrl, params = {}) {
         const query = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {
@@ -387,11 +602,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function normaliseHead(item) {
         const settlements = item.settlement_types || item.settlements || [];
+        const category = normaliseCategory(item.category || item.raw_category, item.name || item.display_name, item.nature);
         return {
             id: item.id,
+            head_code: item.head_code || '',
             name: item.name || item.display_name,
+            display_name: item.display_name || [item.head_code, item.name].filter(Boolean).join(' - '),
             nature: item.nature,
-            category: item.category || item.nature,
+            category,
+            raw_category: item.raw_category || item.category || item.nature,
             transaction_screen: item.transaction_screen || 'Transaction Entry',
             default_party_type_id: item.default_party_type_id || null,
             default_party_type_name: item.default_party_type_name || '',
@@ -400,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
             help_text: item.help_text || '',
             requires_party: bool(item.requires_party) || normalisePartyMode(item.party_required_mode) === 'Required',
             requires_reference: Boolean(Number(item.requires_reference) || item.requires_reference === true),
-            settlements: settlements.map((settlementItem) => ({ id: settlementItem.id, name: settlementItem.name || settlementItem.display_name, code: settlementItem.code || '' })),
+            settlements: settlements.map((settlementItem) => ({ id: settlementItem.id, name: settlementItem.name || settlementItem.display_name, code: settlementItem.code || '', display_name: settlementItem.display_name || settlementItem.name })),
         };
     }
 
@@ -444,15 +663,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function cashBankDirectionLabel() {
         const selectedHead = headById(head.value);
-        const value = `${selectedHead?.nature || ''} ${selectedHead?.name || ''} ${settlementText()}`.toUpperCase();
-        if (value.includes('RECEIPT') || value.includes('RECEIVED') || value.includes('COLLECTION') || value.includes('INCOME') || value.includes('CAPITAL') || value.includes('ADVANCE_RECEIVED') || value.includes('ADVANCE RECEIVED')) return 'received in';
+        const value = `${selectedHead?.nature || ''} ${selectedHead?.category || ''} ${selectedHead?.name || ''} ${settlementText()}`.toUpperCase();
+        if (value.includes('RECEIPT') || value.includes('RECEIVED') || value.includes('COLLECTION') || value.includes('INCOME') || value.includes('CAPITAL') || value.includes('SALES') || value.includes('ADVANCE_RECEIVED') || value.includes('ADVANCE RECEIVED')) return 'received in';
         return 'paid from';
     }
 
     function updateSettlementHint() {
         settlementHint.textContent = selectedHeadRequiresCashBank()
             ? `Select the Cash/Bank account where money will be ${cashBankDirectionLabel()}. The accounting rule still decides Debit/Credit.`
-            : 'Only settlement types with active accounting rules are shown. Cash/Bank may stay blank if this is a due or journal transaction.';
+            : 'Only settlement types mapped with the selected Transaction Head are shown. Cash/Bank may stay blank for due, opening, or journal transactions.';
     }
 
     function resetPreview(message = 'Select transaction information to generate preview.') {
@@ -481,27 +700,236 @@ document.addEventListener('DOMContentLoaded', () => {
         if (rows.some((row) => String(row.id) === String(previousValue))) select.value = previousValue;
     }
 
+    function setWrapVisibility(wrap, visible) {
+        wrap?.classList.toggle('tx-hidden', !visible);
+    }
+
+    function hideDynamicFields(clearValues = false) {
+        Object.values(dynamicWraps).forEach((wrap) => setWrapVisibility(wrap, false));
+        settlement.required = false;
+        party.required = false;
+        cashBank.required = false;
+        reference.required = false;
+        if (partyRequiredElement()) partyRequiredElement().style.display = 'none';
+        referenceRequired.style.display = 'none';
+        if (clearValues) {
+            party.value = '';
+            settlement.value = '';
+            cashBank.value = '';
+            reference.value = '';
+            notes.value = '';
+            if (attachment) attachment.value = '';
+        }
+    }
+
+    function referenceVisibleFor(selectedHead) {
+        if (!selectedHead) return false;
+        if (selectedHead.requires_reference) return true;
+        return ['Sales', 'Purchase', 'Banking', 'Expense', 'Income', 'Asset', 'Loan', 'Employee'].includes(selectedHead.category);
+    }
+
+    function attachmentVisibleFor(selectedHead) {
+        if (!selectedHead) return false;
+        return !['Opening', 'Adjustment'].includes(selectedHead.category);
+    }
+
+    function updatePartyLabel(labelText, required) {
+        partyLabel.textContent = `Select ${labelText} `;
+        const star = document.createElement('span');
+        star.className = 'required';
+        star.id = 'partyRequired';
+        star.textContent = '*';
+        star.style.display = required ? '' : 'none';
+        partyLabel.appendChild(star);
+    }
+
+    function updateDynamicFieldVisibility() {
+        const selectedHead = headById(head.value);
+        if (!selectedHead) {
+            hideDynamicFields(false);
+            updateSettlementHint();
+            return;
+        }
+
+        const requirement = selectedRequirement();
+        const showParty = requirement.partyMode !== 'No';
+        const partyMustBeSelected = requirement.partyRequired && !hasDefaultNotApplicableParty();
+        const showCashBank = selectedHeadRequiresCashBank();
+        const showReference = referenceVisibleFor(selectedHead);
+        const showAttachment = attachmentVisibleFor(selectedHead);
+
+        setWrapVisibility(dynamicWraps.payment, true);
+        settlement.required = true;
+        setWrapVisibility(dynamicWraps.partyType, showParty);
+        setWrapVisibility(dynamicWraps.party, showParty);
+        setWrapVisibility(dynamicWraps.cashBank, showCashBank);
+        setWrapVisibility(dynamicWraps.reference, showReference);
+        setWrapVisibility(dynamicWraps.notes, true);
+        setWrapVisibility(dynamicWraps.attachment, showAttachment);
+
+        if (!showParty) party.value = '';
+        if (!showCashBank) cashBank.value = '';
+        if (!showReference) reference.value = '';
+
+        const partyLabelText = requirement.partyTypeName || (selectedHead.category === 'Employee' ? 'Employee' : 'Party / Person');
+        updatePartyLabel(partyLabelText, partyMustBeSelected);
+        party.required = partyMustBeSelected;
+        dynamicWraps.party?.classList.toggle('soft-required', partyMustBeSelected);
+
+        cashBank.required = showCashBank && cashBanks.length > 0;
+        dynamicWraps.cashBank?.classList.toggle('soft-required', cashBank.required);
+
+        reference.required = Boolean(selectedHead.requires_reference);
+        referenceRequired.style.display = reference.required ? '' : 'none';
+        referenceHint.textContent = reference.required ? 'Reference is required for this Transaction Head.' : 'Optional reference for invoice, bill, cheque, bank slip, or internal memo.';
+        updateSettlementHint();
+    }
+
     async function loadTransactionHeads() {
-        const previousValue = head.value;
-        const renderHeadDropdown = () => {
-            renderOptions(head, heads, 'Select transaction type', (item) => item.name);
-            head.disabled = false;
-            if (previousValue && heads.some((item) => String(item.id) === String(previousValue))) head.value = previousValue;
-            else if (!head.value && heads.length > 0) head.value = heads[0].id;
-            if (heads.length === 0) head.innerHTML = '<option value="">No active Transaction Heads found</option>';
+        const useRows = (rows) => {
+            heads = rows.map(normaliseHead);
+            renderHeadsForSelectedCategory();
         };
 
-        head.disabled = true;
-        heads = fallbackHeads.map(normaliseHead);
-        if (heads.length > 0) renderHeadDropdown();
+        useRows(fallbackHeads);
 
         try {
-            const apiHeads = (await getRows(form.dataset.headsUrl)).map(normaliseHead);
-            if (apiHeads.length > 0) { heads = apiHeads; renderHeadDropdown(); }
+            const apiHeads = await getRows(form.dataset.headsUrl);
+            if (apiHeads.length > 0) useRows(apiHeads);
         } catch (error) {
             console.warn('Transaction Heads API fallback used:', error);
-            if (heads.length === 0) renderHeadDropdown();
         }
+    }
+
+    function headSearchTarget(item) {
+        return `${item.head_code || ''} ${item.name || ''} ${item.display_name || ''}`.toLowerCase();
+    }
+
+    function filteredHeadsForSelectedCategory() {
+        const category = transactionCategory.value;
+        const search = headSearch.value.trim().toLowerCase();
+
+        if (!category) return [];
+
+        return heads.filter((item) => {
+            if (item.category !== category) return false;
+            if (!search) return true;
+            return headSearchTarget(item).includes(search);
+        });
+    }
+
+    function hideHeadSuggestions() {
+        headSuggestionList.classList.add('tx-hidden');
+        headSearch.setAttribute('aria-expanded', 'false');
+    }
+
+    function visibleSuggestionButtons() {
+        return Array.from(headSuggestionList.querySelectorAll('.tx-head-suggestion'));
+    }
+
+    function setActiveSuggestion(index) {
+        const buttons = visibleSuggestionButtons();
+        buttons.forEach((button, buttonIndex) => button.classList.toggle('is-active', buttonIndex === index));
+        if (buttons[index]) buttons[index].scrollIntoView({ block: 'nearest' });
+    }
+
+    function renderHeadSuggestionList(rows, shouldOpen = false) {
+        headSuggestionList.innerHTML = '';
+
+        if (!shouldOpen || headSearch.disabled) {
+            hideHeadSuggestions();
+            return;
+        }
+
+        if (rows.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'tx-head-no-result';
+            empty.textContent = transactionCategory.value
+                ? 'No transaction head found under this category.'
+                : 'Select transaction category first.';
+            headSuggestionList.appendChild(empty);
+            headSuggestionList.classList.remove('tx-hidden');
+            headSearch.setAttribute('aria-expanded', 'true');
+            return;
+        }
+
+        rows.slice(0, 50).forEach((row) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'tx-head-suggestion';
+            button.dataset.headId = row.id;
+            button.setAttribute('role', 'option');
+
+            const name = document.createElement('span');
+            name.textContent = row.name || row.display_name;
+            button.appendChild(name);
+
+            if (row.head_code) {
+                const code = document.createElement('span');
+                code.className = 'tx-head-suggestion-code';
+                code.textContent = row.head_code;
+                button.appendChild(code);
+            }
+
+            button.addEventListener('mousedown', (event) => event.preventDefault());
+            button.addEventListener('click', () => selectTransactionHead(row));
+            headSuggestionList.appendChild(button);
+        });
+
+        headSuggestionList.classList.remove('tx-hidden');
+        headSearch.setAttribute('aria-expanded', 'true');
+    }
+
+    function selectTransactionHead(row) {
+        head.value = String(row.id);
+        headSearch.value = row.display_name || [row.head_code, row.name].filter(Boolean).join(' - ');
+        hideHeadSuggestions();
+        headSearch.setAttribute('aria-expanded', 'false');
+        headHint.textContent = `${row.display_name || row.name} selected under ${row.category}.`;
+        refreshForSelectedHead();
+    }
+
+    function renderHeadsForSelectedCategory(showSuggestions = false) {
+        const category = transactionCategory.value;
+        head.innerHTML = '';
+
+        if (!category) {
+            head.disabled = true;
+            headSearch.disabled = true;
+            headSearch.setAttribute('aria-expanded', 'false');
+            head.appendChild(new Option('Select Transaction Category first', ''));
+            headSearch.value = '';
+            hideHeadSuggestions();
+            headHint.textContent = 'Only transaction heads mapped under the selected category will be shown.';
+            return;
+        }
+
+        const rows = filteredHeadsForSelectedCategory();
+
+        head.disabled = false;
+        headSearch.disabled = false;
+        renderOptions(head, rows, rows.length ? 'Select Transaction Head' : 'No Transaction Head found under this category', (item) => item.display_name || item.name);
+        renderHeadSuggestionList(rows, showSuggestions);
+        headHint.textContent = rows.length
+            ? `${rows.length} Transaction Head${rows.length === 1 ? '' : 's'} found under ${category}. Type and choose from the suggestion list.`
+            : `No active Transaction Head is mapped under ${category}. Add or update it from Transaction Head Setup.`;
+    }
+
+    function setCategory(category) {
+        transactionCategory.value = category;
+        headSearch.value = '';
+        head.value = '';
+        screen.value = '';
+        categorySelector.querySelectorAll('.tx-category-option').forEach((button) => {
+            button.classList.toggle('is-active', button.dataset.category === category);
+        });
+        const definition = categoryDefinitions.find((item) => item.name === category);
+        categoryHint.textContent = definition ? `Example use: ${definition.example}` : 'Select the high-level transaction group.';
+        guidanceText.textContent = `${category} selected. Now choose a searchable Transaction Head mapped under this category.`;
+        renderHeadsForSelectedCategory(true);
+        headSearch.focus();
+        hideDynamicFields(true);
+        resetPreview('Select Transaction Head to continue.');
     }
 
     async function loadCashBanks() {
@@ -567,7 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const previousValue = settlement.value;
         settlement.disabled = true;
         settlement.innerHTML = '<option value="">Loading payment methods...</option>';
-        if (!selectedHead) { settlement.innerHTML = '<option value="">Select transaction type first</option>'; settlement.disabled = false; resetPreview(); return; }
+        if (!selectedHead) { settlement.innerHTML = '<option value="">Select Transaction Head first</option>'; settlement.required = false; settlement.disabled = false; resetPreview(); return; }
         let rows = [];
         try {
             rows = await getRows(endpoint(form.dataset.settlementsUrl, { transaction_head_id: selectedHead.id, mapped_only: 1 }));
@@ -589,41 +1017,36 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (rows.length === 1) settlement.value = rows[0].id;
         else settlement.value = '';
         settlement.disabled = false;
-        toggleCashBank();
     }
 
     async function refreshForSelectedHead() {
         const selectedHead = headById(head.value);
         party.required = false;
-        partyRequired.style.display = 'none';
-        screen.value = selectedHead ? `${selectedHead.transaction_screen || 'Transaction Entry'} / ${selectedHead.category || selectedHead.nature || 'General'}` : '';
-        guidanceText.textContent = selectedHead?.help_text || 'Enter normal business information. The accounting rule will prepare Debit and Credit automatically.';
-        reference.required = Boolean(selectedHead?.requires_reference);
-        referenceHint.textContent = selectedHead?.requires_reference ? 'Reference is required for this transaction head.' : 'Optional unless transaction head requires it.';
+        if (partyRequiredElement()) partyRequiredElement().style.display = 'none';
+
+        if (!selectedHead) {
+            screen.value = '';
+            guidanceText.textContent = transactionCategory.value ? 'Select a Transaction Head to continue.' : 'Select a Transaction Category to load matching Transaction Heads only.';
+            hideDynamicFields(true);
+            resetPreview('Select Transaction Head to continue.');
+            return;
+        }
+
+        screen.value = `${selectedHead.transaction_screen || 'Transaction Entry'} / ${selectedHead.category || selectedHead.nature || 'General'}`;
+        guidanceText.textContent = selectedHead.help_text || 'Enter what happened. Accounting posting rules will be handled from setup.';
 
         await loadSettlementOptions();
         await loadParties();
 
         const requirement = selectedRequirement();
-        const partyMustBeSelected = requirement.partyRequired && !hasDefaultNotApplicableParty();
-        const partyLabel = requirement.partyTypeName || requirement.partyMode || 'Not required';
-        partyType.value = requirement.partyMode === 'No' ? 'Not required by selected rule' : `${partyLabel} (${requirement.partyMode})`;
-        party.required = partyMustBeSelected;
-        partyRequired.style.display = partyMustBeSelected ? '' : 'none';
-        document.getElementById('partyWrap')?.classList.toggle('soft-required', partyMustBeSelected);
-        toggleCashBank();
+        const partyLabelText = requirement.partyTypeName || requirement.partyMode || 'Not required';
+        partyType.value = requirement.partyMode === 'No' ? 'Not required by selected rule' : `${partyLabelText} (${requirement.partyMode})`;
+        updateDynamicFieldVisibility();
         if (!isBooting) schedulePreview();
     }
 
-    function toggleCashBank() {
-        const show = selectedHeadRequiresCashBank();
-        cashBank.required = show && cashBanks.length > 0;
-        document.getElementById('cashBankWrap').classList.toggle('soft-required', show);
-        updateSettlementHint();
-    }
-
     function formReadyForPreview() {
-        if (!date.value || !head.value || !settlement.value || Number(amount.value || 0) <= 0) return false;
+        if (!date.value || !transactionCategory.value || !head.value || !settlement.value || Number(amount.value || 0) <= 0) return false;
         const selectedHead = headById(head.value);
         if (selectedRequirement().partyRequired && !party.value && !hasDefaultNotApplicableParty()) return false;
         if (selectedHead?.requires_reference && !reference.value.trim()) return false;
@@ -637,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function preview() {
-        toggleCashBank();
+        updateDynamicFieldVisibility();
         if (!formReadyForPreview()) { resetPreview('Complete required fields to generate ledger preview.'); return; }
         const formData = new FormData(form);
         formData.set('status', statusInput.value || 'Posted');
@@ -728,20 +1151,95 @@ document.addEventListener('DOMContentLoaded', () => {
         statusInput.value = canPostTransaction ? 'Posted' : 'Draft';
         summaryStatus.textContent = statusInput.value;
         summaryStatus.className = statusInput.value === 'Posted' ? 'badge badge-success' : 'badge badge-warning';
-        date.value = '{{ now()->toDateString() }}';
+        date.value = '{{ $defaultVoucherDate ?? now()->toDateString() }}';
         amount.value = '10000';
-        if (heads.length > 0) head.value = heads[0].id;
-        await refreshForSelectedHead();
-        resetPreview('Complete required fields to generate ledger preview.');
+        transactionCategory.value = '';
+        categorySelector.querySelectorAll('.tx-category-option').forEach((button) => button.classList.remove('is-active'));
+        categoryHint.textContent = 'This is the high-level grouping, for example: Sales, Purchase, Receipt, Payment, Banking, Expense, Income, Owner / Equity, Asset, Loan, Employee, Opening, and Adjustment.';
+        guidanceText.textContent = 'Select a Transaction Category to load matching Transaction Heads only.';
+        renderHeadsForSelectedCategory();
+        hideDynamicFields(true);
+        resetPreview('Select transaction category to begin.');
         showToast('Form cleared.');
     }
+
+    categorySelector.querySelectorAll('.tx-category-option').forEach((button) => {
+        button.addEventListener('click', () => setCategory(button.dataset.category));
+    });
+
+    headSearch.addEventListener('focus', () => {
+        const selectedHead = headById(head.value);
+        const selectedLabel = selectedHead ? (selectedHead.display_name || [selectedHead.head_code, selectedHead.name].filter(Boolean).join(' - ')) : '';
+
+        if (selectedHead && headSearch.value.trim() === selectedLabel.trim()) {
+            hideHeadSuggestions();
+            return;
+        }
+
+        renderHeadsForSelectedCategory(true);
+    });
+
+    headSearch.addEventListener('input', () => {
+        const selectedHead = headById(head.value);
+        const selectedLabel = selectedHead ? (selectedHead.display_name || [selectedHead.head_code, selectedHead.name].filter(Boolean).join(' - ')) : '';
+
+        if (selectedHead && headSearch.value.trim() === selectedLabel.trim()) {
+            hideHeadSuggestions();
+            return;
+        }
+
+        if (!selectedHead || headSearch.value.trim() !== selectedLabel.trim()) {
+            head.value = '';
+            screen.value = '';
+            hideDynamicFields(true);
+            resetPreview('Choose a Transaction Head from the suggestion list.');
+        }
+
+        renderHeadsForSelectedCategory(true);
+    });
+
+    headSearch.addEventListener('keydown', (event) => {
+        const buttons = visibleSuggestionButtons();
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            if (headSuggestionList.classList.contains('tx-hidden')) renderHeadsForSelectedCategory(true);
+            const updatedButtons = visibleSuggestionButtons();
+            if (updatedButtons.length === 0) return;
+            const currentIndex = updatedButtons.findIndex((button) => button.classList.contains('is-active'));
+            setActiveSuggestion(currentIndex >= updatedButtons.length - 1 ? 0 : currentIndex + 1);
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            const currentIndex = buttons.findIndex((button) => button.classList.contains('is-active'));
+            setActiveSuggestion(currentIndex <= 0 ? buttons.length - 1 : currentIndex - 1);
+        }
+
+        if (event.key === 'Enter') {
+            const active = visibleSuggestionButtons().find((button) => button.classList.contains('is-active'));
+            if (active) {
+                event.preventDefault();
+                const selected = heads.find((item) => String(item.id) === String(active.dataset.headId));
+                if (selected) selectTransactionHead(selected);
+            }
+        }
+
+        if (event.key === 'Escape') {
+            hideHeadSuggestions();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('#headCombobox')) hideHeadSuggestions();
+    });
 
     [date, party, amount, settlement, cashBank, reference, notes].forEach((input) => {
         input.addEventListener('input', schedulePreview);
         input.addEventListener('change', schedulePreview);
     });
     head.addEventListener('change', () => refreshForSelectedHead());
-    settlement.addEventListener('change', async () => { await loadParties(); toggleCashBank(); schedulePreview(); });
+    settlement.addEventListener('change', async () => { await loadParties(); updateDynamicFieldVisibility(); schedulePreview(); });
     form.addEventListener('submit', (event) => { event.preventDefault(); submitTransaction('Posted'); });
     document.getElementById('draftBtn')?.addEventListener('click', () => submitTransaction('Draft'));
     document.getElementById('clearBtn')?.addEventListener('click', clearForm);
@@ -752,11 +1250,11 @@ document.addEventListener('DOMContentLoaded', () => {
         statusInput.value = canPostTransaction ? statusInput.value : 'Draft';
         summaryStatus.textContent = statusInput.value;
         summaryStatus.className = statusInput.value === 'Posted' ? 'badge badge-success' : 'badge badge-warning';
-        resetPreview();
+        resetPreview('Select transaction category to begin.');
+        hideDynamicFields(false);
         await Promise.all([loadTransactionHeads(), loadCashBanks()]);
-        await refreshForSelectedHead();
+        renderHeadsForSelectedCategory();
         isBooting = false;
-        schedulePreview();
     }
 
     boot();

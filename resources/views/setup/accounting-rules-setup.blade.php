@@ -24,7 +24,6 @@
         <div class="prototype-actions">
             <button class="btn-outline" type="button" id="addRuleBtn">+ Add New Rule</button>
             <button class="btn-ghost" type="button" data-scroll-target="#ruleListCard">View All Rules</button>
-            <button class="btn-ghost" type="button" data-scroll-target="#journalPreview">Test Rule</button>
         </div>
     </div>
 
@@ -42,7 +41,20 @@
     </div>
 
     <div class="prototype-grid accounting-rule-redesign-grid">
-        <div class="card prototype-card">
+        <div class="card prototype-preview-card accounting-rule-preview-card" id="journalPreview">
+            <div class="prototype-card-header">
+                <div>
+                    <h3>Expected Journal Entry</h3>
+                    <p>Preview of the debit and credit lines generated from the selected rule setup.</p>
+                </div>
+                <span class="badge badge-primary">Debit = Credit</span>
+            </div>
+            <div class="prototype-card-body">
+                <div class="journal-preview-body empty">Select ledgers to preview Debit/Credit.</div>
+            </div>
+        </div>
+
+        <div class="card prototype-card accounting-rule-form-card">
             <div class="prototype-card-header">
                 <div>
                     <h3>Guided Accounting Rule Setup</h3>
@@ -67,6 +79,10 @@
                     <input type="hidden" name="auto_post" value="1">
                     <input type="hidden" name="description" id="ruleDescription">
                     <input type="hidden" name="party_ledger_effect" id="partyLedgerEffect">
+                    <input type="hidden" id="testAmount" value="10000">
+                    <input type="hidden" id="testParty" value="">
+                    <input type="hidden" id="testPayment" value="N/A">
+                    <input type="hidden" id="testCashBank" value="">
 
                     <div class="section-block">
                         <div class="section-heading">
@@ -356,39 +372,6 @@
             </div>
         </div>
 
-        <aside class="prototype-side-stack">
-            <div class="card prototype-preview-card" id="journalPreview">
-                <h3>Expected Journal Entry</h3>
-                <div class="journal-preview-body empty">Select ledgers and amount to preview Debit/Credit.</div>
-            </div>
-
-            <div class="card prototype-preview-card prototype-test-block" id="ruleTestCard">
-                <h3>Auto Journal Preview / Rule Test</h3>
-                <p class="muted" style="margin:4px 0 14px">Try sample input and see the expected journal entry.</p>
-                <div class="prototype-form-grid one">
-                            <div class="prototype-field">
-                                <label for="testAmount">Example Amount</label>
-                                <input id="testAmount" type="number" min="0.01" step="0.01" value="10000">
-                    </div>
-                            <div class="prototype-field">
-                                <label for="testParty">Example Party</label>
-                                <input id="testParty" placeholder="Example: ABC Customer">
-                            </div>
-                            <div class="prototype-field">
-                                <label for="testPayment">Example Payment Method</label>
-                                <select id="testPayment">
-                                    <option value="Cash">Cash</option>
-                                    <option value="Bank">Bank</option>
-                                    <option value="N/A">N/A</option>
-                                </select>
-                            </div>
-                            <div class="prototype-field">
-                                <label for="testCashBank">Example Cash/Bank Ledger</label>
-                                <input id="testCashBank" placeholder="Example: Main Cash">
-                            </div>
-                        </div>
-                    </div>
-        </aside>
     </div>
 
     <section class="card prototype-card prototype-section" id="ruleListCard">
@@ -544,6 +527,43 @@
     </section>
 </div>
 @endsection
+
+@push('styles')
+<style>
+    .accounting-rule-page .accounting-rule-redesign-grid {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 18px !important;
+        width: 100% !important;
+    }
+
+    .accounting-rule-page .accounting-rule-preview-card,
+    .accounting-rule-page .accounting-rule-form-card,
+    .accounting-rule-page #ruleListCard {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .accounting-rule-page .prototype-card-body {
+        width: 100%;
+    }
+
+    .accounting-rule-page .prototype-form-grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .accounting-rule-page .prototype-form-grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 980px) {
+        .accounting-rule-page .prototype-form-grid.three,
+        .accounting-rule-page .prototype-form-grid.two {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+@endpush
 
 @push('scripts')
 <script>
@@ -826,7 +846,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (amount <= 0 || !fields.primary_ledger_id.value || !fields.fixed_counter_ledger_id.value) {
             journalPreview.className = 'journal-preview-body empty';
-            journalPreview.innerHTML = 'Select one primary ledger, one counter ledger, and a positive amount to preview.';
+            journalPreview.innerHTML = 'Select one primary ledger and one counter ledger to preview.';
             return;
         }
 

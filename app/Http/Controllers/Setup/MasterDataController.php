@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\MasterBusinessTypeRequest;
 use App\Http\Requests\MasterCurrencyRequest;
 use App\Http\Requests\MasterFinancialYearRequest;
+use App\Http\Requests\MasterLedgerTypeRequest;
 use App\Http\Requests\MasterPartyTypeRequest;
 use App\Http\Requests\MasterSettlementTypeRequest;
 use App\Models\BusinessType;
@@ -13,6 +14,7 @@ use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\Currency;
 use App\Models\FinancialYear;
+use App\Models\LedgerType;
 use App\Models\PartyType;
 use App\Models\SettlementType;
 use Illuminate\Http\JsonResponse;
@@ -65,6 +67,14 @@ class MasterDataController extends Controller
     }
 
     /**
+     * Show Ledger Types as a separate Master Data sub-page.
+     */
+    public function ledgerTypes(): View
+    {
+        return $this->masterDataView('ledger-types');
+    }
+
+    /**
      * Show Financial Years as a separate Master Data sub-page.
      */
     public function financialYears(): View
@@ -75,11 +85,13 @@ class MasterDataController extends Controller
     private function masterDataView(string $activePage): View
     {
         $tabs = $this->masterDataTabs();
+        $ledgerTypeUsageCounts = $this->ledgerTypeUsageCountsByName();
 
         return view('setup.master-data', [
             'activeMasterDataPage' => $activePage,
             'activeMasterDataTab' => $tabs[$activePage],
             'masterDataTabs' => $tabs,
+            'ledgerTypeUsageCounts' => $ledgerTypeUsageCounts,
             'businessTypes' => BusinessType::query()
                 ->orderByDesc('is_default')
                 ->orderBy('sort_order')
@@ -96,6 +108,10 @@ class MasterDataController extends Controller
                 ->get(),
             'partyTypes' => PartyType::query()
                 ->with('defaultLedger')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
+            'ledgerTypes' => LedgerType::query()
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
@@ -138,6 +154,12 @@ class MasterDataController extends Controller
                 'route' => 'setup.master-data.party-types',
                 'description' => 'Values used in Party / Person Setup and transaction defaults.',
                 'count' => PartyType::query()->count(),
+            ],
+            'ledger-types' => [
+                'label' => 'Ledger Types',
+                'route' => 'setup.master-data.ledger-types',
+                'description' => 'Values used by Chart of Accounts ledger classification dropdown.',
+                'count' => LedgerType::query()->count(),
             ],
             'financial-years' => [
                 'label' => 'Financial Years',
@@ -296,6 +318,54 @@ class MasterDataController extends Controller
         $partyType->delete();
 
         return $this->deleted($request, 'Party type deleted successfully.', 'setup.master-data.party-types');
+    }
+
+    /**
+     * Create a ledger type used by Chart of Accounts setup.
+     */
+    public function storeLedgerType(MasterLedgerTypeRequest $request): JsonResponse
+    {
+        $ledgerType = LedgerType::query()->create($request->validated());
+
+        return $this->saved('Ledger type saved successfully.', $ledgerType, 'setup.master-data.ledger-types');
+    }
+
+    /**
+     * Update a ledger type used by Chart of Accounts setup.
+     */
+    public function updateLedgerType(MasterLedgerTypeRequest $request, LedgerType $ledgerType): JsonResponse
+    {
+        $ledgerType->update($request->validated());
+
+        return $this->saved('Ledger type updated successfully.', $ledgerType, 'setup.master-data.ledger-types');
+    }
+
+    /**
+     * Remove an unused ledger type from master data.
+     */
+    public function destroyLedgerType(Request $request, LedgerType $ledgerType): JsonResponse|RedirectResponse
+    {
+        if ($ledgerType->isProtectedSystemType()) {
+            return $this->blocked(
+                $request,
+                'This is a protected accounting ledger type used by the posting engine and reports. Set the status to Inactive if it should not be available for new Chart of Accounts records.',
+                'setup.master-data.ledger-types'
+            );
+        }
+
+        $usageCount = $this->ledgerTypeUsageCount($ledgerType->name);
+
+        if ($usageCount > 0) {
+            return $this->blocked(
+                $request,
+                "This ledger type is used by {$usageCount} setup/rule record(s). Reassign those records first, or set the ledger type status to Inactive instead of deleting it.",
+                'setup.master-data.ledger-types'
+            );
+        }
+
+        $ledgerType->delete();
+
+        return $this->deleted($request, 'Ledger type deleted successfully.', 'setup.master-data.ledger-types');
     }
 
     /**
@@ -510,6 +580,49 @@ class MasterDataController extends Controller
         });
     }
     
+
+
+    /**
+     * Count ledger-type references across setup tables that store ledger type names.
+     * This protects accounting integrity while allowing unused optional/custom types to be deleted.
+     */
+    private function ledgerTypeUsageCountsByName(): array
+    {
+        if (! Schema::hasTable('ledger_types')) {
+            return [];
+        }
+
+        $counts = [];
+
+        foreach (LedgerType::query()->pluck('name') as $name) {
+            $counts[$name] = $this->ledgerTypeUsageCount($name);
+        }
+
+        return $counts;
+    }
+
+    private function ledgerTypeUsageCount(string $ledgerTypeName): int
+    {
+        $checks = [
+            ['chart_of_accounts', 'ledger_type'],
+            ['accounting_rule_lines', 'allowed_ledger_type'],
+            ['ledger_mapping_rules', 'allowed_counter_ledger_type'],
+        ];
+
+        $total = 0;
+
+        foreach ($checks as [$table, $column]) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $total += (int) DB::table($table)
+                ->where($column, $ledgerTypeName)
+                ->count();
+        }
+
+        return $total;
+    }
 
     private function statusChanged(Request $request, string $message): JsonResponse|RedirectResponse
     {

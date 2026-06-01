@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\AccountType;
 use App\Models\ChartOfAccount;
+use App\Models\LedgerType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -118,7 +119,7 @@ class ChartOfAccountRequest extends FormRequest
 
             'ledger_type' => [
                 'required',
-                Rule::in(ChartOfAccount::LEDGER_TYPES),
+                Rule::in(LedgerType::activeNames()),
             ],
 
             'is_cash_bank' => [

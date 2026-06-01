@@ -6,7 +6,7 @@
         <p data-bn="{{ $txt(data_get($landing, 'contact.body'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'contact.body'), 'en') }}">{{ $txt(data_get($landing, 'contact.body'), $defaultLang) }}</p>
         <div class="contact-methods">
           @if(data_get($landing, 'contact.phone'))
-            <a class="contact-method" href="tel:{{ preg_replace('/\s+/', '', data_get($landing, 'contact.phone')) }}"><span class="tick">☎</span><div><b>{{ data_get($landing, 'contact.phone') }}</b><span data-bn="{{ $txt(data_get($landing, 'contact.phone_note'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'contact.phone_note'), 'en') }}">{{ $txt(data_get($landing, 'contact.phone_note'), $defaultLang) }}</span></div></a>
+            <a class="contact-method" href="{{ $landingWhatsAppUrl(data_get($landing, 'contact.phone')) }}" target="_blank" rel="noopener"><span class="tick">☎</span><div><b>{{ data_get($landing, 'contact.phone') }}</b><span data-bn="{{ $txt(data_get($landing, 'contact.phone_note'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'contact.phone_note'), 'en') }}">{{ $txt(data_get($landing, 'contact.phone_note'), $defaultLang) }}</span></div></a>
           @endif
           @if(data_get($landing, 'contact.email'))
             <a class="contact-method" href="mailto:{{ data_get($landing, 'contact.email') }}"><span class="tick">✉</span><div><b>{{ data_get($landing, 'contact.email') }}</b><span data-bn="{{ $txt(data_get($landing, 'contact.email_note'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'contact.email_note'), 'en') }}">{{ $txt(data_get($landing, 'contact.email_note'), $defaultLang) }}</span></div></a>

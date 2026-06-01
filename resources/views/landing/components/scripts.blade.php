@@ -2,7 +2,6 @@
 (function () {
   const bnBtn = document.getElementById('bnBtn');
   const enBtn = document.getElementById('enBtn');
-  const loginUrl = @json($loginUrl);
   const successText = {
     bn: @json($txt(data_get($landing, 'contact.form.success'), 'bn')),
     en: @json($txt(data_get($landing, 'contact.form.success'), 'en'))
@@ -63,21 +62,43 @@
   const form = document.getElementById('demoForm');
   const status = document.getElementById('landingFormStatus');
 
-  form?.addEventListener('submit', (event) => {
+  form?.addEventListener('submit', async (event) => {
     event.preventDefault();
 
+    const lang = document.documentElement.lang === 'en' ? 'en' : 'bn';
+
     if (status) {
-      const lang = document.documentElement.lang === 'en' ? 'en' : 'bn';
-      status.textContent = lang === 'bn'
-        ? 'ডেমো চালু করতে সিস্টেমে লগইন করুন।'
-        : 'Please log in to start the demo.';
+      status.textContent = lang === 'bn' ? 'পাঠানো হচ্ছে...' : 'Sending...';
       status.classList.remove('error');
       status.style.display = 'block';
     }
 
-    setTimeout(() => {
-      window.location.assign(loginUrl);
-    }, 220);
+    try {
+      const response = await fetch(form.action, {
+        method: form.method || 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new FormData(form)
+      });
+
+      if (!response.ok) {
+        throw new Error('Request failed');
+      }
+
+      form.reset();
+
+      if (status) {
+        status.textContent = successText[lang] || (lang === 'bn' ? 'আপনার ডেমো রিকোয়েস্ট পাঠানো হয়েছে।' : 'Your demo request has been sent.');
+        status.classList.remove('error');
+      }
+    } catch (error) {
+      if (status) {
+        status.textContent = lang === 'bn' ? 'রিকোয়েস্ট পাঠানো যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Could not send the request. Please try again.';
+        status.classList.add('error');
+      }
+    }
   });
 })();
 </script>

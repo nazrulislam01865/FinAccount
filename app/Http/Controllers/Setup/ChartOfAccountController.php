@@ -9,9 +9,12 @@ use App\Services\Setup\EntityDeleteService;
 use App\Http\Controllers\Concerns\RespondsToDelete;
 use App\Http\Requests\ChartOfAccountRequest;
 use App\Models\ChartOfAccount;
+use App\Models\LedgerType;
+use App\Services\Setup\ChartOfAccountExcelService;
 use App\Services\Setup\ChartOfAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\View\View;
 
 class ChartOfAccountController extends Controller
@@ -38,8 +41,46 @@ class ChartOfAccountController extends Controller
             'accounts' => $accounts,
             'stats' => $stats,
             'coaLevels' => ChartOfAccount::COA_LEVELS,
-            'ledgerTypes' => ChartOfAccount::LEDGER_TYPES,
+            'ledgerTypes' => LedgerType::activeNames(),
         ]);
+    }
+
+    public function export(ChartOfAccountExcelService $excel): BinaryFileResponse
+    {
+        $path = $excel->exportPath();
+        $extension = pathinfo($path, PATHINFO_EXTENSION) ?: 'xlsx';
+        $contentType = $extension === 'xlsx'
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv';
+
+        return response()->download(
+            $path,
+            'chart-of-accounts-' . now()->format('Ymd-His') . '.' . $extension,
+            ['Content-Type' => $contentType]
+        )->deleteFileAfterSend(true);
+    }
+
+    public function import(
+        Request $request,
+        ChartOfAccountExcelService $excel,
+        ChartOfAccountService $service
+    ): RedirectResponse {
+        $request->validate([
+            'coa_file' => ['required', 'file', 'mimes:xlsx,xlsm,csv,txt', 'max:5120'],
+        ]);
+
+        $result = $excel->import($request->file('coa_file'), $service, $request->user()?->id);
+        $message = sprintf(
+            'CoA import completed. Created: %d, Updated: %d, Skipped: %d.',
+            $result['created'],
+            $result['updated'],
+            $result['skipped']
+        );
+
+        return redirect()
+            ->route('setup.chart-of-accounts')
+            ->with('status', $message)
+            ->with('import_errors', array_slice($result['errors'], 0, 10));
     }
 
     public function store(

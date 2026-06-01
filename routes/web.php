@@ -73,9 +73,13 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->middleware('permission:approvals.manage')
         ->name('approvals.reject');
 
-    Route::get('/audit-trail', AuditTrailController::class)
+    Route::get('/audit-trail', [AuditTrailController::class, 'index'])
         ->middleware('permission:audit-trail.view')
         ->name('audit-trail.index');
+
+    Route::get('/audit-trail/export', [AuditTrailController::class, 'export'])
+        ->middleware('permission:audit-trail.view')
+        ->name('audit-trail.export');
 
     /*
     |--------------------------------------------------------------------------
@@ -112,7 +116,7 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->middleware('permission:advance-management.manage|transactions.create')
         ->name('api.advance-management.store');
 
-    Route::get('/ledger-report', [LedgerReportController::class, 'index'])
+    Route::get('/ledger-report', fn () => redirect()->route('accounting-reports.ledger-report.index'))
         ->middleware('permission:ledger-report.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
         ->name('ledger-report.index');
 
@@ -185,6 +189,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
             ->middleware('permission:master-data.view')
             ->name('master-data.party-types');
 
+        Route::get('/master-data/ledger-types', [MasterDataController::class, 'ledgerTypes'])
+            ->middleware('permission:master-data.view')
+            ->name('master-data.ledger-types');
+
         Route::get('/master-data/financial-years', [MasterDataController::class, 'financialYears'])
             ->middleware('permission:master-data.view')
             ->name('master-data.financial-years');
@@ -205,6 +213,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
             ->middleware('permission:master-data.manage')
             ->name('master-data.party-types.destroy');
 
+        Route::delete('/master-data/ledger-types/{ledger_type}', [MasterDataController::class, 'destroyLedgerType'])
+            ->middleware('permission:master-data.manage')
+            ->name('master-data.ledger-types.destroy');
+
         Route::delete('/master-data/financial-years/{financial_year}', [MasterDataController::class, 'destroyFinancialYear'])
             ->middleware('permission:master-data.manage')
             ->name('master-data.financial-years.destroy');
@@ -212,6 +224,14 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         Route::get('/chart-of-accounts', [ChartOfAccountController::class, 'index'])
             ->middleware('permission:chart-of-accounts.view')
             ->name('chart-of-accounts');
+
+        Route::get('/chart-of-accounts/export', [ChartOfAccountController::class, 'export'])
+            ->middleware('permission:chart-of-accounts.view')
+            ->name('chart-of-accounts.export');
+
+        Route::post('/chart-of-accounts/import', [ChartOfAccountController::class, 'import'])
+            ->middleware('permission:chart-of-accounts.manage')
+            ->name('chart-of-accounts.import');
 
         Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
             ->middleware('permission:chart-of-accounts.manage')
@@ -404,6 +424,13 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::match(['post', 'put'], '/api/master-data/party-types/{party_type}', [MasterDataController::class, 'updatePartyType'])
         ->middleware('permission:master-data.manage')
         ->name('api.master-data.party-types.update');
+
+    Route::post('/api/master-data/ledger-types', [MasterDataController::class, 'storeLedgerType'])
+        ->middleware('permission:master-data.manage')
+        ->name('api.master-data.ledger-types.store');
+    Route::match(['post', 'put'], '/api/master-data/ledger-types/{ledger_type}', [MasterDataController::class, 'updateLedgerType'])
+        ->middleware('permission:master-data.manage')
+        ->name('api.master-data.ledger-types.update');
 
     Route::post('/api/master-data/financial-years', [MasterDataController::class, 'storeFinancialYear'])
         ->middleware('permission:master-data.manage')

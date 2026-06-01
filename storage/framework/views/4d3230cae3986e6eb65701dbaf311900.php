@@ -21,6 +21,10 @@
             <div class="alert-success"><?php echo e(session('status')); ?></div>
         <?php endif; ?>
 
+        <?php if(request()->boolean('session_expired')): ?>
+            <div class="auth-session-expired">Your current session expired, please login.</div>
+        <?php endif; ?>
+
         <?php if((int) session('login_lockout_seconds', 0) > 0): ?>
             <div class="auth-lockout" data-login-countdown data-seconds="<?php echo e((int) session('login_lockout_seconds', 0)); ?>" aria-live="polite">
                 <strong>Login temporarily locked</strong>
@@ -64,7 +68,7 @@ unset($__errorArgs, $__bag); ?>
     </div>
 </div>
 <style>
-    .auth-lockout{margin:0 0 14px;padding:13px 14px;border:1px solid #fecaca;border-radius:14px;background:#fef2f2;color:#991b1b;font-size:13px;line-height:1.45;text-align:left}
+    .auth-lockout,.auth-session-expired{margin:0 0 14px;padding:13px 14px;border:1px solid #fecaca;border-radius:14px;background:#fef2f2;color:#991b1b;font-size:13px;line-height:1.45;text-align:left}
     .auth-lockout strong{display:block;margin-bottom:4px}.auth-lockout span{display:block}.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
 </style>
 <script>

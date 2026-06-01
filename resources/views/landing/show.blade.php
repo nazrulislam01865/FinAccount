@@ -15,19 +15,33 @@
 
     $isEnabled = fn (string $key) => (bool) data_get($landing, $key.'.enabled', true);
     $defaultLang = data_get($landing, 'meta.default_lang', 'bn') === 'en' ? 'en' : 'bn';
-    $loginUrl = route('login');
-    $isDemoLink = function ($href = null, $label = null) use ($txt): bool {
-        $href = trim((string) $href);
-        $bn = strtolower($txt($label, 'bn'));
-        $en = strtolower($txt($label, 'en'));
-
-        return $href === '#contact'
-            || str_contains($bn, 'ডেমো')
-            || str_contains($en, 'demo');
+    $landingHref = function ($href = null, $label = null): string {
+        $href = trim((string) ($href ?: '#'));
+        return $href !== '' ? $href : '#';
     };
-    $landingHref = fn ($href = null, $label = null) => $isDemoLink($href, $label)
-        ? $loginUrl
-        : ((string) ($href ?: '#'));
+    $landingWhatsAppUrl = function (?string $phone): string {
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        if ($digits === '') {
+            return '#contact';
+        }
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+        if (str_starts_with($digits, '0')) {
+            $digits = '880'.substr($digits, 1);
+        }
+        return 'https://wa.me/'.$digits;
+    };
+    $landingImageUrl = function (?string $path): string {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return '';
+        }
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+        return asset(ltrim($path, '/'));
+    };
 @endphp
 <!DOCTYPE html>
 <html lang="{{ $defaultLang }}">

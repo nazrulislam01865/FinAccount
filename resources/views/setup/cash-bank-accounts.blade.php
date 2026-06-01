@@ -2,6 +2,93 @@
 
 @section('title', 'Cash / Bank Account Setup | HisebGhor')
 
+@push('styles')
+<style>
+    .setup-full-width-flow {
+        grid-template-columns: 1fr !important;
+        gap: 18px;
+    }
+
+    .setup-full-width-flow > .right-stack {
+        order: 1;
+        display: grid;
+        grid-template-columns: 1fr !important;
+        gap: 18px;
+        width: 100%;
+    }
+
+    .setup-full-width-flow > .left-stack {
+        order: 2;
+        width: 100%;
+    }
+
+    .setup-full-width-flow .form-panel,
+    .setup-full-width-flow .form-card,
+    .setup-full-width-flow .toolbar,
+    .setup-full-width-flow .table-card,
+    .setup-full-width-flow .table-info-grid {
+        width: 100%;
+    }
+
+    .setup-full-width-flow .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px;
+        align-items: start;
+    }
+
+    .setup-full-width-flow .form-grid > .two-col,
+    .setup-full-width-flow .form-grid > .hint-box,
+    .setup-full-width-flow .form-grid > .form-actions,
+    .setup-full-width-flow .form-grid > .actions,
+    .setup-full-width-flow .form-grid > .preview-box,
+    .setup-full-width-flow .form-grid > #bankFields {
+        grid-column: 1 / -1;
+    }
+
+    .setup-full-width-flow .form-actions,
+    .setup-full-width-flow .actions {
+        margin-top: 3px;
+    }
+
+    .setup-full-width-flow .toolbar {
+        margin-top: 0;
+    }
+
+    .setup-full-width-flow .table-card {
+        overflow-x: auto;
+    }
+
+    .setup-full-width-flow .table-wrap {
+        width: 100%;
+        overflow-x: scroll;
+        scrollbar-gutter: stable both-edges;
+    }
+
+    .setup-full-width-flow table {
+        min-width: 1100px;
+    }
+
+    .setup-full-width-flow #bankFields {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 15px;
+    }
+
+    .setup-full-width-flow #bankFields.hidden,
+    .setup-full-width-flow #bankFields .hidden {
+        display: none !important;
+    }
+
+    @media (max-width: 880px) {
+        .setup-full-width-flow .form-grid,
+        .setup-full-width-flow #bankFields {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="page-title">
     <div>
@@ -13,7 +100,7 @@
 
 @include('partials.setup-progress', ['current' => 3])
 
-<div class="layout">
+<div class="layout setup-full-width-flow">
     <div class="left-stack">
         <div class="card toolbar" data-table-filter="#cashBankTable" data-count-target="#resultCount">
             <div class="field search-field">
@@ -152,7 +239,7 @@
                     @empty
                         <tr data-empty="true">
                             <td colspan="9" class="muted" style="text-align:center;padding:24px">
-                                No cash/bank accounts found. Add your first account using the form on the right.
+                                No cash/bank accounts found. Add your first account using the form above.
                             </td>
                         </tr>
                     @endforelse

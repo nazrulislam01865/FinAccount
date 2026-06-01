@@ -65,7 +65,7 @@
     </div>
 </div>
 
-<form class="card toolbar ledger-toolbar accounting-filter-sequence" method="GET" action="{{ route('ledger-report.index') }}">
+<form class="card toolbar ledger-toolbar accounting-filter-sequence" method="GET" action="{{ route('accounting-reports.ledger-report.index') }}">
     <div class="date-range-field">
         <label>Date Range</label>
         <div class="date-range-inputs">

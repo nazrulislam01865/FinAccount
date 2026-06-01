@@ -32,7 +32,8 @@ class TransactionController extends Controller
 
         $transactionHeads = TransactionHead::query()
             ->where('status', 'Active')
-            ->with(['defaultPartyType', 'settlementTypes' => fn ($query) => $query->where('status', 'Active')->orderBy('sort_order')])
+            ->with(['defaultPartyType', 'settlementTypes' => fn ($query) => $query->where('status', 'Active')->orderBy('sort_order')->orderBy('name')])
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 

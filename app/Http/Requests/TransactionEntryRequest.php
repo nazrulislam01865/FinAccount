@@ -32,6 +32,7 @@ class TransactionEntryRequest extends FormRequest
             'status' => $this->status ?: 'Posted',
             'reference' => $this->blankToNull($this->reference),
             'notes' => $this->blankToNull($this->notes),
+            'transaction_category' => $this->blankToNull($this->input('transaction_category')),
         ]);
     }
 
@@ -39,6 +40,7 @@ class TransactionEntryRequest extends FormRequest
     {
         return [
             'voucher_date' => ['required', 'date'],
+            'transaction_category' => ['required', 'string', Rule::in(TransactionHead::transactionCategories())],
             'transaction_head_id' => [
                 'required',
                 'integer',
@@ -106,6 +108,7 @@ class TransactionEntryRequest extends FormRequest
 
             $this->validateStatusPermission($validator);
             $this->validateDateInsideActiveFinancialYear($validator);
+            $this->validateHeadCategoryPair($validator, $head);
             $this->validateHeadSettlementPair($validator, $head, $settlement);
             $this->validateReferenceRequirement($validator, $head);
             $this->validateDynamicInputRequirements($validator, $head, $settlement);
@@ -184,6 +187,7 @@ class TransactionEntryRequest extends FormRequest
         return [
             'voucher_date.required' => 'Transaction date is required.',
             'voucher_date.date' => 'Transaction date must be a valid date.',
+            'transaction_category.in' => 'Selected Transaction Category is invalid.',
             'transaction_head_id.required' => 'Transaction Head is required.',
             'transaction_head_id.exists' => 'Selected Transaction Head is invalid or inactive.',
             'settlement_type_id.required' => 'Settlement Type is required.',
@@ -197,6 +201,25 @@ class TransactionEntryRequest extends FormRequest
             'attachment.mimes' => 'Attachment must be a PDF, JPG, JPEG, or PNG file.',
             'attachment.max' => 'Attachment size cannot exceed 5MB.',
         ];
+    }
+
+    private function validateHeadCategoryPair(Validator $validator, TransactionHead $head): void
+    {
+        $category = $this->input('transaction_category');
+
+        if (! $category) {
+            return;
+        }
+
+        $selectedCategory = TransactionHead::normaliseCategory((string) $category);
+        $headCategory = TransactionHead::normaliseCategory($head->category, $head->name, $head->nature);
+
+        if ($selectedCategory !== $headCategory) {
+            $validator->errors()->add(
+                'transaction_head_id',
+                'Selected Transaction Head does not belong to the selected Transaction Category.'
+            );
+        }
     }
 
     private function validateDateInsideActiveFinancialYear(Validator $validator): void

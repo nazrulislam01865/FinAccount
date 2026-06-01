@@ -24,6 +24,44 @@ window.AccountingUI = (() => {
     setTimeout(() => toast.classList.remove('show'), 2600);
   }
 
+  function sessionExpiredUrl(url = '') {
+    return url || '/login?session_expired=1';
+  }
+
+  function isLoginRedirectResponse(response) {
+    const responseUrl = String(response?.url || '');
+
+    return Boolean(response?.redirected && responseUrl.includes('/login'))
+      || responseUrl.endsWith('/login')
+      || responseUrl.includes('/login?');
+  }
+
+  function redirectToLogin(message = 'Your current session expired, please login.', url = '') {
+    showToast(message);
+
+    window.setTimeout(() => {
+      window.location.href = sessionExpiredUrl(url);
+    }, 250);
+  }
+
+  function handleExpiredResponse(response, result = {}) {
+    if (!response) {
+      return false;
+    }
+
+    const contentType = String(response.headers?.get('content-type') || '');
+    const expiredStatus = [401, 419].includes(response.status);
+    const loginRedirect = isLoginRedirectResponse(response);
+    const htmlInsteadOfJson = response.ok && !contentType.includes('application/json') && loginRedirect;
+
+    if (!expiredStatus && !loginRedirect && !htmlInsteadOfJson) {
+      return false;
+    }
+
+    redirectToLogin(result.message || 'Your current session expired, please login.', result.redirect);
+    return true;
+  }
+
   async function getJson(url) {
     const response = await fetch(url, {
       headers: {
@@ -32,6 +70,10 @@ window.AccountingUI = (() => {
       },
       credentials: 'same-origin',
     });
+
+    if (handleExpiredResponse(response)) {
+      throw new Error('Session expired. Redirecting to login.');
+    }
 
     if (!response.ok) {
       throw new Error(`Request failed: ${url}`);
@@ -776,6 +818,11 @@ window.AccountingUI = (() => {
           });
 
           const result = await response.json().catch(() => ({}));
+
+          if (handleExpiredResponse(response, result)) {
+            setSubmitting(form, false);
+            return;
+          }
 
           if (!response.ok) {
             const fieldName = firstValidationField(result.errors);

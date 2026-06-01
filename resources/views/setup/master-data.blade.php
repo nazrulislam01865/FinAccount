@@ -12,14 +12,41 @@
 
     .master-section {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 330px;
-        gap: 22px;
+        grid-template-columns: 1fr;
+        gap: 18px;
         align-items: start;
+    }
+
+    .master-section > .form-panel {
+        order: 1;
+        width: 100%;
+    }
+
+    .master-section > .table-card {
+        order: 2;
+        width: 100%;
     }
 
     .master-form {
         display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 14px;
+        align-items: start;
+    }
+
+    .master-form .actions,
+    .master-form .full {
+        grid-column: 1 / -1;
+    }
+
+    .master-section .table-wrap {
+        width: 100%;
+        overflow-x: scroll;
+        scrollbar-gutter: stable both-edges;
+    }
+
+    .master-section table {
+        min-width: 1000px;
     }
 
     .master-card-head {
@@ -108,13 +135,25 @@
         flex: 0 0 auto;
     }
 
-    @media (max-width: 1320px) {
-        .master-section {
-            grid-template-columns: 1fr;
-        }
+    .locked-action {
+        opacity: .45;
+        cursor: not-allowed;
+        pointer-events: auto;
+    }
+
+    .usage-help {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
     }
 
     @media (max-width: 880px) {
+        .master-form {
+            grid-template-columns: 1fr;
+        }
+
         .master-subnav {
             padding: 12px;
         }
@@ -669,6 +708,160 @@
                         <option value="Inactive">Inactive</option>
                     </select>
                 </div>
+
+                <div class="actions">
+                    <button type="button" class="btn-ghost js-master-reset">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </aside>
+    </section>
+    @endif
+
+
+    @if($activeMasterDataPage === 'ledger-types')
+    <section class="master-section" id="ledgerTypesSection">
+        <div class="card table-card">
+            <div class="master-card-head">
+                <div>
+                    <h3>Ledger Types</h3>
+                    <p>These values appear in Chart of Accounts setup under "What type of ledger is this?"</p>
+                </div>
+                <span class="badge badge-primary">{{ $ledgerTypes->count() }} Items</span>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Code</th>
+                            <th>Description</th>
+                            <th>Usage</th>
+                            <th>System</th>
+                            <th>Sort</th>
+                            <th>Status</th>
+                            <th style="text-align:right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($ledgerTypes as $type)
+                            @php
+                                $usageCount = (int) ($ledgerTypeUsageCounts[$type->name] ?? 0);
+                                $isProtectedLedgerType = $type->isProtectedSystemType();
+                                $deleteLocked = $usageCount > 0 || $isProtectedLedgerType;
+                                $deleteTitle = $usageCount > 0
+                                    ? 'Used by '.$usageCount.' setup/rule record(s). Reassign those records or set this ledger type inactive.'
+                                    : ($isProtectedLedgerType ? 'Protected accounting ledger type cannot be deleted. Set it inactive if needed.' : 'Delete');
+                            @endphp
+                            <tr
+                                data-id="{{ $type->id }}"
+                                data-name="{{ e($type->name) }}"
+                                data-code="{{ e($type->code) }}"
+                                data-description="{{ e($type->description) }}"
+                                data-is-system="{{ $type->is_system ? 1 : 0 }}"
+                                data-sort-order="{{ $type->sort_order }}"
+                                data-status="{{ $type->status }}"
+                                data-usage-count="{{ $usageCount }}"
+                                data-update-url="{{ route('api.master-data.ledger-types.update', $type) }}"
+                            >
+                                <td class="strong">{{ $type->name }}</td>
+                                <td>{{ $type->code }}</td>
+                                <td>{{ $type->description ?: '—' }}</td>
+                                <td>
+                                    <span class="badge {{ $usageCount > 0 ? 'badge-primary' : 'badge-neutral' }}">
+                                        {{ $usageCount }} Used
+                                    </span>
+                                    @if($usageCount > 0)
+                                        <span class="usage-help">Reassign or deactivate instead of deleting.</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <span class="badge {{ $type->is_system ? 'badge-active' : 'badge-neutral' }}">
+                                        {{ $isProtectedLedgerType ? 'Protected' : ($type->is_system ? 'Yes' : 'No') }}
+                                    </span>
+                                </td>
+                                <td>{{ $type->sort_order }}</td>
+                                <td>
+                                    <span class="badge {{ $type->status === 'Active' ? 'badge-active' : 'badge-neutral' }}">
+                                        {{ $type->status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-cell">
+                                        <button class="icon-btn js-master-edit" type="button" data-target="ledgerTypeForm" title="Edit">✎</button>
+                                        @if($deleteLocked)
+                                            <button class="icon-btn delete-btn locked-action" type="button" title="{{ $deleteTitle }}" aria-disabled="true">🗑</button>
+                                        @else
+                                            <form method="POST" action="{{ route('setup.master-data.ledger-types.destroy', $type) }}" data-delete-form onsubmit="return confirm('Delete this ledger type?')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="icon-btn delete-btn" type="submit" title="Delete">🗑</button>
+                                            </form>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr data-empty="true">
+                                <td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No ledger types found.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <aside class="card form-panel">
+            <div class="panel-head">
+                <div>
+                    <h3>Add / Edit Ledger Type</h3>
+                    <span>Example: Cash, Bank, Party Control, Loan, Asset, Income, Expense.</span>
+                </div>
+            </div>
+
+            <form
+                class="form-grid master-form"
+                id="ledgerTypeForm"
+                data-frontend-form
+                data-action="{{ route('api.master-data.ledger-types.store') }}"
+                data-store-url="{{ route('api.master-data.ledger-types.store') }}"
+                data-success="Ledger type saved successfully."
+            >
+                @csrf
+                <input type="hidden" name="_method" value="POST">
+
+                <div>
+                    <label>Name <span class="required">*</span></label>
+                    <input name="name" placeholder="Loan" required>
+                </div>
+
+                <div>
+                    <label>Code <span class="required">*</span></label>
+                    <input name="code" placeholder="LOAN" required>
+                    <div class="inline-help">Uppercase letters, numbers, and underscores only.</div>
+                </div>
+
+                <div>
+                    <label>Sort Order</label>
+                    <input type="number" name="sort_order" min="0" value="0">
+                </div>
+
+                <div>
+                    <label>Status <span class="required">*</span></label>
+                    <select name="status" required>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                    <div class="inline-help">Use Inactive to hide a ledger type from new CoA entries when it is already used by existing accounts.</div>
+                </div>
+
+                <div class="full">
+                    <label>Description</label>
+                    <textarea name="description" placeholder="Where this ledger type should be used"></textarea>
+                </div>
+
+                <input type="hidden" name="is_system" value="0">
 
                 <div class="actions">
                     <button type="button" class="btn-ghost js-master-reset">Cancel</button>

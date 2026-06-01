@@ -11,6 +11,7 @@ use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\Currency;
 use App\Models\LedgerMappingRule;
+use App\Models\LedgerType;
 use App\Models\Party;
 use App\Models\PartyType;
 use App\Models\SettlementType;
@@ -106,7 +107,7 @@ class DropdownController extends Controller
     public function ledgerTypes(): JsonResponse
     {
         return $this->ok(
-            collect(ChartOfAccount::LEDGER_TYPES)->map(fn ($type) => [
+            collect(LedgerType::activeNames())->map(fn ($type) => [
                 'id' => $type,
                 'name' => $type,
                 'display_name' => $type,
@@ -194,29 +195,47 @@ class DropdownController extends Controller
         ]);
     }
 
-    public function transactionHeads(): JsonResponse
+    public function transactionHeads(Request $request): JsonResponse
     {
-        return $this->ok(
-            TransactionHead::query()
-                ->where('status', 'Active')
-                ->with(['settlementTypes' => fn ($query) => $query
+        $selectedCategory = $request->filled('category')
+            ? TransactionHead::normaliseCategory((string) $request->input('category'))
+            : null;
+        $search = strtolower(trim((string) $request->input('q', $request->input('search', ''))));
+
+        $heads = TransactionHead::query()
+            ->where('status', 'Active')
+            ->with([
+                'defaultPartyType',
+                'settlementTypes' => fn ($query) => $query
                     ->where('status', 'Active')
                     ->orderBy('sort_order')
-                    ->orderBy('name')])
-                ->orderBy('name')
-                ->get()
-                ->map(fn (TransactionHead $item) => [
+                    ->orderBy('name'),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function (TransactionHead $item) {
+                $normalisedCategory = TransactionHead::normaliseCategory(
+                    $item->category,
+                    $item->name,
+                    $item->nature
+                );
+
+                return [
                     'id' => $item->id,
                     'name' => $item->name,
                     'display_name' => $item->name,
+                    'head_code' => $item->head_code,
                     'nature' => $item->nature,
-                    'category' => $item->category ?: $item->nature,
+                    'category' => $normalisedCategory,
+                    'raw_category' => $item->category ?: $item->nature,
                     'default_party_type_id' => $item->default_party_type_id,
+                    'default_party_type_name' => $item->defaultPartyType?->name,
                     'default_primary_ledger_id' => $item->default_primary_ledger_id,
                     'default_movement' => $item->default_movement,
                     'payment_method_required' => (bool) $item->payment_method_required,
                     'party_required_mode' => $item->party_required_mode ?: ($item->requires_party ? 'Required' : 'No'),
-                    'transaction_screen' => $item->transaction_screen,
+                    'transaction_screen' => $item->transaction_screen ?: 'Transaction Entry',
                     'is_system_default' => (bool) ($item->is_system_default ?? false),
                     'is_user_selectable' => (bool) ($item->is_user_selectable ?? true),
                     'sort_order' => $item->sort_order,
@@ -235,8 +254,22 @@ class DropdownController extends Controller
                         'code' => $settlement->code,
                         'display_name' => $settlement->name,
                     ])->values(),
-                ])
-        );
+                ];
+            });
+
+        if ($selectedCategory) {
+            $heads = $heads->filter(fn (array $item) => $item['category'] === $selectedCategory);
+        }
+
+        if ($search !== '') {
+            $heads = $heads->filter(function (array $item) use ($search) {
+                $target = strtolower(trim(($item['head_code'] ? $item['head_code'] . ' ' : '') . $item['name'] . ' ' . $item['category']));
+
+                return str_contains($target, $search);
+            });
+        }
+
+        return $this->ok($heads->values());
     }
 
     public function settlementTypes(Request $request): JsonResponse

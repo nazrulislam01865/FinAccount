@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\ChartOfAccount;
 use App\Models\SettlementType;
+use App\Models\TransactionHead;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,8 +31,12 @@ class TransactionHeadRequest extends FormRequest
             }
         }
 
-        $category = $this->blankToNull($this->input('category'));
-        $nature = $this->blankToNull($this->input('nature')) ?: $this->natureFromCategory($category);
+        $category = TransactionHead::normaliseCategory(
+            $this->blankToNull($this->input('category')),
+            $this->blankToNull($this->input('name')),
+            $this->blankToNull($this->input('nature'))
+        );
+        $nature = $this->blankToNull($this->input('nature')) ?: TransactionHead::natureFromCategory($category);
 
         $partyRequiredMode = (string) ($this->input('party_required_mode') ?: ($this->boolean('requires_party') ? 'Required' : 'No'));
         $partyRequiredMode = match ($partyRequiredMode) {
@@ -93,7 +98,7 @@ class TransactionHeadRequest extends FormRequest
                 Rule::in(['Payment', 'Receipt', 'Due', 'Advance', 'Adjustment', 'Expense', 'Journal', 'Purchase', 'Sales', 'Equity', 'Loan', 'Asset']),
             ],
 
-            'category' => ['required', 'string', 'max:50'],
+            'category' => ['required', 'string', 'max:50', Rule::in(TransactionHead::transactionCategories())],
 
             'default_party_type_id' => [Rule::requiredIf($this->input('party_required_mode') === 'Required'), 'nullable', 'integer', 'exists:party_types,id'],
             'default_primary_ledger_id' => ['nullable', 'integer', 'exists:chart_of_accounts,id'],
@@ -164,22 +169,6 @@ class TransactionHeadRequest extends FormRequest
             'status.required' => 'Status is required.',
             'status.in' => 'Status must be Active or Inactive.',
         ];
-    }
-
-    private function natureFromCategory(?string $category): string
-    {
-        return match ($category) {
-            'Sales', 'Receipt' => 'Receipt',
-            'Purchase', 'Due' => 'Due',
-            'Expense Payment' => 'Expense',
-            'Asset Purchase' => 'Asset',
-            'Equity' => 'Equity',
-            'Loan' => 'Loan',
-            'Advance' => 'Advance',
-            'Adjustment' => 'Adjustment',
-            'Other' => 'Journal',
-            default => 'Payment',
-        };
     }
 
     private function blankToNull(mixed $value): ?string

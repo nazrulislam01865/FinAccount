@@ -28,7 +28,7 @@ class UserRoleController extends Controller
         $actor = $request->user();
 
         $users = User::query()
-            ->with('roles.permissions')
+            ->with(['roles.permissions', 'directPermissions'])
             ->orderBy('name')
             ->get();
 
@@ -48,9 +48,9 @@ class UserRoleController extends Controller
             ])
             ->values();
 
-        $rolePermissionMatrix = $roles->mapWithKeys(function (Role $role) {
+        $userPermissionMatrix = $users->mapWithKeys(function (User $user) {
             return [
-                (int) $role->id => $role->permissions
+                (int) $user->id => $user->directPermissions
                     ->pluck('name')
                     ->mapWithKeys(fn (string $name) => [$name => true])
                     ->all(),
@@ -64,9 +64,9 @@ class UserRoleController extends Controller
             'roles' => $roles,
             'assignableRoleIds' => $assignableRoleIds,
             'permissionRows' => $permissionRows,
-            'rolePermissionMatrix' => $rolePermissionMatrix,
+            'userPermissionMatrix' => $userPermissionMatrix,
             'canManageUsers' => $actor?->hasPermission('users.manage') ?? false,
-            'canManageRolePermissions' => $actor?->hasPermission('roles.manage') ?? false,
+            'canManageUserPermissions' => $actor?->hasPermission('roles.manage') ?? false,
         ]);
     }
 
@@ -79,7 +79,7 @@ class UserRoleController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::min(8)],
-            'role_ids' => ['required', 'array', 'min:1'],
+            'role_ids' => ['required', 'array', 'size:1'],
             'role_ids.*' => ['integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('status', 'Active'))],
             'status' => ['required', Rule::in(['Active', 'Inactive'])],
         ]);
@@ -92,9 +92,11 @@ class UserRoleController extends Controller
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
                 'status' => $data['status'],
+                'uses_direct_permissions' => true,
             ]);
 
             $user->roles()->sync($roleIds);
+            $this->syncUserPermissionsFromRoles($user, $roleIds);
 
             return $user;
         });
@@ -128,7 +130,7 @@ class UserRoleController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', Password::min(8)],
-            'role_ids' => ['required', 'array', 'min:1'],
+            'role_ids' => ['required', 'array', 'size:1'],
             'role_ids.*' => ['integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('status', 'Active'))],
             'status' => ['required', Rule::in(['Active', 'Inactive'])],
         ]);
@@ -148,6 +150,7 @@ class UserRoleController extends Controller
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'status' => $data['status'],
+                'uses_direct_permissions' => true,
             ];
 
             if (!empty($data['password'])) {
@@ -156,9 +159,10 @@ class UserRoleController extends Controller
 
             $user->update($payload);
             $user->roles()->sync($roleIds);
+            $this->syncUserPermissionsFromRoles($user, $roleIds);
         });
 
-        $freshUser = $user->fresh('roles');
+        $freshUser = $user->fresh(['roles', 'directPermissions']);
 
         $this->auditSecurityChange(
             'USER_UPDATED',
@@ -219,39 +223,55 @@ class UserRoleController extends Controller
     public function updateRolePermissions(Request $request): JsonResponse
     {
         $actor = $request->user();
-        abort_unless($actor?->hasPermission('roles.manage'), 403, 'You are not allowed to update role permission access.');
+        abort_unless($actor?->hasPermission('roles.manage'), 403, 'You are not allowed to update user permission access.');
 
         $data = $request->validate([
             'permissions' => ['required', 'array'],
             'permissions.*' => ['array'],
         ]);
 
-        $roles = Role::query()
-            ->where('status', 'Active')
-            ->with('permissions')
+        $userIds = collect(array_keys($data['permissions']))
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $users = User::query()
+            ->whereIn('id', $userIds)
+            ->with(['roles', 'directPermissions'])
             ->get()
-            ->keyBy(fn (Role $role) => (int) $role->id);
+            ->keyBy(fn (User $user) => (int) $user->id);
+
+        if ($users->count() !== $userIds->count()) {
+            abort(422, 'One or more selected users are invalid.');
+        }
 
         $permissionIdsByName = Permission::query()->pluck('id', 'name');
         $allPermissionIds = $permissionIdsByName->values()->map(fn ($id) => (int) $id)->all();
         $configuredPermissionNames = array_keys(config('access.permissions', []));
-        $oldMatrixAudit = $roles
-            ->mapWithKeys(fn (Role $role) => [
-                $role->name => $role->permissions->pluck('name')->sort()->values()->all(),
+
+        $oldMatrixAudit = $users
+            ->mapWithKeys(fn (User $user) => [
+                $user->name.' <'.$user->email.'>' => $user->directPermissions->pluck('name')->sort()->values()->all(),
             ])
             ->all();
 
-        DB::transaction(function () use ($data, $roles, $permissionIdsByName, $allPermissionIds, $configuredPermissionNames) {
-            foreach ($data['permissions'] as $roleId => $permissionPayload) {
-                $role = $roles->get((int) $roleId);
+        DB::transaction(function () use ($actor, $data, $users, $permissionIdsByName, $allPermissionIds, $configuredPermissionNames) {
+            foreach ($data['permissions'] as $userId => $permissionPayload) {
+                $targetUser = $users->get((int) $userId);
 
-                if (!$role) {
-                    abort(422, 'One or more selected roles are invalid.');
+                if (!$targetUser) {
+                    abort(422, 'One or more selected users are invalid.');
                 }
 
-                if ($role->isFixedFullAccessRole()) {
-                    $role->permissions()->sync($allPermissionIds);
+                if ($targetUser->hasFixedFullAccessRole()) {
+                    $targetUser->directPermissions()->sync($allPermissionIds);
+                    $targetUser->forceFill(['uses_direct_permissions' => true])->save();
                     continue;
+                }
+
+                if (!$actor->canManageUser($targetUser)) {
+                    abort(403, 'You cannot update access for '.$targetUser->name.' because of role hierarchy rules.');
                 }
 
                 $selectedPermissionIds = collect($permissionPayload)
@@ -265,30 +285,26 @@ class UserRoleController extends Controller
                     ->values()
                     ->all();
 
-                $role->permissions()->sync($selectedPermissionIds);
-            }
-
-            $fixedFullAccessRoles = $roles->filter(fn (Role $role) => $role->isFixedFullAccessRole());
-
-            foreach ($fixedFullAccessRoles as $role) {
-                $role->permissions()->sync($allPermissionIds);
+                $targetUser->directPermissions()->sync($selectedPermissionIds);
+                $targetUser->forceFill(['uses_direct_permissions' => true])->save();
+                $targetUser->flushAccessCache();
             }
         });
 
-        $newMatrixAudit = Role::query()
-            ->whereIn('id', $roles->keys())
-            ->with('permissions')
+        $newMatrixAudit = User::query()
+            ->whereIn('id', $users->keys())
+            ->with('directPermissions')
             ->get()
-            ->mapWithKeys(fn (Role $role) => [
-                $role->name => $role->permissions->pluck('name')->sort()->values()->all(),
+            ->mapWithKeys(fn (User $user) => [
+                $user->name.' <'.$user->email.'>' => $user->directPermissions->pluck('name')->sort()->values()->all(),
             ])
             ->all();
 
-        $this->auditSecurityChange('ROLE_PERMISSION_MATRIX_UPDATED', $oldMatrixAudit, $newMatrixAudit, $actor);
+        $this->auditSecurityChange('USER_PERMISSION_MATRIX_UPDATED', $oldMatrixAudit, $newMatrixAudit, $actor);
 
         return response()->json([
             'success' => true,
-            'message' => 'Role permission matrix updated successfully.',
+            'message' => 'User access matrix updated successfully.',
             'redirect' => route('settings.users-roles'),
         ]);
     }
@@ -330,6 +346,41 @@ class UserRoleController extends Controller
         }
 
         return $requestedRoleIds->all();
+    }
+
+    private function syncUserPermissionsFromRoles(User $user, array $roleIds): void
+    {
+        $permissionIds = $this->permissionIdsForRoles($roleIds);
+
+        $user->directPermissions()->sync($permissionIds);
+        $user->forceFill(['uses_direct_permissions' => true])->save();
+        $user->flushAccessCache();
+    }
+
+    /**
+     * @param array<int, int|string> $roleIds
+     * @return array<int, int>
+     */
+    private function permissionIdsForRoles(array $roleIds): array
+    {
+        $roles = Role::query()
+            ->whereIn('id', collect($roleIds)->map(fn ($id) => (int) $id)->all())
+            ->with('permissions')
+            ->get();
+
+        if ($roles->contains(fn (Role $role) => $role->isFixedFullAccessRole())) {
+            return Permission::query()
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return $roles
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function permissionModule(string $permission): string

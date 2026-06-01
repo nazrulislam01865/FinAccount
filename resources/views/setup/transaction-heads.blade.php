@@ -2,6 +2,77 @@
 
 @section('title', 'Transaction Head Setup | HisebGhor')
 
+
+@push('styles')
+<style>
+    .transaction-head-page .transaction-head-redesign-grid{
+        grid-template-columns:1fr;
+    }
+    .transaction-head-page .prototype-side-stack{
+        max-width:none;
+    }
+    .transaction-head-page .tx-head-filter-grid{
+        display:grid;
+        grid-template-columns:minmax(260px,2fr) repeat(3,minmax(160px,1fr));
+        gap:12px;
+        align-items:end;
+        margin-bottom:16px;
+    }
+    .transaction-head-page .tx-head-filter-grid label{
+        display:block;
+        margin:0 0 6px;
+        color:#344054;
+        font-size:12px;
+        font-weight:850;
+    }
+    .transaction-head-page .tx-head-filter-grid input,
+    .transaction-head-page .tx-head-filter-grid select{
+        width:100%;
+        min-height:46px;
+        border-radius:14px;
+    }
+    .transaction-head-page .tx-head-list-summary{
+        color:var(--muted);
+        font-size:12px;
+        font-weight:750;
+        margin:-4px 0 12px;
+    }
+    .transaction-head-page .tx-head-table-wrap{
+        max-height:620px;
+        overflow:auto;
+        scrollbar-gutter:stable both-edges;
+    }
+    .transaction-head-page .tx-head-table-wrap thead th{
+        position:sticky;
+        top:0;
+        z-index:2;
+    }
+    .transaction-head-page .tx-head-table-wrap::-webkit-scrollbar{
+        width:12px;
+        height:12px;
+    }
+    .transaction-head-page .tx-head-table-wrap::-webkit-scrollbar-track{
+        background:#f2f4f7;
+        border-radius:999px;
+    }
+    .transaction-head-page .tx-head-table-wrap::-webkit-scrollbar-thumb{
+        background:#cbd5e1;
+        border-radius:999px;
+        border:3px solid #f2f4f7;
+    }
+    @media(max-width:980px){
+        .transaction-head-page .tx-head-filter-grid{
+            grid-template-columns:1fr 1fr;
+        }
+    }
+    @media(max-width:640px){
+        .transaction-head-page .tx-head-filter-grid{
+            grid-template-columns:1fr;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
 @php
     $activeHeads = $transactionHeads->where('status', 'Active')->count();
@@ -11,6 +82,11 @@
     $salesHeads = $transactionHeads->filter(fn ($head) => str_contains(strtolower((string) ($head->category ?: $head->nature ?: $head->name)), 'sales'))->count();
     $expenseHeads = $transactionHeads->filter(fn ($head) => str_contains(strtolower((string) ($head->category ?: $head->nature ?: $head->name)), 'expense'))->count();
     $screenCount = $transactionHeads->pluck('transaction_screen')->filter()->unique()->count();
+    $categoryFilterOptions = collect(\App\Models\TransactionHead::transactionCategories())
+        ->merge($transactionHeads->pluck('category')->filter())
+        ->merge($transactionHeads->pluck('nature')->filter())
+        ->unique()
+        ->values();
 @endphp
 
 <div class="prototype-page transaction-head-page">
@@ -81,18 +157,9 @@
                             <label for="headCategory">Which category does it belong to? <span class="required">*</span></label>
                             <select id="headCategory" name="category" required>
                                 <option value="">Select category</option>
-                                <option value="Sales">Sales</option>
-                                <option value="Receipt">Receipt</option>
-                                <option value="Payment">Payment</option>
-                                <option value="Expense Payment">Expense Payment</option>
-                                <option value="Asset Purchase">Asset Purchase</option>
-                                <option value="Equity">Equity / Owner Transaction</option>
-                                <option value="Loan">Loan</option>
-                                <option value="Advance">Advance</option>
-                                <option value="Purchase">Purchase</option>
-                                <option value="Due">Due</option>
-                                <option value="Adjustment">Adjustment</option>
-                                <option value="Other">Other / Journal</option>
+                                @foreach(\App\Models\TransactionHead::transactionCategories() as $categoryOption)
+                                    <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
+                                @endforeach
                             </select>
                             <div class="hint">Used by the accounting engine and transaction screen filter.</div>
                         </div>
@@ -239,38 +306,43 @@
         </div>
 
         <div class="prototype-card-body">
-            <div class="prototype-filter-grid" data-table-filter="#headTable" data-count-target="#resultCount">
+            <div class="tx-head-filter-grid" aria-label="Transaction head filters">
                 <div class="field search-field">
-                    <span>⌕</span>
-                    <input placeholder="Search transaction heads..." data-filter-key="text">
+                    <label for="headFilterSearch">Search</label>
+                    <input id="headFilterSearch" placeholder="Search transaction heads...">
                 </div>
                 <div>
-                    <label>Category</label>
-                    <select data-filter-key="category">
+                    <label for="headFilterCategory">Category</label>
+                    <select id="headFilterCategory">
                         <option value="">All Categories</option>
-                        <option value="Sales">Sales</option>
-                        <option value="Purchase">Purchase</option>
-                        <option value="Receipt">Receipt</option>
-                        <option value="Payment">Payment</option>
-                        <option value="Expense Payment">Expense Payment</option>
-                        <option value="Due">Due</option>
-                        <option value="Advance">Advance</option>
-                        <option value="Adjustment">Adjustment</option>
-                        <option value="Other">Other</option>
+                        @foreach($categoryFilterOptions as $categoryOption)
+                            <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div>
-                    <label>Status</label>
-                    <select data-filter-key="status">
+                    <label for="headFilterStatus">Status</label>
+                    <select id="headFilterStatus">
                         <option value="">All Status</option>
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
                     </select>
                 </div>
+                <div>
+                    <label for="headLoadSize">Show records</label>
+                    <select id="headLoadSize">
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="150">150</option>
+                        <option value="200">200</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
             </div>
+            <div class="tx-head-list-summary" id="headVisibleSummary">Showing records as you scroll.</div>
 
-            <div class="table-wrap prototype-table-wrap always-scroll">
-                <table id="headTable" data-client-pagination="true" data-page-size="10">
+            <div class="table-wrap prototype-table-wrap always-scroll tx-head-table-wrap" id="headTableWrap">
+                <table id="headTable" data-no-client-pagination="true">
                     <thead>
                         <tr>
                             <th>Code</th>
@@ -294,6 +366,7 @@
                                 $settlementIds = $head->settlementTypes->pluck('id')->map(fn ($id) => (string) $id)->values();
                             @endphp
                             <tr
+                                data-head-row="true"
                                 data-id="{{ $head->id }}"
                                 data-text="{{ e(trim(($head->head_code ? $head->head_code . ' ' : '') . $head->name . ' ' . $category . ' ' . ($head->transaction_screen ?: ''))) }}"
                                 data-head-code="{{ e($head->head_code) }}"
@@ -344,6 +417,9 @@
                         @empty
                             <tr data-empty="true"><td colspan="11" class="muted" style="text-align:center;padding:24px">No transaction heads found.</td></tr>
                         @endforelse
+                        <tr id="headFilterEmptyRow" data-filter-empty="true" style="display:none">
+                            <td colspan="11" class="muted" style="text-align:center;padding:24px">No transaction heads match the current filter.</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -405,24 +481,24 @@ document.addEventListener('DOMContentLoaded', () => {
         switch (category) {
             case 'Sales':
             case 'Receipt':
+            case 'Income':
                 return 'Receipt';
             case 'Purchase':
-            case 'Due':
-                return 'Due';
-            case 'Expense Payment':
-                return 'Expense';
-            case 'Asset Purchase':
-                return 'Asset';
-            case 'Equity':
-                return 'Equity';
-            case 'Loan':
-                return 'Loan';
-            case 'Advance':
-                return 'Advance';
+                return 'Purchase';
+            case 'Expense':
+            case 'Payment':
+            case 'Employee':
+                return 'Payment';
+            case 'Banking':
+            case 'Opening':
             case 'Adjustment':
                 return 'Adjustment';
-            case 'Other':
-                return 'Journal';
+            case 'Owner / Equity':
+                return 'Equity';
+            case 'Asset':
+                return 'Asset';
+            case 'Loan':
+                return 'Loan';
             default:
                 return 'Payment';
         }
@@ -432,27 +508,30 @@ document.addEventListener('DOMContentLoaded', () => {
         switch (category) {
             case 'Sales':
                 return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Sales Entry', settlements: ['cash', 'bank', 'due'] };
+            case 'Purchase':
+                return { movement: 'Increase', payment: '1', party: 'Required', screen: 'Purchase Entry', settlements: ['cash', 'bank', 'due'] };
             case 'Receipt':
-                return { movement: 'Decrease', payment: '1', party: 'Required', screen: 'Receipt Entry', settlements: ['cash', 'bank'] };
+                return { movement: 'Decrease', payment: '1', party: 'Required', screen: 'Receipt Entry', settlements: ['cash', 'bank', 'advance'] };
             case 'Payment':
                 return { movement: 'Decrease', payment: '1', party: 'Optional', screen: 'Payment Entry', settlements: ['cash', 'bank'] };
-            case 'Expense Payment':
-                return { movement: 'Increase', payment: '1', party: 'No', screen: 'Expense Entry', settlements: ['cash', 'bank'] };
-            case 'Asset Purchase':
-                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Asset Purchase Entry', settlements: ['cash', 'bank'] };
-            case 'Equity':
+            case 'Banking':
+                return { movement: 'No Movement', payment: '1', party: 'No', screen: 'Banking Entry', settlements: ['cash', 'bank', 'adjust'] };
+            case 'Expense':
+                return { movement: 'Increase', payment: '1', party: 'No', screen: 'Expense Entry', settlements: ['cash', 'bank', 'due'] };
+            case 'Income':
+                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Income Entry', settlements: ['cash', 'bank', 'due'] };
+            case 'Owner / Equity':
                 return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Owner / Equity Entry', settlements: ['cash', 'bank'] };
+            case 'Asset':
+                return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Asset Entry', settlements: ['cash', 'bank', 'due'] };
             case 'Loan':
                 return { movement: 'Increase', payment: '1', party: 'Optional', screen: 'Loan Entry', settlements: ['cash', 'bank'] };
-            case 'Advance':
-                return { movement: 'Increase', payment: '1', party: 'Required', screen: 'Advance Entry', settlements: ['cash', 'bank', 'advance'] };
-            case 'Purchase':
-            case 'Due':
-                return { movement: 'Increase', payment: '0', party: 'Required', screen: 'Purchase / Due Entry', settlements: ['due'] };
+            case 'Employee':
+                return { movement: 'Decrease', payment: '1', party: 'Required', screen: 'Employee Entry', settlements: ['cash', 'bank', 'advance'] };
+            case 'Opening':
+                return { movement: 'Increase', payment: '0', party: 'Optional', screen: 'Opening Balance Entry', settlements: ['opening', 'adjust'] };
             case 'Adjustment':
                 return { movement: 'No Movement', payment: '0', party: 'Optional', screen: 'Adjustment Entry', settlements: ['adjust'] };
-            case 'Other':
-                return { movement: 'No Movement', payment: '0', party: 'No', screen: 'Journal Entry', settlements: ['journal', 'adjust'] };
             default:
                 return { movement: 'Increase', payment: '0', party: 'No', screen: 'Transaction Entry', settlements: [] };
         }
@@ -604,6 +683,105 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', () => loadForEdit(button.closest('tr')));
     });
 
+    const headTable = document.getElementById('headTable');
+    const headTableWrap = document.getElementById('headTableWrap');
+    const headFilterSearch = document.getElementById('headFilterSearch');
+    const headFilterCategory = document.getElementById('headFilterCategory');
+    const headFilterStatus = document.getElementById('headFilterStatus');
+    const headLoadSize = document.getElementById('headLoadSize');
+    const headVisibleSummary = document.getElementById('headVisibleSummary');
+    const headResultCount = document.getElementById('resultCount');
+    const headFilterEmptyRow = document.getElementById('headFilterEmptyRow');
+    let headVisibleLimit = selectedHeadLoadSize();
+
+    function selectedHeadLoadSize() {
+        const value = headLoadSize?.value || '50';
+        return value === 'all' ? Infinity : Number(value || 50);
+    }
+
+    function allHeadRows() {
+        return Array.from(headTable?.querySelectorAll('tbody tr[data-head-row="true"]') || []);
+    }
+
+    function headMatchesFilters(row) {
+        const search = String(headFilterSearch?.value || '').toLowerCase().trim();
+        const category = String(headFilterCategory?.value || '').toLowerCase().trim();
+        const status = String(headFilterStatus?.value || '').toLowerCase().trim();
+        const rowText = String(row.dataset.text || row.innerText || '').toLowerCase();
+        const rowCategory = String(row.dataset.category || '').toLowerCase();
+        const rowStatus = String(row.dataset.status || '').toLowerCase();
+
+        return (!search || rowText.includes(search))
+            && (!category || rowCategory === category)
+            && (!status || rowStatus === status);
+    }
+
+    function updateHeadVisibleSummary(shown, matched, total) {
+        const text = total
+            ? `Showing ${Math.min(shown, matched)} of ${matched} matching transaction head${matched === 1 ? '' : 's'} (${total} total). Scroll to load more.`
+            : 'No transaction heads found.';
+
+        if (headVisibleSummary) headVisibleSummary.textContent = text;
+        if (headResultCount) headResultCount.textContent = matched
+            ? `Showing ${Math.min(shown, matched)} of ${matched} entries`
+            : `Showing 0 of ${total} entries`;
+    }
+
+    function renderHeadRows() {
+        const rows = allHeadRows();
+        const matchedRows = rows.filter((row) => row.dataset.filterMatch !== '0');
+        const visibleRows = Number.isFinite(headVisibleLimit)
+            ? matchedRows.slice(0, headVisibleLimit)
+            : matchedRows;
+        const visibleSet = new Set(visibleRows);
+
+        rows.forEach((row) => {
+            row.style.display = visibleSet.has(row) ? '' : 'none';
+        });
+
+        if (headFilterEmptyRow) {
+            headFilterEmptyRow.style.display = rows.length > 0 && matchedRows.length === 0 ? '' : 'none';
+        }
+
+        updateHeadVisibleSummary(visibleRows.length, matchedRows.length, rows.length);
+    }
+
+    function applyHeadFilters(resetLimit = true) {
+        const batchSize = selectedHeadLoadSize();
+        if (resetLimit) headVisibleLimit = batchSize;
+        if (batchSize === Infinity) headVisibleLimit = Infinity;
+        if (!Number.isFinite(headVisibleLimit) || headVisibleLimit < batchSize) headVisibleLimit = batchSize;
+
+        allHeadRows().forEach((row) => {
+            row.dataset.filterMatch = headMatchesFilters(row) ? '1' : '0';
+        });
+
+        renderHeadRows();
+    }
+
+    function loadMoreHeadRows() {
+        const batchSize = selectedHeadLoadSize();
+        if (batchSize === Infinity) return;
+
+        const matchedRows = allHeadRows().filter((row) => row.dataset.filterMatch !== '0');
+        if (headVisibleLimit >= matchedRows.length) return;
+
+        headVisibleLimit += batchSize;
+        renderHeadRows();
+    }
+
+    [headFilterSearch, headFilterCategory, headFilterStatus].forEach((control) => {
+        control?.addEventListener('input', () => applyHeadFilters(true));
+        control?.addEventListener('change', () => applyHeadFilters(true));
+    });
+
+    headLoadSize?.addEventListener('change', () => applyHeadFilters(true));
+
+    headTableWrap?.addEventListener('scroll', () => {
+        const nearBottom = headTableWrap.scrollTop + headTableWrap.clientHeight >= headTableWrap.scrollHeight - 90;
+        if (nearBottom) loadMoreHeadRows();
+    }, { passive: true });
+
 
     form.addEventListener('submit', (event) => {
         syncSettlementHidden();
@@ -627,6 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cancelButton?.addEventListener('click', resetForm);
 
+    applyHeadFilters(true);
     syncSettlementHidden();
     syncDerivedFields();
 });

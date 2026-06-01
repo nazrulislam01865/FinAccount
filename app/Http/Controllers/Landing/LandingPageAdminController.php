@@ -9,6 +9,9 @@ use App\Support\LandingPageContent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Throwable;
@@ -100,6 +103,7 @@ class LandingPageAdminController extends Controller
             'brand' => [
                 'name' => $this->text(data_get($validated, 'brand.name', data_get($current, 'brand.name', 'HisebGhor'))),
                 'logo_text' => $this->text(data_get($validated, 'brand.logo_text', data_get($current, 'brand.logo_text', 'হি'))),
+                'logo' => $this->brandLogo($request, $current),
                 'tagline' => $this->translation($request->input('brand.tagline'), data_get($current, 'brand.tagline')),
             ],
             'nav_links' => $this->navLinks($request->input('nav_links', [])),
@@ -118,7 +122,7 @@ class LandingPageAdminController extends Controller
             'why' => $this->sectionText($request, 'why', $current, true),
             'why_cards' => $this->cards($request->input('why_cards', []), ['icon', 'title', 'body']),
             'features' => $this->sectionText($request, 'features', $current, true),
-            'screens' => $this->screens($request->input('screens', [])),
+            'screens' => $this->screens($request, $current),
             'audience' => $this->audienceSection($request, $current),
             'audiences' => $this->cards($request->input('audiences', []), ['title', 'body']),
             'pricing' => $this->sectionText($request, 'pricing', $current, true),
@@ -199,10 +203,9 @@ class LandingPageAdminController extends Controller
             'meta.description' => ['required', 'string', 'max:500'],
             'meta.default_lang' => ['required', Rule::in(['bn', 'en'])],
 
-            'brand.name' => ['required', 'string', 'max:120'],
-            'brand.logo_text' => ['required', 'string', 'max:20'],
-            'brand.tagline.bn' => ['required', 'string', 'max:180'],
-            'brand.tagline.en' => ['required', 'string', 'max:180'],
+            'brand.logo.image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:4096'],
+            'brand.logo.image_path' => ['nullable', 'string', 'max:500'],
+            'brand.logo.image_name' => ['nullable', 'string', 'max:255'],
 
             'theme.green' => $requiredColor,
             'theme.green_dark' => $requiredColor,
@@ -217,6 +220,9 @@ class LandingPageAdminController extends Controller
             'nav_links.*.label.bn' => $requiredShortText,
             'nav_links.*.label.en' => $requiredShortText,
             'nav_links.*.href' => ['required', 'string', 'max:220'],
+            'cta.primary.label.bn' => $requiredShortText,
+            'cta.primary.label.en' => $requiredShortText,
+            'cta.primary.href' => ['required', 'string', 'max:500'],
 
             'hero.enabled' => ['required', 'boolean'],
             'hero.eyebrow.bn' => $requiredMediumText,
@@ -233,21 +239,9 @@ class LandingPageAdminController extends Controller
             'trust_items' => ['required', 'array', 'min:1'],
             'trust_items.*.bn' => $requiredShortText,
             'trust_items.*.en' => $requiredShortText,
-            'hero.dashboard.title.bn' => $requiredShortText,
-            'hero.dashboard.title.en' => $requiredShortText,
-            'hero.dashboard.subtitle.bn' => $requiredShortText,
-            'hero.dashboard.subtitle.en' => $requiredShortText,
-            'hero.dashboard.chip.bn' => $requiredShortText,
-            'hero.dashboard.chip.en' => $requiredShortText,
-            'hero.dashboard.stats' => ['required', 'array', 'min:1'],
-            'hero.dashboard.stats.*.label.bn' => $requiredShortText,
-            'hero.dashboard.stats.*.label.en' => $requiredShortText,
-            'hero.dashboard.stats.*.value' => $requiredShortText,
-            'hero.dashboard.rows' => ['required', 'array', 'min:1'],
-            'hero.dashboard.rows.*.name.bn' => $requiredShortText,
-            'hero.dashboard.rows.*.name.en' => $requiredShortText,
-            'hero.dashboard.rows.*.debit' => $requiredShortText,
-            'hero.dashboard.rows.*.credit' => $requiredShortText,
+            'hero.dashboard.image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:4096'],
+            'hero.dashboard.image_path' => ['nullable', 'string', 'max:500'],
+            'hero.dashboard.image_name' => ['nullable', 'string', 'max:255'],
 
             'why.enabled' => ['required', 'boolean'],
             'why.mini.bn' => $requiredShortText,
@@ -271,8 +265,9 @@ class LandingPageAdminController extends Controller
             'features.subtitle.bn' => $requiredLongText,
             'features.subtitle.en' => $requiredLongText,
             'screens' => ['required', 'array', 'min:1'],
-            'screens.*.badges_bn' => ['required', 'string', 'max:1000'],
-            'screens.*.badges_en' => ['required', 'string', 'max:1000'],
+            'screens.*.image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:4096'],
+            'screens.*.image_path' => ['nullable', 'string', 'max:500'],
+            'screens.*.image_name' => ['nullable', 'string', 'max:255'],
             'screens.*.title.bn' => $requiredShortText,
             'screens.*.title.en' => $requiredShortText,
             'screens.*.body.bn' => $requiredLongText,
@@ -397,10 +392,10 @@ class LandingPageAdminController extends Controller
             'nav_links' => 'Navigation menu',
             'hero.buttons' => 'Hero buttons',
             'trust_items' => 'Trust items',
-            'hero.dashboard.stats' => 'Dashboard counters',
-            'hero.dashboard.rows' => 'Dashboard transaction rows',
+            'hero.dashboard.image' => 'Dashboard preview image',
             'why_cards' => 'Why section cards',
             'screens' => 'Feature screen cards',
+            'screens.*.image' => 'Feature screen image',
             'audiences' => 'Audience cards',
             'packages' => 'Pricing packages',
             'pricing_notes' => 'Pricing note cards',
@@ -414,6 +409,19 @@ class LandingPageAdminController extends Controller
         $allowed = ['basic', 'nav', 'hero', 'why', 'features', 'audience', 'pricing', 'testimonials', 'faq', 'contact', 'footer'];
 
         return in_array($section, $allowed, true) ? $section : 'basic';
+    }
+
+    private function brandLogo(Request $request, array $current): array
+    {
+        $currentLogo = data_get($current, 'brand.logo', []);
+
+        return $this->landingImage(
+            $request,
+            'brand.logo.image',
+            $request->input('brand.logo.image_path', data_get($currentLogo, 'path')),
+            $request->input('brand.logo.image_name', data_get($currentLogo, 'name')),
+            'uploads/landing/logo'
+        );
     }
 
     private function theme(Request $request, array $current): array
@@ -435,6 +443,8 @@ class LandingPageAdminController extends Controller
 
     private function hero(Request $request, array $current): array
     {
+        $currentImage = data_get($current, 'hero.dashboard.image', []);
+
         return [
             'enabled' => $request->boolean('hero.enabled'),
             'eyebrow' => $this->translation($request->input('hero.eyebrow'), data_get($current, 'hero.eyebrow')),
@@ -443,11 +453,13 @@ class LandingPageAdminController extends Controller
             'subtitle' => $this->translation($request->input('hero.subtitle'), data_get($current, 'hero.subtitle')),
             'buttons' => $this->heroButtons($request->input('hero.buttons', [])),
             'dashboard' => [
-                'title' => $this->translation($request->input('hero.dashboard.title'), data_get($current, 'hero.dashboard.title')),
-                'subtitle' => $this->translation($request->input('hero.dashboard.subtitle'), data_get($current, 'hero.dashboard.subtitle')),
-                'chip' => $this->translation($request->input('hero.dashboard.chip'), data_get($current, 'hero.dashboard.chip')),
-                'stats' => $this->dashboardStats($request->input('hero.dashboard.stats', [])),
-                'rows' => $this->dashboardRows($request->input('hero.dashboard.rows', [])),
+                'image' => $this->landingImage(
+                    $request,
+                    'hero.dashboard.image',
+                    $request->input('hero.dashboard.image_path', data_get($currentImage, 'path')),
+                    $request->input('hero.dashboard.image_name', data_get($currentImage, 'name')),
+                    'uploads/landing/hero'
+                ),
             ],
         ];
     }
@@ -582,15 +594,22 @@ class LandingPageAdminController extends Controller
         return $cards;
     }
 
-    private function screens(array $rows): array
+    private function screens(Request $request, array $current): array
     {
         $screens = [];
 
-        foreach ($rows as $row) {
+        foreach ((array) $request->input('screens', []) as $index => $row) {
+            $currentImage = data_get($current, 'screens.'.$index.'.image', []);
             $screen = [
-                'badges' => $this->pairedLines($row['badges_bn'] ?? '', $row['badges_en'] ?? ''),
                 'title' => $this->translation($row['title'] ?? []),
                 'body' => $this->translation($row['body'] ?? []),
+                'image' => $this->landingImage(
+                    $request,
+                    'screens.'.$index.'.image',
+                    $row['image_path'] ?? data_get($currentImage, 'path'),
+                    $row['image_name'] ?? data_get($currentImage, 'name'),
+                    'uploads/landing/screens'
+                ),
             ];
 
             if ($this->allCardFieldsBlank($screen)) {
@@ -739,6 +758,66 @@ class LandingPageAdminController extends Controller
         }
 
         return $faqs;
+    }
+
+    private function landingImage(Request $request, string $fileKey, mixed $existingPath, mixed $existingName, string $directory): array
+    {
+        $path = $this->text($existingPath);
+        $name = $this->text($existingName);
+        $file = $request->file($fileKey);
+
+        if ($file instanceof UploadedFile && $file->isValid()) {
+            $oldPath = $path;
+            $stored = $this->storeLandingImage($file, $directory);
+            $path = $stored['path'];
+            $name = $stored['name'];
+
+            $this->deleteReplacedLandingImage($oldPath, $path);
+        }
+
+        if ($name === '' && $path !== '') {
+            $name = basename($path);
+        }
+
+        return [
+            'path' => $path,
+            'name' => $name,
+        ];
+    }
+
+    private function storeLandingImage(UploadedFile $file, string $directory): array
+    {
+        $directory = trim($directory, '/');
+        $targetDirectory = public_path($directory);
+        File::ensureDirectoryExists($targetDirectory, 0755, true);
+
+        $originalName = $this->text($file->getClientOriginalName()) ?: 'landing-image';
+        $baseName = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'landing-image';
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
+        $filename = now()->format('YmdHis').'-'.Str::random(8).'-'.$baseName.'.'.$extension;
+
+        $file->move($targetDirectory, $filename);
+
+        return [
+            'path' => $directory.'/'.$filename,
+            'name' => $originalName,
+        ];
+    }
+
+    private function deleteReplacedLandingImage(string $oldPath, string $newPath): void
+    {
+        $oldPath = trim($oldPath, '/');
+        $newPath = trim($newPath, '/');
+
+        if ($oldPath === '' || $oldPath === $newPath || !str_starts_with($oldPath, 'uploads/landing/')) {
+            return;
+        }
+
+        $fullPath = public_path($oldPath);
+
+        if (is_file($fullPath)) {
+            @unlink($fullPath);
+        }
     }
 
     private function pairedLines(string|array|null $bnText, string|array|null $enText): array

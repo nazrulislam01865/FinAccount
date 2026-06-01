@@ -23,7 +23,9 @@ class AuditObserver
 
         $old = [];
         foreach (array_keys($changes) as $key) {
-            $old[$key] = $model->getOriginal($key);
+            $old[$key] = method_exists($model, 'getRawOriginal')
+                ? $model->getRawOriginal($key)
+                : $model->getOriginal($key);
         }
 
         $this->record($model, 'updated', $old, $changes);

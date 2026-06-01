@@ -32,8 +32,28 @@
         ['label' => 'Currencies', 'route' => 'setup.master-data.currencies'],
         ['label' => 'Settlement Types', 'route' => 'setup.master-data.settlement-types'],
         ['label' => 'Party Types', 'route' => 'setup.master-data.party-types'],
+        ['label' => 'Ledger Types', 'route' => 'setup.master-data.ledger-types'],
         ['label' => 'Financial Years', 'route' => 'setup.master-data.financial-years'],
     ];
+
+    $isReportRoute = request()->routeIs('accounting-reports.*') || request()->routeIs('ledger-report.*') || request()->routeIs('audit-trail.*');
+
+    $reportLinks = [
+        ['label' => 'Transaction List', 'route' => 'accounting-reports.transactions.index', 'active' => 'accounting-reports.transactions.*'],
+        ['label' => 'Cash / Bank Book', 'route' => 'accounting-reports.cash-bank-book.index', 'active' => 'accounting-reports.cash-bank-book.*'],
+        ['label' => 'Ledger Report', 'route' => 'accounting-reports.ledger-report.index', 'active' => 'accounting-reports.ledger-report.*'],
+        ['label' => 'Trial Balance', 'route' => 'accounting-reports.trial-balance.index', 'active' => 'accounting-reports.trial-balance.*'],
+        ['label' => 'Income Statement', 'route' => 'accounting-reports.income-statement.index', 'active' => 'accounting-reports.income-statement.*'],
+        ['label' => 'Balance Sheet', 'route' => 'accounting-reports.balance-sheet.index', 'active' => 'accounting-reports.balance-sheet.*'],
+        ['label' => 'Cash Flow Statement', 'route' => 'accounting-reports.cash-flow-statement.index', 'active' => 'accounting-reports.cash-flow-statement.*'],
+        ['label' => 'Customer Receivables', 'route' => 'accounting-reports.customer-receivables.index', 'active' => 'accounting-reports.customer-receivables.*'],
+        ['label' => 'Supplier Payables', 'route' => 'accounting-reports.supplier-payables.index', 'active' => 'accounting-reports.supplier-payables.*'],
+        ['label' => 'Sales Report', 'route' => 'accounting-reports.sales-report.index', 'active' => 'accounting-reports.sales-report.*'],
+        ['label' => 'Expense Report', 'route' => 'accounting-reports.expense-report.index', 'active' => 'accounting-reports.expense-report.*'],
+        ['label' => 'Audit Log Report', 'route' => 'audit-trail.index', 'active' => 'audit-trail.*'],
+    ];
+
+    $hasVisibleReportLinks = collect($reportLinks)->contains(fn ($link) => $canRoute($link['route']));
 
 ?>
 
@@ -109,59 +129,48 @@
         </a>
     <?php endif; ?>
 
-    <?php if($canRoute('accounting-reports.transactions.index') || $canPermission('transactions.view')): ?>
-        <a href="<?php echo e(route('accounting-reports.transactions.index')); ?>" class="nav-item <?php echo e(request()->routeIs('accounting-reports.transactions.*') ? 'active' : ''); ?>">
-            <div class="nav-icon">📄</div>
-            <span>Transaction List</span>
-        </a>
+    <?php if($hasVisibleReportLinks): ?>
+        <details class="nav-group reports-nav-group" <?php echo e($isReportRoute ? 'open' : ''); ?>>
+            <summary
+                class="nav-item nav-parent <?php echo e($isReportRoute ? 'active' : ''); ?>"
+                data-sidebar-group-summary
+                aria-controls="reportsSubmenu"
+            >
+                <div class="nav-icon">R</div>
+                <span>Reports</span>
+                <span class="nav-arrow" aria-hidden="true">⌄</span>
+            </summary>
+
+            <div
+                class="nav-submenu <?php echo e($isReportRoute ? 'is-open' : ''); ?>"
+                id="reportsSubmenu"
+                aria-label="Reports Submenu"
+            >
+                <?php $__currentLoopData = $reportLinks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $reportLink): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                    <?php if($canRoute($reportLink['route'])): ?>
+                        <a
+                            href="<?php echo e(route($reportLink['route'])); ?>"
+                            class="nav-subitem <?php echo e(request()->routeIs($reportLink['active']) ? 'active' : ''); ?>"
+                        >
+                            <span><?php echo e($reportLink['label']); ?></span>
+                        </a>
+                    <?php endif; ?>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+            </div>
+        </details>
     <?php endif; ?>
 
     <?php if($canRoute('due-management.index')): ?>
         <a href="<?php echo e(route('due-management.index')); ?>" class="nav-item <?php echo e($isActive('due-management.index')); ?>">
-            <div class="nav-icon">⏳</div>
+            <div class="nav-icon">DM</div>
             <span>Due Management</span>
         </a>
     <?php endif; ?>
 
     <?php if($canRoute('advance-management.index')): ?>
         <a href="<?php echo e(route('advance-management.index')); ?>" class="nav-item <?php echo e($isActive('advance-management.index')); ?>">
-            <div class="nav-icon">↗</div>
+            <div class="nav-icon">AM</div>
             <span>Advance Management</span>
-        </a>
-    <?php endif; ?>
-
-    <?php if($canRoute('ledger-report.index')): ?>
-        <a href="<?php echo e(route('ledger-report.index')); ?>" class="nav-item <?php echo e($isActive('ledger-report.index')); ?>">
-            <div class="nav-icon">📘</div>
-            <span>Ledger Report</span>
-        </a>
-    <?php endif; ?>
-
-    <?php if($canRoute('accounting-reports.cash-bank-book.index')): ?>
-        <a href="<?php echo e(route('accounting-reports.cash-bank-book.index')); ?>" class="nav-item <?php echo e(request()->routeIs('accounting-reports.cash-bank-book.*') ? 'active' : ''); ?>">
-            <div class="nav-icon">🏦</div>
-            <span>Cash / Bank Book</span>
-        </a>
-    <?php endif; ?>
-
-    <?php if($canRoute('accounting-reports.trial-balance.index')): ?>
-        <a href="<?php echo e(route('accounting-reports.trial-balance.index')); ?>" class="nav-item <?php echo e(request()->routeIs('accounting-reports.trial-balance.*') ? 'active' : ''); ?>">
-            <div class="nav-icon">TB</div>
-            <span>Trial Balance</span>
-        </a>
-    <?php endif; ?>
-
-    <?php if($canRoute('accounting-reports.income-statement.index')): ?>
-        <a href="<?php echo e(route('accounting-reports.income-statement.index')); ?>" class="nav-item <?php echo e(request()->routeIs('accounting-reports.income-statement.*') ? 'active' : ''); ?>">
-            <div class="nav-icon">IS</div>
-            <span>Income Statement</span>
-        </a>
-    <?php endif; ?>
-
-    <?php if($canRoute('accounting-reports.index') || $canPermission('reports.view')): ?>
-        <a href="<?php echo e(route('accounting-reports.index')); ?>" class="nav-item <?php echo e(request()->routeIs('accounting-reports.index') ? 'active' : ''); ?>">
-            <div class="nav-icon">▣</div>
-            <span>Reports</span>
         </a>
     <?php endif; ?>
 
@@ -171,14 +180,6 @@
             <span>Approvals</span>
         </a>
     <?php endif; ?>
-
-    <?php if($canRoute('audit-trail.index')): ?>
-        <a href="<?php echo e(route('audit-trail.index')); ?>" class="nav-item <?php echo e($isActive('audit-trail.index')); ?>">
-            <div class="nav-icon">A</div>
-            <span>Audit Trail</span>
-        </a>
-    <?php endif; ?>
-
 
     <?php if($canRoute('release-notes.index')): ?>
         <div class="nav-title">System</div>

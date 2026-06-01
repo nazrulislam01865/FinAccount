@@ -15,27 +15,20 @@
         @endforeach
       </div>
     </div>
-    <div class="hero-card">
-      <div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-      <div class="mock">
-        <div class="mock-top">
-          <div class="mock-title">
-            <strong data-bn="{{ $txt(data_get($landing, 'hero.dashboard.title'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'hero.dashboard.title'), 'en') }}">{{ $txt(data_get($landing, 'hero.dashboard.title'), $defaultLang) }}</strong>
-            <span data-bn="{{ $txt(data_get($landing, 'hero.dashboard.subtitle'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'hero.dashboard.subtitle'), 'en') }}">{{ $txt(data_get($landing, 'hero.dashboard.subtitle'), $defaultLang) }}</span>
+    @php
+      $dashboardImagePath = trim((string) data_get($landing, 'hero.dashboard.image.path', ''));
+      $dashboardImageName = trim((string) data_get($landing, 'hero.dashboard.image.name', ''));
+    @endphp
+    <div class="hero-card hero-image-only-card">
+      <div class="dashboard-preview">
+        @if($dashboardImagePath !== '')
+          <img src="{{ $landingImageUrl($dashboardImagePath) }}" alt="{{ $dashboardImageName ?: 'Dashboard Preview' }}" class="dashboard-preview-image dashboard-preview-image-only">
+        @else
+          <div class="dashboard-preview-placeholder">
+            <span data-bn="ড্যাশবোর্ড প্রিভিউ ছবি" data-en="Dashboard preview image">{{ $defaultLang === 'bn' ? 'ড্যাশবোর্ড প্রিভিউ ছবি' : 'Dashboard preview image' }}</span>
+            <small data-bn="শিগগিরই স্ক্রিনশট যুক্ত হবে" data-en="Screenshot will appear here">{{ $defaultLang === 'bn' ? 'শিগগিরই স্ক্রিনশট যুক্ত হবে' : 'Screenshot will appear here' }}</small>
           </div>
-          <span class="mock-chip" data-bn="{{ $txt(data_get($landing, 'hero.dashboard.chip'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'hero.dashboard.chip'), 'en') }}">{{ $txt(data_get($landing, 'hero.dashboard.chip'), $defaultLang) }}</span>
-        </div>
-        <div class="mock-stats">
-          @foreach(data_get($landing, 'hero.dashboard.stats', []) as $stat)
-            <div class="mock-stat"><span data-bn="{{ $txt(data_get($stat, 'label'), 'bn') }}" data-en="{{ $txt(data_get($stat, 'label'), 'en') }}">{{ $txt(data_get($stat, 'label'), $defaultLang) }}</span><strong>{{ data_get($stat, 'value') }}</strong></div>
-          @endforeach
-        </div>
-        <div class="mock-table">
-          <div class="mock-row head"><span data-bn="লেনদেন" data-en="Transaction">{{ $defaultLang === 'bn' ? 'লেনদেন' : 'Transaction' }}</span><span data-bn="ডেবিট" data-en="Debit">{{ $defaultLang === 'bn' ? 'ডেবিট' : 'Debit' }}</span><span data-bn="ক্রেডিট" data-en="Credit">{{ $defaultLang === 'bn' ? 'ক্রেডিট' : 'Credit' }}</span></div>
-          @foreach(data_get($landing, 'hero.dashboard.rows', []) as $row)
-            <div class="mock-row"><span data-bn="{{ $txt(data_get($row, 'name'), 'bn') }}" data-en="{{ $txt(data_get($row, 'name'), 'en') }}">{{ $txt(data_get($row, 'name'), $defaultLang) }}</span><span class="green">{{ data_get($row, 'debit') }}</span><span class="red">{{ data_get($row, 'credit') }}</span></div>
-          @endforeach
-        </div>
+        @endif
       </div>
     </div>
   </div>
