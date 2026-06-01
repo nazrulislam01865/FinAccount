@@ -137,26 +137,63 @@
     }
 
     .matrix-scroll {
+        width: 100%;
+        max-width: 100%;
         max-height: none;
         overflow-x: auto;
         overflow-y: hidden;
         padding-bottom: 10px;
         overscroll-behavior-x: contain;
     }
-    .matrix-scroll table { min-width: 1280px; }
-    .matrix-scroll table th, .matrix-scroll table td { white-space:nowrap; vertical-align:middle; }
-    .matrix-scroll table th:first-child, .matrix-scroll table td:first-child {
+
+    .user-access-matrix {
+        width: max-content;
+        min-width: 100%;
+        table-layout: fixed;
+    }
+
+    .user-access-matrix th,
+    .user-access-matrix td {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .user-access-matrix th:first-child,
+    .user-access-matrix td:first-child {
         position: sticky;
         left: 0;
         z-index: 2;
         background: #fff;
         box-shadow: 1px 0 0 var(--line);
     }
-    .matrix-scroll table thead th:first-child { z-index: 3; }
-    .permission-cell { min-width: 240px; white-space:normal !important; }
+
+    .user-access-matrix thead th:first-child { z-index: 3; }
+
+    .permission-cell {
+        width: 320px !important;
+        min-width: 320px !important;
+        max-width: 320px !important;
+        white-space: normal !important;
+    }
+
+    .matrix-user-cell,
+    .permission-decision-cell {
+        width: 220px !important;
+        min-width: 220px !important;
+        max-width: 220px !important;
+    }
+
+    .matrix-user-title,
+    .matrix-user-meta {
+        display: block;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .permission-module { color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
     .permission-key { color:var(--muted); font-size:11px; margin-top:4px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-    .permission-decision-cell { min-width: 148px; }
     .access-select {
         min-width: 132px;
         height: 38px;
@@ -383,7 +420,13 @@
                 @csrf
 
                 <div class="matrix-scroll">
-                    <table>
+                    <table class="user-access-matrix" style="min-width: max(100%, {{ 320 + max(1, $users->count()) * 220 }}px);">
+                        <colgroup>
+                            <col style="width:320px;min-width:320px;max-width:320px">
+                            @foreach($users as $matrixUserForColumn)
+                                <col style="width:220px;min-width:220px;max-width:220px">
+                            @endforeach
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th class="permission-cell">Task / Permission</th>
@@ -394,10 +437,10 @@
                                         $isFixedFullAccessUser = $matrixUser->hasFixedFullAccessRole();
                                         $canManageMatrixUser = $canManageUserPermissions && $currentUser?->canManageUser($matrixUser) && !$isFixedFullAccessUser;
                                     @endphp
-                                    <th>
-                                        <div class="strong">{{ $matrixUser->name }}</div>
-                                        <div class="permission-key">{{ $matrixUser->email }}</div>
-                                        <div class="permission-key">Level {{ $matrixRoleLevel }}</div>
+                                    <th class="matrix-user-cell">
+                                        <div class="strong matrix-user-title" title="{{ $matrixUser->name }}">{{ $matrixUser->name }}</div>
+                                        <div class="permission-key matrix-user-meta" title="{{ $matrixUser->email }}">{{ $matrixUser->email }}</div>
+                                        <div class="permission-key matrix-user-meta">Level {{ $matrixRoleLevel }}</div>
                                         @if($isFixedFullAccessUser)
                                             <span class="badge badge-primary" style="margin-top:6px">Fixed Full Access</span>
                                         @elseif(!$canManageMatrixUser)

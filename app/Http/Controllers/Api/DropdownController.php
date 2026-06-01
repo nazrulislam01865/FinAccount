@@ -458,6 +458,8 @@ class DropdownController extends Controller
         return $this->ok(
             $query->orderBy('account_code')
                 ->get()
+                ->unique('id')
+                ->values()
                 ->map(fn (ChartOfAccount $account) => $this->formatAccount($account))
         );
     }

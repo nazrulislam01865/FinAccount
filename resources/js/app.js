@@ -139,6 +139,9 @@ window.AccountingUI = (() => {
       return;
     }
 
+    const requestToken = `${Date.now()}-${Math.random()}`;
+    select.dataset.dropdownLoadToken = requestToken;
+
     const placeholder = select.dataset.placeholder || 'Select';
     const template = select.dataset.label || 'name';
     const selected = selectedValues(select);
@@ -154,9 +157,25 @@ window.AccountingUI = (() => {
 
     try {
       const result = await getJson(url);
-      const rows = Array.isArray(result.data) ? result.data : [];
 
-      if (isMultiple && rows.length === 0) {
+      if (select.dataset.dropdownLoadToken !== requestToken) {
+        return;
+      }
+
+      const rows = Array.isArray(result.data) ? result.data : [];
+      const seenValues = new Set();
+      const uniqueRows = rows.filter((item) => {
+        const value = String(item?.id ?? '');
+
+        if (!value || seenValues.has(value)) {
+          return false;
+        }
+
+        seenValues.add(value);
+        return true;
+      });
+
+      if (isMultiple && uniqueRows.length === 0) {
         const option = document.createElement('option');
         option.value = '';
         option.textContent = 'No options found';
@@ -164,7 +183,7 @@ window.AccountingUI = (() => {
         select.appendChild(option);
       }
 
-      rows.forEach((item) => {
+      uniqueRows.forEach((item) => {
         const option = document.createElement('option');
 
         option.value = item.id;
@@ -182,6 +201,10 @@ window.AccountingUI = (() => {
       select.disabled = false;
       select.dispatchEvent(new Event('change', { bubbles: true }));
     } catch (error) {
+      if (select.dataset.dropdownLoadToken !== requestToken) {
+        return;
+      }
+
       console.error(error);
 
       select.innerHTML = `<option value="">Backend API not ready</option>`;

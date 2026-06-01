@@ -2019,6 +2019,17 @@ body.sidebar-navigating .sidebar-backdrop {
     padding-top: 11px;
 }
 
+
+.company-setup-form.is-company-readonly .company-fields:disabled select,
+.company-setup-form.is-company-readonly .company-fields:disabled select:not([multiple]):not([size]),
+.company-setup-form.is-company-readonly .company-fields:disabled select:not([multiple])[size="1"] {
+    color: #667085 !important;
+    background-color: #f8fafc !important;
+    border-color: #eaecf0 !important;
+    box-shadow: none !important;
+    cursor: default !important;
+}
+
 @media(max-width:880px) {
     .company-view-banner,
     .company-view-actions {
