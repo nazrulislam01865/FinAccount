@@ -7,6 +7,9 @@
     $currentUser = auth()->user();
     $assignableLookup = collect($assignableRoleIds ?? [])->mapWithKeys(fn ($id) => [(int) $id => true]);
     $editableMatrixUserCount = collect($users ?? [])->filter(fn ($matrixUser) => ($canManageUserPermissions ?? false) && $currentUser?->canManageUser($matrixUser) && !$matrixUser->hasFixedFullAccessRole())->count();
+    $matrixPermissionColumnWidth = 300;
+    $matrixUserColumnWidth = 188;
+    $matrixTableWidth = $matrixPermissionColumnWidth + max(1, collect($users ?? [])->count()) * $matrixUserColumnWidth;
 @endphp
 
 <style>
@@ -17,9 +20,17 @@
 
     .users-role-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1.55fr) minmax(340px, .9fr);
+        grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr);
         gap: 18px;
         align-items: start;
+        min-width: 0;
+    }
+
+    .users-role-page .left-stack,
+    .users-role-page .right-stack,
+    .users-role-page .table-card {
+        min-width: 0;
+        max-width: 100%;
     }
 
     .users-table-wrap {
@@ -137,19 +148,38 @@
     }
 
     .matrix-scroll {
+        display: block;
         width: 100%;
         max-width: 100%;
         max-height: none;
-        overflow-x: auto;
+        overflow-x: scroll !important;
         overflow-y: hidden;
-        padding-bottom: 10px;
+        padding-bottom: 12px;
         overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-gutter: stable;
+    }
+
+    .matrix-scroll::-webkit-scrollbar {
+        height: 12px;
+    }
+
+    .matrix-scroll::-webkit-scrollbar-track {
+        background: #f2f4f7;
+        border-radius: 999px;
+    }
+
+    .matrix-scroll::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 999px;
+        border: 3px solid #f2f4f7;
     }
 
     .user-access-matrix {
-        width: max-content;
-        min-width: 100%;
-        table-layout: fixed;
+        width: auto !important;
+        max-width: none !important;
+        table-layout: fixed !important;
+        border-collapse: collapse;
     }
 
     .user-access-matrix th,
@@ -170,23 +200,23 @@
     .user-access-matrix thead th:first-child { z-index: 3; }
 
     .permission-cell {
-        width: 320px !important;
-        min-width: 320px !important;
-        max-width: 320px !important;
+        width: 300px !important;
+        min-width: 300px !important;
+        max-width: 300px !important;
         white-space: normal !important;
     }
 
     .matrix-user-cell,
     .permission-decision-cell {
-        width: 220px !important;
-        min-width: 220px !important;
-        max-width: 220px !important;
+        width: 188px !important;
+        min-width: 188px !important;
+        max-width: 188px !important;
     }
 
     .matrix-user-title,
     .matrix-user-meta {
         display: block;
-        max-width: 180px;
+        max-width: 148px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -195,7 +225,7 @@
     .permission-module { color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
     .permission-key { color:var(--muted); font-size:11px; margin-top:4px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .access-select {
-        min-width: 132px;
+        min-width: 124px;
         height: 38px;
         min-height: 38px;
         border-width: 1.5px;
@@ -420,11 +450,11 @@
                 @csrf
 
                 <div class="matrix-scroll">
-                    <table class="user-access-matrix" style="min-width: max(100%, {{ 320 + max(1, $users->count()) * 220 }}px);">
+                    <table class="user-access-matrix" style="width: {{ $matrixTableWidth }}px; min-width: {{ $matrixTableWidth }}px;">
                         <colgroup>
-                            <col style="width:320px;min-width:320px;max-width:320px">
+                            <col style="width:{{ $matrixPermissionColumnWidth }}px;min-width:{{ $matrixPermissionColumnWidth }}px;max-width:{{ $matrixPermissionColumnWidth }}px">
                             @foreach($users as $matrixUserForColumn)
-                                <col style="width:220px;min-width:220px;max-width:220px">
+                                <col style="width:{{ $matrixUserColumnWidth }}px;min-width:{{ $matrixUserColumnWidth }}px;max-width:{{ $matrixUserColumnWidth }}px">
                             @endforeach
                         </colgroup>
                         <thead>

@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Transaction Entry | HisebGhor'); ?>
 
-@section('title', 'Transaction Entry | HisebGhor')
-
-@section('content')
-@php
+<?php $__env->startSection('content'); ?>
+<?php
     use App\Models\TransactionHead;
 
     $money = fn ($value) => number_format((float) $value, 2);
@@ -76,7 +74,7 @@
     $canPostTransaction = $currentUser?->hasPermission('transactions.create') ?? false;
     $canSaveDraftTransaction = $currentUser?->hasAnyPermission(['transactions.create', 'transactions.draft']) ?? false;
     $isDraftOnlyTransactionUser = !$canPostTransaction && $canSaveDraftTransaction;
-@endphp
+?>
 
 <div class="prototype-page transaction-entry-page">
     <div class="prototype-hero transaction-entry-hero">
@@ -93,10 +91,10 @@
     </div>
 
     <div class="prototype-stats four transaction-stats-redesign">
-        <div class="card prototype-stat"><span>Today Cash In</span><strong class="green">BDT {{ $money($todayCashIn) }}</strong><small>Receipt and collections</small></div>
-        <div class="card prototype-stat"><span>Today Cash Out</span><strong class="red">BDT {{ $money($todayCashOut) }}</strong><small>Payments and expenses</small></div>
-        <div class="card prototype-stat"><span>Due Payable</span><strong class="orange">BDT {{ $money($duePayable) }}</strong><small>We need to pay</small></div>
-        <div class="card prototype-stat"><span>Due Receivable</span><strong class="blue">BDT {{ $money($dueReceivable) }}</strong><small>We need to collect</small></div>
+        <div class="card prototype-stat"><span>Today Cash In</span><strong class="green">BDT <?php echo e($money($todayCashIn)); ?></strong><small>Receipt and collections</small></div>
+        <div class="card prototype-stat"><span>Today Cash Out</span><strong class="red">BDT <?php echo e($money($todayCashOut)); ?></strong><small>Payments and expenses</small></div>
+        <div class="card prototype-stat"><span>Due Payable</span><strong class="orange">BDT <?php echo e($money($duePayable)); ?></strong><small>We need to pay</small></div>
+        <div class="card prototype-stat"><span>Due Receivable</span><strong class="blue">BDT <?php echo e($money($dueReceivable)); ?></strong><small>We need to collect</small></div>
     </div>
 
     <div class="prototype-grid transaction-entry-grid">
@@ -113,17 +111,17 @@
                 <form
                     id="transactionForm"
                     class="prototype-form"
-                    data-preview-url="{{ route('api.transactions.preview') }}"
-                    data-store-url="{{ route('api.transactions.store') }}"
-                    data-heads-url="{{ route('api.dropdowns.transaction-heads') }}"
-                    data-settlements-url="{{ route('api.dropdowns.settlement-types') }}"
-                    data-parties-url="{{ route('api.dropdowns.parties') }}"
-                    data-cash-bank-url="{{ route('api.dropdowns.cash-bank-accounts') }}"
-                    data-can-post="{{ $canPostTransaction ? '1' : '0' }}"
-                    data-can-draft="{{ $canSaveDraftTransaction ? '1' : '0' }}"
+                    data-preview-url="<?php echo e(route('api.transactions.preview')); ?>"
+                    data-store-url="<?php echo e(route('api.transactions.store')); ?>"
+                    data-heads-url="<?php echo e(route('api.dropdowns.transaction-heads')); ?>"
+                    data-settlements-url="<?php echo e(route('api.dropdowns.settlement-types')); ?>"
+                    data-parties-url="<?php echo e(route('api.dropdowns.parties')); ?>"
+                    data-cash-bank-url="<?php echo e(route('api.dropdowns.cash-bank-accounts')); ?>"
+                    data-can-post="<?php echo e($canPostTransaction ? '1' : '0'); ?>"
+                    data-can-draft="<?php echo e($canSaveDraftTransaction ? '1' : '0'); ?>"
                 >
-                    @csrf
-                    <input type="hidden" id="statusInput" name="status" value="{{ $isDraftOnlyTransactionUser ? 'Draft' : 'Posted' }}">
+                    <?php echo csrf_field(); ?>
+                    <input type="hidden" id="statusInput" name="status" value="<?php echo e($isDraftOnlyTransactionUser ? 'Draft' : 'Posted'); ?>">
                     <input type="hidden" id="transactionCategory" name="transaction_category" value="">
                     <input type="hidden" id="screen" value="">
 
@@ -138,22 +136,22 @@
                     <div class="prototype-form-grid two">
                         <div class="prototype-field">
                             <label for="date">Date <span class="required">*</span></label>
-                            <input type="date" id="date" name="voucher_date" value="{{ $defaultVoucherDate ?? now()->toDateString() }}" required>
+                            <input type="date" id="date" name="voucher_date" value="<?php echo e($defaultVoucherDate ?? now()->toDateString()); ?>" required>
                         </div>
 
                         <div class="prototype-field full transaction-category-field">
                             <label>Transaction Category <span class="required">*</span></label>
                             <div class="tx-category-selector" id="transactionCategorySelector" role="group" aria-label="Transaction Category">
-                                @foreach($transactionCategories as $category)
+                                <?php $__currentLoopData = $transactionCategories; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $category): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                     <button
                                         type="button"
                                         class="tx-category-option"
-                                        data-category="{{ $category['name'] }}"
-                                        title="{{ $category['example'] }}"
+                                        data-category="<?php echo e($category['name']); ?>"
+                                        title="<?php echo e($category['example']); ?>"
                                     >
-                                        <span>{{ $category['name'] }}</span>
+                                        <span><?php echo e($category['name']); ?></span>
                                     </button>
-                                @endforeach
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                             </div>
                             <div class="hint" id="categoryHint">This is the high-level grouping, for example: Sales, Purchase, Receipt, Payment, Banking, Expense, Income, Owner / Equity, Asset, Loan, Employee, Opening, and Adjustment.</div>
                         </div>
@@ -248,20 +246,20 @@
                         </div>
                     </div>
 
-                    @if($isDraftOnlyTransactionUser)
+                    <?php if($isDraftOnlyTransactionUser): ?>
                         <div class="validation warn" style="display:block;margin-top:12px">
                             Your role can enter transactions as draft only. Final posting is locked until an authorized user reviews/posts it.
                         </div>
-                    @endif
+                    <?php endif; ?>
 
                     <div class="prototype-form-actions">
                         <button type="button" class="btn-ghost" id="clearBtn">Clear</button>
-                        @if($canSaveDraftTransaction)
+                        <?php if($canSaveDraftTransaction): ?>
                             <button type="button" class="btn-outline" id="draftBtn">Save Draft</button>
-                        @endif
-                        @if($canPostTransaction)
+                        <?php endif; ?>
+                        <?php if($canPostTransaction): ?>
                             <button type="submit" class="btn-primary" id="postBtn">Post Transaction</button>
-                        @endif
+                        <?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -336,30 +334,30 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($recentTransactions as $transaction)
+                        <?php $__empty_1 = true; $__currentLoopData = $recentTransactions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $transaction): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                             <tr>
-                                <td>{{ optional($transaction->voucher_date)->format('Y-m-d') }}</td>
-                                <td class="strong">{{ $transaction->transactionHead?->name ?? 'Transaction' }}</td>
-                                <td>{{ $transaction->party?->party_name ?? 'No Party' }}</td>
-                                <td class="amount">BDT {{ $money($transaction->amount) }}</td>
-                                <td>{{ $transaction->settlementType?->name ?? '—' }}</td>
-                                <td class="amount">BDT {{ $money($transaction->total_debit ?: $transaction->details->sum('debit')) }}</td>
-                                <td class="amount">BDT {{ $money($transaction->total_credit ?: $transaction->details->sum('credit')) }}</td>
-                                <td><span class="badge {{ $transaction->status === 'Posted' ? 'badge-success' : 'badge-warning' }}">{{ $transaction->status }}</span></td>
-                                <td><span class="badge badge-neutral">{{ $transaction->voucher_number }}</span></td>
+                                <td><?php echo e(optional($transaction->voucher_date)->format('Y-m-d')); ?></td>
+                                <td class="strong"><?php echo e($transaction->transactionHead?->name ?? 'Transaction'); ?></td>
+                                <td><?php echo e($transaction->party?->party_name ?? 'No Party'); ?></td>
+                                <td class="amount">BDT <?php echo e($money($transaction->amount)); ?></td>
+                                <td><?php echo e($transaction->settlementType?->name ?? '—'); ?></td>
+                                <td class="amount">BDT <?php echo e($money($transaction->total_debit ?: $transaction->details->sum('debit'))); ?></td>
+                                <td class="amount">BDT <?php echo e($money($transaction->total_credit ?: $transaction->details->sum('credit'))); ?></td>
+                                <td><span class="badge <?php echo e($transaction->status === 'Posted' ? 'badge-success' : 'badge-warning'); ?>"><?php echo e($transaction->status); ?></span></td>
+                                <td><span class="badge badge-neutral"><?php echo e($transaction->voucher_number); ?></span></td>
                             </tr>
-                        @empty
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No transactions yet. Post your first transaction to see it here.</td></tr>
-                        @endforelse
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </section>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@push('styles')
+<?php $__env->startPush('styles'); ?>
 <style>
     .transaction-entry-page .transaction-entry-grid {
         grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr) !important;
@@ -547,15 +545,15 @@
         .tx-category-option { width: 100%; text-align: left; }
     }
 </style>
-@endpush
+<?php $__env->stopPush(); ?>
 
-@push('scripts')
+<?php $__env->startPush('scripts'); ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const categoryDefinitions = @json($transactionCategories);
-    const fallbackHeads = @json($headPayload);
-    const fallbackParties = @json($partyPayload);
-    const fallbackCashBanks = @json($cashBankPayload);
+    const categoryDefinitions = <?php echo json_encode($transactionCategories, 15, 512) ?>;
+    const fallbackHeads = <?php echo json_encode($headPayload, 15, 512) ?>;
+    const fallbackParties = <?php echo json_encode($partyPayload, 15, 512) ?>;
+    const fallbackCashBanks = <?php echo json_encode($cashBankPayload, 15, 512) ?>;
     const form = document.getElementById('transactionForm');
     if (!form) return;
 
@@ -1265,7 +1263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusInput.value = canPostTransaction ? 'Posted' : 'Draft';
         summaryStatus.textContent = statusInput.value;
         summaryStatus.className = statusInput.value === 'Posted' ? 'badge badge-success' : 'badge badge-warning';
-        date.value = '{{ $defaultVoucherDate ?? now()->toDateString() }}';
+        date.value = '<?php echo e($defaultVoucherDate ?? now()->toDateString()); ?>';
         amount.value = '10000';
         transactionCategory.value = '';
         categorySelector.querySelectorAll('.tx-category-option').forEach((button) => button.classList.remove('is-active'));
@@ -1373,4 +1371,6 @@ document.addEventListener('DOMContentLoaded', () => {
     boot();
 });
 </script>
-@endpush
+<?php $__env->stopPush(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/transactions/create.blade.php ENDPATH**/ ?>

@@ -2,8 +2,18 @@
   <div class="container nav">
     <a href="#top" class="brand brand-image-only" aria-label="{{ data_get($landing, 'brand.name', 'HisebGhor') }}">
       @php
-        $brandLogoPath = trim((string) data_get($landing, 'brand.logo.path', ''));
-        $brandLogoName = trim((string) data_get($landing, 'brand.logo.name', ''));
+        $brandLogoPath = trim((string) (
+          data_get($landing, 'brand.logo.path')
+          ?: data_get($landing, 'brand.logo.image.path')
+          ?: data_get($landing, 'brand.logo.image_path')
+          ?: ''
+        ));
+        $brandLogoName = trim((string) (
+          data_get($landing, 'brand.logo.name')
+          ?: data_get($landing, 'brand.logo.image.name')
+          ?: data_get($landing, 'brand.logo.image_name')
+          ?: ($brandLogoPath !== '' ? basename($brandLogoPath) : '')
+        ));
       @endphp
       @if($brandLogoPath !== '')
         <img class="brand-logo-full" src="{{ $landingImageUrl($brandLogoPath) }}" alt="{{ $brandLogoName ?: data_get($landing, 'brand.name', 'HisebGhor') }}">

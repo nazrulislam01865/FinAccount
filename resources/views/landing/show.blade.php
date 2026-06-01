@@ -40,7 +40,12 @@
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
         }
-        return asset(ltrim($path, '/'));
+
+        $relativePath = ltrim($path, '/');
+        $url = asset($relativePath);
+        $fullPath = public_path($relativePath);
+
+        return is_file($fullPath) ? $url.'?v='.filemtime($fullPath) : $url;
     };
 @endphp
 <!DOCTYPE html>

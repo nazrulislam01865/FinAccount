@@ -37,10 +37,27 @@
         }
         return implode(PHP_EOL, $output);
     };
-    $imagePath = fn ($row): string => trim((string) (data_get($row, 'image.path') ?: data_get($row, 'image_path') ?: ''));
+    $imagePath = function ($row): string {
+        if (is_string($row)) {
+            return trim($row);
+        }
+
+        return trim((string) (
+            data_get($row, 'path')
+            ?: data_get($row, 'image.path')
+            ?: data_get($row, 'image_path')
+            ?: ''
+        ));
+    };
     $imageName = function ($row) use ($imagePath): string {
-        $name = trim((string) (data_get($row, 'image.name') ?: data_get($row, 'image_name') ?: ''));
+        $name = trim((string) (
+            data_get($row, 'name')
+            ?: data_get($row, 'image.name')
+            ?: data_get($row, 'image_name')
+            ?: ''
+        ));
         $path = $imagePath($row);
+
         return $name !== '' ? $name : ($path !== '' ? basename($path) : '');
     };
     $imageUrl = function (?string $path): string {
@@ -51,7 +68,12 @@
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
         }
-        return asset(ltrim($path, '/'));
+
+        $relativePath = ltrim($path, '/');
+        $url = asset($relativePath);
+        $fullPath = public_path($relativePath);
+
+        return is_file($fullPath) ? $url.'?v='.filemtime($fullPath) : $url;
     };
 
     $brandLogo = data_get($landing, 'brand.logo', []);

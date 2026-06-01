@@ -414,12 +414,22 @@ class LandingPageAdminController extends Controller
     private function brandLogo(Request $request, array $current): array
     {
         $currentLogo = data_get($current, 'brand.logo', []);
+        $currentPath = data_get($currentLogo, 'path')
+            ?: data_get($currentLogo, 'image.path')
+            ?: data_get($currentLogo, 'image_path')
+            ?: '';
+        $currentName = data_get($currentLogo, 'name')
+            ?: data_get($currentLogo, 'image.name')
+            ?: data_get($currentLogo, 'image_name')
+            ?: ($currentPath !== '' ? basename((string) $currentPath) : '');
+        $submittedPath = $request->input('brand.logo.image_path');
+        $submittedName = $request->input('brand.logo.image_name');
 
         return $this->landingImage(
             $request,
             'brand.logo.image',
-            $request->input('brand.logo.image_path', data_get($currentLogo, 'path')),
-            $request->input('brand.logo.image_name', data_get($currentLogo, 'name')),
+            trim((string) $submittedPath) !== '' ? $submittedPath : $currentPath,
+            trim((string) $submittedName) !== '' ? $submittedName : $currentName,
             'uploads/landing/logo'
         );
     }
