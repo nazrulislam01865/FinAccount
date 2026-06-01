@@ -41,6 +41,42 @@
     .coa-alert{margin-bottom:16px;padding:12px 14px;border-radius:14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#067647;font-weight:750;}
     .coa-alert.error{border-color:#fecaca;background:#fef2f2;color:#991b1b;}
 
+    .coa-import-review-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.46);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:34px 18px;overflow:auto;}
+    .coa-import-review-backdrop.coa-hidden{display:none!important;}
+    .coa-import-review-modal{width:min(1180px,100%);background:#fff;border-radius:24px;border:1px solid var(--coa-line);box-shadow:0 24px 80px rgba(15,23,42,.28);overflow:hidden;}
+    .coa-import-review-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid var(--coa-line);background:linear-gradient(180deg,#f8fbff,#fff);}
+    .coa-import-review-head h2{margin:0;color:#1d2939;font-size:24px;letter-spacing:-.03em;}
+    .coa-import-review-head p{margin:6px 0 0;color:var(--coa-muted);font-size:14px;line-height:1.45;}
+    .coa-review-close{width:38px;height:38px;min-height:38px;border-radius:999px;background:#f2f4f7;color:#344054;border:1px solid var(--coa-line);font-size:20px;padding:0;}
+    .coa-import-review-summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+    .coa-review-pill{display:inline-flex;align-items:center;border-radius:999px;padding:7px 12px;background:#eef4ff;color:#175cd3;font-weight:850;font-size:12px;}
+    .coa-import-review-body{padding:20px 24px 24px;display:grid;gap:16px;max-height:72vh;overflow:auto;}
+    .coa-import-issue{border:1px solid var(--coa-line);border-radius:20px;background:#fff;overflow:hidden;}
+    .coa-import-issue summary{cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 18px;background:#fbfcfd;list-style:none;}
+    .coa-import-issue summary::-webkit-details-marker{display:none;}
+    .coa-issue-title{font-weight:900;color:#101828;font-size:16px;}
+    .coa-issue-subtitle{margin-top:4px;color:#667085;font-size:13px;}
+    .coa-issue-tag{display:inline-flex;align-items:center;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;white-space:nowrap;}
+    .coa-issue-tag.conflict{background:#fff7ed;color:#c2410c;}
+    .coa-issue-tag.rule_violation{background:#fef2f2;color:#b42318;}
+    .coa-issue-content{padding:18px;display:grid;gap:16px;}
+    .coa-issue-reasons{margin:0;padding-left:18px;color:#7a271a;font-weight:700;line-height:1.5;}
+    .coa-existing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+    .coa-existing-card{border:1px solid #fed7aa;background:#fff7ed;border-radius:16px;padding:12px;color:#7c2d12;}
+    .coa-existing-card strong{display:block;color:#9a3412;margin-bottom:5px;}
+    .coa-resolve-form{display:grid;gap:14px;border-top:1px dashed var(--coa-line);padding-top:16px;}
+    .coa-resolve-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+    .coa-resolve-grid .span-2{grid-column:span 2;}
+    .coa-resolve-grid .span-4{grid-column:1/-1;}
+    .coa-resolve-form label{font-size:12px;margin-bottom:6px;color:#344054;font-weight:850;}
+    .coa-resolve-form input,.coa-resolve-form select,.coa-resolve-form textarea{min-height:42px;border-radius:12px;font-size:14px;}
+    .coa-resolve-errors{border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:14px;padding:10px 12px;font-weight:750;}
+    .coa-resolve-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;}
+    .coa-resolve-actions .danger{background:#fff;color:#b42318;border:1px solid #fecaca;}
+    .coa-resolve-actions .success{background:#16a34a;color:#fff;}
+    @media(max-width:940px){.coa-resolve-grid,.coa-existing-grid{grid-template-columns:1fr 1fr;}.coa-resolve-grid .span-2,.coa-resolve-grid .span-4{grid-column:1/-1;}}
+    @media(max-width:640px){.coa-import-review-head{flex-direction:column;}.coa-resolve-grid,.coa-existing-grid{grid-template-columns:1fr;}.coa-import-review-body{max-height:none;}}
+
     .coa-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px;}
     .coa-stat{background:#fff;border:1px solid var(--coa-line);border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(16,24,40,.06);min-width:0;}
     .coa-stat span{display:block;color:var(--coa-muted);font-size:12px;margin-bottom:4px;font-weight:750;}
@@ -338,6 +374,210 @@
                     <li>{{ $error }}</li>
                 @endforeach
             </ul>
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div class="coa-alert error">{{ session('error') }}</div>
+    @endif
+
+    @php
+        $coaImportReview = session('coa_import_review');
+    @endphp
+    @if(!empty($coaImportReview['issues']))
+        <div class="coa-import-review-backdrop" id="coaImportReviewModal" role="dialog" aria-modal="true" aria-labelledby="coaImportReviewTitle">
+            <div class="coa-import-review-modal">
+                <div class="coa-import-review-head">
+                    <div>
+                        <h2 id="coaImportReviewTitle">Review Chart of Accounts Import</h2>
+                        <p>Existing accounts are no longer updated automatically. Resolve each conflict or accounting-rule issue before it is saved.</p>
+                        <div class="coa-import-review-summary">
+                            <span class="coa-review-pill">Created: {{ $coaImportReview['summary']['created'] ?? 0 }}</span>
+                            <span class="coa-review-pill">Conflicts: {{ $coaImportReview['summary']['conflicts'] ?? 0 }}</span>
+                            <span class="coa-review-pill">Rule Issues: {{ $coaImportReview['summary']['violations'] ?? 0 }}</span>
+                            <span class="coa-review-pill">Needs Review: {{ count($coaImportReview['issues'] ?? []) }}</span>
+                        </div>
+                    </div>
+                    <button type="button" class="coa-review-close" data-close-import-review aria-label="Close import review">×</button>
+                </div>
+                <div class="coa-import-review-body">
+                    @foreach($coaImportReview['issues'] as $issueIndex => $issue)
+                        @php
+                            $payload = $issue['payload'] ?? [];
+                            $issueType = $issue['type'] ?? 'rule_violation';
+                            $firstExisting = $issue['existing'][0] ?? null;
+                        @endphp
+                        <details class="coa-import-issue" @if($issueIndex === 0 || !empty($issue['resolve_errors'])) open @endif>
+                            <summary>
+                                <div>
+                                    <div class="coa-issue-title">
+                                        Row {{ $issue['line_number'] ?? '—' }}: {{ $issue['account_code'] ?? ($payload['account_code'] ?? 'New Account') }} — {{ $issue['account_name'] ?? ($payload['account_name'] ?? '') }}
+                                    </div>
+                                    <div class="coa-issue-subtitle">
+                                        {{ $issueType === 'conflict' ? 'This row matches an existing account. Choose update, edit as new, or skip.' : 'This row does not follow the required CoA/accounting setup rules. Correct it before adding.' }}
+                                    </div>
+                                </div>
+                                <span class="coa-issue-tag {{ $issueType }}">{{ $issueType === 'conflict' ? 'Conflict' : 'Rule Issue' }}</span>
+                            </summary>
+                            <div class="coa-issue-content">
+                                @if(!empty($issue['reasons']))
+                                    <ul class="coa-issue-reasons">
+                                        @foreach($issue['reasons'] as $reason)
+                                            <li>{{ $reason }}</li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+
+                                @if(!empty($issue['resolve_errors']))
+                                    <div class="coa-resolve-errors">
+                                        <strong>Still needs correction:</strong>
+                                        <ul style="margin:6px 0 0 18px">
+                                            @foreach($issue['resolve_errors'] as $resolveError)
+                                                <li>{{ $resolveError }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+
+                                @if(!empty($issue['existing']))
+                                    <div class="coa-existing-grid">
+                                        @foreach($issue['existing'] as $existing)
+                                            <div class="coa-existing-card">
+                                                <strong>Existing account</strong>
+                                                <div>{{ $existing['account_code'] ?? '—' }} — {{ $existing['account_name'] ?? '—' }}</div>
+                                                <div>Level: {{ $existing['coa_level'] ?? '—' }} | Nature: {{ $existing['account_type_name'] ?? '—' }}</div>
+                                                <div>Ledger Type: {{ $existing['ledger_type'] ?? '—' }} | Status: {{ $existing['status'] ?? '—' }}</div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
+
+                                <form method="POST" action="{{ route('setup.chart-of-accounts.import.resolve') }}" class="coa-resolve-form">
+                                    @csrf
+                                    <input type="hidden" name="import_issue_id" value="{{ $issue['id'] }}">
+
+                                    @if(!empty($issue['existing']))
+                                        <div class="coa-resolve-grid">
+                                            <div class="span-2">
+                                                <label>Existing account to update</label>
+                                                <select name="existing_account_id">
+                                                    @foreach($issue['existing'] as $existing)
+                                                        <option value="{{ $existing['id'] }}" @selected(($firstExisting['id'] ?? null) === ($existing['id'] ?? null))>
+                                                            {{ $existing['account_code'] ?? '' }} — {{ $existing['account_name'] ?? '' }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    <div class="coa-resolve-grid">
+                                        <div>
+                                            <label>Account code</label>
+                                            <input name="account_code" value="{{ $payload['account_code'] ?? '' }}" required>
+                                        </div>
+                                        <div>
+                                            <label>Account name</label>
+                                            <input name="account_name" value="{{ $payload['account_name'] ?? '' }}" required>
+                                        </div>
+                                        <div>
+                                            <label>CoA level</label>
+                                            <select name="coa_level" required>
+                                                @foreach($coaLevels as $level => $label)
+                                                    <option value="{{ $level }}" @selected((int)($payload['coa_level'] ?? 4) === (int)$level)>{{ $level }} — {{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>Status</label>
+                                            <select name="status" required>
+                                                <option value="Active" @selected(($payload['status'] ?? 'Active') === 'Active')>Active</option>
+                                                <option value="Inactive" @selected(($payload['status'] ?? 'Active') === 'Inactive')>Inactive</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>Account nature</label>
+                                            <select name="account_type_id" required>
+                                                <option value="">Select nature</option>
+                                                @foreach($accountTypes as $accountTypeOption)
+                                                    <option value="{{ $accountTypeOption->id }}" @selected((int)($payload['account_type_id'] ?? 0) === (int)$accountTypeOption->id)>
+                                                        {{ $accountTypeOption->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>Parent account</label>
+                                            <select name="parent_id">
+                                                <option value="">No parent / Level 1</option>
+                                                @foreach($parentAccountOptions as $parentOption)
+                                                    <option value="{{ $parentOption->id }}" @selected((int)($payload['parent_id'] ?? 0) === (int)$parentOption->id)>
+                                                        L{{ $parentOption->coa_level }} — {{ $parentOption->account_code }} — {{ $parentOption->account_name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>Normal balance</label>
+                                            <select name="normal_balance" required>
+                                                <option value="Debit" @selected(($payload['normal_balance'] ?? 'Debit') === 'Debit')>Debit</option>
+                                                <option value="Credit" @selected(($payload['normal_balance'] ?? 'Debit') === 'Credit')>Credit</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>Ledger type</label>
+                                            <select name="ledger_type" required>
+                                                @foreach($ledgerTypes as $type)
+                                                    <option value="{{ $type }}" @selected(($payload['ledger_type'] ?? 'Asset') === $type)>{{ $type }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>Party type</label>
+                                            <select name="party_type_id">
+                                                <option value="">Not applicable</option>
+                                                @foreach($partyTypes as $partyTypeOption)
+                                                    <option value="{{ $partyTypeOption->id }}" @selected((int)($payload['party_type_id'] ?? 0) === (int)$partyTypeOption->id)>{{ $partyTypeOption->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>User selectable?</label>
+                                            <select name="is_user_selectable">
+                                                <option value="1" @selected((bool)($payload['is_user_selectable'] ?? false))>Yes</option>
+                                                <option value="0" @selected(! (bool)($payload['is_user_selectable'] ?? false))>No</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label>System ledger?</label>
+                                            <select name="is_system_ledger">
+                                                <option value="0" @selected(! (bool)($payload['is_system_ledger'] ?? false))>No</option>
+                                                <option value="1" @selected((bool)($payload['is_system_ledger'] ?? false))>Yes</option>
+                                            </select>
+                                        </div>
+                                        <div class="span-2">
+                                            <label>Description</label>
+                                            <input name="description" value="{{ $payload['description'] ?? '' }}">
+                                        </div>
+                                        <div class="span-4">
+                                            <label>Example usage</label>
+                                            <textarea name="example_usage">{{ $payload['example_usage'] ?? '' }}</textarea>
+                                        </div>
+                                    </div>
+
+                                    <div class="coa-resolve-actions">
+                                        <button class="btn-soft danger" type="submit" name="import_issue_action" value="skip">Skip this row</button>
+                                        <button class="btn-primary success" type="submit" name="import_issue_action" value="create">Add / Save corrected as new</button>
+                                        @if($issueType === 'conflict' && !empty($issue['existing']))
+                                            <button class="btn-primary" type="submit" name="import_issue_action" value="update">Update selected existing account</button>
+                                        @endif
+                                    </div>
+                                </form>
+                            </div>
+                        </details>
+                    @endforeach
+                </div>
+            </div>
         </div>
     @endif
 
@@ -796,6 +1036,12 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-close-import-review]').forEach((button) => {
+        button.addEventListener('click', () => {
+            document.getElementById('coaImportReviewModal')?.classList.add('coa-hidden');
+        });
+    });
+
     const accountRows = @json($accountRows->keyBy('id')->toArray());
     const levelMap = @json($coaLevels);
     const normalByNature = { Asset: 'Debit', Expense: 'Debit', 'Equity Contra': 'Debit', Liability: 'Credit', Equity: 'Credit', Income: 'Credit', "Owner's Equity": 'Credit', 'Owner’s Equity': 'Credit' };

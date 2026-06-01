@@ -233,6 +233,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
             ->middleware('permission:chart-of-accounts.manage')
             ->name('chart-of-accounts.import');
 
+        Route::post('/chart-of-accounts/import/resolve', [ChartOfAccountController::class, 'resolveImportIssue'])
+            ->middleware('permission:chart-of-accounts.manage')
+            ->name('chart-of-accounts.import.resolve');
+
         Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
             ->middleware('permission:chart-of-accounts.manage')
             ->name('chart-of-accounts.destroy');

@@ -4,6 +4,7 @@ namespace App\Services\Setup;
 
 use App\Models\AccountType;
 use App\Models\ChartOfAccount;
+use App\Models\LedgerType;
 use App\Models\PartyType;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -86,9 +87,11 @@ class ChartOfAccountExcelService
         $updated = 0;
         $skipped = 0;
         $errors = [];
+        $conflicts = [];
+        $violations = [];
         $hierarchy = $this->existingHierarchy();
 
-        DB::transaction(function () use ($rows, $headers, $firstDataLineNumber, $accountService, $userId, &$created, &$updated, &$skipped, &$errors, &$hierarchy) {
+        DB::transaction(function () use ($rows, $headers, $firstDataLineNumber, $accountService, $userId, &$created, &$skipped, &$errors, &$conflicts, &$violations, &$hierarchy) {
             foreach ($rows as $index => $row) {
                 $lineNumber = $firstDataLineNumber + $index;
                 $data = $this->mapRow($headers, $row);
@@ -101,27 +104,55 @@ class ChartOfAccountExcelService
 
                 try {
                     $payload = $this->toAccountPayload($data, $lineNumber);
-                    $account = ChartOfAccount::query()
-                        ->where('account_code', $payload['account_code'])
-                        ->first();
+                } catch (\Throwable $exception) {
+                    $skipped++;
+                    $draftPayload = $this->draftPayloadFromImportData($data);
+                    $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $draftPayload, [$exception->getMessage()]);
+                    $errors[] = 'Row ' . $lineNumber . ': ' . $exception->getMessage();
+                    continue;
+                }
 
-                    if ($account) {
-                        $accountService->update($account, $payload, $userId);
-                        $updated++;
-                    } else {
-                        $accountService->create($payload, $userId);
-                        $created++;
-                    }
+                $duplicateAccounts = $this->findDuplicateAccounts($payload);
+                if ($duplicateAccounts !== []) {
+                    $skipped++;
+                    $reasons = collect($duplicateAccounts)
+                        ->map(fn (array $account) => $account['reason'])
+                        ->values()
+                        ->all();
+                    $conflicts[] = $this->makeImportIssue('conflict', $lineNumber, $payload, $reasons, $duplicateAccounts);
+                    $errors[] = 'Row ' . $lineNumber . ': Existing account conflict. Resolve manually from the import review popup.';
+                    continue;
+                }
 
+                $ruleErrors = $this->validateAccountPayload($payload);
+                if ($ruleErrors !== []) {
+                    $skipped++;
+                    $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $payload, $ruleErrors);
+                    $errors[] = 'Row ' . $lineNumber . ': ' . implode(' ', $ruleErrors);
+                    continue;
+                }
+
+                try {
+                    $accountService->create($payload, $userId);
+                    $created++;
                     $this->rememberHierarchy($hierarchy, $payload, $data);
                 } catch (\Throwable $exception) {
                     $skipped++;
+                    $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $payload, [$exception->getMessage()]);
                     $errors[] = 'Row ' . $lineNumber . ': ' . $exception->getMessage();
                 }
             }
         });
 
-        return compact('created', 'updated', 'skipped', 'errors');
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'conflicts' => $conflicts,
+            'violations' => $violations,
+            'issues' => array_values(array_merge($conflicts, $violations)),
+        ];
     }
 
     private function prepareImportRows(array $rows): array
@@ -453,6 +484,331 @@ class ChartOfAccountExcelService
             'example_usage' => $data['example_usage'] ?? null,
             'status' => in_array(($data['status'] ?? 'Active'), ['Active', 'Inactive'], true) ? $data['status'] : 'Active',
         ];
+    }
+
+    public function normalizeResolvedPayload(array $input): array
+    {
+        $coaLevel = (int) ($input['coa_level'] ?? 4);
+        $coaLevel = in_array($coaLevel, [1, 2, 3, 4], true) ? $coaLevel : 4;
+
+        $ledgerType = trim((string) ($input['ledger_type'] ?? ($coaLevel === 4 ? 'Asset' : 'Group')));
+        if ($coaLevel < 4) {
+            $ledgerType = 'Group';
+        }
+
+        $normalBalance = $this->normalizeNormalBalance($input['normal_balance'] ?? '');
+
+        return [
+            'account_code' => trim((string) ($input['account_code'] ?? '')),
+            'account_name' => trim((string) ($input['account_name'] ?? '')),
+            'coa_level' => $coaLevel,
+            'parent_id' => $coaLevel === 1 ? null : ($this->nullableInt($input['parent_id'] ?? null)),
+            'account_type_id' => $this->nullableInt($input['account_type_id'] ?? null),
+            'normal_balance' => in_array($normalBalance, ['Debit', 'Credit'], true) ? $normalBalance : trim((string) ($input['normal_balance'] ?? '')),
+            'ledger_type' => $ledgerType,
+            'party_type_id' => $this->nullableInt($input['party_type_id'] ?? null),
+            'is_user_selectable' => $this->truthy($input['is_user_selectable'] ?? false),
+            'is_system_ledger' => $this->truthy($input['is_system_ledger'] ?? false),
+            'description' => trim((string) ($input['description'] ?? '')) ?: null,
+            'example_usage' => trim((string) ($input['example_usage'] ?? '')) ?: null,
+            'status' => in_array(($input['status'] ?? 'Active'), ['Active', 'Inactive'], true) ? $input['status'] : 'Active',
+        ];
+    }
+
+    public function validateAccountPayload(array $payload, ?int $ignoreAccountId = null): array
+    {
+        $errors = [];
+        $accountCode = trim((string) ($payload['account_code'] ?? ''));
+        $accountName = trim((string) ($payload['account_name'] ?? ''));
+        $coaLevel = (int) ($payload['coa_level'] ?? 4);
+        $ledgerType = trim((string) ($payload['ledger_type'] ?? ''));
+        $parentId = $payload['parent_id'] ?? null;
+        $accountTypeId = $payload['account_type_id'] ?? null;
+        $normalBalance = $this->normalizeNormalBalance($payload['normal_balance'] ?? '');
+        $activeLedgerTypes = LedgerType::activeNames();
+
+        if ($accountCode === '') {
+            $errors[] = 'Account Code is required.';
+        } elseif (! preg_match('/^[A-Za-z0-9.\-_]+$/', $accountCode)) {
+            $errors[] = 'Account Code may contain only letters, numbers, dots, hyphens, and underscores.';
+        }
+
+        if ($accountName === '') {
+            $errors[] = 'Account Name is required.';
+        }
+
+        if (! in_array($coaLevel, [1, 2, 3, 4], true)) {
+            $errors[] = 'CoA Level must be 1, 2, 3, or 4.';
+        }
+
+        $accountType = AccountType::query()->find($accountTypeId);
+        if (! $accountType) {
+            $errors[] = 'Account Class is invalid or missing.';
+        }
+
+        if (! in_array($ledgerType, $activeLedgerTypes, true)) {
+            $errors[] = 'Ledger Type is invalid or inactive: ' . ($ledgerType ?: '(blank)') . '.';
+        }
+
+        if ($accountCode !== '') {
+            $duplicateCode = ChartOfAccount::query()
+                ->where('account_code', $accountCode)
+                ->when($ignoreAccountId, fn ($query) => $query->whereKeyNot($ignoreAccountId))
+                ->first();
+
+            if ($duplicateCode) {
+                $errors[] = 'Account Code already exists: ' . $duplicateCode->display_name . '.';
+            }
+        }
+
+        if ($accountName !== '') {
+            $duplicateName = ChartOfAccount::query()
+                ->where('account_name', $accountName)
+                ->when($ignoreAccountId, fn ($query) => $query->whereKeyNot($ignoreAccountId))
+                ->first();
+
+            if ($duplicateName) {
+                $errors[] = 'Account Name already exists: ' . $duplicateName->display_name . '.';
+            }
+        }
+
+        if ($coaLevel === 1 && ! empty($parentId)) {
+            $errors[] = 'Level 1 Account Class cannot have a parent account.';
+        }
+
+        $parent = null;
+        if ($coaLevel > 1) {
+            if (empty($parentId)) {
+                $errors[] = 'Parent Account is required for Level ' . $coaLevel . '.';
+            } else {
+                $parent = ChartOfAccount::query()->find($parentId);
+                if (! $parent) {
+                    $errors[] = 'Parent account was not found. Select a valid parent before adding this account.';
+                } else {
+                    $parentLevel = (int) ($parent->coa_level ?: ($parent->account_level === 'Ledger' ? 4 : max(1, $coaLevel - 1)));
+
+                    if ($parent->status !== 'Active') {
+                        $errors[] = 'Parent Account must be active.';
+                    }
+
+                    if ($parent->account_level !== 'Group') {
+                        $errors[] = 'Parent Account must be a non-posting Group account.';
+                    }
+
+                    if ($parentLevel !== $coaLevel - 1) {
+                        $errors[] = 'Parent Account must be exactly one level above this account.';
+                    }
+
+                    if ($accountType && (int) $parent->account_type_id !== (int) $accountType->id) {
+                        $errors[] = 'Parent Account must use the same Account Class.';
+                    }
+                }
+            }
+        }
+
+        if ($coaLevel < 4 && $ledgerType !== 'Group') {
+            $errors[] = 'Level 1, 2, and 3 accounts must use Ledger Type Group because posting is allowed only in Level 4 ledger heads.';
+        }
+
+        if ($coaLevel === 4 && $ledgerType === 'Group') {
+            $errors[] = 'Level 4 ledger heads cannot use Ledger Type Group. Select the actual ledger type such as Asset, Expense, Income, Cash, Bank, or Party Control.';
+        }
+
+        if ($accountType && $ledgerType !== '') {
+            $compatibilityError = $this->ledgerTypeCompatibilityError($ledgerType, (string) $accountType->name);
+            if ($compatibilityError) {
+                $errors[] = $compatibilityError;
+            }
+        }
+
+        if (in_array($ledgerType, ['Cash', 'Bank'], true) && $accountType && $accountType->name !== 'Asset') {
+            $errors[] = 'Cash and Bank ledgers must use Asset account class.';
+        }
+
+        if ($ledgerType === 'Party Control' && empty($payload['party_type_id'])) {
+            $errors[] = 'Party Type is required for Party Control ledgers.';
+        }
+
+        if ($ledgerType === 'Party Control' && $this->truthy($payload['is_user_selectable'] ?? false)) {
+            $errors[] = 'Party Control ledgers should not be directly user selectable because party selection is handled by transaction rules.';
+        }
+
+        if (! in_array($normalBalance, ['Debit', 'Credit'], true)) {
+            $errors[] = 'Normal Balance must be Debit or Credit.';
+        } elseif ($accountType) {
+            $expectedBalance = $this->expectedNormalBalance((string) $accountType->name, $ledgerType);
+            if ($expectedBalance && $normalBalance !== $expectedBalance) {
+                $errors[] = 'Normal Balance should be ' . $expectedBalance . ' for ' . $accountType->name . ($ledgerType ? ' / ' . $ledgerType : '') . ' according to accounting rules.';
+            }
+        }
+
+        if (! in_array(($payload['status'] ?? 'Active'), ['Active', 'Inactive'], true)) {
+            $errors[] = 'Status must be Active or Inactive.';
+        }
+
+        return array_values(array_unique($errors));
+    }
+
+    private function draftPayloadFromImportData(array $data): array
+    {
+        $coaLevel = (int) ($data['coa_level'] ?? 4);
+        $accountClass = trim((string) ($data['account_class'] ?? ''));
+        $accountType = $accountClass !== ''
+            ? AccountType::query()->where('name', $accountClass)->orWhere('code', $accountClass)->first()
+            : null;
+        $normalBalance = $this->normalizeNormalBalance($data['normal_balance'] ?? '');
+        $parentId = null;
+        $parentCode = trim((string) ($data['parent_code'] ?? ''));
+        if ($parentCode !== '') {
+            $parentId = ChartOfAccount::query()->where('account_code', $parentCode)->value('id');
+        }
+
+        return [
+            'account_code' => trim((string) ($data['account_code'] ?? '')),
+            'account_name' => trim((string) ($data['account_name'] ?? '')),
+            'coa_level' => in_array($coaLevel, [1, 2, 3, 4], true) ? $coaLevel : 4,
+            'parent_id' => $parentId,
+            'account_type_id' => $accountType?->id,
+            'normal_balance' => in_array($normalBalance, ['Debit', 'Credit'], true) ? $normalBalance : ($accountType?->normal_balance ?? 'Debit'),
+            'ledger_type' => $coaLevel === 4 ? trim((string) ($data['ledger_type'] ?? 'Asset')) : 'Group',
+            'party_type_id' => null,
+            'is_user_selectable' => $this->truthy($data['user_selectable'] ?? true),
+            'is_system_ledger' => $this->truthy($data['system_ledger'] ?? false),
+            'description' => trim((string) ($data['description'] ?? '')) ?: null,
+            'example_usage' => trim((string) ($data['example_usage'] ?? '')) ?: null,
+            'status' => in_array(($data['status'] ?? 'Active'), ['Active', 'Inactive'], true) ? $data['status'] : 'Active',
+        ];
+    }
+
+    private function findDuplicateAccounts(array $payload): array
+    {
+        $duplicates = [];
+        $accountCode = trim((string) ($payload['account_code'] ?? ''));
+        $accountName = trim((string) ($payload['account_name'] ?? ''));
+
+        if ($accountCode !== '') {
+            $existingByCode = ChartOfAccount::query()->where('account_code', $accountCode)->first();
+            if ($existingByCode) {
+                $duplicates[$existingByCode->id] = $this->accountConflictSummary($existingByCode, 'Account Code already exists.');
+            }
+        }
+
+        if ($accountName !== '') {
+            $existingByName = ChartOfAccount::query()->where('account_name', $accountName)->first();
+            if ($existingByName) {
+                $duplicates[$existingByName->id] = $this->accountConflictSummary($existingByName, 'Account Name already exists.');
+            }
+        }
+
+        return array_values($duplicates);
+    }
+
+    private function accountConflictSummary(ChartOfAccount $account, string $reason): array
+    {
+        return [
+            'id' => $account->id,
+            'reason' => $reason . ' Existing: ' . $account->display_name,
+            'account_code' => $account->account_code,
+            'account_name' => $account->account_name,
+            'coa_level' => $account->coa_level,
+            'account_type_id' => $account->account_type_id,
+            'account_type_name' => $account->accountType?->name,
+            'parent_id' => $account->parent_id,
+            'parent_name' => $account->parent?->display_name,
+            'normal_balance' => $account->normal_balance,
+            'ledger_type' => $account->ledger_type,
+            'status' => $account->status,
+        ];
+    }
+
+    private function makeImportIssue(string $type, int $lineNumber, array $payload, array $reasons, array $existing = []): array
+    {
+        $id = substr(sha1($type . '|' . $lineNumber . '|' . json_encode($payload) . '|' . json_encode($reasons)), 0, 16);
+
+        return [
+            'id' => $id,
+            'type' => $type,
+            'line_number' => $lineNumber,
+            'title' => $type === 'conflict' ? 'Existing Account Conflict' : 'Accounting Rule Issue',
+            'account_code' => $payload['account_code'] ?? '',
+            'account_name' => $payload['account_name'] ?? '',
+            'reasons' => array_values(array_unique(array_filter($reasons))),
+            'existing' => $existing,
+            'payload' => $this->reviewPayload($payload),
+        ];
+    }
+
+    private function reviewPayload(array $payload): array
+    {
+        return [
+            'account_code' => (string) ($payload['account_code'] ?? ''),
+            'account_name' => (string) ($payload['account_name'] ?? ''),
+            'coa_level' => (int) ($payload['coa_level'] ?? 4),
+            'parent_id' => $this->nullableInt($payload['parent_id'] ?? null),
+            'account_type_id' => $this->nullableInt($payload['account_type_id'] ?? null),
+            'normal_balance' => (string) ($payload['normal_balance'] ?? 'Debit'),
+            'ledger_type' => (string) ($payload['ledger_type'] ?? 'Asset'),
+            'party_type_id' => $this->nullableInt($payload['party_type_id'] ?? null),
+            'is_user_selectable' => (bool) ($payload['is_user_selectable'] ?? false),
+            'is_system_ledger' => (bool) ($payload['is_system_ledger'] ?? false),
+            'description' => (string) ($payload['description'] ?? ''),
+            'example_usage' => (string) ($payload['example_usage'] ?? ''),
+            'status' => (string) ($payload['status'] ?? 'Active'),
+        ];
+    }
+
+    private function ledgerTypeCompatibilityError(string $ledgerType, string $accountTypeName): ?string
+    {
+        $accountTypeName = trim($accountTypeName);
+
+        $assetLedgerTypes = ['Cash', 'Bank', 'Inventory', 'Asset'];
+        if (in_array($ledgerType, $assetLedgerTypes, true) && $accountTypeName !== 'Asset') {
+            return $ledgerType . ' ledger must be placed under Asset account class.';
+        }
+
+        if ($ledgerType === 'Loan' && $accountTypeName !== 'Liability') {
+            return 'Loan ledger should be placed under Liability account class.';
+        }
+
+        if ($ledgerType === 'Liability' && $accountTypeName !== 'Liability') {
+            return 'Liability ledger must be placed under Liability account class.';
+        }
+
+        if (in_array($ledgerType, ['Equity', 'Equity Contra'], true) && ! in_array($accountTypeName, ['Equity', "Owner's Equity", 'Owner’s Equity'], true)) {
+            return $ledgerType . ' ledger must be placed under Equity account class.';
+        }
+
+        if ($ledgerType === 'Income' && $accountTypeName !== 'Income') {
+            return 'Income ledger must be placed under Income account class.';
+        }
+
+        if ($ledgerType === 'Expense' && $accountTypeName !== 'Expense') {
+            return 'Expense ledger must be placed under Expense account class.';
+        }
+
+        return null;
+    }
+
+    private function expectedNormalBalance(string $accountTypeName, string $ledgerType): ?string
+    {
+        if ($ledgerType === 'Equity Contra') {
+            return 'Debit';
+        }
+
+        return match ($accountTypeName) {
+            'Asset', 'Expense' => 'Debit',
+            'Liability', 'Equity', "Owner's Equity", 'Owner’s Equity', 'Income' => 'Credit',
+            default => null,
+        };
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     private function readCsv(string $path): array
