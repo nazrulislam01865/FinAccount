@@ -38,6 +38,15 @@
     .coa-import-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}
     .coa-import-form input[type=file]{max-width:230px;min-height:42px;padding:7px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff;}
     .coa-import-form input[type=file]::file-selector-button{border:0;border-radius:10px;padding:7px 10px;margin-right:8px;font-weight:800;color:#1d2939;}
+    .coa-import-progress{display:none;flex:1 1 100%;min-width:260px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.14);border-radius:16px;padding:11px 12px;margin-top:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12);}
+    .coa-import-progress.is-active{display:block;}
+    .coa-import-progress-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;color:#fff;font-size:13px;font-weight:850;}
+    .coa-import-progress-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .coa-import-progress-percent{font-variant-numeric:tabular-nums;}
+    .coa-import-progress-track{height:10px;border-radius:999px;background:rgba(255,255,255,.24);overflow:hidden;}
+    .coa-import-progress-bar{height:100%;width:0%;border-radius:999px;background:#fff;transition:width .22s ease;}
+    .coa-import-progress-detail{margin-top:7px;color:rgba(255,255,255,.78);font-size:12px;font-weight:700;line-height:1.35;}
+    .coa-import-form.is-importing input[type=file],.coa-import-form.is-importing button[type=submit]{opacity:.68;pointer-events:none;}
     .coa-alert{margin-bottom:16px;padding:12px 14px;border-radius:14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#067647;font-weight:750;}
     .coa-alert.error{border-color:#fecaca;background:#fef2f2;color:#991b1b;}
 
@@ -358,10 +367,20 @@
             <a class="coa-btn-light button" href="{{ route('setup.chart-of-accounts.export') }}">Export Excel</a>
             <button class="coa-btn-light" type="button" data-coa-tab-button="tree">View CoA Tree</button>
             <button class="coa-btn-light" type="button" data-coa-tab-button="posting">Posting Ledgers</button>
-            <form class="coa-import-form" method="POST" action="{{ route('setup.chart-of-accounts.import') }}" enctype="multipart/form-data">
+            <form class="coa-import-form" method="POST" action="{{ route('setup.chart-of-accounts.import') }}" enctype="multipart/form-data" data-coa-import-form data-success-url="{{ route('setup.chart-of-accounts') }}">
                 @csrf
-                <input type="file" name="coa_file" accept=".xlsx,.xlsm,.csv,.txt" required>
-                <button class="coa-btn-light" type="submit">Import Excel</button>
+                <input type="file" name="coa_file" accept=".xlsx,.xlsm,.csv,.txt" required data-coa-import-file>
+                <button class="coa-btn-light" type="submit" data-coa-import-submit>Import Excel</button>
+                <div class="coa-import-progress" data-coa-import-progress aria-live="polite" aria-hidden="true">
+                    <div class="coa-import-progress-top">
+                        <span class="coa-import-progress-text" data-coa-import-status>Select a file to import.</span>
+                        <span class="coa-import-progress-percent" data-coa-import-percent>0%</span>
+                    </div>
+                    <div class="coa-import-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-coa-import-track>
+                        <div class="coa-import-progress-bar" data-coa-import-bar></div>
+                    </div>
+                    <div class="coa-import-progress-detail" data-coa-import-detail>Waiting to start.</div>
+                </div>
             </form>
         </div>
     </header>
@@ -1052,6 +1071,151 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const importForm = document.querySelector('[data-coa-import-form]');
+    if (importForm) {
+        const importFile = importForm.querySelector('[data-coa-import-file]');
+        const importSubmit = importForm.querySelector('[data-coa-import-submit]');
+        const importProgress = importForm.querySelector('[data-coa-import-progress]');
+        const importStatus = importForm.querySelector('[data-coa-import-status]');
+        const importPercent = importForm.querySelector('[data-coa-import-percent]');
+        const importDetail = importForm.querySelector('[data-coa-import-detail]');
+        const importTrack = importForm.querySelector('[data-coa-import-track]');
+        const importBar = importForm.querySelector('[data-coa-import-bar]');
+        let processingTimer = null;
+        let currentProgress = 0;
+
+        function setImportProgress(value, status, detail) {
+            currentProgress = Math.max(currentProgress, Math.min(100, Math.round(value)));
+            if (importProgress) {
+                importProgress.classList.add('is-active');
+                importProgress.setAttribute('aria-hidden', 'false');
+            }
+            if (importStatus && status) importStatus.textContent = status;
+            if (importDetail && detail) importDetail.textContent = detail;
+            if (importPercent) importPercent.textContent = `${currentProgress}%`;
+            if (importTrack) importTrack.setAttribute('aria-valuenow', String(currentProgress));
+            if (importBar) importBar.style.width = `${currentProgress}%`;
+        }
+
+        function stopProcessingTimer() {
+            if (processingTimer) {
+                clearInterval(processingTimer);
+                processingTimer = null;
+            }
+        }
+
+        function startProcessingTimer() {
+            stopProcessingTimer();
+            processingTimer = setInterval(() => {
+                if (currentProgress < 94) {
+                    setImportProgress(currentProgress + 1, 'Importing rows...', 'The server is validating hierarchy, duplicates, and accounting rules.');
+                }
+            }, 650);
+        }
+
+        importFile?.addEventListener('change', () => {
+            const fileName = importFile.files?.[0]?.name || 'Selected file';
+            currentProgress = 0;
+            setImportProgress(0, 'Ready to import', fileName);
+        });
+
+        importForm.addEventListener('submit', (event) => {
+            if (!window.XMLHttpRequest || !window.FormData) {
+                return;
+            }
+
+            event.preventDefault();
+
+            if (!importFile?.files?.length) {
+                importFile?.reportValidity?.();
+                return;
+            }
+
+            stopProcessingTimer();
+            currentProgress = 0;
+            importForm.classList.add('is-importing');
+            importSubmit?.setAttribute('disabled', 'disabled');
+
+            const formData = new FormData(importForm);
+            const xhr = new XMLHttpRequest();
+            const fileName = importFile.files[0]?.name || 'selected file';
+
+            setImportProgress(1, 'Starting import...', `Preparing ${fileName}.`);
+
+            xhr.upload.addEventListener('progress', (progressEvent) => {
+                if (!progressEvent.lengthComputable) {
+                    setImportProgress(8, 'Uploading file...', 'Uploading file to the server.');
+                    return;
+                }
+
+                const uploadPercent = Math.round((progressEvent.loaded / progressEvent.total) * 65);
+                setImportProgress(Math.max(1, uploadPercent), 'Uploading file...', `${Math.round((progressEvent.loaded / progressEvent.total) * 100)}% of the file uploaded.`);
+            });
+
+            xhr.upload.addEventListener('load', () => {
+                setImportProgress(70, 'File uploaded', 'Server import has started.');
+                startProcessingTimer();
+            });
+
+            xhr.addEventListener('load', () => {
+                stopProcessingTimer();
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    let response = {};
+                    try {
+                        response = JSON.parse(xhr.responseText || '{}');
+                    } catch (error) {
+                        response = {};
+                    }
+
+                    const resultParts = [];
+                    if (typeof response.created !== 'undefined') resultParts.push(`Created: ${response.created}`);
+                    if (typeof response.skipped !== 'undefined') resultParts.push(`Skipped/review: ${response.skipped}`);
+
+                    setImportProgress(100, 'Import completed', resultParts.join(' · ') || 'Redirecting to the updated Chart of Accounts.');
+
+                    window.setTimeout(() => {
+                        window.location.assign(response.redirect_url || importForm.dataset.successUrl || window.location.href);
+                    }, 500);
+                    return;
+                }
+
+                let errorMessage = 'Please check the selected file and try again.';
+                try {
+                    const errorResponse = JSON.parse(xhr.responseText || '{}');
+                    const validationErrors = errorResponse.errors ? Object.values(errorResponse.errors).flat() : [];
+                    errorMessage = validationErrors[0] || errorResponse.message || errorMessage;
+                } catch (error) {
+                    // Keep the generic message when the response is not JSON.
+                }
+
+                importForm.classList.remove('is-importing');
+                importSubmit?.removeAttribute('disabled');
+                setImportProgress(100, 'Import failed', errorMessage);
+            });
+
+            xhr.addEventListener('error', () => {
+                stopProcessingTimer();
+                importForm.classList.remove('is-importing');
+                importSubmit?.removeAttribute('disabled');
+                setImportProgress(100, 'Network error', 'The file could not be uploaded. Check your connection and try again.');
+            });
+
+            xhr.open('POST', importForm.action, true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.addEventListener('readystatechange', () => {
+                if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED || xhr.readyState === XMLHttpRequest.LOADING) {
+                    if (currentProgress < 70) {
+                        setImportProgress(70, 'File uploaded', 'Server import has started.');
+                    }
+                    startProcessingTimer();
+                }
+            });
+            xhr.send(formData);
+        });
+    }
+
     document.querySelectorAll('[data-discard-import-review]').forEach((form) => {
         form.addEventListener('submit', (event) => {
             if (! confirm('Discard the pending Chart of Accounts import review? These skipped rows will not be imported and this popup will not appear again unless you import another file.')) {

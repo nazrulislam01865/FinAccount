@@ -73,7 +73,7 @@ class ChartOfAccountController extends Controller
         Request $request,
         ChartOfAccountExcelService $excel,
         ChartOfAccountService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $request->validate([
             'coa_file' => ['required', 'file', 'mimes:xlsx,xlsm,csv,txt', 'max:5120'],
         ]);
@@ -87,28 +87,45 @@ class ChartOfAccountController extends Controller
             count($issues)
         );
 
-        $redirect = redirect()
-            ->route('setup.chart-of-accounts')
-            ->with('status', $message)
-            ->with('import_errors', array_slice($result['errors'], 0, 10));
+        $importErrors = array_slice($result['errors'], 0, 10);
+        $reviewPayload = null;
 
         if ($issues !== []) {
-            session([
-                'coa_import_review' => [
-                    'summary' => [
-                        'created' => $result['created'],
-                        'skipped' => $result['skipped'],
-                        'conflicts' => count($result['conflicts'] ?? []),
-                        'violations' => count($result['violations'] ?? []),
-                    ],
-                    'issues' => $issues,
+            $reviewPayload = [
+                'summary' => [
+                    'created' => $result['created'],
+                    'skipped' => $result['skipped'],
+                    'conflicts' => count($result['conflicts'] ?? []),
+                    'violations' => count($result['violations'] ?? []),
                 ],
-            ]);
+                'issues' => $issues,
+            ];
+
+            session(['coa_import_review' => $reviewPayload]);
         } else {
             session()->forget('coa_import_review');
         }
 
-        return $redirect;
+        if ($request->expectsJson() || $request->ajax()) {
+            session()->flash('status', $message);
+            session()->flash('import_errors', $importErrors);
+
+            return response()->json([
+                'message' => $message,
+                'redirect_url' => route('setup.chart-of-accounts'),
+                'created' => $result['created'],
+                'updated' => 0,
+                'skipped' => $result['skipped'],
+                'needs_review' => count($issues),
+                'has_review' => $issues !== [],
+                'review_summary' => $reviewPayload['summary'] ?? null,
+            ]);
+        }
+
+        return redirect()
+            ->route('setup.chart-of-accounts')
+            ->with('status', $message)
+            ->with('import_errors', $importErrors);
     }
 
     public function resolveImportIssue(
