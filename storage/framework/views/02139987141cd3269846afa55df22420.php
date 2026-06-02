@@ -45,7 +45,11 @@
     .coa-import-review-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid var(--coa-line);background:linear-gradient(180deg,#f8fbff,#fff);}
     .coa-import-review-head h2{margin:0;color:#1d2939;font-size:24px;letter-spacing:-.03em;}
     .coa-import-review-head p{margin:6px 0 0;color:var(--coa-muted);font-size:14px;line-height:1.45;}
+    .coa-review-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+    .coa-review-head-actions form{margin:0;}
     .coa-review-close{width:38px;height:38px;min-height:38px;border-radius:999px;background:#f2f4f7;color:#344054;border:1px solid var(--coa-line);font-size:20px;padding:0;}
+    .coa-review-discard{background:#fff;color:#b42318;border:1px solid #fecaca;border-radius:12px;min-height:38px;padding:0 12px;font-weight:850;font-size:13px;}
+    .coa-review-discard:hover,.coa-review-close:hover{background:#fef2f2;color:#991b1b;}
     .coa-import-review-summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
     .coa-review-pill{display:inline-flex;align-items:center;border-radius:999px;padding:7px 12px;background:#eef4ff;color:#175cd3;font-weight:850;font-size:12px;}
     .coa-import-review-body{padding:20px 24px 24px;display:grid;gap:16px;max-height:72vh;overflow:auto;}
@@ -396,9 +400,21 @@
                             <span class="coa-review-pill">Needs Review: <?php echo e(count($coaImportReview['issues'] ?? [])); ?></span>
                         </div>
                     </div>
-                    <button type="button" class="coa-review-close" data-close-import-review aria-label="Close import review">×</button>
+                    <div class="coa-review-head-actions">
+                        <form method="POST" action="<?php echo e(route('setup.chart-of-accounts.import.discard')); ?>" data-discard-import-review>
+                            <?php echo csrf_field(); ?>
+                            <button type="submit" class="coa-review-discard">Discard review</button>
+                        </form>
+                        <form method="POST" action="<?php echo e(route('setup.chart-of-accounts.import.discard')); ?>" data-discard-import-review>
+                            <?php echo csrf_field(); ?>
+                            <button type="submit" class="coa-review-close" aria-label="Discard import review">×</button>
+                        </form>
+                    </div>
                 </div>
                 <div class="coa-import-review-body">
+                    <div class="coa-alert error" style="margin-bottom:0">
+                        These rows are only pending review; they have not been imported. Click <strong>Discard review</strong> to permanently clear this popup from your session.
+                    </div>
                     <?php $__currentLoopData = $coaImportReview['issues']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $issueIndex => $issue): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                         <?php
                             $payload = $issue['payload'] ?? [];
@@ -1039,9 +1055,11 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('[data-close-import-review]').forEach((button) => {
-        button.addEventListener('click', () => {
-            document.getElementById('coaImportReviewModal')?.classList.add('coa-hidden');
+    document.querySelectorAll('[data-discard-import-review]').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            if (! confirm('Discard the pending Chart of Accounts import review? These skipped rows will not be imported and this popup will not appear again unless you import another file.')) {
+                event.preventDefault();
+            }
         });
     });
 

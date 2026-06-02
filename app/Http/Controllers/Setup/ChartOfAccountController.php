@@ -235,6 +235,16 @@ class ChartOfAccountController extends Controller
         session(['coa_import_review' => $review]);
     }
 
+
+    public function discardImportReview(): RedirectResponse
+    {
+        session()->forget('coa_import_review');
+
+        return redirect()
+            ->route('setup.chart-of-accounts')
+            ->with('status', 'Chart of Accounts import review discarded. Skipped rows will not appear again unless you import the file again.');
+    }
+
     public function store(
         ChartOfAccountRequest $request,
         ChartOfAccountService $service
