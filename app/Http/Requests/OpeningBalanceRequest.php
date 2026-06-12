@@ -6,6 +6,8 @@ use App\Models\ChartOfAccount;
 use App\Models\FinancialYear;
 use App\Models\OpeningBalance;
 use App\Models\Party;
+use App\Models\PartyLedgerMapping;
+use App\Support\PartyAccountingProfile;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -147,17 +149,28 @@ class OpeningBalanceRequest extends FormRequest
                 ->keyBy('id');
 
             $parties = Party::query()
-                ->with(['partyType', 'linkedLedger.accountType'])
+                ->with(['partyType', 'linkedLedger.accountType', 'ledgerMappings.ledger.accountType'])
                 ->whereIn('id', $partyIds)
                 ->get()
                 ->keyBy('id');
 
-            $partyCountsByLedger = Party::query()
+            $mappedPartyLedgerIds = PartyLedgerMapping::query()
+                ->where('status', 'Active')
+                ->whereIn('chart_of_account_id', $accountIds)
+                ->whereNotNull('chart_of_account_id')
+                ->pluck('chart_of_account_id');
+
+            $legacyPartyLedgerIds = Party::query()
                 ->where('status', 'Active')
                 ->whereIn('linked_ledger_account_id', $accountIds)
-                ->selectRaw('linked_ledger_account_id, COUNT(*) as total')
-                ->groupBy('linked_ledger_account_id')
-                ->pluck('total', 'linked_ledger_account_id');
+                ->pluck('linked_ledger_account_id');
+
+            $partyLedgerIds = $mappedPartyLedgerIds
+                ->merge($legacyPartyLedgerIds)
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->flip();
 
             $seenRows = [];
             $totalDebit = 0.0;
@@ -211,7 +224,7 @@ class OpeningBalanceRequest extends FormRequest
                     );
                 }
 
-                if ($this->accountRequiresParty($account, (int) ($partyCountsByLedger[$accountId] ?? 0)) && !$partyId) {
+                if ($this->accountRequiresParty($account, $partyLedgerIds->has($accountId) ? 1 : 0) && !$partyId) {
                     $validator->errors()->add(
                         "items.$index.party_id",
                         'Party / Sub-ledger is required for receivable, payable, and advance opening balances.'
@@ -221,15 +234,28 @@ class OpeningBalanceRequest extends FormRequest
                 if ($partyId) {
                     $party = $parties[$partyId] ?? null;
 
-                    if ($party && (int) $party->linked_ledger_account_id !== $accountId) {
-                        $validator->errors()->add(
-                            "items.$index.party_id",
-                            'Selected party is not linked with the selected ledger account.'
-                        );
-                    }
-
                     if ($party) {
-                        $this->validatePartyBalanceSide($validator, $index, $party, $accountType, $normalBalance, $debit, $credit);
+                        $mappingPurpose = $party->mappingPurposeForAccount($accountId);
+                        $legacyMatch = (int) $party->linked_ledger_account_id === $accountId;
+
+                        if (! $mappingPurpose && ! $legacyMatch) {
+                            $validator->errors()->add(
+                                "items.$index.party_id",
+                                'Selected party does not have an active ledger mapping for the selected account.'
+                            );
+                        }
+
+                        $mappingPurpose ??= PartyAccountingProfile::purposeFromNature(
+                            $party->effectiveLedgerNature()
+                        );
+
+                        $this->validatePartyBalanceSide(
+                            $validator,
+                            $index,
+                            $mappingPurpose,
+                            $debit,
+                            $credit
+                        );
                     }
                 }
 
@@ -322,50 +348,25 @@ class OpeningBalanceRequest extends FormRequest
     private function validatePartyBalanceSide(
         Validator $validator,
         int $index,
-        Party $party,
-        ?string $accountType,
-        ?string $normalBalance,
+        string $mappingPurpose,
         float $debit,
         float $credit
     ): void {
-        $nature = $party->default_ledger_nature ?: $this->inferPartyNature($party, $accountType, $normalBalance);
+        $expectedSide = PartyAccountingProfile::openingSideForPurpose($mappingPurpose);
 
-        if (in_array($nature, ['Receivable', 'Advance Paid'], true) && $credit > 0) {
+        if ($expectedSide === 'Debit' && $credit > 0) {
             $validator->errors()->add(
                 "items.$index.credit_opening",
-                'Receivable and advance paid party balances must be entered as Debit Opening.'
+                'This party mapping requires the opening balance to be entered as Debit Opening.'
             );
         }
 
-        if (in_array($nature, ['Payable', 'Advance Received'], true) && $debit > 0) {
+        if ($expectedSide === 'Credit' && $debit > 0) {
             $validator->errors()->add(
                 "items.$index.debit_opening",
-                'Payable and advance received party balances must be entered as Credit Opening.'
+                'This party mapping requires the opening balance to be entered as Credit Opening.'
             );
         }
-    }
-
-    private function inferPartyNature(Party $party, ?string $accountType, ?string $normalBalance): string
-    {
-        $value = strtoupper(trim(($party->partyType?->code ?? '') . ' ' . ($party->partyType?->name ?? '') . ' ' . ($party->sub_type ?? '')));
-
-        if (str_contains($value, 'CUSTOMER') || str_contains($value, 'TENANT')) {
-            return 'Receivable';
-        }
-
-        if (str_contains($value, 'SUPPLIER') || str_contains($value, 'VENDOR') || str_contains($value, 'EMPLOYEE') || str_contains($value, 'DRIVER') || str_contains($value, 'LANDLORD')) {
-            return 'Payable';
-        }
-
-        if ($accountType === 'Asset' && $normalBalance === 'Debit') {
-            return 'Receivable';
-        }
-
-        if ($accountType === 'Liability' && $normalBalance === 'Credit') {
-            return 'Payable';
-        }
-
-        return 'No Effect';
     }
 
     private function blankToNull(mixed $value): ?string

@@ -229,6 +229,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
             ->middleware('permission:chart-of-accounts.view')
             ->name('chart-of-accounts.export');
 
+        Route::get('/chart-of-accounts/import-template', [ChartOfAccountController::class, 'importTemplate'])
+            ->middleware('permission:chart-of-accounts.view')
+            ->name('chart-of-accounts.import-template');
+
         Route::post('/chart-of-accounts/import', [ChartOfAccountController::class, 'import'])
             ->middleware('permission:chart-of-accounts.manage')
             ->name('chart-of-accounts.import');
@@ -240,6 +244,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         Route::post('/chart-of-accounts/import/discard', [ChartOfAccountController::class, 'discardImportReview'])
             ->middleware('permission:chart-of-accounts.manage')
             ->name('chart-of-accounts.import.discard');
+
+        Route::delete('/chart-of-accounts/bulk', [ChartOfAccountController::class, 'bulkDestroy'])
+            ->middleware('permission:chart-of-accounts.manage')
+            ->name('chart-of-accounts.bulk-destroy');
 
         Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
             ->middleware('permission:chart-of-accounts.manage')

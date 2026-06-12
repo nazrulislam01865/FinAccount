@@ -4,103 +4,188 @@ namespace App\Services\Setup;
 
 use App\Models\Company;
 use App\Models\TransactionHead;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TransactionHeadService
 {
-    public function create(array $data, ?int $userId = null): TransactionHead
-    {
-        return DB::transaction(function () use ($data, $userId) {
-            $head = TransactionHead::query()->create(
-                $this->payload($data, $userId, true)
-            );
+    public function create(
+        array $data,
+        ?int $userId = null,
+        ?int $companyId = null
+    ): TransactionHead {
+        return DB::transaction(function () use ($data, $userId, $companyId): TransactionHead {
+            $companyId = $this->resolveCompanyId($companyId);
 
-            $head->settlementTypes()->sync($data['settlement_type_ids']);
+            if ($companyId > 0) {
+                Company::query()->whereKey($companyId)->lockForUpdate()->firstOrFail();
+            }
 
-            return $head->fresh(['defaultPartyType', 'defaultPrimaryLedger', 'settlementTypes']);
+            $category = TransactionHead::normaliseCategory($data['category'] ?? null);
+
+            $head = TransactionHead::query()->create([
+                'company_id' => $companyId ?: null,
+                'head_code' => $this->nextHeadCode($category, $companyId),
+                'name' => $data['name'],
+                'category' => $category,
+                'default_primary_ledger_id' => $data['default_primary_ledger_id'],
+                'help_text' => $data['help_text'] ?? null,
+                'status' => $data['status'] ?? 'Active',
+
+                // Compatibility columns are system-derived only. Accounting
+                // Rules remain the source of party, money and Dr/Cr behavior.
+                'nature' => TransactionHead::natureFromCategory($category),
+                'default_party_type_id' => null,
+                'default_movement' => $this->legacyMovement($category),
+                'payment_method_required' => false,
+                'party_required_mode' => 'No',
+                'transaction_screen' => $this->screenFromCategory($category),
+                'is_system_default' => false,
+                'is_user_selectable' => true,
+                'sort_order' => $this->nextSortOrder($companyId),
+                'requires_party' => false,
+                'requires_reference' => false,
+                'created_by' => $userId,
+                'updated_by' => $userId,
+            ]);
+
+            return $head->fresh([
+                'defaultPrimaryLedger',
+                'accountingRules.lines',
+                'accountingRules.settlementType',
+            ]);
         });
     }
 
-    public function update(TransactionHead $head, array $data, ?int $userId = null): TransactionHead
-    {
-        return DB::transaction(function () use ($head, $data, $userId) {
-            $head->update(
-                $this->payload($data, $userId, false, $head)
-            );
+    public function update(
+        TransactionHead $head,
+        array $data,
+        ?int $userId = null
+    ): TransactionHead {
+        return DB::transaction(function () use ($head, $data, $userId): TransactionHead {
+            $head->refresh();
+            $category = TransactionHead::normaliseCategory($data['category'] ?? $head->category);
+            $postingLedgerId = (int) $data['default_primary_ledger_id'];
 
-            $head->settlementTypes()->sync($data['settlement_type_ids']);
+            if ($head->vouchers()->exists()) {
+                $categoryChanged = $category !== TransactionHead::normaliseCategory($head->category);
+                $ledgerChanged = $postingLedgerId !== (int) $head->default_primary_ledger_id;
 
-            return $head->fresh(['defaultPartyType', 'defaultPrimaryLedger', 'settlementTypes']);
+                if ($categoryChanged || $ledgerChanged) {
+                    throw ValidationException::withMessages([
+                        'transaction_head' => 'Category and Posting COA cannot be changed after this Transaction Head has transaction history. Deactivate it and create a new Transaction Head instead.',
+                    ]);
+                }
+            }
+
+            $head->update([
+                // Business ID and company ownership are immutable.
+                'name' => $data['name'],
+                'category' => $category,
+                'default_primary_ledger_id' => $postingLedgerId,
+                'help_text' => $data['help_text'] ?? null,
+                'status' => $data['status'] ?? $head->status,
+
+                // Keep legacy columns synchronized but never user-editable.
+                'nature' => TransactionHead::natureFromCategory($category),
+                'default_party_type_id' => null,
+                'default_movement' => $this->legacyMovement($category),
+                'payment_method_required' => false,
+                'party_required_mode' => 'No',
+                'transaction_screen' => $this->screenFromCategory($category),
+                'requires_party' => false,
+                'requires_reference' => false,
+                'updated_by' => $userId,
+            ]);
+
+            return $head->fresh([
+                'defaultPrimaryLedger',
+                'accountingRules.lines',
+                'accountingRules.settlementType',
+            ]);
         });
     }
 
-    private function payload(array $data, ?int $userId, bool $creating, ?TransactionHead $head = null): array
+    private function nextHeadCode(string $category, int $companyId): string
     {
-        $payload = Arr::only($data, [
-            'head_code',
-            'name',
-            'nature',
-            'category',
-            'default_party_type_id',
-            'default_primary_ledger_id',
-            'default_movement',
-            'payment_method_required',
-            'party_required_mode',
-            'transaction_screen',
-            'is_system_default',
-            'is_user_selectable',
-            'sort_order',
-            'linked_accounting_rule_code',
-            'description',
-            'help_text',
-            'developer_note',
-            'status',
-        ]);
+        $prefix = 'TH-' . $this->categoryPrefix($category);
 
-        $company = Company::query()->first();
-
-        $payload['company_id'] = $head?->company_id ?: $company?->id;
-
-        if ($creating) {
-            $payload['head_code'] = $payload['head_code'] ?? $this->nextHeadCode();
-        } elseif (empty($payload['head_code'])) {
-            unset($payload['head_code']);
-        }
-
-        $payload['category'] = $payload['category'] ?: $payload['nature'];
-        $payload['payment_method_required'] = (bool) ($data['payment_method_required'] ?? false);
-        $payload['party_required_mode'] = $data['party_required_mode'] ?? ((bool) ($data['requires_party'] ?? false) ? 'Required' : 'No');
-        $payload['requires_party'] = $payload['party_required_mode'] !== 'No';
-        $payload['requires_reference'] = (bool) ($data['requires_reference'] ?? false);
-        $payload['is_system_default'] = (bool) ($data['is_system_default'] ?? false);
-        $payload['is_user_selectable'] = (bool) ($data['is_user_selectable'] ?? true);
-        $payload['sort_order'] = $data['sort_order'] ?? $head?->sort_order ?? $this->nextSortOrder();
-
-        if ($creating) {
-            $payload['created_by'] = $userId;
-        }
-
-        $payload['updated_by'] = $userId;
-
-        return $payload;
-    }
-
-    private function nextHeadCode(): string
-    {
-        $lastCode = TransactionHead::query()
+        $numbers = TransactionHead::query()
             ->withTrashed()
-            ->where('head_code', 'like', 'TH-%')
-            ->orderByDesc('id')
-            ->value('head_code');
+            ->when(
+                $companyId > 0,
+                fn ($query) => $query->where('company_id', $companyId),
+                fn ($query) => $query->whereNull('company_id')
+            )
+            ->where('head_code', 'like', $prefix . '-%')
+            ->lockForUpdate()
+            ->pluck('head_code')
+            ->map(function (?string $code) use ($prefix): int {
+                if (! $code || ! preg_match('/^' . preg_quote($prefix, '/') . '-(\d+)$/', $code, $matches)) {
+                    return 0;
+                }
 
-        $number = $lastCode ? (int) str_replace('TH-', '', $lastCode) : 0;
+                return (int) $matches[1];
+            });
 
-        return 'TH-' . str_pad((string) ($number + 1), 3, '0', STR_PAD_LEFT);
+        $next = ((int) $numbers->max()) + 1;
+
+        return $prefix . '-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 
-    private function nextSortOrder(): int
+    private function nextSortOrder(int $companyId): int
     {
-        return ((int) TransactionHead::query()->max('sort_order')) + 10;
+        $maximum = TransactionHead::query()
+            ->when(
+                $companyId > 0,
+                fn ($query) => $query->where('company_id', $companyId),
+                fn ($query) => $query->whereNull('company_id')
+            )
+            ->max('sort_order');
+
+        return ((int) $maximum) + 10;
+    }
+
+    private function categoryPrefix(string $category): string
+    {
+        return match ($category) {
+            'Sales' => 'SAL',
+            'Purchase' => 'PUR',
+            'Receipt' => 'REC',
+            'Payment' => 'PAY',
+            'Banking' => 'BNK',
+            'Expense' => 'EXP',
+            'Income' => 'INC',
+            'Owner / Equity' => 'EQT',
+            'Asset' => 'AST',
+            'Loan' => 'LON',
+            'Employee' => 'EMP',
+            'Opening' => 'OPN',
+            'Adjustment' => 'ADJ',
+            default => 'GEN',
+        };
+    }
+
+    private function screenFromCategory(string $category): string
+    {
+        return match ($category) {
+            'Opening' => 'Opening Balance Entry',
+            'Owner / Equity' => 'Owner / Equity Entry',
+            default => $category . ' Entry',
+        };
+    }
+
+    private function legacyMovement(string $category): string
+    {
+        return match ($category) {
+            'Banking', 'Adjustment' => 'No Movement',
+            'Payment', 'Receipt', 'Employee' => 'Decrease',
+            default => 'Increase',
+        };
+    }
+
+    private function resolveCompanyId(?int $companyId): int
+    {
+        return (int) ($companyId ?: Company::query()->orderBy('id')->value('id') ?: 0);
     }
 }

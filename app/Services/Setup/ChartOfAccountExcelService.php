@@ -91,56 +91,125 @@ class ChartOfAccountExcelService
         $violations = [];
         $hierarchy = $this->existingHierarchy();
 
-        DB::transaction(function () use ($rows, $headers, $firstDataLineNumber, $accountService, $userId, &$created, &$skipped, &$errors, &$conflicts, &$violations, &$hierarchy) {
-            foreach ($rows as $index => $row) {
-                $lineNumber = $firstDataLineNumber + $index;
-                $data = $this->mapRow($headers, $row);
+        $pendingRows = collect($rows)
+            ->map(function (array $row, int $index) use ($headers, $firstDataLineNumber): array {
+                return [
+                    'line_number' => $firstDataLineNumber + $index,
+                    'data' => $this->mapRow($headers, $row),
+                ];
+            })
+            ->reject(fn (array $item): bool => $this->blankRow($item['data']))
+            ->values()
+            ->all();
 
-                if ($this->blankRow($data)) {
-                    continue;
+        DB::transaction(function () use ($pendingRows, $accountService, $userId, &$created, &$skipped, &$errors, &$conflicts, &$violations, &$hierarchy) {
+            $remaining = $pendingRows;
+            $maximumPasses = max(1, count($remaining) + 1);
+            $pass = 0;
+
+            while ($remaining !== [] && $pass < $maximumPasses) {
+                $pass++;
+                $createdThisPass = 0;
+                $deferred = [];
+
+                foreach ($remaining as $item) {
+                    $lineNumber = (int) $item['line_number'];
+                    $data = $this->normalizeImportedCoaData($item['data'], $hierarchy);
+
+                    try {
+                        $payload = $this->toAccountPayload($data, $lineNumber);
+                    } catch (\Throwable $exception) {
+                        if ($this->shouldDeferMissingParent($exception)) {
+                            $deferred[] = $item;
+                            continue;
+                        }
+
+                        $this->recordImportViolation(
+                            $lineNumber,
+                            $data,
+                            [$exception->getMessage()],
+                            $skipped,
+                            $violations,
+                            $errors
+                        );
+                        continue;
+                    }
+
+                    $duplicateAccounts = $this->findDuplicateAccounts($payload);
+                    if ($duplicateAccounts !== []) {
+                        $skipped++;
+                        $reasons = collect($duplicateAccounts)
+                            ->map(fn (array $account) => $account['reason'])
+                            ->values()
+                            ->all();
+                        $conflicts[] = $this->makeImportIssue('conflict', $lineNumber, $payload, $reasons, $duplicateAccounts);
+                        $errors[] = 'Row ' . $lineNumber . ': Existing account conflict. The existing CoA was not changed; resolve this row manually from the import review popup.';
+                        continue;
+                    }
+
+                    $ruleErrors = $this->validateAccountPayload($payload);
+                    if ($ruleErrors !== []) {
+                        $this->recordImportViolation(
+                            $lineNumber,
+                            $data,
+                            $ruleErrors,
+                            $skipped,
+                            $violations,
+                            $errors,
+                            $payload
+                        );
+                        continue;
+                    }
+
+                    try {
+                        $accountService->create($payload, $userId);
+                        $created++;
+                        $createdThisPass++;
+                        $this->rememberHierarchy($hierarchy, $payload, $data);
+                    } catch (\Throwable $exception) {
+                        $this->recordImportViolation(
+                            $lineNumber,
+                            $data,
+                            [$exception->getMessage()],
+                            $skipped,
+                            $violations,
+                            $errors,
+                            $payload
+                        );
+                    }
                 }
 
-                $data = $this->normalizeImportedCoaData($data, $hierarchy);
-
-                try {
-                    $payload = $this->toAccountPayload($data, $lineNumber);
-                } catch (\Throwable $exception) {
-                    $skipped++;
-                    $draftPayload = $this->draftPayloadFromImportData($data);
-                    $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $draftPayload, [$exception->getMessage()]);
-                    $errors[] = 'Row ' . $lineNumber . ': ' . $exception->getMessage();
-                    continue;
+                if ($deferred === []) {
+                    break;
                 }
 
-                $duplicateAccounts = $this->findDuplicateAccounts($payload);
-                if ($duplicateAccounts !== []) {
-                    $skipped++;
-                    $reasons = collect($duplicateAccounts)
-                        ->map(fn (array $account) => $account['reason'])
-                        ->values()
-                        ->all();
-                    $conflicts[] = $this->makeImportIssue('conflict', $lineNumber, $payload, $reasons, $duplicateAccounts);
-                    $errors[] = 'Row ' . $lineNumber . ': Existing account conflict. Resolve manually from the import review popup.';
-                    continue;
+                if ($createdThisPass === 0) {
+                    foreach ($deferred as $item) {
+                        $lineNumber = (int) $item['line_number'];
+                        $data = $this->normalizeImportedCoaData($item['data'], $hierarchy);
+
+                        try {
+                            $payload = $this->toAccountPayload($data, $lineNumber);
+                            $messages = ['Parent account could not be resolved from the existing CoA or the valid rows in this import file.'];
+                        } catch (\Throwable $exception) {
+                            $payload = null;
+                            $messages = [$exception->getMessage()];
+                        }
+
+                        $this->recordImportViolation(
+                            $lineNumber,
+                            $data,
+                            $messages,
+                            $skipped,
+                            $violations,
+                            $errors,
+                            $payload
+                        );
+                    }
+                    break;
                 }
 
-                $ruleErrors = $this->validateAccountPayload($payload);
-                if ($ruleErrors !== []) {
-                    $skipped++;
-                    $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $payload, $ruleErrors);
-                    $errors[] = 'Row ' . $lineNumber . ': ' . implode(' ', $ruleErrors);
-                    continue;
-                }
-
-                try {
-                    $accountService->create($payload, $userId);
-                    $created++;
-                    $this->rememberHierarchy($hierarchy, $payload, $data);
-                } catch (\Throwable $exception) {
-                    $skipped++;
-                    $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $payload, [$exception->getMessage()]);
-                    $errors[] = 'Row ' . $lineNumber . ': ' . $exception->getMessage();
-                }
+                $remaining = $deferred;
             }
         });
 
@@ -153,6 +222,27 @@ class ChartOfAccountExcelService
             'violations' => $violations,
             'issues' => array_values(array_merge($conflicts, $violations)),
         ];
+    }
+
+    private function shouldDeferMissingParent(\Throwable $exception): bool
+    {
+        return str_contains($exception->getMessage(), 'Parent account not found:');
+    }
+
+    private function recordImportViolation(
+        int $lineNumber,
+        array $data,
+        array $messages,
+        int &$skipped,
+        array &$violations,
+        array &$errors,
+        ?array $payload = null
+    ): void {
+        $skipped++;
+        $payload ??= $this->draftPayloadFromImportData($data);
+        $messages = array_values(array_unique(array_filter($messages)));
+        $violations[] = $this->makeImportIssue('rule_violation', $lineNumber, $payload, $messages);
+        $errors[] = 'Row ' . $lineNumber . ': ' . implode(' ', $messages);
     }
 
     private function prepareImportRows(array $rows): array
@@ -252,7 +342,11 @@ class ChartOfAccountExcelService
         $data['level_4'] = $level4;
 
         if (! array_key_exists('user_selectable', $data) || $this->cleanValue($data['user_selectable']) === '') {
-            $data['user_selectable'] = $postingAllowed ? 'Yes' : 'No';
+            $data['user_selectable'] = ((int) $coaLevel === 4 && $ledgerType !== 'Party Control') ? 'Yes' : 'No';
+        }
+
+        if (! array_key_exists('system_ledger', $data) || $this->cleanValue($data['system_ledger']) === '') {
+            $data['system_ledger'] = 'No';
         }
 
         return $data;

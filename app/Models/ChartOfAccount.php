@@ -20,6 +20,7 @@ class ChartOfAccount extends Model
         'Group',
         'Cash',
         'Bank',
+        'Mobile Wallet',
         'Party Control',
         'Inventory',
         'Asset',
@@ -86,7 +87,7 @@ class ChartOfAccount extends Model
 
     public function parent()
     {
-        return $this->belongsTo(self::class, 'parent_id');
+        return $this->belongsTo(self::class, 'parent_id')->withTrashed();
     }
 
     public function children()

@@ -227,6 +227,13 @@ class AccountingRulePreviewService
     {
         return match ($this->ledgerResolver->normalizeLedgerSource($line->ledger_source)) {
             'user_cash_bank' => $line->side === 'Debit' ? 'Received In Account' : 'Paid From Account',
+            'party_receivable' => 'Party Receivable Ledger',
+            'party_payable' => 'Party Payable Ledger',
+            'party_advance_paid' => 'Party Advance Paid Ledger',
+            'party_advance_received' => 'Party Advance Received Ledger',
+            'party_loan_payable' => 'Party Loan Payable Ledger',
+            'party_salary_payable' => 'Party Salary Payable Ledger',
+            'party_capital' => 'Party Capital Ledger',
             'party_control' => 'Party/Sub-Ledger Control Account',
             'transaction_head' => 'Transaction Head Default Ledger',
             'system_derived' => 'System Derived Ledger',

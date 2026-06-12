@@ -13,11 +13,14 @@ use App\Models\Currency;
 use App\Models\LedgerMappingRule;
 use App\Models\LedgerType;
 use App\Models\Party;
+use App\Models\PartyLedgerMapping;
 use App\Models\PartyType;
 use App\Models\SettlementType;
 use App\Models\TimeZone;
 use App\Models\TransactionHead;
+use App\Services\Accounting\TransactionHeadConfigurationService;
 use App\Services\Accounting\TransactionRequirementService;
+use App\Support\PartyAccountingProfile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -129,7 +132,7 @@ class DropdownController extends Controller
                     'name' => $item->name,
                     'code' => $item->code,
                     'default_ledger_account_id' => $item->default_ledger_account_id,
-                    'default_ledger_nature' => $this->inferPartyLedgerNature($item),
+                    'default_ledger_nature' => PartyAccountingProfile::deriveNature($item),
                     'default_ledger_name' => $item->defaultLedger?->display_name,
                     'default_ledger_account_type' => $item->defaultLedger?->accountType?->name,
                     'display_name' => $item->name,
@@ -201,61 +204,64 @@ class DropdownController extends Controller
             ? TransactionHead::normaliseCategory((string) $request->input('category'))
             : null;
         $search = strtolower(trim((string) $request->input('q', $request->input('search', ''))));
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+        $configuration = app(TransactionHeadConfigurationService::class);
 
         $heads = TransactionHead::query()
             ->where('status', 'Active')
+            ->where('is_user_selectable', true)
+            ->when($companyId > 0, fn ($query) => $query->where(function ($scope) use ($companyId) {
+                $scope->where('company_id', $companyId)
+                    ->orWhere(function ($global) {
+                        $global->whereNull('company_id')->where('is_system_default', true);
+                    });
+            }))
             ->with([
-                'defaultPartyType',
-                'settlementTypes' => fn ($query) => $query
-                    ->where('status', 'Active')
-                    ->orderBy('sort_order')
-                    ->orderBy('name'),
+                'defaultPrimaryLedger.accountType',
+                'accountingRules.lines',
+                'accountingRules.settlementType',
+                'accountingRules.partyType',
+                'ledgerMappingRules.settlementType',
+                'settlementTypes',
             ])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(function (TransactionHead $item) {
-                $normalisedCategory = TransactionHead::normaliseCategory(
-                    $item->category,
-                    $item->name,
-                    $item->nature
-                );
+            ->map(function (TransactionHead $item) use ($configuration) {
+                $profile = $configuration->summarize($item);
+
+                if (! $profile['ready']) {
+                    return null;
+                }
 
                 return [
                     'id' => $item->id,
                     'name' => $item->name,
-                    'display_name' => $item->name,
+                    'display_name' => trim(($item->head_code ? $item->head_code . ' - ' : '') . $item->name),
                     'head_code' => $item->head_code,
-                    'nature' => $item->nature,
-                    'category' => $normalisedCategory,
-                    'raw_category' => $item->category ?: $item->nature,
-                    'default_party_type_id' => $item->default_party_type_id,
-                    'default_party_type_name' => $item->defaultPartyType?->name,
+                    'nature' => TransactionHead::natureFromCategory($item->category),
+                    'category' => TransactionHead::normaliseCategory($item->category),
+                    'raw_category' => $item->category,
                     'default_primary_ledger_id' => $item->default_primary_ledger_id,
-                    'default_movement' => $item->default_movement,
-                    'payment_method_required' => (bool) $item->payment_method_required,
-                    'party_required_mode' => $item->party_required_mode ?: ($item->requires_party ? 'Required' : 'No'),
-                    'transaction_screen' => $item->transaction_screen ?: 'Transaction Entry',
-                    'is_system_default' => (bool) ($item->is_system_default ?? false),
-                    'is_user_selectable' => (bool) ($item->is_user_selectable ?? true),
-                    'sort_order' => $item->sort_order,
-                    'linked_accounting_rule_code' => $item->linked_accounting_rule_code,
+                    'default_party_type_id' => $profile['party_type_id'],
+                    'default_party_type_name' => $profile['party_type_name'],
+                    'payment_method_required' => (bool) $profile['payment_method_required'],
+                    'party_required_mode' => $profile['party_required_mode'],
+                    'transaction_screen' => $profile['transaction_screen'],
+                    'is_user_selectable' => true,
                     'help_text' => $item->help_text,
-                    'developer_note' => $item->developer_note,
-                    'requires_party' => (bool) $item->requires_party,
-                    'requires_reference' => (bool) $item->requires_reference,
-                    'settlement_type_ids' => $item->settlementTypes
-                        ->pluck('id')
-                        ->map(fn ($id) => (int) $id)
-                        ->values(),
-                    'settlement_types' => $item->settlementTypes->map(fn (SettlementType $settlement) => [
+                    'requires_party' => (bool) $profile['party_required'],
+                    'requires_reference' => (bool) $profile['requires_reference'],
+                    'settlement_type_ids' => $profile['settlement_type_ids'],
+                    'settlement_types' => collect($profile['settlements'])->map(fn (SettlementType $settlement) => [
                         'id' => $settlement->id,
                         'name' => $settlement->name,
                         'code' => $settlement->code,
                         'display_name' => $settlement->name,
                     ])->values(),
                 ];
-            });
+            })
+            ->filter();
 
         if ($selectedCategory) {
             $heads = $heads->filter(fn (array $item) => $item['category'] === $selectedCategory);
@@ -281,22 +287,27 @@ class DropdownController extends Controller
         $mappedOnly = $request->boolean('mapped_only');
 
         if ($request->filled('transaction_head_id')) {
+            $companyId = (int) ($request->user()?->company_id ?? 0);
             $head = TransactionHead::query()
                 ->where('status', 'Active')
+                ->when($companyId > 0, fn ($builder) => $builder->where(function ($scope) use ($companyId) {
+                    $scope->where('company_id', $companyId)
+                        ->orWhere(function ($global) {
+                            $global->whereNull('company_id')->where('is_system_default', true);
+                        });
+                }))
                 ->whereKey($request->integer('transaction_head_id'))
                 ->first();
 
-            if (!$head) {
+            if (! $head) {
                 return $this->ok(collect());
             }
 
-            $query->whereHas('transactionHeads', fn ($relation) => $relation
-                ->where('transaction_heads.id', $head->id)
-                ->where('transaction_heads.status', 'Active')
-                ->whereNull('transaction_heads.deleted_at'));
-
             if ($mappedOnly) {
                 $legacySettlementIds = LedgerMappingRule::query()
+                    ->where(function ($scope) use ($companyId) {
+                        $scope->where('company_id', $companyId)->orWhereNull('company_id');
+                    })
                     ->where('transaction_head_id', $head->id)
                     ->where('status', 'Active')
                     ->whereNull('deleted_at')
@@ -304,23 +315,35 @@ class DropdownController extends Controller
                     ->filter();
 
                 $v2SpecificSettlementIds = AccountingRule::query()
+                    ->where('company_id', $companyId)
                     ->where('transaction_head_id', $head->id)
                     ->where('status', 'Active')
+                    ->whereNull('deleted_at')
                     ->whereNotNull('settlement_type_id')
                     ->pluck('settlement_type_id')
                     ->filter();
 
                 $hasGenericV2Rule = AccountingRule::query()
+                    ->where('company_id', $companyId)
                     ->where('transaction_head_id', $head->id)
                     ->where('status', 'Active')
+                    ->whereNull('deleted_at')
                     ->whereNull('settlement_type_id')
                     ->exists();
 
-                if (!$hasGenericV2Rule) {
+                if (! $hasGenericV2Rule) {
                     $mappedSettlementIds = $legacySettlementIds
                         ->merge($v2SpecificSettlementIds)
                         ->unique()
                         ->values();
+
+                    // Compatibility fallback for old installations that have
+                    // not yet migrated Settlement mappings into Rules.
+                    if ($mappedSettlementIds->isEmpty()) {
+                        $mappedSettlementIds = $head->settlementTypes()
+                            ->where('settlement_types.status', 'Active')
+                            ->pluck('settlement_types.id');
+                    }
 
                     $query->whereIn('id', $mappedSettlementIds);
                 }
@@ -357,13 +380,16 @@ class DropdownController extends Controller
         );
     }
 
-    public function cashBankAccounts(): JsonResponse
+    public function cashBankAccounts(Request $request): JsonResponse
     {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
         return $this->ok(
             CashBankAccount::query()
+                ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
                 ->where('status', 'Active')
                 ->with(['linkedLedger.accountType', 'bank'])
-                ->orderBy('cash_bank_name')
+                ->orderBy('cash_bank_code')
                 ->get()
                 ->map(fn (CashBankAccount $account) => [
                     'id' => $account->id,
@@ -392,9 +418,12 @@ class DropdownController extends Controller
 
     public function parties(Request $request): JsonResponse
     {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
         $query = Party::query()
             ->where('status', 'Active')
-            ->with(['partyType', 'linkedLedger.accountType']);
+            ->when($companyId > 0, fn ($builder) => $builder->where('company_id', $companyId))
+            ->with(['partyType', 'linkedLedger.accountType', 'ledgerMappings.ledger.accountType']);
 
         if ($request->filled('party_type_id')) {
             $query->where('party_type_id', $request->integer('party_type_id'));
@@ -408,6 +437,14 @@ class DropdownController extends Controller
             $query->where('linked_ledger_account_id', $request->integer('linked_ledger_account_id'));
         }
 
+        if ($request->filled('mapping_purpose')) {
+            $purpose = strtolower(trim(str_replace([' ', '-'], '_', (string) $request->input('mapping_purpose'))));
+            $query->whereHas('ledgerMappings', fn ($mappingQuery) => $mappingQuery
+                ->where('mapping_purpose', $purpose)
+                ->where('status', 'Active')
+                ->whereNotNull('chart_of_account_id'));
+        }
+
         return $this->ok(
             $query->orderBy('party_name')
                 ->get()
@@ -416,7 +453,7 @@ class DropdownController extends Controller
                     'party_code' => $party->party_code,
                     'party_name' => $party->party_name,
                     'sub_type' => $party->sub_type,
-                    'default_ledger_nature' => $party->default_ledger_nature,
+                    'default_ledger_nature' => $party->effectiveLedgerNature(),
                     'opening_balance' => $party->opening_balance,
                     'opening_balance_type' => $party->opening_balance_type,
                     'party_type_id' => $party->party_type_id,
@@ -427,6 +464,22 @@ class DropdownController extends Controller
                     'linked_ledger_account_type' => $party->linkedLedger?->accountType?->name,
                     'linked_ledger_normal_balance' => $party->linkedLedger?->normal_balance
                         ?: $party->linkedLedger?->accountType?->normal_balance,
+                    'ledger_mappings' => $party->ledgerMappings
+                        ->where('status', 'Active')
+                        ->map(fn ($mapping) => [
+                            'purpose' => $mapping->mapping_purpose,
+                            'chart_of_account_id' => $mapping->chart_of_account_id,
+                            'ledger_name' => $mapping->ledger?->display_name,
+                        ])->values(),
+                    'receivable_ledger_account_id' => $party->ledgerMappings
+                        ->first(fn ($mapping) => $mapping->status === 'Active' && $mapping->mapping_purpose === PartyLedgerMapping::PURPOSE_RECEIVABLE)
+                        ?->chart_of_account_id,
+                    'payable_ledger_account_id' => $party->ledgerMappings
+                        ->first(fn ($mapping) => $mapping->status === 'Active' && $mapping->mapping_purpose === PartyLedgerMapping::PURPOSE_PAYABLE)
+                        ?->chart_of_account_id,
+                    'capital_ledger_account_id' => $party->ledgerMappings
+                        ->first(fn ($mapping) => $mapping->status === 'Active' && $mapping->mapping_purpose === PartyLedgerMapping::PURPOSE_CAPITAL)
+                        ?->chart_of_account_id,
                     'display_name' => trim(($party->party_code ? $party->party_code . ' - ' : '') . $party->party_name),
                 ])
         );
@@ -466,29 +519,60 @@ class DropdownController extends Controller
 
     public function cashBankLedgers(Request $request): JsonResponse
     {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+        $type = trim((string) $request->input('type'));
+        $excludeAccountId = $request->integer('exclude_cash_bank_account_id');
+
+        $editingAccount = $excludeAccountId > 0
+            ? CashBankAccount::query()
+                ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
+                ->find($excludeAccountId)
+            : null;
+
         $usedLedgerIds = CashBankAccount::query()
-            ->when($request->filled('exclude_cash_bank_account_id'), fn ($query) => $query
-                ->whereKeyNot($request->integer('exclude_cash_bank_account_id')))
+            ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
+            ->when($editingAccount, fn ($query) => $query->whereKeyNot($editingAccount->id))
             ->pluck('linked_ledger_account_id')
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->all();
 
+        $query = ChartOfAccount::query()
+            ->when($companyId > 0, fn ($builder) => $builder->where('company_id', $companyId))
+            ->where('status', 'Active')
+            ->where(function ($nested) {
+                $nested->where('coa_level', 4)
+                    ->orWhere('account_level', 'Ledger');
+            })
+            ->where('is_cash_bank', true)
+            ->where('posting_allowed', true)
+            ->whereNotIn('id', $usedLedgerIds)
+            ->whereHas('accountType', fn ($builder) => $builder
+                ->where('name', 'Asset')
+                ->where('normal_balance', 'Debit'))
+            ->with('accountType');
+
+        if ($type === 'Cash') {
+            $query->where('ledger_type', 'Cash');
+        } elseif ($type === 'Bank') {
+            $query->where('ledger_type', 'Bank');
+        } elseif ($type === 'Mobile Banking') {
+            $legacyLedgerId = $editingAccount?->type === 'Mobile Banking'
+                && $editingAccount?->linkedLedger?->ledger_type === 'Bank'
+                    ? (int) $editingAccount->linked_ledger_account_id
+                    : 0;
+
+            $query->where(function ($builder) use ($legacyLedgerId) {
+                $builder->where('ledger_type', 'Mobile Wallet');
+
+                if ($legacyLedgerId > 0) {
+                    $builder->orWhereKey($legacyLedgerId);
+                }
+            });
+        }
+
         return $this->ok(
-            ChartOfAccount::query()
-                ->where('status', 'Active')
-                ->where(function ($nested) {
-                    $nested->where('coa_level', 4)
-                        ->orWhere('account_level', 'Ledger');
-                })
-                ->where('is_cash_bank', true)
-                ->where('posting_allowed', true)
-                ->whereNotIn('id', $usedLedgerIds)
-                ->whereHas('accountType', fn ($query) => $query
-                    ->where('name', 'Asset')
-                    ->where('normal_balance', 'Debit'))
-                ->with('accountType')
-                ->orderBy('account_code')
+            $query->orderBy('account_code')
                 ->get()
                 ->map(fn (ChartOfAccount $account) => $this->formatAccount($account))
         );
@@ -500,10 +584,16 @@ class DropdownController extends Controller
             ? PartyType::query()->find($request->integer('party_type_id'))
             : null;
 
+        $mappingPurpose = strtolower(trim(str_replace([' ', '-'], '_', (string) $request->input('mapping_purpose'))));
         $ledgerNature = $request->input('ledger_nature')
-            ?: ($partyType ? $this->inferPartyLedgerNature($partyType) : null);
+            ?: $this->natureForMappingPurpose($mappingPurpose)
+            ?: ($partyType ? PartyAccountingProfile::deriveNature($partyType) : null);
+        $companyId = (int) ($request->user()?->company_id ?? 0);
 
         $query = ChartOfAccount::query()
+            ->when($companyId > 0, fn ($builder) => $builder->where(function ($scope) use ($companyId) {
+                $scope->where('company_id', $companyId)->orWhereNull('company_id');
+            }))
             ->where('status', 'Active')
             ->where(function ($nested) {
                 $nested->where('coa_level', 4)
@@ -512,7 +602,7 @@ class DropdownController extends Controller
             ->where('posting_allowed', true)
             ->with('accountType');
 
-        if ($request->boolean('for_party') || $partyType || $ledgerNature) {
+        if ($request->boolean('for_party') || $partyType || $ledgerNature || $mappingPurpose !== '') {
             $query->where('is_cash_bank', false);
             $this->applyPartyLedgerNatureFilter($query, $ledgerNature);
         }
@@ -575,36 +665,6 @@ class DropdownController extends Controller
         return $ids;
     }
 
-    private function inferPartyLedgerNature(?PartyType $partyType): string
-    {
-        $code = strtoupper((string) $partyType?->code);
-        $name = strtoupper((string) $partyType?->name);
-        $value = $code . ' ' . $name;
-
-        if (str_contains($value, 'CUSTOMER') || str_contains($value, 'CUS') || str_contains($value, 'TENANT')) {
-            return 'Receivable';
-        }
-
-        if (
-            str_contains($value, 'SUPPLIER')
-            || str_contains($value, 'SUP')
-            || str_contains($value, 'VENDOR')
-            || str_contains($value, 'LANDLORD')
-        ) {
-            return 'Payable';
-        }
-
-        if (str_contains($value, 'EMPLOYEE') || str_contains($value, 'DRIVER')) {
-            return 'Payable';
-        }
-
-        if (str_contains($value, 'OWNER')) {
-            return 'No Effect';
-        }
-
-        return 'No Effect';
-    }
-
     private function applyPartyLedgerNatureFilter($query, ?string $ledgerNature): void
     {
         match ($ledgerNature) {
@@ -616,11 +676,23 @@ class DropdownController extends Controller
                 ->where('name', 'Liability')
                 ->where('normal_balance', 'Credit')),
 
+            'Capital' => $query->whereHas('accountType', fn ($relation) => $relation
+                ->where('name', 'Equity')
+                ->where('normal_balance', 'Credit')),
+
             'No Effect' => $query->whereHas('accountType', fn ($relation) => $relation
                 ->whereIn('name', ['Asset', 'Liability', 'Equity'])),
 
             default => null,
         };
+    }
+
+
+    private function natureForMappingPurpose(string $purpose): ?string
+    {
+        $nature = PartyAccountingProfile::natureFromPurpose($purpose);
+
+        return $nature === PartyAccountingProfile::NATURE_NO_EFFECT ? null : $nature;
     }
 
     public function partyLedgerEffects(): JsonResponse

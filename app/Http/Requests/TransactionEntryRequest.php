@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\AccountingEngine\Services\PartyLedgerResolver;
 use App\Models\AccountingRule;
 use App\Models\CashBankAccount;
 use App\Models\LedgerMappingRule;
@@ -38,6 +39,8 @@ class TransactionEntryRequest extends FormRequest
 
     public function rules(): array
     {
+        $companyId = (int) ($this->user()?->company_id ?? 0);
+
         return [
             'voucher_date' => ['required', 'date'],
             'transaction_category' => ['required', 'string', Rule::in(TransactionHead::transactionCategories())],
@@ -61,18 +64,24 @@ class TransactionEntryRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::exists('parties', 'id')
-                    ->where(fn ($query) => $query
-                        ->where('status', 'Active')
-                        ->whereNull('deleted_at')),
+                    ->where(function ($query) use ($companyId) {
+                        $query->where('status', 'Active')->whereNull('deleted_at');
+                        if ($companyId > 0) {
+                            $query->where('company_id', $companyId);
+                        }
+                    }),
             ],
 
             'cash_bank_account_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('cash_bank_accounts', 'id')
-                    ->where(fn ($query) => $query
-                        ->where('status', 'Active')
-                        ->whereNull('deleted_at')),
+                    ->where(function ($query) use ($companyId) {
+                        $query->where('status', 'Active')->whereNull('deleted_at');
+                        if ($companyId > 0) {
+                            $query->where('company_id', $companyId);
+                        }
+                    }),
             ],
 
             'amount' => ['required', 'numeric', 'min:0.01'],
@@ -297,9 +306,24 @@ class TransactionEntryRequest extends FormRequest
         }
 
         if ($this->party_id) {
-            $party = Party::query()->find($this->integer('party_id'));
+            $party = Party::query()->with('ledgerMappings')->find($this->integer('party_id'));
+            $requiredPurposes = collect($requirements['required_party_mapping_purposes'] ?? []);
+            $partyLedgerResolver = app(PartyLedgerResolver::class);
 
-            if ($party && !empty($requirements['party_type_id']) && (int) $party->party_type_id !== (int) $requirements['party_type_id']) {
+            foreach ($requiredPurposes as $purpose) {
+                if (! $party || ! $partyLedgerResolver->resolve($party, (string) $purpose, false)) {
+                    $validator->errors()->add(
+                        'party_id',
+                        'Selected Party / Person is missing the required ' . str_replace('_', ' ', (string) $purpose) . ' ledger mapping.'
+                    );
+                }
+            }
+
+            $typeMismatch = $party
+                && ! empty($requirements['party_type_id'])
+                && (int) $party->party_type_id !== (int) $requirements['party_type_id'];
+
+            if ($typeMismatch && $requiredPurposes->isEmpty()) {
                 $validator->errors()->add(
                     'party_id',
                     'Selected Party / Person does not match the party type required by this accounting rule.'

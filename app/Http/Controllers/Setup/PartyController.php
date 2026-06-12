@@ -18,10 +18,20 @@ class PartyController extends Controller
 {
     use RespondsToDelete;
 
-    public function index(): View
+    public function index(Request $request): View
     {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
         $parties = Party::query()
-            ->with(['partyType.defaultLedger.accountType', 'linkedLedger.accountType'])
+            ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
+            ->with([
+                'partyType.defaultLedger.accountType',
+                'linkedLedger.accountType',
+                'ledgerMappings.ledger.accountType',
+                'receivableLedgerMapping.ledger.accountType',
+                'payableLedgerMapping.ledger.accountType',
+                'capitalLedgerMapping.ledger.accountType',
+            ])
             ->orderBy('party_code')
             ->get();
 
@@ -36,13 +46,14 @@ class PartyController extends Controller
     ): JsonResponse {
         $party = $service->create(
             $request->validated(),
-            $request->user()?->id
+            $request->user()?->id,
+            (int) ($request->user()?->company_id ?? 0) ?: null
         );
 
         return response()->json([
             'success' => true,
             'message' => 'Party saved successfully.',
-            'data' => $party->load(['partyType.defaultLedger.accountType', 'linkedLedger.accountType']),
+            'data' => $party->load(['partyType.defaultLedger.accountType', 'linkedLedger.accountType', 'ledgerMappings.ledger.accountType']),
             'redirect' => route('setup.parties'),
         ], 201);
     }
@@ -52,6 +63,8 @@ class PartyController extends Controller
         Party $party,
         PartyService $service
     ): JsonResponse {
+        $this->ensurePartyBelongsToCurrentCompany($request, $party);
+
         $party = $service->update(
             $party,
             $request->validated(),
@@ -61,7 +74,7 @@ class PartyController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Party updated successfully.',
-            'data' => $party->load(['partyType.defaultLedger.accountType', 'linkedLedger.accountType']),
+            'data' => $party->load(['partyType.defaultLedger.accountType', 'linkedLedger.accountType', 'ledgerMappings.ledger.accountType']),
             'redirect' => route('setup.parties'),
         ]);
     }
@@ -71,13 +84,15 @@ class PartyController extends Controller
         Party $party,
         EntityDeleteService $deleteService
     ): JsonResponse|RedirectResponse {
+        $this->ensurePartyBelongsToCurrentCompany($request, $party);
+
         try {
             $deleteService->deleteParty($party);
         } catch (Throwable $exception) {
             return $this->deleteFailure(
                 $request,
                 'setup.parties',
-                'This party could not be deleted. Please try again or check related records.',
+                $exception->getMessage(),
                 $exception
             );
         }
@@ -88,4 +103,15 @@ class PartyController extends Controller
             'Party deleted successfully.'
         );
     }
+
+    private function ensurePartyBelongsToCurrentCompany(Request $request, Party $party): void
+    {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
+        abort_if(
+            $companyId > 0 && (int) $party->company_id !== $companyId,
+            404
+        );
+    }
+
 }

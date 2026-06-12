@@ -127,13 +127,18 @@ abstract class BaseVoucherDetailReportService
             ->leftJoin('account_types as at', 'at.id', '=', 'a.account_type_id')
             ->leftJoin('chart_of_accounts as parent', 'parent.id', '=', 'a.parent_id')
             ->leftJoinSub($movement, 'm', 'm.account_id', '=', 'a.id')
-            ->whereNull('a.deleted_at')
             ->where(function (Builder $query) {
-                $query->where('a.posting_allowed', 1)
+                $query->where(function (Builder $activeAccount) {
+                    $activeAccount->whereNull('a.deleted_at')
+                        ->where('a.posting_allowed', 1);
+                })
                     ->orWhereNotNull('m.account_id');
             })
             ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))
-            ->when(! $includeInactive, fn (Builder $query) => $query->where('a.status', 'Active'))
+            ->when(! $includeInactive, fn (Builder $query) => $query->where(function (Builder $statusQuery) {
+                $statusQuery->where('a.status', 'Active')
+                    ->orWhereNotNull('a.deleted_at');
+            }))
             ->orderBy('at.sort_order')
             ->orderBy('a.account_code')
             ->selectRaw('a.id AS account_id')

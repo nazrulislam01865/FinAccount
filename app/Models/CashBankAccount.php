@@ -30,6 +30,25 @@ class CashBankAccount extends Model
         'opening_balance' => 'decimal:2',
     ];
 
+    protected static function booted(): void
+    {
+        static::updating(function (CashBankAccount $account): void {
+            $originalCode = $account->getOriginal('cash_bank_code');
+            $originalCompanyId = $account->getOriginal('company_id');
+
+            if ($originalCode !== null
+                && $originalCode !== ''
+                && $account->isDirty('cash_bank_code')) {
+                throw new \LogicException('Cash/Bank ID is immutable and cannot be changed.');
+            }
+
+            if ($account->exists && $account->isDirty('company_id')
+                && (string) $originalCompanyId !== (string) $account->company_id) {
+                throw new \LogicException('Cash/Bank account company ownership cannot be changed.');
+            }
+        });
+    }
+
     public function company()
     {
         return $this->belongsTo(Company::class);

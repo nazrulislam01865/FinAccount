@@ -1,0 +1,2 @@
+<?php echo $__env->make('setup.accounting-rules-setup', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/project_work/resources/views/setup/ledger-mapping.blade.php ENDPATH**/ ?>

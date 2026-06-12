@@ -11,7 +11,7 @@ class PartyType extends Model
         return $query->where('status', 'Active');
     }
 
-    protected $fillable = ['name', 'code', 'default_ledger_account_id', 'status', 'sort_order'];
+    protected $fillable = ['name', 'code', 'default_ledger_account_id', 'default_ledger_nature', 'status', 'sort_order'];
 
     public function defaultLedger()
     {

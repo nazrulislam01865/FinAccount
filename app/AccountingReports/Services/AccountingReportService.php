@@ -338,7 +338,14 @@ class AccountingReportService
     {
         $query = $this->reportLineQuery($companyId)
             ->join('chart_of_accounts as a', 'a.id', '=', 'd.account_id')
-            ->leftJoin('cash_bank_accounts as cb', 'cb.linked_ledger_account_id', '=', 'a.id')
+            ->leftJoin('cash_bank_accounts as cb', function ($join) use ($companyId) {
+                $join->on('cb.linked_ledger_account_id', '=', 'a.id')
+                    ->whereNull('cb.deleted_at');
+
+                if ($companyId) {
+                    $join->where('cb.company_id', '=', $companyId);
+                }
+            })
             ->where('a.is_cash_bank', 1)
             ->selectRaw('d.id AS journal_line_id')
             ->selectRaw('v.voucher_date AS journal_date')
@@ -366,7 +373,14 @@ class AccountingReportService
     public function cashBankAccounts(string $bookType = 'All', ?int $companyId = null): Collection
     {
         $query = DB::table('chart_of_accounts as a')
-            ->leftJoin('cash_bank_accounts as cb', 'cb.linked_ledger_account_id', '=', 'a.id')
+            ->leftJoin('cash_bank_accounts as cb', function ($join) use ($companyId) {
+                $join->on('cb.linked_ledger_account_id', '=', 'a.id')
+                    ->whereNull('cb.deleted_at');
+
+                if ($companyId) {
+                    $join->where('cb.company_id', '=', $companyId);
+                }
+            })
             ->where('a.is_cash_bank', 1)
             ->whereNull('a.deleted_at')
             ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))

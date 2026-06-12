@@ -15,6 +15,7 @@ class LedgerType extends Model
         'GROUP',
         'CASH',
         'BANK',
+        'MOBILE_WALLET',
         'PARTY_CONTROL',
         'ASSET',
         'LIABILITY',

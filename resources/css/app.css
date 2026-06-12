@@ -3528,3 +3528,113 @@ table[data-client-pagination]:not([data-pagination-ready="1"]) tbody tr:nth-chil
 .table-page-action[disabled], .table-client-pagination .page-btn[disabled] { cursor: not-allowed; opacity: .48; }
 .table-page-ellipsis { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 34px; color: var(--muted); font-weight: 800; }
 @media print { table[data-client-pagination] tbody tr[hidden] { display: table-row !important; } }
+
+/* Sidebar theme: match the dark blue table/header color. */
+.sidebar {
+    background: #143e5c;
+    border-right-color: rgba(255, 255, 255, .14);
+    color: #fff;
+}
+
+.sidebar .brand {
+    border-bottom-color: rgba(255, 255, 255, .16);
+}
+
+.sidebar .brand h1,
+.sidebar .help-card strong {
+    color: #fff;
+}
+
+.sidebar .brand p,
+.sidebar .help-card span {
+    color: #cbd5e1;
+}
+
+.sidebar .brand-mark {
+    background: rgba(255, 255, 255, .14);
+    border: 1px solid rgba(255, 255, 255, .22);
+    box-shadow: 0 12px 24px rgba(2, 18, 32, .24);
+}
+
+.sidebar .nav-title {
+    color: rgba(255, 255, 255, .65);
+}
+
+.sidebar .nav-item,
+.sidebar .nav-parent {
+    color: #e2e8f0;
+}
+
+.sidebar .nav-item:hover,
+.sidebar .nav-parent:hover {
+    background: rgba(255, 255, 255, .10);
+    color: #fff;
+}
+
+.sidebar .nav-item.active,
+.sidebar .nav-parent.active {
+    background: #fff;
+    color: #143e5c;
+    border-color: rgba(255, 255, 255, .72);
+    box-shadow: inset 4px 0 0 #38bdf8, 0 8px 18px rgba(3, 25, 43, .18);
+}
+
+.sidebar .nav-icon {
+    background: rgba(255, 255, 255, .12);
+    color: #e2e8f0;
+}
+
+.sidebar .nav-item.active .nav-icon,
+.sidebar .nav-parent.active .nav-icon {
+    background: #143e5c;
+    color: #fff;
+}
+
+.sidebar .nav-submenu {
+    border-left-color: rgba(255, 255, 255, .20);
+}
+
+.sidebar .nav-subitem {
+    color: #cbd5e1;
+}
+
+.sidebar .nav-subitem:hover {
+    background: rgba(255, 255, 255, .10);
+    color: #fff;
+}
+
+.sidebar .nav-subitem.active {
+    background: rgba(255, 255, 255, .16);
+    color: #fff;
+    border-color: rgba(255, 255, 255, .20);
+}
+
+.sidebar .nav-parent .nav-arrow,
+.sidebar .nav-group[open] > summary.nav-parent .nav-arrow,
+.sidebar .nav-parent[aria-expanded="true"] .nav-arrow {
+    color: #cbd5e1;
+}
+
+.sidebar .help-card {
+    background: rgba(255, 255, 255, .10);
+    border-color: rgba(255, 255, 255, .18);
+    box-shadow: none;
+}
+
+.sidebar .help-badge {
+    background: #fff;
+    color: #143e5c;
+}
+
+.sidebar {
+    scrollbar-color: rgba(255, 255, 255, .32) transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, .32);
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, .48);
+}
+

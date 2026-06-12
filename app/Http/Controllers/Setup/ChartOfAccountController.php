@@ -69,6 +69,19 @@ class ChartOfAccountController extends Controller
         )->deleteFileAfterSend(true);
     }
 
+    public function importTemplate(): BinaryFileResponse
+    {
+        $path = resource_path('templates/chart-of-accounts-import-template.xlsx');
+
+        abort_unless(is_file($path), 404, 'The Chart of Accounts import template is not available.');
+
+        return response()->download(
+            $path,
+            'chart-of-accounts-import-template.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        );
+    }
+
     public function import(
         Request $request,
         ChartOfAccountExcelService $excel,
@@ -298,13 +311,180 @@ class ChartOfAccountController extends Controller
         ]);
     }
 
+    public function bulkDestroy(
+        Request $request,
+        EntityDeleteService $deleteService
+    ): JsonResponse|RedirectResponse {
+        $validated = $request->validate([
+            'account_ids' => ['required', 'array', 'min:1'],
+            'account_ids.*' => ['required', 'integer', 'distinct', 'exists:chart_of_accounts,id'],
+            'return_tab' => ['nullable', 'in:tree,posting,full'],
+            'confirm_cascade' => ['nullable', 'boolean'],
+        ]);
+
+        $returnTab = in_array($validated['return_tab'] ?? null, ['tree', 'posting', 'full'], true)
+            ? (string) $validated['return_tab']
+            : 'tree';
+
+        try {
+            $impact = $deleteService->chartOfAccountsDeleteImpact($validated['account_ids']);
+
+            if (! $impact['can_delete']) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $impact['blocked_message'],
+                        'blockers' => $impact['blockers'],
+                    ], 422);
+                }
+
+                return redirect()
+                    ->route('setup.chart-of-accounts', ['coa_tab' => $returnTab])
+                    ->with('error', $impact['blocked_message']);
+            }
+
+            if (! $request->boolean('confirm_cascade')) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'requires_confirmation' => true,
+                        'message' => 'Confirm deletion of all selected Chart of Accounts branches.',
+                        'confirmation_message' => $impact['confirmation_message'],
+                        'impact' => [
+                            'selected_roots' => $impact['selected_roots'],
+                            'selected_root_count' => $impact['selected_root_count'],
+                            'account_count' => $impact['account_count'],
+                            'descendant_count' => $impact['descendant_count'],
+                            'levels' => $impact['levels'],
+                            'rules' => $impact['rules'],
+                            'rule_count' => $impact['rule_count'],
+                            'reassignments' => $impact['reassignments'],
+                            'reassignment_count' => $impact['reassignment_count'],
+                            'history_references' => $impact['history_references'],
+                            'history_reference_count' => $impact['history_reference_count'],
+                        ],
+                    ], 409);
+                }
+
+                return redirect()
+                    ->route('setup.chart-of-accounts', ['coa_tab' => $returnTab])
+                    ->with('error', 'Please confirm deletion of all selected Chart of Accounts branches.');
+            }
+
+            $result = $deleteService->deleteChartOfAccounts(
+                $validated['account_ids'],
+                true
+            );
+        } catch (Throwable $exception) {
+            return $this->deleteFailure(
+                $request,
+                'setup.chart-of-accounts',
+                $exception->getMessage() ?: 'The selected Chart of Accounts records could not be deleted.',
+                $exception
+            );
+        }
+
+        $rootCount = (int) ($result['selected_root_count'] ?? count($validated['account_ids']));
+        $message = $result['deleted_count'] . ' Chart of Accounts record(s) were deleted from '
+            . $rootCount . ' selected branch' . ($rootCount === 1 ? '' : 'es') . '.';
+
+        if ($result['cleared_rule_count'] > 0) {
+            $message .= ' ' . $result['cleared_rule_count'] . ' affected accounting rule(s) were preserved, their deleted ledger assignment was cleared, and they were set to Inactive for reassignment.';
+        }
+
+        if (($result['history_reference_count'] ?? 0) > 0) {
+            $message .= ' ' . $result['history_reference_count'] . ' historical accounting reference(s) were retained unchanged for reports and audit.';
+        }
+
+        if ($result['reassignment_count'] > 0) {
+            $message .= ' Review the affected setup pages and assign replacement ledger(s).';
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'deleted_ids' => $result['deleted_ids'],
+                'deleted_count' => $result['deleted_count'],
+                'selected_root_count' => $rootCount,
+                'deleted_rule_count' => $result['deleted_rule_count'],
+                'cleared_rule_count' => $result['cleared_rule_count'],
+                'reassignments' => $result['reassignments'],
+                'reassignment_count' => $result['reassignment_count'],
+                'reassignment_message' => $result['reassignment_message'],
+                'history_references' => $result['history_references'] ?? [],
+                'history_reference_count' => (int) ($result['history_reference_count'] ?? 0),
+                'return_tab' => $returnTab,
+            ]);
+        }
+
+        $redirect = redirect()
+            ->route('setup.chart-of-accounts', ['coa_tab' => $returnTab])
+            ->with('success', $message);
+
+        if ($result['reassignment_message'] !== '') {
+            $redirect->with('warning', $result['reassignment_message']);
+        }
+
+        return $redirect;
+    }
+
     public function destroy(
         Request $request,
         ChartOfAccount $chartOfAccount,
         EntityDeleteService $deleteService
     ): JsonResponse|RedirectResponse {
+        $returnTab = in_array($request->input('return_tab'), ['tree', 'posting', 'full'], true)
+            ? (string) $request->input('return_tab')
+            : 'tree';
+
         try {
-            $deleteService->deleteChartOfAccount($chartOfAccount);
+            $impact = $deleteService->chartOfAccountDeleteImpact($chartOfAccount);
+
+            if (! $impact['can_delete']) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $impact['blocked_message'],
+                        'blockers' => $impact['blockers'],
+                    ], 422);
+                }
+
+                return redirect()
+                    ->route('setup.chart-of-accounts', ['coa_tab' => $returnTab])
+                    ->with('error', $impact['blocked_message']);
+            }
+
+            if ($impact['requires_confirmation'] && ! $request->boolean('confirm_cascade')) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'requires_confirmation' => true,
+                        'message' => 'Confirm deletion of the complete Chart of Accounts branch.',
+                        'confirmation_message' => $impact['confirmation_message'],
+                        'impact' => [
+                            'account_count' => $impact['account_count'],
+                            'descendant_count' => $impact['descendant_count'],
+                            'levels' => $impact['levels'],
+                            'rules' => $impact['rules'],
+                            'rule_count' => $impact['rule_count'],
+                            'reassignments' => $impact['reassignments'],
+                            'reassignment_count' => $impact['reassignment_count'],
+                            'history_references' => $impact['history_references'],
+                            'history_reference_count' => $impact['history_reference_count'],
+                        ],
+                    ], 409);
+                }
+
+                return redirect()
+                    ->route('setup.chart-of-accounts', ['coa_tab' => $returnTab])
+                    ->with('error', 'This account contains lower CoA levels or is used by accounting rules. Please confirm the complete branch deletion from the CoA list.');
+            }
+
+            $result = $deleteService->deleteChartOfAccount(
+                $chartOfAccount,
+                $request->boolean('confirm_cascade')
+            );
         } catch (Throwable $exception) {
             return $this->deleteFailure(
                 $request,
@@ -314,10 +494,47 @@ class ChartOfAccountController extends Controller
             );
         }
 
-        return $this->deleteSuccess(
-            $request,
-            'setup.chart-of-accounts',
-            'Account deleted successfully.'
-        );
+        $message = $result['deleted_count'] > 1
+            ? $result['deleted_count'] . ' Chart of Accounts records were deleted from the selected branch.'
+            : 'Account deleted successfully.';
+
+        if ($result['cleared_rule_count'] > 0) {
+            $message .= ' ' . $result['cleared_rule_count'] . ' affected accounting rule(s) were preserved, their deleted ledger assignment was cleared, and they were set to Inactive for reassignment.';
+        }
+
+        if (($result['history_reference_count'] ?? 0) > 0) {
+            $message .= ' ' . $result['history_reference_count'] . ' historical accounting reference(s) were retained unchanged for reports and audit.';
+        }
+
+        if ($result['reassignment_count'] > 0) {
+            $message .= ' Review the affected setup pages and assign replacement ledger(s).';
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'deleted_ids' => $result['deleted_ids'],
+                'deleted_count' => $result['deleted_count'],
+                'deleted_rule_count' => $result['deleted_rule_count'],
+                'cleared_rule_count' => $result['cleared_rule_count'],
+                'reassignments' => $result['reassignments'],
+                'reassignment_count' => $result['reassignment_count'],
+                'reassignment_message' => $result['reassignment_message'],
+                'history_references' => $result['history_references'] ?? [],
+                'history_reference_count' => (int) ($result['history_reference_count'] ?? 0),
+                'return_tab' => $returnTab,
+            ]);
+        }
+
+        $redirect = redirect()
+            ->route('setup.chart-of-accounts', ['coa_tab' => $returnTab])
+            ->with('success', $message);
+
+        if ($result['reassignment_message'] !== '') {
+            $redirect->with('warning', $result['reassignment_message']);
+        }
+
+        return $redirect;
     }
 }

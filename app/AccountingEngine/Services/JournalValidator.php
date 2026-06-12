@@ -83,7 +83,7 @@ class JournalValidator
                 ]);
             }
 
-            $party = Party::query()->with('partyType')->find($partyId);
+            $party = Party::query()->with(['partyType', 'ledgerMappings'])->find($partyId);
 
             if (! $party || $party->status !== 'Active') {
                 throw ValidationException::withMessages([
@@ -91,9 +91,16 @@ class JournalValidator
                 ]);
             }
 
-            if ($ledger->party_type_id && (int) $party->party_type_id !== (int) $ledger->party_type_id) {
+            $hasExplicitMapping = $party->ledgerMappings->contains(
+                fn ($mapping) => $mapping->status === 'Active'
+                    && (int) $mapping->chart_of_account_id === (int) $ledger->id
+            );
+
+            if ($ledger->party_type_id
+                && (int) $party->party_type_id !== (int) $ledger->party_type_id
+                && ! $hasExplicitMapping) {
                 throw ValidationException::withMessages([
-                    'party_id' => "Selected party type does not match {$ledger->display_name}.",
+                    'party_id' => "Selected party type does not match {$ledger->display_name}, and no explicit party ledger mapping allows it.",
                 ]);
             }
         }

@@ -42,7 +42,7 @@ class OpeningBalance extends Model
 
     public function account()
     {
-        return $this->belongsTo(ChartOfAccount::class, 'account_id');
+        return $this->belongsTo(ChartOfAccount::class, 'account_id')->withTrashed();
     }
 
     public function party()

@@ -29,15 +29,25 @@ class TransactionHeadSeeder extends Seeder
             ['TH-012', 'Office Rent Expense', 'Expense', 'Vendor', ['Cash', 'Bank', 'Due']],
         ];
 
-        foreach ($heads as [$code, $name, $nature, $partyType, $settlements]) {
+        foreach ($heads as $index => [$code, $name, $nature, $partyType, $settlements]) {
+            $category = TransactionHead::normaliseCategory(null, $name, $nature);
+
             $head = TransactionHead::updateOrCreate(
                 ['head_code' => $code],
                 [
                     'name' => $name,
-                    'nature' => $nature,
+                    'category' => $category,
+                    'nature' => TransactionHead::natureFromCategory($category),
+                    // Retained only for legacy rule compatibility. New V2
+                    // Accounting Rules carry their own Party Type.
                     'default_party_type_id' => $party($partyType),
-                    'requires_party' => true,
+                    'requires_party' => false,
                     'requires_reference' => false,
+                    'payment_method_required' => false,
+                    'party_required_mode' => 'No',
+                    'is_system_default' => true,
+                    'is_user_selectable' => true,
+                    'sort_order' => ($index + 1) * 10,
                     'status' => 'Active',
                 ]
             );

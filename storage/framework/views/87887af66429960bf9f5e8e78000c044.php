@@ -92,7 +92,7 @@
     <div>
         <span class="page-label">Cash / Bank Account Setup</span>
         <h2>Cash / Bank Account Setup</h2>
-        <p>Configure cash boxes, bank accounts, and mobile financial accounts used for payment and receipt.</p>
+        <p>Configure cash boxes, bank accounts, and mobile wallets used for payment and receipt. IDs are generated automatically.</p>
     </div>
 </div>
 
@@ -190,6 +190,10 @@
                                         · <?php echo e($account->linkedLedger->normal_balance ?: $account->linkedLedger->accountType->normal_balance); ?>
 
                                     </div>
+                                <?php elseif(! $account->linked_ledger_account_id && $account->status === 'Inactive'): ?>
+                                    <div class="hint" style="margin-top:4px;color:#b42318;font-weight:700">
+                                        Ledger reassignment required. Assign a replacement CoA ledger and reactivate this account.
+                                    </div>
                                 <?php endif; ?>
                             </td>
 
@@ -284,13 +288,15 @@
                 <input type="hidden" name="_method" id="cashBankFormMethod" value="POST">
 
                 <div>
-                    <label>Cash/Bank Code</label>
+                    <label>Cash/Bank ID (Automatic)</label>
                     <input
-                        name="cash_bank_code"
-                        maxlength="30"
-                        placeholder="Auto generated if blank"
+                        id="cashBankCodeDisplay"
+                        type="text"
+                        value=""
+                        placeholder="Generated automatically after save"
+                        readonly
+                        aria-readonly="true"
                     >
-                    <div class="hint">Example: CB-001, BK-001, MB-001.</div>
                 </div>
 
                 <div>
@@ -300,7 +306,6 @@
                         placeholder="Auto-filled from linked ledger if blank"
                         required
                     >
-                    <div class="hint">This name appears in Paid From / Received In dropdowns.</div>
                 </div>
 
                 <div>
@@ -325,9 +330,6 @@
                         data-label="account"
                         data-placeholder="Select Asset cash/bank ledger"
                     ></select>
-                    <div class="hint">
-                        Only active Asset ledger accounts marked as Cash/Bank are shown. Each ledger can be linked once.
-                    </div>
                 </div>
 
                 <div id="bankFields">
@@ -338,7 +340,6 @@
                             name="bank_name"
                             placeholder="Example: BRAC Bank PLC / bKash"
                         >
-                        <div class="hint">Required for Bank. Optional for Mobile Banking.</div>
                     </div>
 
                     <div class="bank-detail-row" id="branchRow">
@@ -356,7 +357,6 @@
                             type="text"
                             placeholder="Enter account, card, or wallet number"
                         >
-                        <div class="hint">Optional text field. Keep exact bank/MFS format.</div>
                     </div>
                 </div>
 
@@ -378,10 +378,6 @@
                     </select>
                 </div>
 
-                <div class="hint-box">
-                    <strong>Accounting safety rules</strong>
-                    Cash/Bank setup only links valid Asset cash/bank ledgers. It does not create debit or credit entries.
-                </div>
 
                 <div class="form-actions">
                     <button
@@ -414,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addButton = document.getElementById('addCashBankBtn');
     const cancelButton = document.getElementById('cancelCashBankBtn');
 
-    const code = form.querySelector('[name="cash_bank_code"]');
+    const code = document.getElementById('cashBankCodeDisplay');
     const name = form.querySelector('[name="cash_bank_name"]');
     const type = document.getElementById('cashBankType');
     const linkedLedger = document.getElementById('linkedLedger');
@@ -459,39 +455,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         select.dispatchEvent(new Event('change', { bubbles: true }));
         return Promise.resolve();
-    }
-
-    function inferTypeFromLedgerName() {
-        const option = selectedLedgerOption();
-        const ledgerName = String(option?.dataset.accountName || option?.textContent || '').toLowerCase();
-
-        if (!ledgerName || type.value) {
-            return;
-        }
-
-        if (
-            ledgerName.includes('mobile')
-            || ledgerName.includes('bkash')
-            || ledgerName.includes('b-kash')
-            || ledgerName.includes('nagad')
-            || ledgerName.includes('rocket')
-            || ledgerName.includes('wallet')
-        ) {
-            type.value = 'Mobile Banking';
-            type.dispatchEvent(new Event('change', { bubbles: true }));
-            return;
-        }
-
-        if (ledgerName.includes('bank')) {
-            type.value = 'Bank';
-            type.dispatchEvent(new Event('change', { bubbles: true }));
-            return;
-        }
-
-        if (ledgerName.includes('cash')) {
-            type.value = 'Cash';
-            type.dispatchEvent(new Event('change', { bubbles: true }));
-        }
     }
 
     function autofillNameFromLedger() {
@@ -554,6 +517,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const baseUrl = linkedLedger.dataset.baseUrl || '/api/dropdowns/cash-bank-ledgers';
         const params = new URLSearchParams();
 
+        if (type?.value) {
+            params.set('type', type.value);
+        }
+
         if (isEditing && form.dataset.editingId) {
             params.set('exclude_cash_bank_account_id', form.dataset.editingId);
         }
@@ -587,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (code) {
-            code.value = '';
+            code.value = 'Generated automatically after save';
         }
 
         if (usageNote) {
@@ -634,22 +601,28 @@ document.addEventListener('DOMContentLoaded', () => {
             status.value = row.dataset.status || 'Active';
         }
 
+        form.dataset.loadingEdit = '1';
+
         setDropdownValue(type, row.dataset.type || '').then(() => {
             syncTypeFields();
+            return reloadAvailableLedgers(row.dataset.linkedLedger || '');
+        }).finally(() => {
+            delete form.dataset.loadingEdit;
         });
-
-        reloadAvailableLedgers(row.dataset.linkedLedger || '');
 
         form.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast('Cash / Bank account loaded for editing.');
     }
 
-    linkedLedger.addEventListener('change', () => {
-        inferTypeFromLedgerName();
-        autofillNameFromLedger();
-    });
+    linkedLedger.addEventListener('change', autofillNameFromLedger);
 
-    type.addEventListener('change', syncTypeFields);
+    type.addEventListener('change', () => {
+        syncTypeFields();
+
+        if (form.dataset.loadingEdit !== '1') {
+            reloadAvailableLedgers();
+        }
+    });
 
     document.querySelectorAll('#cashBankTable .edit-btn').forEach((button) => {
         button.addEventListener('click', () => loadForEdit(button.closest('tr')));
@@ -664,6 +637,10 @@ document.addEventListener('DOMContentLoaded', () => {
         resetForm();
         showToast('Form cleared.');
     });
+
+    if (code && !code.value) {
+        code.value = 'Generated automatically after save';
+    }
 
     syncTypeFields();
 });

@@ -51,6 +51,6 @@ class DueRegister extends Model
 
     public function account()
     {
-        return $this->belongsTo(ChartOfAccount::class);
+        return $this->belongsTo(ChartOfAccount::class)->withTrashed();
     }
 }

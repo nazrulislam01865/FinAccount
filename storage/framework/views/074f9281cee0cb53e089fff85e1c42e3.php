@@ -26,29 +26,33 @@
         },
     ])->values();
 
-    $headPayload = $transactionHeads->map(fn ($head) => [
-        'id' => $head->id,
-        'head_code' => $head->head_code,
-        'name' => $head->name,
-        'display_name' => trim(($head->head_code ? $head->head_code . ' - ' : '') . $head->name),
-        'nature' => $head->nature,
-        'category' => TransactionHead::normaliseCategory($head->category, $head->name, $head->nature),
-        'raw_category' => $head->category ?: $head->nature,
-        'transaction_screen' => $head->transaction_screen ?: 'Transaction Entry',
-        'default_party_type_id' => $head->default_party_type_id,
-        'default_party_type_name' => $head->defaultPartyType?->name,
-        'payment_method_required' => (bool) $head->payment_method_required,
-        'party_required_mode' => $head->party_required_mode ?: ($head->requires_party ? 'Required' : 'No'),
-        'help_text' => $head->help_text,
-        'requires_party' => (bool) $head->requires_party,
-        'requires_reference' => (bool) $head->requires_reference,
-        'settlements' => $head->settlementTypes->map(fn ($settlement) => [
-            'id' => $settlement->id,
-            'name' => $settlement->name,
-            'code' => $settlement->code,
-            'display_name' => $settlement->name,
-        ])->values(),
-    ])->values();
+    $headPayload = $transactionHeads->map(function ($head) use ($transactionHeadProfiles) {
+        $profile = $transactionHeadProfiles[$head->id] ?? [];
+
+        return [
+            'id' => $head->id,
+            'head_code' => $head->head_code,
+            'name' => $head->name,
+            'display_name' => trim(($head->head_code ? $head->head_code . ' - ' : '') . $head->name),
+            'nature' => TransactionHead::natureFromCategory($head->category),
+            'category' => TransactionHead::normaliseCategory($head->category),
+            'raw_category' => $head->category,
+            'transaction_screen' => $profile['transaction_screen'] ?? 'Transaction Entry',
+            'default_party_type_id' => $profile['party_type_id'] ?? null,
+            'default_party_type_name' => $profile['party_type_name'] ?? null,
+            'payment_method_required' => (bool) ($profile['payment_method_required'] ?? false),
+            'party_required_mode' => $profile['party_required_mode'] ?? 'No',
+            'help_text' => $head->help_text,
+            'requires_party' => (bool) ($profile['party_required'] ?? false),
+            'requires_reference' => (bool) ($profile['requires_reference'] ?? false),
+            'settlements' => collect($profile['settlements'] ?? [])->map(fn ($settlement) => [
+                'id' => $settlement->id,
+                'name' => $settlement->name,
+                'code' => $settlement->code,
+                'display_name' => $settlement->name,
+            ])->values(),
+        ];
+    })->values();
 
     $partyPayload = $parties->map(fn ($party) => [
         'id' => $party->id,

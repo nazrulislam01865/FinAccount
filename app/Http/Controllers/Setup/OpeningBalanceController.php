@@ -12,6 +12,7 @@ use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\VoucherHeader;
 use App\Services\Accounting\FinancialYearService;
+use App\Support\PartyAccountingProfile;
 use App\Services\Setup\OpeningBalanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -55,7 +56,7 @@ class OpeningBalanceController extends Controller
 
         $parties = Party::query()
             ->where('status', 'Active')
-            ->with(['partyType', 'linkedLedger.accountType'])
+            ->with(['partyType', 'linkedLedger.accountType', 'ledgerMappings.ledger.accountType'])
             ->orderBy('party_name')
             ->get();
 
@@ -167,7 +168,7 @@ class OpeningBalanceController extends Controller
 
     private function seedOpeningRows($accounts, $parties, $cashBankOpeningBalances)
     {
-        $partiesByAccount = $parties->groupBy('linked_ledger_account_id');
+        $partiesByAccount = $parties->groupBy(fn (Party $party) => $this->primaryLedgerIdForParty($party));
 
         return $accounts->flatMap(function (ChartOfAccount $account) use ($partiesByAccount, $cashBankOpeningBalances) {
             $linkedParties = $partiesByAccount->get($account->id, collect());
@@ -206,17 +207,33 @@ class OpeningBalanceController extends Controller
 
     private function openingSideForParty(Party $party, ChartOfAccount $account): ?string
     {
-        $nature = $party->default_ledger_nature;
+        $purpose = $party->mappingPurposeForAccount((int) $account->id);
 
-        if (in_array($nature, ['Receivable', 'Advance Paid'], true)) {
-            return 'Debit';
+        if (! $purpose && (int) $party->linked_ledger_account_id === (int) $account->id) {
+            $purpose = PartyAccountingProfile::purposeFromNature($party->effectiveLedgerNature());
         }
 
-        if (in_array($nature, ['Payable', 'Advance Received'], true)) {
-            return 'Credit';
+        return PartyAccountingProfile::openingSideForPurpose($purpose)
+            ?: $account->normal_balance
+            ?: $account->accountType?->normal_balance;
+    }
+
+    private function primaryLedgerIdForParty(Party $party): ?int
+    {
+        if ($party->linked_ledger_account_id) {
+            return (int) $party->linked_ledger_account_id;
         }
 
-        return $account->normal_balance ?: $account->accountType?->normal_balance;
+        $party->loadMissing('ledgerMappings');
+        $primaryPurpose = PartyAccountingProfile::purposeFromNature($party->effectiveLedgerNature());
+        $mapping = $party->ledgerMappings
+            ->first(fn ($item) => $item->status === 'Active'
+                && $item->mapping_purpose === $primaryPurpose
+                && $item->chart_of_account_id)
+            ?: $party->ledgerMappings
+                ->first(fn ($item) => $item->status === 'Active' && $item->chart_of_account_id);
+
+        return $mapping?->chart_of_account_id ? (int) $mapping->chart_of_account_id : null;
     }
 
     private function amount(mixed $value): float

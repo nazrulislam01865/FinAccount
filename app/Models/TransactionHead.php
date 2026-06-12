@@ -40,12 +40,9 @@ class TransactionHead extends Model
         'is_system_default',
         'is_user_selectable',
         'sort_order',
-        'linked_accounting_rule_code',
         'requires_party',
         'requires_reference',
-        'description',
         'help_text',
-        'developer_note',
         'status',
         'created_by',
         'updated_by',
@@ -178,6 +175,24 @@ class TransactionHead extends Model
     public function ledgerMappingRules()
     {
         return $this->hasMany(LedgerMappingRule::class);
+    }
+
+    public function accountingRules()
+    {
+        return $this->hasMany(AccountingRule::class);
+    }
+
+    public function activeAccountingRules()
+    {
+        return $this->hasMany(AccountingRule::class)->where('status', 'Active');
+    }
+
+    public function scopeForCompany($query, ?int $companyId)
+    {
+        return $query->when(
+            (int) $companyId > 0,
+            fn ($builder) => $builder->where('company_id', (int) $companyId)
+        );
     }
 
     public function vouchers()

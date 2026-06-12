@@ -40,7 +40,7 @@ class VoucherDetail extends Model
 
     public function account()
     {
-        return $this->belongsTo(ChartOfAccount::class);
+        return $this->belongsTo(ChartOfAccount::class)->withTrashed();
     }
 
     public function party()

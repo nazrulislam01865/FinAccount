@@ -13,6 +13,7 @@ use App\Models\TransactionHead;
 use App\Models\VoucherDetail;
 use App\Models\VoucherHeader;
 use App\Services\Accounting\FinancialYearService;
+use App\Services\Accounting\TransactionHeadConfigurationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
@@ -26,16 +27,48 @@ class TransactionController extends Controller
 {
     public function create(
         Request $request,
-        FinancialYearService $financialYearService
+        FinancialYearService $financialYearService,
+        TransactionHeadConfigurationService $headConfiguration
     ): View {
         $currentFinancialYear = $financialYearService->current($request->user()?->id);
 
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
         $transactionHeads = TransactionHead::query()
             ->where('status', 'Active')
-            ->with(['defaultPartyType', 'settlementTypes' => fn ($query) => $query->where('status', 'Active')->orderBy('sort_order')->orderBy('name')])
+            ->where('is_user_selectable', true)
+            ->when($companyId > 0, fn ($query) => $query->where(function ($scope) use ($companyId) {
+                $scope->where('company_id', $companyId)
+                    ->orWhere(function ($global) {
+                        $global->whereNull('company_id')->where('is_system_default', true);
+                    });
+            }))
+            ->with([
+                'defaultPrimaryLedger.accountType',
+                'accountingRules.lines',
+                'accountingRules.settlementType',
+                'accountingRules.partyType',
+                'ledgerMappingRules.settlementType',
+                'settlementTypes',
+            ])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+
+        $transactionHeadProfiles = $transactionHeads->mapWithKeys(
+            fn (TransactionHead $head) => [$head->id => $headConfiguration->summarize($head)]
+        );
+
+        $transactionHeads = $transactionHeads
+            ->filter(fn (TransactionHead $head) => (bool) data_get($transactionHeadProfiles, $head->id . '.ready'))
+            ->values();
+
+        foreach ($transactionHeads as $head) {
+            $head->setRelation(
+                'settlementTypes',
+                collect(data_get($transactionHeadProfiles, $head->id . '.settlements', []))
+            );
+        }
 
         $settlementTypes = SettlementType::query()
             ->where('status', 'Active')
@@ -44,7 +77,8 @@ class TransactionController extends Controller
 
         $parties = Party::query()
             ->where('status', 'Active')
-            ->with(['partyType', 'linkedLedger'])
+            ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
+            ->with(['partyType', 'linkedLedger', 'ledgerMappings.ledger'])
             ->orderBy('party_name')
             ->get();
 
@@ -94,6 +128,7 @@ class TransactionController extends Controller
         return view('transactions.create', [
             'currentFinancialYear' => $currentFinancialYear,
             'transactionHeads' => $transactionHeads,
+            'transactionHeadProfiles' => $transactionHeadProfiles,
             'settlementTypes' => $settlementTypes,
             'parties' => $parties,
             'cashBankAccounts' => $cashBankAccounts,

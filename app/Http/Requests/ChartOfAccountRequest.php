@@ -208,12 +208,12 @@ class ChartOfAccountRequest extends FormRequest
                 $validator->errors()->add('posting_allowed', 'Level 4 Ledger Head accounts must allow posting.');
             }
 
-            if ($isCashBank && ! in_array($ledgerType, ['Cash', 'Bank'], true)) {
-                $validator->errors()->add('ledger_type', 'Cash/Bank flag must match Ledger Type Cash or Bank.');
+            if ($isCashBank && ! in_array($ledgerType, ['Cash', 'Bank', 'Mobile Wallet'], true)) {
+                $validator->errors()->add('ledger_type', 'Cash/Bank flag must match Ledger Type Cash, Bank, or Mobile Wallet.');
             }
 
             if ($isCashBank && $accountType->name !== 'Asset') {
-                $validator->errors()->add('ledger_type', 'Cash and Bank ledgers must use the Asset account class.');
+                $validator->errors()->add('ledger_type', 'Cash, Bank, and Mobile Wallet ledgers must use the Asset account class.');
             }
 
             if ($isPartyControl && $ledgerType !== 'Party Control') {

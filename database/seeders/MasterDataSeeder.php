@@ -44,10 +44,22 @@ class MasterDataSeeder extends Seeder
         }
 
         foreach ([
-            ['Employee', 'EMP'], ['Supplier', 'SUP'], ['Customer', 'CUS'], ['Vendor', 'VENDOR'], ['Landlord', 'LANDLORD'],
-            ['Driver', 'DRIVER'], ['Owner', 'OWNER'], ['Tenant', 'TENANT'], ['Other', 'OTHER'],
-        ] as $i => [$name, $code]) {
-            PartyType::updateOrCreate(['code' => $code], ['name' => $name, 'status' => 'Active', 'sort_order' => $i + 1]);
+            ['Employee', 'EMP', 'Payable'],
+            ['Supplier', 'SUP', 'Payable'],
+            ['Customer', 'CUS', 'Receivable'],
+            ['Vendor', 'VENDOR', 'Payable'],
+            ['Landlord', 'LANDLORD', 'Payable'],
+            ['Driver', 'DRIVER', 'Payable'],
+            ['Owner', 'OWNER', 'Capital'],
+            ['Tenant', 'TENANT', 'Receivable'],
+            ['Other', 'OTHER', 'No Effect'],
+        ] as $i => [$name, $code, $nature]) {
+            PartyType::updateOrCreate(['code' => $code], [
+                'name' => $name,
+                'default_ledger_nature' => $nature,
+                'status' => 'Active',
+                'sort_order' => $i + 1,
+            ]);
         }
 
         foreach ([

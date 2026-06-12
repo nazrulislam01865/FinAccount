@@ -41,8 +41,16 @@
         'party_name' => $party->party_name,
         'party_code' => $party->party_code,
         'party_type' => $party->partyType?->name,
-        'default_ledger_nature' => $party->default_ledger_nature,
+        'default_ledger_nature' => $party->effectiveLedgerNature(),
         'linked_ledger_account_id' => $party->linked_ledger_account_id,
+        'ledger_account_ids' => $party->ledgerMappings
+            ->where('status', 'Active')
+            ->pluck('chart_of_account_id')
+            ->push($party->linked_ledger_account_id)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values(),
     ])->values();
 
     $badgeClass = function (?string $type) {
@@ -618,7 +626,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function linkedParties(accountId) {
         return parties.filter((party) => {
-            return String(party.linked_ledger_account_id) === String(accountId);
+            const ledgerIds = Array.isArray(party.ledger_account_ids)
+                ? party.ledger_account_ids
+                : [party.linked_ledger_account_id].filter(Boolean);
+
+            return ledgerIds.some((ledgerId) => String(ledgerId) === String(accountId));
         });
     }
 
@@ -683,7 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const selected = String(party.id) === String(selectedId) ? 'selected' : '';
                 const label = `${party.party_code ? party.party_code + ' - ' : ''}${party.party_name}`;
 
-                return `<option value="${party.id}" data-linked-account="${party.linked_ledger_account_id}" ${selected}>${escapeHtml(label)}</option>`;
+                return `<option value="${party.id}" data-linked-account="${accountId}" ${selected}>${escapeHtml(label)}</option>`;
             }),
         ].join('');
     }

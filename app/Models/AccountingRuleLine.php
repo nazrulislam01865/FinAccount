@@ -10,6 +10,13 @@ class AccountingRuleLine extends Model
         'fixed',
         'user_cash_bank',
         'party_control',
+        'party_receivable',
+        'party_payable',
+        'party_advance_paid',
+        'party_advance_received',
+        'party_loan_payable',
+        'party_salary_payable',
+        'party_capital',
         'transaction_head',
         'system_derived',
     ];

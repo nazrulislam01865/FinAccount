@@ -6,31 +6,59 @@ use App\Models\Bank;
 use App\Models\CashBankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
+use Illuminate\Support\Facades\DB;
 
 class CashBankAccountService
 {
-    public function create(array $data, ?int $userId = null): CashBankAccount
+    public function create(array $data, ?int $userId = null, ?int $companyId = null): CashBankAccount
     {
-        $company = Company::query()->first();
-        $data = $this->prepareAccountingData($data);
+        return DB::transaction(function () use ($data, $userId, $companyId): CashBankAccount {
+            $companyId = $this->resolveCompanyId($companyId);
 
-        $data['company_id'] = $company?->id;
-        $data['cash_bank_code'] = $data['cash_bank_code'] ?: $this->nextCashBankCode($data['type']);
-        $data['created_by'] = $userId;
-        $data['updated_by'] = $userId;
+            // Serializes code generation per company and prevents duplicate IDs
+            // when two users save at the same time.
+            if ($companyId > 0) {
+                Company::query()->whereKey($companyId)->lockForUpdate()->firstOrFail();
+            }
 
-        return CashBankAccount::query()->create($data);
+            $data = $this->prepareAccountingData($data);
+            $data['company_id'] = $companyId ?: null;
+            $data['cash_bank_code'] = $this->nextCashBankCode($data['type'], $companyId);
+            $data['created_by'] = $userId;
+            $data['updated_by'] = $userId;
+
+            return CashBankAccount::query()
+                ->create($data)
+                ->fresh(['linkedLedger.accountType', 'bank']);
+        });
     }
 
     public function update(CashBankAccount $account, array $data, ?int $userId = null): CashBankAccount
     {
-        $data = $this->prepareAccountingData($data, $account);
-        $data['cash_bank_code'] = $data['cash_bank_code'] ?: $account->cash_bank_code ?: $this->nextCashBankCode($data['type']);
-        $data['updated_by'] = $userId;
+        return DB::transaction(function () use ($account, $data, $userId): CashBankAccount {
+            $data = $this->prepareAccountingData($data, $account);
 
-        $account->update($data);
+            // Business ID and company ownership are immutable.
+            unset($data['cash_bank_code'], $data['company_id']);
 
-        return $account->fresh(['linkedLedger.accountType', 'bank']);
+            if (! $account->cash_bank_code) {
+                $companyId = (int) ($account->company_id ?? 0);
+
+                if ($companyId > 0) {
+                    Company::query()->whereKey($companyId)->lockForUpdate()->first();
+                }
+
+                $data['cash_bank_code'] = $this->nextCashBankCode(
+                    (string) ($account->type ?: $data['type']),
+                    $companyId
+                );
+            }
+
+            $data['updated_by'] = $userId;
+            $account->update($data);
+
+            return $account->fresh(['linkedLedger.accountType', 'bank']);
+        });
     }
 
     private function prepareAccountingData(array $data, ?CashBankAccount $account = null): array
@@ -41,10 +69,12 @@ class CashBankAccountService
             ? ChartOfAccount::query()->find($linkedLedgerId)
             : null;
 
-        $bankId = $data['bank_id'] ?? null;
+        $bankId = array_key_exists('bank_id', $data)
+            ? $data['bank_id']
+            : $account?->bank_id;
         $bank = $bankId ? Bank::query()->find($bankId) : null;
 
-        $cashBankName = trim((string) ($data['cash_bank_name'] ?? ''));
+        $cashBankName = trim((string) ($data['cash_bank_name'] ?? $account?->cash_bank_name ?? ''));
 
         if ($cashBankName === '' && $linkedLedger) {
             $cashBankName = $linkedLedger->account_name;
@@ -54,14 +84,23 @@ class CashBankAccountService
         $data['type'] = $type;
         $data['linked_ledger_account_id'] = $linkedLedgerId;
         $data['bank_id'] = $bankId;
-        $data['bank_name'] = $data['bank_name'] ?? $bank?->bank_name ?? null;
-        $data['branch_name'] = $data['branch_name'] ?? null;
-        $data['account_number'] = $data['account_number'] ?? null;
-        $data['opening_balance'] = round((float) ($data['opening_balance'] ?? 0), 2);
-        $data['usage_note'] = $data['usage_note'] ?? null;
-        $data['status'] = $data['status'] ?? 'Active';
+        $data['bank_name'] = array_key_exists('bank_name', $data)
+            ? $data['bank_name']
+            : ($account?->bank_name ?? $bank?->bank_name);
+        $data['branch_name'] = array_key_exists('branch_name', $data)
+            ? $data['branch_name']
+            : $account?->branch_name;
+        $data['account_number'] = array_key_exists('account_number', $data)
+            ? $data['account_number']
+            : $account?->account_number;
+        $data['opening_balance'] = array_key_exists('opening_balance', $data)
+            ? round((float) $data['opening_balance'], 2)
+            : round((float) ($account?->opening_balance ?? 0), 2);
+        $data['usage_note'] = array_key_exists('usage_note', $data)
+            ? $data['usage_note']
+            : $account?->usage_note;
+        $data['status'] = $data['status'] ?? $account?->status ?? 'Active';
 
-        // Cash boxes do not have bank-specific identity fields.
         if ($type === 'Cash') {
             $data['bank_id'] = null;
             $data['bank_name'] = null;
@@ -69,7 +108,6 @@ class CashBankAccountService
             $data['account_number'] = null;
         }
 
-        // Mobile wallets do not normally have branches. Keep account number for wallet/account ID.
         if ($type === 'Mobile Banking') {
             $data['bank_id'] = null;
             $data['branch_name'] = null;
@@ -78,7 +116,7 @@ class CashBankAccountService
         return $data;
     }
 
-    private function nextCashBankCode(string $type): string
+    private function nextCashBankCode(string $type, int $companyId): string
     {
         $prefix = match ($type) {
             'Bank' => 'BK',
@@ -86,14 +124,29 @@ class CashBankAccountService
             default => 'CB',
         };
 
-        $lastCode = CashBankAccount::query()
+        $numbers = CashBankAccount::query()
             ->withTrashed()
+            ->when($companyId > 0,
+                fn ($query) => $query->where('company_id', $companyId),
+                fn ($query) => $query->whereNull('company_id'))
             ->where('cash_bank_code', 'like', $prefix . '-%')
-            ->orderByDesc('id')
-            ->value('cash_bank_code');
+            ->lockForUpdate()
+            ->pluck('cash_bank_code')
+            ->map(function (?string $code) use ($prefix): int {
+                if (! $code || ! preg_match('/^' . preg_quote($prefix, '/') . '-(\d+)$/', $code, $matches)) {
+                    return 0;
+                }
 
-        $number = $lastCode ? (int) str_replace($prefix . '-', '', $lastCode) : 0;
+                return (int) $matches[1];
+            });
 
-        return $prefix . '-' . str_pad((string) ($number + 1), 3, '0', STR_PAD_LEFT);
+        $next = ((int) $numbers->max()) + 1;
+
+        return $prefix . '-' . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+    }
+
+    private function resolveCompanyId(?int $companyId): int
+    {
+        return (int) ($companyId ?: Company::query()->orderBy('id')->value('id') ?: 0);
     }
 }

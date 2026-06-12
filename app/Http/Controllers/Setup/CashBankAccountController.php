@@ -18,11 +18,14 @@ class CashBankAccountController extends Controller
 {
     use RespondsToDelete;
 
-    public function index(): View
+    public function index(Request $request): View
     {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
         $accounts = CashBankAccount::query()
+            ->when($companyId > 0, fn ($query) => $query->where('company_id', $companyId))
             ->with(['linkedLedger.accountType', 'bank'])
-            ->orderBy('cash_bank_name')
+            ->orderBy('cash_bank_code')
             ->get();
 
         return view('setup.cash-bank-accounts', [
@@ -36,12 +39,13 @@ class CashBankAccountController extends Controller
     ): JsonResponse {
         $account = $service->create(
             $request->validated(),
-            $request->user()?->id
+            $request->user()?->id,
+            (int) ($request->user()?->company_id ?? 0) ?: null
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'Cash / Bank account saved successfully.',
+            'message' => 'Cash / Bank account saved successfully. ID: ' . $account->cash_bank_code,
             'data' => $account->load(['linkedLedger.accountType', 'bank']),
             'redirect' => route('setup.cash-bank-accounts'),
         ], 201);
@@ -52,6 +56,8 @@ class CashBankAccountController extends Controller
         CashBankAccount $cashBankAccount,
         CashBankAccountService $service
     ): JsonResponse {
+        $this->ensureAccountBelongsToCurrentCompany($request, $cashBankAccount);
+
         $account = $service->update(
             $cashBankAccount,
             $request->validated(),
@@ -71,13 +77,15 @@ class CashBankAccountController extends Controller
         CashBankAccount $cashBankAccount,
         EntityDeleteService $deleteService
     ): JsonResponse|RedirectResponse {
+        $this->ensureAccountBelongsToCurrentCompany($request, $cashBankAccount);
+
         try {
             $deleteService->deleteCashBankAccount($cashBankAccount);
         } catch (Throwable $exception) {
             return $this->deleteFailure(
                 $request,
                 'setup.cash-bank-accounts',
-                'This cash / bank account could not be deleted. Please try again or check related records.',
+                $exception->getMessage(),
                 $exception
             );
         }
@@ -86,6 +94,16 @@ class CashBankAccountController extends Controller
             $request,
             'setup.cash-bank-accounts',
             'Cash / Bank account deleted successfully.'
+        );
+    }
+
+    private function ensureAccountBelongsToCurrentCompany(Request $request, CashBankAccount $account): void
+    {
+        $companyId = (int) ($request->user()?->company_id ?? 0);
+
+        abort_if(
+            $companyId > 0 && (int) $account->company_id !== $companyId,
+            404
         );
     }
 }

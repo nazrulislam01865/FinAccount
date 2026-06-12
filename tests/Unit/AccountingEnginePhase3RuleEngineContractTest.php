@@ -36,6 +36,13 @@ class AccountingEnginePhase3RuleEngineContractTest extends TestCase
         $this->assertSame('fixed', $resolver->normalizeLedgerSource('Fixed Ledger'));
         $this->assertSame('user_cash_bank', $resolver->normalizeLedgerSource('User Selected Cash/Bank Ledger'));
         $this->assertSame('party_control', $resolver->normalizeLedgerSource('User Selected Party Control Ledger'));
+        $this->assertSame('party_receivable', $resolver->normalizeLedgerSource('Party Receivable Ledger'));
+        $this->assertSame('party_payable', $resolver->normalizeLedgerSource('Party Payable Ledger'));
+        $this->assertSame('party_advance_paid', $resolver->normalizeLedgerSource('Party Advance Paid Ledger'));
+        $this->assertSame('party_advance_received', $resolver->normalizeLedgerSource('Party Advance Received Ledger'));
+        $this->assertSame('party_loan_payable', $resolver->normalizeLedgerSource('Party Loan Payable Ledger'));
+        $this->assertSame('party_salary_payable', $resolver->normalizeLedgerSource('Party Salary Payable Ledger'));
+        $this->assertSame('party_capital', $resolver->normalizeLedgerSource('Party Capital Ledger'));
         $this->assertSame('transaction_head', $resolver->normalizeLedgerSource('Transaction Head Based Ledger'));
         $this->assertSame('system_derived', $resolver->normalizeLedgerSource('System Derived Ledger'));
     }

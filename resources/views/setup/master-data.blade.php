@@ -610,6 +610,7 @@
                         <tr>
                             <th>Name</th>
                             <th>Code</th>
+                            <th>Default Nature</th>
                             <th>Default Ledger</th>
                             <th>Sort</th>
                             <th>Status</th>
@@ -623,13 +624,22 @@
                                 data-name="{{ e($type->name) }}"
                                 data-code="{{ e($type->code) }}"
                                 data-default-ledger-account-id="{{ $type->default_ledger_account_id }}"
+                                data-default-ledger-nature="{{ $type->default_ledger_nature ?: 'No Effect' }}"
                                 data-sort-order="{{ $type->sort_order }}"
                                 data-status="{{ $type->status }}"
                                 data-update-url="{{ route('api.master-data.party-types.update', $type) }}"
                             >
                                 <td class="strong">{{ $type->name }}</td>
                                 <td>{{ $type->code }}</td>
-                                <td>{{ $type->defaultLedger?->display_name ?? '—' }}</td>
+                                <td><span class="badge badge-primary">{{ $type->default_ledger_nature ?: 'No Effect' }}</span></td>
+                                <td>
+                                    {{ $type->defaultLedger?->display_name ?? '—' }}
+                                    @if(! $type->default_ledger_account_id && $type->status === 'Inactive')
+                                        <div class="hint" style="margin-top:4px;color:#b42318;font-weight:700">
+                                            Ledger reassignment required. Select a replacement default ledger and reactivate this party type.
+                                        </div>
+                                    @endif
+                                </td>
                                 <td>{{ $type->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $type->status === 'Active' ? 'badge-active' : 'badge-neutral' }}">
@@ -649,7 +659,7 @@
                             </tr>
                         @empty
                             <tr data-empty="true">
-                                <td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No party types found.</td>
+                                <td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">No party types found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -684,6 +694,19 @@
                 <div>
                     <label>Code <span class="required">*</span></label>
                     <input name="code" placeholder="SUP" required>
+                </div>
+
+                <div>
+                    <label>Default Accounting Nature <span class="required">*</span></label>
+                    <select name="default_ledger_nature" required>
+                        <option value="Receivable">Receivable</option>
+                        <option value="Payable">Payable</option>
+                        <option value="Advance Paid">Advance Paid</option>
+                        <option value="Advance Received">Advance Received</option>
+                        <option value="Capital">Capital / Owner Equity</option>
+                        <option value="No Effect">No Effect</option>
+                    </select>
+                    <div class="hint">Sets the automatic primary nature for parties of this type. Transaction rules still use explicit party ledger mappings.</div>
                 </div>
 
                 <div>

@@ -2,6 +2,7 @@
 
 namespace App\AccountingReports\Services\Reports;
 
+use App\Models\PartyLedgerMapping;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -10,15 +11,15 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
 {
     public function customerReceivable(array $filters = []): array
     {
-        return $this->buildPartyBalance($filters, 'Customer Receivable', 'Customer', 'debit');
+        return $this->buildPartyBalance($filters, 'Customer Receivable', 'Customer', PartyLedgerMapping::PURPOSE_RECEIVABLE, 'debit');
     }
 
     public function supplierPayable(array $filters = []): array
     {
-        return $this->buildPartyBalance($filters, 'Supplier Payable', 'Supplier', 'credit');
+        return $this->buildPartyBalance($filters, 'Supplier Payable', 'Supplier', PartyLedgerMapping::PURPOSE_PAYABLE, 'credit');
     }
 
-    private function buildPartyBalance(array $filters, string $title, string $partyKind, string $normalSide): array
+    private function buildPartyBalance(array $filters, string $title, string $partyKind, string $mappingPurpose, string $normalSide): array
     {
         $companyId = ! empty($filters['company_id']) ? (int) $filters['company_id'] : null;
         $fromDate = $filters['from_date'] ?? now()->startOfMonth()->toDateString();
@@ -27,7 +28,7 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
         $partyId = ! empty($filters['party_id']) ? (int) $filters['party_id'] : null;
         $includeZero = (bool) ($filters['include_zero_balances'] ?? false);
 
-        $movementSub = $this->partyMovementQuery($companyId, null, $toDate, $partyKind)
+        $movementSub = $this->partyMovementQuery($companyId, null, $toDate, $mappingPurpose)
             ->groupBy('d.party_id', 'd.account_id')
             ->selectRaw('d.party_id')
             ->selectRaw('d.account_id')
@@ -65,7 +66,7 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
             ->orderBy('p.party_name')
             ->orderBy('a.account_code')
             ->get()
-            ->map(function (object $row) use ($normalSide, $companyId, $toDate, $partyKind) {
+            ->map(function (object $row) use ($normalSide, $companyId, $toDate, $mappingPurpose) {
                 $openingNet = (float) $row->opening_debit - (float) $row->opening_credit;
                 $periodNet = (float) $row->period_debit - (float) $row->period_credit;
                 $closingDebitNet = $openingNet + $periodNet;
@@ -77,7 +78,7 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
                 $aging = $this->agingBucketsFor(
                     companyId: $companyId,
                     toDate: $toDate,
-                    partyKind: $partyKind,
+                    mappingPurpose: $mappingPurpose,
                     partyId: (int) $row->party_id,
                     accountId: (int) $row->account_id,
                     normalSide: $normalSide
@@ -109,17 +110,22 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
                 '90_plus' => round((float) $rows->sum('aging_90_plus'), 2),
             ],
             'parties' => DB::table('parties as p')
-                ->join('party_types as pt', 'pt.id', '=', 'p.party_type_id')
-                ->whereRaw('LOWER(pt.name) LIKE ?', ['%' . mb_strtolower($partyKind) . '%'])
+                ->join('party_ledger_mappings as plm', function ($join) use ($mappingPurpose) {
+                    $join->on('plm.party_id', '=', 'p.id')
+                        ->where('plm.mapping_purpose', '=', $mappingPurpose)
+                        ->whereNotNull('plm.chart_of_account_id');
+                })
                 ->when($companyId, fn (Builder $query) => $query->where('p.company_id', $companyId))
+                ->whereNull('p.deleted_at')
                 ->where('p.status', 'Active')
                 ->orderBy('p.party_name')
                 ->select('p.id', 'p.party_code', 'p.party_name')
+                ->distinct()
                 ->get(),
         ];
     }
 
-    private function agingBucketsFor(?int $companyId, string $toDate, string $partyKind, int $partyId, int $accountId, string $normalSide): array
+    private function agingBucketsFor(?int $companyId, string $toDate, string $mappingPurpose, int $partyId, int $accountId, string $normalSide): array
     {
         $buckets = [
             '0_30' => 0.0,
@@ -130,7 +136,7 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
 
         $to = Carbon::parse($toDate)->endOfDay();
 
-        $this->partyMovementQuery($companyId, null, $toDate, $partyKind)
+        $this->partyMovementQuery($companyId, null, $toDate, $mappingPurpose)
             ->where('d.party_id', $partyId)
             ->where('d.account_id', $accountId)
             ->orderBy('v.voucher_date')
@@ -164,16 +170,16 @@ class PartyBalanceReportService extends BaseVoucherDetailReportService
         return array_map(fn (float $amount) => round($amount, 2), $buckets);
     }
 
-    private function partyMovementQuery(?int $companyId, ?string $fromDate, ?string $toDate, string $partyKind): Builder
+    private function partyMovementQuery(?int $companyId, ?string $fromDate, ?string $toDate, string $mappingPurpose): Builder
     {
         return $this->basePostedLinesQuery($companyId, $fromDate, $toDate)
             ->join('parties as p', 'p.id', '=', 'd.party_id')
             ->join('party_types as pt', 'pt.id', '=', 'p.party_type_id')
-            ->whereNotNull('d.party_id')
-            ->where(function (Builder $query) use ($partyKind) {
-                $query->where('a.is_party_control', 1)
-                    ->orWhereRaw('LOWER(a.ledger_type) = ?', ['party control']);
+            ->join('party_ledger_mappings as plm', function ($join) use ($mappingPurpose) {
+                $join->on('plm.party_id', '=', 'd.party_id')
+                    ->on('plm.chart_of_account_id', '=', 'd.account_id')
+                    ->where('plm.mapping_purpose', '=', $mappingPurpose);
             })
-            ->whereRaw('LOWER(pt.name) LIKE ?', ['%' . mb_strtolower($partyKind) . '%']);
+            ->whereNotNull('d.party_id');
     }
 }

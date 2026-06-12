@@ -44,11 +44,16 @@ class TrialBalanceReportService extends BaseVoucherDetailReportService
             ->leftJoin('account_types as at', 'at.id', '=', 'a.account_type_id')
             ->leftJoinSub($openingSub, 'op', 'op.account_id', '=', 'a.id')
             ->leftJoinSub($periodSub, 'pd', 'pd.account_id', '=', 'a.id')
-            ->whereNull('a.deleted_at')
             ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))
-            ->when(! $includeInactive, fn (Builder $query) => $query->where('a.status', 'Active'))
+            ->when(! $includeInactive, fn (Builder $query) => $query->where(function (Builder $statusQuery) {
+                $statusQuery->where('a.status', 'Active')
+                    ->orWhereNotNull('a.deleted_at');
+            }))
             ->where(function (Builder $query) {
-                $query->where('a.posting_allowed', 1)
+                $query->where(function (Builder $activeAccount) {
+                    $activeAccount->whereNull('a.deleted_at')
+                        ->where('a.posting_allowed', 1);
+                })
                     ->orWhereNotNull('op.account_id')
                     ->orWhereNotNull('pd.account_id');
             })

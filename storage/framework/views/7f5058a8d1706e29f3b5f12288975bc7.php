@@ -145,8 +145,8 @@
                         <th>Party Type</th>
                         <th>Mobile</th>
                         <th>Email</th>
-                        <th>Ledger Nature</th>
-                        <th>Linked Ledger</th>
+                        <th>Receivable COA</th>
+                        <th>Payable / Capital COA</th>
                         <th>Status</th>
                         <th style="text-align:right">Actions</th>
                     </tr>
@@ -158,7 +158,6 @@
                             data-id="<?php echo e($party->id); ?>"
                             data-name="<?php echo e(e($party->party_name)); ?>"
                             data-type="<?php echo e($party->party_type_id); ?>"
-                            data-sub-type="<?php echo e(e($party->sub_type)); ?>"
                             data-mobile="<?php echo e(e($party->mobile)); ?>"
                             data-email="<?php echo e(e($party->email)); ?>"
                             data-address="<?php echo e(e($party->address)); ?>"
@@ -170,7 +169,9 @@
                             data-ownership-percentage="<?php echo e($party->ownership_percentage !== null ? number_format((float) $party->ownership_percentage, 2, '.', '') : ''); ?>"
                             data-contact-info="<?php echo e(e($party->contact_info)); ?>"
                             data-linked-ledger="<?php echo e($party->linked_ledger_account_id); ?>"
-                            data-default-ledger-nature="<?php echo e($party->default_ledger_nature); ?>"
+                            data-receivable-ledger="<?php echo e($party->receivableLedgerMapping?->chart_of_account_id); ?>"
+                            data-payable-capital-ledger="<?php echo e($party->payableLedgerMapping?->chart_of_account_id ?: $party->capitalLedgerMapping?->chart_of_account_id); ?>"
+                            data-default-ledger-nature="<?php echo e($party->effectiveLedgerNature()); ?>"
                             data-notes="<?php echo e(e($party->notes)); ?>"
                             data-status="<?php echo e($party->status); ?>"
                             data-update-url="<?php echo e(url('/api/parties/' . $party->id)); ?>"
@@ -206,21 +207,31 @@
                             </td>
 
                             <td>
-                                <span class="badge badge-blue">
-                                    <?php echo e($party->default_ledger_nature ?: 'No Effect'); ?>
+                                <?php ($receivableMapping = $party->receivableLedgerMapping); ?>
+                                <strong><?php echo e($receivableMapping?->ledger?->display_name ?? '—'); ?></strong>
+                                <?php if($receivableMapping?->ledger?->accountType): ?>
+                                    <div class="hint" style="margin-top:2px">
+                                        <?php echo e($receivableMapping->ledger->accountType->name); ?>
 
-                                </span>
+                                        · <?php echo e($receivableMapping->ledger->normal_balance ?: $receivableMapping->ledger->accountType->normal_balance); ?>
 
+                                    </div>
+                                <?php endif; ?>
                             </td>
 
                             <td>
-                                <strong><?php echo e($party->linkedLedger?->display_name ?? '—'); ?></strong>
-                                <?php if($party->linkedLedger?->accountType): ?>
+                                <?php ($payableCapitalMapping = $party->payableLedgerMapping ?: $party->capitalLedgerMapping); ?>
+                                <strong><?php echo e($payableCapitalMapping?->ledger?->display_name ?? '—'); ?></strong>
+                                <?php if($payableCapitalMapping?->ledger?->accountType): ?>
                                     <div class="hint" style="margin-top:2px">
-                                        <?php echo e($party->linkedLedger->accountType->name); ?>
+                                        <?php echo e(ucfirst(str_replace('_', ' ', $payableCapitalMapping->mapping_purpose))); ?>
 
-                                        · <?php echo e($party->linkedLedger->normal_balance ?: $party->linkedLedger->accountType->normal_balance); ?>
+                                        · <?php echo e($payableCapitalMapping->ledger->accountType->name); ?>
 
+                                    </div>
+                                <?php elseif($party->ledgerMappings->whereNotNull('chart_of_account_id')->isEmpty() && $party->status === 'Inactive'): ?>
+                                    <div class="hint" style="margin-top:4px;color:#b42318;font-weight:700">
+                                        Ledger reassignment required. Assign a replacement party mapping and reactivate this party.
                                     </div>
                                 <?php endif; ?>
                             </td>
@@ -260,7 +271,7 @@
                         </tr>
                     <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                         <tr data-empty="true">
-                            <td colspan="9" class="muted" style="text-align:center;padding:24px">
+                            <td colspan="10" class="muted" style="text-align:center;padding:24px">
                                 No parties found. Add your first party using the form above.
                             </td>
                         </tr>
@@ -281,7 +292,7 @@
 
         <div class="card info-card">
             <h3>Parties are sub-ledgers</h3>
-            <p>The user selects a party in transactions. The backend uses the party type, linked ledger, and accounting rules to affect receivable, payable, salary payable, advance, or owner ledgers automatically.</p>
+            <p>The user selects a party in transactions. The backend uses purpose-specific receivable/payable mappings and accounting rules to affect receivable, payable, salary payable, advance, or owner ledgers automatically.</p>
         </div>
     </div>
 
@@ -323,28 +334,6 @@
                         data-dropdown="/api/dropdowns/party-types"
                         data-placeholder="Select Party Type"
                     ></select>
-                    <div class="hint">Party Type suggests receivable, payable, owner, or no-effect handling.</div>
-                </div>
-
-                <div>
-                    <label>Ledger Nature</label>
-                    <input
-                        type="text"
-                        id="ledgerNaturePreview"
-                        class="readonly-field"
-                        value="Select Party Type first"
-                        readonly
-                    >
-                    <div class="hint">Auto-filled so users do not choose debit or credit manually.</div>
-                </div>
-
-                <div>
-                    <label>Sub Type</label>
-                    <input
-                        name="sub_type"
-                        maxlength="100"
-                        placeholder="Example: Farmer, Retailer, Service Provider"
-                    >
                 </div>
 
                 <div class="two-col">
@@ -357,7 +346,6 @@
                             maxlength="50"
                             placeholder="Enter mobile number"
                         >
-                        <div class="hint">Optional but unique when provided.</div>
                     </div>
 
                     <div>
@@ -420,17 +408,27 @@
                 </div>
 
                 <div>
-                    <label>Linked Ledger <span class="required">*</span></label>
+                    <label>Receivable COA</label>
                     <select
-                        name="linked_ledger_account_id"
-                        id="linkedLedger"
-                        required
+                        name="receivable_ledger_account_id"
+                        id="receivableLedger"
                         data-base-url="/api/dropdowns/ledger-accounts"
-                        data-dropdown="/api/dropdowns/ledger-accounts?for_party=1"
+                        data-dropdown="/api/dropdowns/ledger-accounts?for_party=1&mapping_purpose=receivable"
                         data-label="account"
-                        data-placeholder="Select Party Ledger"
+                        data-placeholder="Select Receivable Ledger"
                     ></select>
-                    <div class="hint">Filtered by party type. Customer/Tenant uses Asset receivable. Supplier/Vendor/Employee uses Liability payable.</div>
+                </div>
+
+                <div>
+                    <label>Payable / Capital COA</label>
+                    <select
+                        name="payable_capital_ledger_account_id"
+                        id="payableCapitalLedger"
+                        data-base-url="/api/dropdowns/ledger-accounts"
+                        data-dropdown="/api/dropdowns/ledger-accounts?for_party=1&mapping_purpose=payable"
+                        data-label="account"
+                        data-placeholder="Select Payable or Capital Ledger"
+                    ></select>
                 </div>
 
 
@@ -448,11 +446,6 @@
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
                     </select>
-                </div>
-
-                <div class="hint-box">
-                    <strong>Accounting safety rules</strong>
-                    Party setup stores who is involved and which control ledger they belong to. It does not post income, expense, payable, or receivable by itself. Posting happens through transaction rules.
                 </div>
 
                 <div class="form-actions">
@@ -489,8 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const partyName = form.querySelector('[name="party_name"]');
     const partyType = document.getElementById('partyType');
     const defaultLedgerNature = document.getElementById('defaultLedgerNature');
-    const ledgerNaturePreview = document.getElementById('ledgerNaturePreview');
-    const subType = form.querySelector('[name="sub_type"]');
     const mobile = form.querySelector('[name="mobile"]');
     const email = form.querySelector('[name="email"]');
     const address = form.querySelector('[name="address"]');
@@ -501,7 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const salaryAmount = form.querySelector('[name="salary_amount"]');
     const ownershipPercentage = form.querySelector('[name="ownership_percentage"]');
     const contactInfo = form.querySelector('[name="contact_info"]');
-    const linkedLedger = document.getElementById('linkedLedger');
+    const receivableLedger = document.getElementById('receivableLedger');
+    const payableCapitalLedger = document.getElementById('payableCapitalLedger');
     const notes = form.querySelector('[name="notes"]');
     const status = form.querySelector('[name="status"]');
 
@@ -538,12 +530,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function syncNaturePreview() {
+    function syncDerivedNature() {
         const option = selectedPartyTypeOption();
-        const nature = option?.dataset.defaultLedgerNature || defaultLedgerNature.value || 'No Effect';
-
-        defaultLedgerNature.value = nature;
-        ledgerNaturePreview.value = nature;
+        defaultLedgerNature.value = option?.dataset.defaultLedgerNature || defaultLedgerNature.value || 'No Effect';
     }
 
     function syncPartyProfileFields() {
@@ -575,31 +564,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function reloadLedgerOptions(selectedValue = '') {
-        const baseUrl = linkedLedger.dataset.baseUrl || '/api/dropdowns/ledger-accounts';
+    function payableCapitalPurpose() {
+        const option = selectedPartyTypeOption();
+        const label = `${option?.textContent || ''} ${option?.dataset.code || ''}`.toLowerCase();
+
+        return label.includes('owner') || label.includes('partner') || defaultLedgerNature.value === 'Capital'
+            ? 'capital'
+            : 'payable';
+    }
+
+    function reloadPurposeLedger(select, purpose, selectedValue = '') {
+        const baseUrl = select.dataset.baseUrl || '/api/dropdowns/ledger-accounts';
         const params = new URLSearchParams();
-
         params.set('for_party', '1');
+        params.set('mapping_purpose', purpose);
 
-        if (partyType.value) {
-            params.set('party_type_id', partyType.value);
-        }
+        select.dataset.dropdown = `${baseUrl}?${params.toString()}`;
+        return setDropdownValue(select, selectedValue);
+    }
 
-        if (defaultLedgerNature.value) {
-            params.set('ledger_nature', defaultLedgerNature.value);
-        }
-
-        linkedLedger.dataset.dropdown = `${baseUrl}?${params.toString()}`;
-
-        return setDropdownValue(linkedLedger, selectedValue);
+    function reloadLedgerOptions(receivableValue = '', payableCapitalValue = '') {
+        return Promise.all([
+            reloadPurposeLedger(receivableLedger, 'receivable', receivableValue),
+            reloadPurposeLedger(payableCapitalLedger, payableCapitalPurpose(), payableCapitalValue),
+        ]);
     }
 
     function maybeUseDefaultLedger() {
         const option = selectedPartyTypeOption();
         const defaultLedgerId = option?.dataset.defaultLedgerAccountId || '';
 
-        if (defaultLedgerId && !linkedLedger.value) {
-            setDropdownValue(linkedLedger, defaultLedgerId);
+        if (!defaultLedgerId) return;
+
+        if (defaultLedgerNature.value === 'Receivable' && !receivableLedger.value) {
+            setDropdownValue(receivableLedger, defaultLedgerId);
+            return;
+        }
+
+        if (!payableCapitalLedger.value) {
+            setDropdownValue(payableCapitalLedger, defaultLedgerId);
         }
     }
 
@@ -609,14 +612,13 @@ document.addEventListener('DOMContentLoaded', () => {
         methodInput.value = 'POST';
         title.textContent = 'Create Party';
 
-        [partyType, linkedLedger].forEach((select) => {
+        [partyType, receivableLedger, payableCapitalLedger].forEach((select) => {
             if (select) {
                 select.dataset.selected = '';
             }
         });
 
         defaultLedgerNature.value = 'No Effect';
-        ledgerNaturePreview.value = 'Select Party Type first';
         [creditLimit, paymentTerms, department, designation, salaryAmount, ownershipPercentage, contactInfo].forEach((input) => {
             if (input) input.value = '';
         });
@@ -633,7 +635,6 @@ document.addEventListener('DOMContentLoaded', () => {
         title.textContent = 'Edit Party';
 
         partyName.value = row.dataset.name || '';
-        subType.value = row.dataset.subType || '';
         mobile.value = row.dataset.mobile || '';
         email.value = row.dataset.email || '';
         address.value = row.dataset.address || '';
@@ -649,9 +650,12 @@ document.addEventListener('DOMContentLoaded', () => {
         status.value = row.dataset.status || 'Active';
 
         setDropdownValue(partyType, row.dataset.type || '').then(() => {
-            syncNaturePreview();
+            syncDerivedNature();
             syncPartyProfileFields();
-            reloadLedgerOptions(row.dataset.linkedLedger || '');
+            reloadLedgerOptions(
+                row.dataset.receivableLedger || '',
+                row.dataset.payableCapitalLedger || ''
+            );
         });
 
         form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -663,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultLedgerNatureValue = option?.dataset.defaultLedgerNature || 'No Effect';
 
         defaultLedgerNature.value = defaultLedgerNatureValue;
-        syncNaturePreview();
+        syncDerivedNature();
         syncPartyProfileFields();
         reloadLedgerOptions().then(maybeUseDefaultLedger);
     });
@@ -683,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Form cleared.');
     });
 
-    syncNaturePreview();
+    syncDerivedNature();
     syncPartyProfileFields();
 });
 </script>

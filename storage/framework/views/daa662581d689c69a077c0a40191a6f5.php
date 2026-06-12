@@ -217,6 +217,13 @@
                                 <select id="primarySource" name="primary_ledger_source" required>
                                     <option value="Fixed Ledger">Fixed Ledger</option>
                                     <option value="User Selected Cash/Bank Ledger">User Selected Cash/Bank Ledger</option>
+                                    <option value="Party Receivable Ledger">Party Receivable Ledger</option>
+                                    <option value="Party Payable Ledger">Party Payable Ledger</option>
+                                    <option value="Party Advance Paid Ledger">Party Advance Paid Ledger</option>
+                                    <option value="Party Advance Received Ledger">Party Advance Received Ledger</option>
+                                    <option value="Party Loan Payable Ledger">Party Loan Payable Ledger</option>
+                                    <option value="Party Salary Payable Ledger">Party Salary Payable Ledger</option>
+                                    <option value="Party Capital Ledger">Party Capital Ledger</option>
                                     <option value="Transaction Head Based Ledger">Transaction Head Based Ledger</option>
                                     <option value="System Derived Ledger">System Derived Ledger</option>
                                 </select>
@@ -274,6 +281,13 @@
                                     <option value="Fixed Ledger">Fixed Ledger</option>
                                     <option value="User Selected Cash/Bank Ledger">User Selected Cash/Bank Ledger</option>
                                     <option value="User Selected Party Control Ledger">User Selected Party Control Ledger</option>
+                                    <option value="Party Receivable Ledger">Party Receivable Ledger</option>
+                                    <option value="Party Payable Ledger">Party Payable Ledger</option>
+                                    <option value="Party Advance Paid Ledger">Party Advance Paid Ledger</option>
+                                    <option value="Party Advance Received Ledger">Party Advance Received Ledger</option>
+                                    <option value="Party Loan Payable Ledger">Party Loan Payable Ledger</option>
+                                    <option value="Party Salary Payable Ledger">Party Salary Payable Ledger</option>
+                                    <option value="Party Capital Ledger">Party Capital Ledger</option>
                                     <option value="Transaction Head Based Ledger">Transaction Head Based Ledger</option>
                                     <option value="Payment Method Based Ledger">Payment Method Based Ledger</option>
                                     <option value="Party Type Based Ledger">Party Type Based Ledger</option>
@@ -495,7 +509,15 @@
                                 <td class="code"><?php echo e($rule->rule_code ?: '—'); ?></td>
                                 <td class="strong"><?php echo e($rule->rule_name ?: $rule->description ?: 'Accounting Rule'); ?></td>
                                 <td><?php echo e($rule->transactionHead?->name ?? '—'); ?></td>
-                                <td><?php echo e($primary?->display_name ?? '—'); ?></td>
+                                <td>
+                                    <?php echo e($primary?->display_name ?? '—'); ?>
+
+                                    <?php if($rule->status === 'Inactive' && (! $primary || (! $counter && str_contains(strtolower((string) $rule->counter_ledger_source), 'fixed')))): ?>
+                                        <div class="hint" style="margin-top:4px;color:#b42318;font-weight:700">
+                                            Ledger reassignment required. Edit this rule and select replacement ledger(s).
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td><span class="badge badge-primary"><?php echo e($rule->primary_posting_side ?: 'Debit'); ?></span></td>
                                 <td><?php echo e($rule->counter_ledger_source ?: 'Fixed Ledger'); ?></td>
                                 <td><?php echo e($rule->counter_selection_method ?: 'Fixed by Rule'); ?></td>
@@ -637,6 +659,13 @@ document.addEventListener('DOMContentLoaded', () => {
         switch (source) {
             case 'User Selected Cash/Bank Ledger': return 'user_cash_bank';
             case 'User Selected Party Control Ledger': return 'party_control';
+            case 'Party Receivable Ledger': return 'party_receivable';
+            case 'Party Payable Ledger': return 'party_payable';
+            case 'Party Advance Paid Ledger': return 'party_advance_paid';
+            case 'Party Advance Received Ledger': return 'party_advance_received';
+            case 'Party Loan Payable Ledger': return 'party_loan_payable';
+            case 'Party Salary Payable Ledger': return 'party_salary_payable';
+            case 'Party Capital Ledger': return 'party_capital';
             case 'Transaction Head Based Ledger': return 'transaction_head';
             case 'Payment Method Based Ledger': return 'user_cash_bank';
             case 'Party Type Based Ledger': return 'party_control';
@@ -651,6 +680,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (line.ledger_source === 'user_cash_bank') {
             return fields.testCashBank.value || fallback || 'Selected Cash/Bank Ledger';
         }
+        if (line.ledger_source === 'party_receivable') return 'Selected Party Receivable Ledger';
+        if (line.ledger_source === 'party_payable') return 'Selected Party Payable Ledger';
+        if (line.ledger_source === 'party_advance_paid') return 'Selected Party Advance Paid Ledger';
+        if (line.ledger_source === 'party_advance_received') return 'Selected Party Advance Received Ledger';
+        if (line.ledger_source === 'party_loan_payable') return 'Selected Party Loan Payable Ledger';
+        if (line.ledger_source === 'party_salary_payable') return 'Selected Party Salary Payable Ledger';
+        if (line.ledger_source === 'party_capital') return 'Selected Party Capital Ledger';
         if (line.ledger_source === 'party_control') {
             return fallback || 'Selected Party Control Ledger';
         }

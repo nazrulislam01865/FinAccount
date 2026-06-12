@@ -38,7 +38,7 @@ class JournalLine extends Model
 
     public function ledger()
     {
-        return $this->belongsTo(ChartOfAccount::class, 'ledger_id');
+        return $this->belongsTo(ChartOfAccount::class, 'ledger_id')->withTrashed();
     }
 
     public function party()

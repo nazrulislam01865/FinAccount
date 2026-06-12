@@ -3,18 +3,24 @@
 namespace App\Services\Accounting;
 
 use App\AccountingEngine\Services\AccountingRulePreviewService;
+use App\AccountingEngine\Services\PartyLedgerResolver;
 use App\Models\CashBankAccount;
 use App\Models\Company;
 use App\Models\ChartOfAccount;
 use App\Models\LedgerMappingRule;
 use App\Models\Party;
+use App\Models\PartyLedgerMapping;
 use Illuminate\Validation\ValidationException;
 
 class MappingResolverService
 {
+    private PartyLedgerResolver $partyLedgerResolver;
+
     public function __construct(
-        private readonly AccountingRulePreviewService $accountingRulePreviewService
+        private readonly AccountingRulePreviewService $accountingRulePreviewService,
+        ?PartyLedgerResolver $partyLedgerResolver = null
     ) {
+        $this->partyLedgerResolver = $partyLedgerResolver ?? new PartyLedgerResolver();
     }
 
     public function resolve(int $transactionHeadId, int $settlementTypeId): LedgerMappingRule
@@ -74,7 +80,7 @@ class MappingResolverService
 
         $cashBankAccount = $this->resolveCashBankAccount($rule, $cashBankAccountId);
         $party = $partyId
-            ? Party::query()->with(['partyType', 'linkedLedger.accountType'])->find($partyId)
+            ? Party::query()->with(['partyType', 'linkedLedger.accountType', 'ledgerMappings.ledger.accountType'])->find($partyId)
             : null;
 
         $debitAccount = $this->resolveSideAccount(
@@ -279,11 +285,48 @@ class MappingResolverService
             return $cashBankAccount?->linkedLedger ?: $configuredAccount;
         }
 
-        if ($party?->linkedLedger && $this->partyLedgerCanReplace($configuredAccount, $party->linkedLedger)) {
-            return $party->linkedLedger;
+        if ($party) {
+            $purpose = $this->purposeForConfiguredAccount($configuredAccount);
+            $mappedLedger = $this->partyLedgerResolver->resolve($party, $purpose, false);
+
+            if ($mappedLedger && $this->partyLedgerCanReplace($configuredAccount, $mappedLedger)) {
+                return $mappedLedger;
+            }
+
+            if ($party->linkedLedger && $this->partyLedgerCanReplace($configuredAccount, $party->linkedLedger)) {
+                return $party->linkedLedger;
+            }
         }
 
         return $configuredAccount;
+    }
+
+
+    private function purposeForConfiguredAccount(ChartOfAccount $account): string
+    {
+        $type = $this->accountTypeName($account);
+        $name = strtolower(trim((string) $account->account_name . ' ' . (string) $account->ledger_type));
+
+        if ($type === 'Asset') {
+            return str_contains($name, 'advance')
+                ? PartyLedgerMapping::PURPOSE_ADVANCE_PAID
+                : PartyLedgerMapping::PURPOSE_RECEIVABLE;
+        }
+
+        if ($type === 'Liability') {
+            return match (true) {
+                str_contains($name, 'salary'), str_contains($name, 'wage') => PartyLedgerMapping::PURPOSE_SALARY_PAYABLE,
+                str_contains($name, 'loan') => PartyLedgerMapping::PURPOSE_LOAN_PAYABLE,
+                str_contains($name, 'advance') => PartyLedgerMapping::PURPOSE_ADVANCE_RECEIVED,
+                default => PartyLedgerMapping::PURPOSE_PAYABLE,
+            };
+        }
+
+        if ($type === 'Equity') {
+            return PartyLedgerMapping::PURPOSE_CAPITAL;
+        }
+
+        return PartyLedgerMapping::PURPOSE_GENERAL;
     }
 
     private function partyLedgerCanReplace(ChartOfAccount $configuredAccount, ChartOfAccount $partyLedger): bool

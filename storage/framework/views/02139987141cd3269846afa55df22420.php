@@ -36,6 +36,15 @@
     .coa-import-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}
     .coa-import-form input[type=file]{max-width:230px;min-height:42px;padding:7px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff;}
     .coa-import-form input[type=file]::file-selector-button{border:0;border-radius:10px;padding:7px 10px;margin-right:8px;font-weight:800;color:#1d2939;}
+    .coa-import-progress{display:none;flex:1 1 100%;min-width:260px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.14);border-radius:16px;padding:11px 12px;margin-top:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12);}
+    .coa-import-progress.is-active{display:block;}
+    .coa-import-progress-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;color:#fff;font-size:13px;font-weight:850;}
+    .coa-import-progress-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .coa-import-progress-percent{font-variant-numeric:tabular-nums;}
+    .coa-import-progress-track{height:10px;border-radius:999px;background:rgba(255,255,255,.24);overflow:hidden;}
+    .coa-import-progress-bar{height:100%;width:0%;border-radius:999px;background:#fff;transition:width .22s ease;}
+    .coa-import-progress-detail{margin-top:7px;color:rgba(255,255,255,.78);font-size:12px;font-weight:700;line-height:1.35;}
+    .coa-import-form.is-importing input[type=file],.coa-import-form.is-importing button[type=submit]{opacity:.68;pointer-events:none;}
     .coa-alert{margin-bottom:16px;padding:12px 14px;border-radius:14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#067647;font-weight:750;}
     .coa-alert.error{border-color:#fecaca;background:#fef2f2;color:#991b1b;}
 
@@ -127,9 +136,18 @@
     .coa-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
     .coa-tab{background:#eef6f8;color:var(--primary);box-shadow:none;}
     .coa-tab.active{background:var(--primary);color:#fff;}
+    .coa-bulk-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:16px;background:#f7fbff;}
+    .coa-bulk-left,.coa-bulk-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .coa-select-control{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:#344054;cursor:pointer;white-space:nowrap;}
+    .coa-select-control input{width:18px;height:18px;min-height:18px;padding:0;margin:0;accent-color:var(--primary);}
+    .coa-selected-count{font-size:13px;font-weight:850;color:#1d2939;}
+    .coa-bulk-delete:disabled,.coa-bulk-clear:disabled{opacity:.48;cursor:not-allowed;transform:none;}
+    .coa-select-cell{width:46px;text-align:center;vertical-align:middle!important;}
     .coa-filter-grid{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:10px;margin-bottom:14px;}
     .coa-tree{display:grid;gap:6px;}
-    .coa-tree-node{padding:10px 12px;border:1px solid var(--coa-line);border-radius:14px;background:#fff;cursor:pointer;transition:.16s ease;}
+    .coa-tree-node{padding:10px 12px;border:1px solid var(--coa-line);border-radius:14px;background:#fff;cursor:pointer;transition:.16s ease;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;}
+    .coa-tree-content{min-width:0;}
+    .coa-tree-actions{flex-wrap:wrap;}
     .coa-tree-node:hover{border-color:#bfdbfe;transform:translateY(-1px);}
     .coa-tree-name{font-weight:850;color:#1d2939;}
     .coa-tree-meta{color:var(--coa-muted);font-size:12px;margin:2px 0 4px;}
@@ -171,6 +189,10 @@
         .coa-actions-row button,.coa-quick-actions button{width:100%;}
         .coa-lvl1,.coa-lvl2,.coa-lvl3,.coa-lvl4{margin-left:0;}
         .coa-tree-node{border-left:5px solid #bfdbfe;}
+    }
+    @media(max-width:1080px){
+        .coa-view-toolbar.coa-bulk-toolbar{align-items:flex-start;}
+        .coa-view-toolbar.coa-bulk-toolbar .coa-load-group{margin-left:auto;border-top:0;padding-top:0;}
     }
     @media(max-width:720px){
         .coa-hero{padding:18px;border-radius:20px;}
@@ -246,22 +268,29 @@
         border-radius:14px!important;
         font-size:14px!important;
     }
+    .coa-toolbar-slot{min-height:0;}
+    .coa-toolbar-slot:empty{display:none;}
     .coa-view-toolbar{
         display:flex;
-        align-items:end;
+        align-items:center;
         justify-content:space-between;
         gap:14px;
         flex-wrap:wrap;
-        margin:0 0 14px;
-        padding:12px 14px;
+        margin:0 0 10px;
+        padding:10px 12px;
         border:1px solid var(--coa-line);
-        border-radius:16px;
+        border-radius:14px;
         background:#f8fbff;
     }
-    .coa-load-control{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-    .coa-load-control label{margin:0;font-size:12px;font-weight:850;color:#344054;}
-    .coa-load-control select{width:150px;min-height:42px;height:42px;padding-top:8px;padding-bottom:8px;}
-    .coa-list-summary{color:var(--coa-muted);font-size:12px;font-weight:750;}
+    .coa-bulk-selection{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;}
+    .coa-bulk-selection .coa-selected-count{white-space:nowrap;}
+    .coa-load-group{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0;margin-left:auto;}
+    .coa-load-control{display:flex;align-items:center;gap:7px;flex:0 0 auto;}
+    .coa-load-control label{margin:0;font-size:12px;font-weight:850;color:#344054;white-space:nowrap;}
+    .coa-load-control select{width:88px;min-height:38px;height:38px;padding:7px 30px 7px 10px;border-radius:10px;font-size:13px;}
+    .coa-list-summary{min-width:0;color:var(--coa-muted);font-size:12px;font-weight:750;line-height:1.4;text-align:right;}
+    .coa-bulk-actions{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;}
+    .coa-bulk-actions button{white-space:nowrap;min-height:38px;padding:8px 12px;border-radius:10px;font-size:12px;}
     .coa-tree{
         max-height:560px;
         overflow-y:auto;
@@ -285,8 +314,17 @@
         .content .coa-template-page .coa-import-form{flex:1 1 100%;}
         .content .coa-template-page .coa-hero :is(.coa-btn-light,.button,button){width:100%!important;}
         .content .coa-template-page .coa-import-form input[type=file]{width:100%!important;}
-        .coa-view-toolbar{align-items:stretch;}
-        .coa-load-control,.coa-load-control select{width:100%;}
+        .coa-view-toolbar{align-items:stretch;padding:10px;}
+        .coa-bulk-selection,.coa-load-group,.coa-bulk-actions{width:100%;}
+        .coa-bulk-selection{align-items:flex-start;}
+        .coa-bulk-actions{order:3;}
+        .coa-bulk-actions button{flex:1 1 140px;}
+        .coa-load-group{margin-left:0;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--coa-line);padding-top:10px;}
+        .coa-list-summary{text-align:left;flex:1 1 180px;}
+        .coa-load-control{margin-left:auto;}
+        .coa-load-control select{width:92px;}
+        .coa-tree-node{grid-template-columns:auto minmax(0,1fr);}
+        .coa-tree-actions{grid-column:1/-1;justify-content:flex-start;padding-left:28px;}
     }
 
     /* Unified blue hero heading is controlled globally from resources/css/app.css.
@@ -340,6 +378,7 @@
             'delete_url' => route('setup.chart-of-accounts.destroy', $account),
         ];
     });
+    $canManageCoa = auth()->user()?->hasPermission('chart-of-accounts.manage') ?? false;
 ?>
 
 <div class="coa-template-page">
@@ -354,12 +393,23 @@
         <div class="coa-quick-actions">
             <button class="coa-btn-light" type="button" id="newAccountHeroBtn">+ Add New Account</button>
             <a class="coa-btn-light button" href="<?php echo e(route('setup.chart-of-accounts.export')); ?>">Export Excel</a>
+            <a class="coa-btn-light button" href="<?php echo e(route('setup.chart-of-accounts.import-template')); ?>">Download Import Template</a>
             <button class="coa-btn-light" type="button" data-coa-tab-button="tree">View CoA Tree</button>
             <button class="coa-btn-light" type="button" data-coa-tab-button="posting">Posting Ledgers</button>
-            <form class="coa-import-form" method="POST" action="<?php echo e(route('setup.chart-of-accounts.import')); ?>" enctype="multipart/form-data">
+            <form class="coa-import-form" method="POST" action="<?php echo e(route('setup.chart-of-accounts.import')); ?>" enctype="multipart/form-data" data-coa-import-form data-success-url="<?php echo e(route('setup.chart-of-accounts')); ?>">
                 <?php echo csrf_field(); ?>
-                <input type="file" name="coa_file" accept=".xlsx,.xlsm,.csv,.txt" required>
-                <button class="coa-btn-light" type="submit">Import Excel</button>
+                <input type="file" name="coa_file" accept=".xlsx,.xlsm,.csv,.txt" required data-coa-import-file>
+                <button class="coa-btn-light" type="submit" data-coa-import-submit>Import Excel</button>
+                <div class="coa-import-progress" data-coa-import-progress aria-live="polite" aria-hidden="true">
+                    <div class="coa-import-progress-top">
+                        <span class="coa-import-progress-text" data-coa-import-status>Select a file to import.</span>
+                        <span class="coa-import-progress-percent" data-coa-import-percent>0%</span>
+                    </div>
+                    <div class="coa-import-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-coa-import-track>
+                        <div class="coa-import-progress-bar" data-coa-import-bar></div>
+                    </div>
+                    <div class="coa-import-progress-detail" data-coa-import-detail>Waiting to start.</div>
+                </div>
             </form>
         </div>
     </header>
@@ -567,13 +617,7 @@
                                                 <option value="0" <?php if(! (bool)($payload['is_user_selectable'] ?? false)): echo 'selected'; endif; ?>>No</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label>System ledger?</label>
-                                            <select name="is_system_ledger">
-                                                <option value="0" <?php if(! (bool)($payload['is_system_ledger'] ?? false)): echo 'selected'; endif; ?>>No</option>
-                                                <option value="1" <?php if((bool)($payload['is_system_ledger'] ?? false)): echo 'selected'; endif; ?>>Yes</option>
-                                            </select>
-                                        </div>
+                                        <input type="hidden" name="is_system_ledger" value="<?php echo e((bool)($payload['is_system_ledger'] ?? false) ? 1 : 0); ?>">
                                         <div class="span-2">
                                             <label>Description</label>
                                             <input name="description" value="<?php echo e($payload['description'] ?? ''); ?>">
@@ -601,12 +645,12 @@
     <?php endif; ?>
 
     <section class="coa-stats" aria-label="Chart of Accounts statistics">
-        <div class="coa-stat"><span>Total Accounts</span><strong><?php echo e($stats['total'] ?? $accountRows->count()); ?></strong></div>
-        <div class="coa-stat"><span>Posting Ledgers</span><strong><?php echo e($stats['posting'] ?? 0); ?></strong></div>
-        <div class="coa-stat"><span>Group Accounts</span><strong><?php echo e($stats['groups'] ?? 0); ?></strong></div>
-        <div class="coa-stat"><span>Cash/Bank Ledgers</span><strong><?php echo e($stats['cash_bank'] ?? 0); ?></strong></div>
-        <div class="coa-stat"><span>Party Control</span><strong><?php echo e($stats['party_control'] ?? 0); ?></strong></div>
-        <div class="coa-stat"><span>Active Accounts</span><strong><?php echo e($stats['active'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Total Accounts</span><strong data-coa-stat="total"><?php echo e($stats['total'] ?? $accountRows->count()); ?></strong></div>
+        <div class="coa-stat"><span>Posting Ledgers</span><strong data-coa-stat="posting"><?php echo e($stats['posting'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Group Accounts</span><strong data-coa-stat="groups"><?php echo e($stats['groups'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Cash/Bank Ledgers</span><strong data-coa-stat="cash_bank"><?php echo e($stats['cash_bank'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Party Control</span><strong data-coa-stat="party_control"><?php echo e($stats['party_control'] ?? 0); ?></strong></div>
+        <div class="coa-stat"><span>Active Accounts</span><strong data-coa-stat="active"><?php echo e($stats['active'] ?? 0); ?></strong></div>
     </section>
 
     <section class="coa-main-grid">
@@ -689,16 +733,14 @@
                                 <option value="Debit">Debit</option>
                                 <option value="Credit">Credit</option>
                             </select>
-                            <div class="coa-hint">Auto-suggested from account nature.</div>
                         </div>
 
-                        <div class="coa-field">
+                        <div class="coa-field coa-hidden">
                             <label for="postingPreview">Can transactions be posted here?</label>
                             <select id="postingPreview" disabled>
                                 <option value="0">No</option>
                                 <option value="1" selected>Yes</option>
                             </select>
-                            <div class="coa-hint">Only Ledger Head should be Yes.</div>
                         </div>
 
                         <div class="coa-field">
@@ -718,7 +760,7 @@
                             </select>
                         </div>
 
-                        <div class="coa-field">
+                        <div class="coa-field coa-hidden">
                             <label for="userSelectableSelect">Should users select this in transaction entry?</label>
                             <select id="userSelectableSelect">
                                 <option value="0">No</option>
@@ -727,7 +769,7 @@
                         </div>
                     </div>
 
-                    <div class="coa-derived-flags">
+                    <div class="coa-derived-flags coa-hidden">
                         <span id="postingBadge" class="coa-badge posting">Posting: Yes</span>
                         <span id="cashBankBadge" class="coa-badge group">Cash/Bank: No</span>
                         <span id="partyControlBadge" class="coa-badge group">Party Control: No</span>
@@ -736,7 +778,7 @@
                     <div class="coa-advanced">
                         <button type="button" class="btn-ghost" id="advancedToggleBtn">Show / Hide Advanced Details</button>
                         <div class="coa-form-grid coa-hidden" id="advancedFields" style="margin-top:15px">
-                            <div class="coa-field">
+                            <div class="coa-field coa-hidden">
                                 <label for="cashBankPreview">Is this a cash or bank account?</label>
                                 <select id="cashBankPreview" disabled>
                                     <option value="0">No</option>
@@ -744,7 +786,7 @@
                                 </select>
                             </div>
 
-                            <div class="coa-field">
+                            <div class="coa-field coa-hidden">
                                 <label for="partyControlPreview">Does this track customer/supplier/employee/owner balance?</label>
                                 <select id="partyControlPreview" disabled>
                                     <option value="0">No</option>
@@ -762,13 +804,10 @@
                                 ></select>
                             </div>
 
-                            <div class="coa-field">
-                                <label for="systemLedgerSelect">Is system ledger?</label>
-                                <select id="systemLedgerSelect">
-                                    <option value="1">Yes</option>
-                                    <option value="0" selected>No</option>
-                                </select>
-                            </div>
+                            <select id="systemLedgerSelect" class="coa-hidden" aria-hidden="true" tabindex="-1">
+                                <option value="1">Yes</option>
+                                <option value="0" selected>No</option>
+                            </select>
 
                             <div class="coa-field full">
                                 <label for="description">Short description</label>
@@ -799,7 +838,6 @@
         <div class="coa-card-header">
             <div>
                 <h2 class="coa-card-title">CoA Views</h2>
-                <p class="coa-card-subtitle">Tree view, posting ledgers, and full account list.</p>
             </div>
         </div>
         <div class="coa-card-body">
@@ -809,40 +847,81 @@
                 <button class="coa-tab" type="button" data-coa-tab-button="full" id="tabFull">Full CoA List</button>
             </div>
 
-            <div class="coa-view-toolbar" aria-label="CoA list loading controls">
-                <div class="coa-load-control">
-                    <label for="coaLoadSize">Load records at once</label>
-                    <select id="coaLoadSize">
-                        <option value="50" selected>50</option>
-                        <option value="100">100</option>
-                        <option value="150">150</option>
-                        <option value="200">200</option>
-                        <option value="all">All</option>
-                    </select>
-                </div>
-                <div class="coa-list-summary" id="coaVisibleSummary">Showing records as you scroll.</div>
-            </div>
-
             <div id="treeView" data-coa-tab-panel="tree">
+                <div class="coa-toolbar-slot" data-coa-toolbar-slot="tree">
+                    <div
+                        class="coa-view-toolbar <?php echo e($canManageCoa ? 'coa-bulk-toolbar' : ''); ?>"
+                        data-coa-view-toolbar
+                        aria-label="Chart of Accounts row and bulk actions"
+                        <?php if($canManageCoa): ?>
+                            data-coa-bulk-toolbar
+                            data-delete-url="<?php echo e(route('setup.chart-of-accounts.bulk-destroy')); ?>"
+                        <?php endif; ?>
+                    >
+                        <?php if($canManageCoa): ?>
+                            <div class="coa-bulk-selection">
+                                <label class="coa-select-control" data-coa-select-control title="Select all visible accounts">
+                                    <input type="checkbox" id="coaSelectVisible" aria-label="Select all visible accounts" title="Select all visible accounts">
+                                </label>
+                                <span class="coa-selected-count" id="coaSelectedCount">0 selected</span>
+                                <div class="coa-bulk-actions">
+                                    <button type="button" class="btn-ghost delete-btn coa-bulk-delete" id="coaDeleteSelected" disabled>Delete selected</button>
+                                    <button type="button" class="btn-ghost coa-bulk-clear" id="coaClearSelected" disabled>Clear</button>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="coa-load-group">
+                            <div class="coa-list-summary" id="coaVisibleSummary">Showing records as you scroll.</div>
+                            <div class="coa-load-control">
+                                <label for="coaLoadSize">Rows</label>
+                                <select id="coaLoadSize">
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                    <option value="150">150</option>
+                                    <option value="200">200</option>
+                                    <option value="all">All</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="coa-tree" id="tree">
                     <?php $__empty_1 = true; $__currentLoopData = $accountRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <div
                             class="coa-tree-node coa-lvl<?php echo e($row['coa_level']); ?>"
                             data-coa-tree-row
-                            data-edit-row-id="<?php echo e($row['id']); ?>"
-                            role="button"
-                            tabindex="0"
+                            data-coa-account-id="<?php echo e($row['id']); ?>"
                         >
-                            <div class="coa-tree-name"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
-                            <div class="coa-tree-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?><?php echo e($row['parent_name'] ? ' · Under ' . $row['parent_name'] : ''); ?></div>
-                            <div>
-                                <span class="coa-badge <?php echo e($row['posting_allowed'] ? 'posting' : 'group'); ?>"><?php echo e($row['ledger_type'] ?: 'Group'); ?></span>
-                                <?php if($row['posting_allowed']): ?><span class="coa-badge posting">Posting</span><?php endif; ?>
-                                <?php if($row['ledger_type'] === 'Cash'): ?><span class="coa-badge cash">Cash</span><?php endif; ?>
-                                <?php if($row['ledger_type'] === 'Bank'): ?><span class="coa-badge bank">Bank</span><?php endif; ?>
-                                <?php if($row['is_party_control']): ?><span class="coa-badge party">Party Control</span><?php endif; ?>
-                                <?php if($row['is_system_ledger']): ?><span class="coa-badge system">System</span><?php endif; ?>
-                                <span class="coa-badge <?php echo e($row['status'] === 'Active' ? '' : 'inactive'); ?>"><?php echo e($row['status']); ?></span>
+                            <?php if($canManageCoa): ?>
+                                <label class="coa-select-control" data-coa-select-control title="Select this CoA branch">
+                                    <input type="checkbox" value="<?php echo e($row['id']); ?>" data-coa-select data-select-tab="tree" aria-label="Select <?php echo e($row['display_name']); ?>">
+                                </label>
+                            <?php endif; ?>
+                            <div class="coa-tree-content" data-edit-row-id="<?php echo e($row['id']); ?>" role="button" tabindex="0">
+                                <div class="coa-tree-name"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
+                                <div class="coa-tree-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?><?php echo e($row['parent_name'] ? ' · Under ' . $row['parent_name'] : ''); ?></div>
+                                <div>
+                                    <span class="coa-badge <?php echo e($row['posting_allowed'] ? 'posting' : 'group'); ?>"><?php echo e($row['ledger_type'] ?: 'Group'); ?></span>
+                                    <?php if($row['posting_allowed']): ?><span class="coa-badge posting">Posting</span><?php endif; ?>
+                                    <?php if($row['ledger_type'] === 'Cash'): ?><span class="coa-badge cash">Cash</span><?php endif; ?>
+                                    <?php if($row['ledger_type'] === 'Bank'): ?><span class="coa-badge bank">Bank</span><?php endif; ?>
+                                    <?php if($row['is_party_control']): ?><span class="coa-badge party">Party Control</span><?php endif; ?>
+                                    <?php if($row['is_system_ledger']): ?><span class="coa-badge system">System</span><?php endif; ?>
+                                    <span class="coa-badge <?php echo e($row['status'] === 'Active' ? '' : 'inactive'); ?>"><?php echo e($row['status']); ?></span>
+                                </div>
+                            </div>
+                            <div class="coa-action-stack coa-tree-actions">
+                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form data-coa-delete-form data-account-id="<?php echo e($row['id']); ?>">
+                                    <?php echo csrf_field(); ?>
+                                    <?php echo method_field('DELETE'); ?>
+                                    <input type="hidden" name="return_tab" value="tree">
+                                    <button type="submit" class="btn-ghost coa-small-btn delete-btn">
+                                        <?php echo e($row['coa_level'] < 4 ? 'Delete Branch' : 'Delete'); ?>
+
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
@@ -852,10 +931,12 @@
             </div>
 
             <div id="postingView" class="coa-hidden" data-coa-tab-panel="posting">
+                <div class="coa-toolbar-slot" data-coa-toolbar-slot="posting"></div>
                 <div class="coa-table-wrap">
                     <table id="postingCoaTable" data-no-client-pagination="true">
                         <thead>
                             <tr>
+                                <?php if($canManageCoa): ?><th class="coa-select-cell">Select</th><?php endif; ?>
                                 <th>CoA Code</th>
                                 <th>Ledger Name</th>
                                 <th>Class</th>
@@ -873,7 +954,14 @@
                         </thead>
                         <tbody>
                             <?php $__empty_1 = true; $__currentLoopData = $accountRows->where('posting_allowed', true); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                                <tr data-posting-row data-edit-row-id="<?php echo e($row['id']); ?>">
+                                <tr data-posting-row data-coa-account-id="<?php echo e($row['id']); ?>" data-edit-row-id="<?php echo e($row['id']); ?>">
+                                    <?php if($canManageCoa): ?>
+                                        <td class="coa-select-cell">
+                                            <label class="coa-select-control" data-coa-select-control>
+                                                <input type="checkbox" value="<?php echo e($row['id']); ?>" data-coa-select data-select-tab="posting" aria-label="Select <?php echo e($row['display_name']); ?>">
+                                            </label>
+                                        </td>
+                                    <?php endif; ?>
                                     <td class="code"><?php echo e($row['account_code']); ?></td>
                                     <td><strong><?php echo e($row['account_name']); ?></strong></td>
                                     <td><?php echo e($row['account_class'] ?: '—'); ?></td>
@@ -886,23 +974,46 @@
                                     <td><?php echo e($row['party_type_name'] ?: '—'); ?></td>
                                     <td><?php echo e($row['is_user_selectable'] ? 'Yes' : 'No'); ?></td>
                                     <td><?php echo e($row['status']); ?></td>
-                                    <td><button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button></td>
+                                    <td>
+                                        <div class="coa-action-stack">
+                                            <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                            <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form data-coa-delete-form data-account-id="<?php echo e($row['id']); ?>">
+                                                <?php echo csrf_field(); ?>
+                                                <?php echo method_field('DELETE'); ?>
+                                                <input type="hidden" name="return_tab" value="posting">
+                                                <button type="submit" class="btn-ghost coa-small-btn delete-btn">Delete</button>
+                                            </form>
+                                        </div>
+                                    </td>
                                 </tr>
                             <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                                <tr><td colspan="13" class="coa-table-empty">No posting ledgers found.</td></tr>
+                                <tr><td colspan="<?php echo e($canManageCoa ? 14 : 13); ?>" class="coa-table-empty">No posting ledgers found.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
                 <div class="coa-mobile-list">
                     <?php $__currentLoopData = $accountRows->where('posting_allowed', true); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                        <div class="coa-mobile-item" data-posting-mobile-row>
+                        <div class="coa-mobile-item" data-posting-mobile-row data-coa-account-id="<?php echo e($row['id']); ?>">
                             <div class="coa-mobile-top">
                                 <div>
                                     <div class="coa-mobile-title"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
                                     <div class="coa-mobile-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?></div>
                                 </div>
-                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                <div class="coa-action-stack">
+                                    <?php if($canManageCoa): ?>
+                                        <label class="coa-select-control" data-coa-select-control>
+                                            <input type="checkbox" value="<?php echo e($row['id']); ?>" data-coa-select data-select-tab="posting" aria-label="Select <?php echo e($row['display_name']); ?>">
+                                        </label>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                    <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form data-coa-delete-form data-account-id="<?php echo e($row['id']); ?>">
+                                        <?php echo csrf_field(); ?>
+                                        <?php echo method_field('DELETE'); ?>
+                                        <input type="hidden" name="return_tab" value="posting">
+                                        <button type="submit" class="btn-ghost coa-small-btn delete-btn">Delete</button>
+                                    </form>
+                                </div>
                             </div>
                             <div>
                                 <span class="coa-badge posting"><?php echo e($row['ledger_type'] ?: 'Posting'); ?></span>
@@ -950,10 +1061,13 @@
                     </select>
                 </div>
 
+                <div class="coa-toolbar-slot" data-coa-toolbar-slot="full"></div>
+
                 <div class="coa-table-wrap">
                     <table id="fullCoaTable" data-no-client-pagination="true">
                         <thead>
                             <tr>
+                                <?php if($canManageCoa): ?><th class="coa-select-cell">Select</th><?php endif; ?>
                                 <th>CoA Code</th>
                                 <th>Account Name</th>
                                 <th>Level</th>
@@ -973,6 +1087,7 @@
                             <?php $__empty_1 = true; $__currentLoopData = $accountRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                                 <tr
                                     data-full-row
+                                    data-coa-account-id="<?php echo e($row['id']); ?>"
                                     data-search="<?php echo e(strtolower($row['account_code'] . ' ' . $row['account_name'] . ' ' . ($row['parent_name'] ?? '') . ' ' . ($row['account_group'] ?? '') . ' ' . ($row['account_sub_group'] ?? ''))); ?>"
                                     data-class="<?php echo e($row['account_class']); ?>"
                                     data-level="<?php echo e($row['coa_level']); ?>"
@@ -980,6 +1095,13 @@
                                     data-posting="<?php echo e($row['posting_allowed'] ? 'Yes' : 'No'); ?>"
                                     data-edit-row-id="<?php echo e($row['id']); ?>"
                                 >
+                                    <?php if($canManageCoa): ?>
+                                        <td class="coa-select-cell">
+                                            <label class="coa-select-control" data-coa-select-control>
+                                                <input type="checkbox" value="<?php echo e($row['id']); ?>" data-coa-select data-select-tab="full" aria-label="Select <?php echo e($row['display_name']); ?>">
+                                            </label>
+                                        </td>
+                                    <?php endif; ?>
                                     <td class="code"><?php echo e($row['account_code']); ?></td>
                                     <td>
                                         <strong><?php echo e($row['account_name']); ?></strong>
@@ -998,18 +1120,20 @@
                                     <td>
                                         <div class="coa-action-stack">
                                             <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
-                                            <?php if(! $row['is_system_ledger']): ?>
-                                                <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form>
-                                                    <?php echo csrf_field(); ?>
-                                                    <?php echo method_field('DELETE'); ?>
-                                                    <button type="submit" class="btn-ghost coa-small-btn delete-btn">Delete</button>
-                                                </form>
-                                            <?php endif; ?>
+                                            <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form data-coa-delete-form data-account-id="<?php echo e($row['id']); ?>">
+                                                <?php echo csrf_field(); ?>
+                                                <?php echo method_field('DELETE'); ?>
+                                                <input type="hidden" name="return_tab" value="full">
+                                                <button type="submit" class="btn-ghost coa-small-btn delete-btn">
+                                                    <?php echo e($row['coa_level'] < 4 ? 'Delete Branch' : 'Delete'); ?>
+
+                                                </button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
                             <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                                <tr><td colspan="13" class="coa-table-empty">No accounts found.</td></tr>
+                                <tr><td colspan="<?php echo e($canManageCoa ? 14 : 13); ?>" class="coa-table-empty">No accounts found.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -1019,6 +1143,7 @@
                         <div
                             class="coa-mobile-item"
                             data-full-mobile-row
+                            data-coa-account-id="<?php echo e($row['id']); ?>"
                             data-search="<?php echo e(strtolower($row['account_code'] . ' ' . $row['account_name'] . ' ' . ($row['parent_name'] ?? '') . ' ' . ($row['account_group'] ?? '') . ' ' . ($row['account_sub_group'] ?? ''))); ?>"
                             data-class="<?php echo e($row['account_class']); ?>"
                             data-level="<?php echo e($row['coa_level']); ?>"
@@ -1030,7 +1155,23 @@
                                     <div class="coa-mobile-title"><?php echo e($row['account_code']); ?> · <?php echo e($row['account_name']); ?></div>
                                     <div class="coa-mobile-meta">Level <?php echo e($row['coa_level']); ?> · <?php echo e($row['level_name']); ?></div>
                                 </div>
-                                <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                <div class="coa-action-stack">
+                                    <?php if($canManageCoa): ?>
+                                        <label class="coa-select-control" data-coa-select-control>
+                                            <input type="checkbox" value="<?php echo e($row['id']); ?>" data-coa-select data-select-tab="full" aria-label="Select <?php echo e($row['display_name']); ?>">
+                                        </label>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn-ghost coa-small-btn" data-edit-row-id="<?php echo e($row['id']); ?>">Edit</button>
+                                    <form method="POST" action="<?php echo e($row['delete_url']); ?>" data-delete-form data-coa-delete-form data-account-id="<?php echo e($row['id']); ?>">
+                                        <?php echo csrf_field(); ?>
+                                        <?php echo method_field('DELETE'); ?>
+                                        <input type="hidden" name="return_tab" value="full">
+                                        <button type="submit" class="btn-ghost coa-small-btn delete-btn">
+                                            <?php echo e($row['coa_level'] < 4 ? 'Delete Branch' : 'Delete'); ?>
+
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
                             <div>
                                 <span class="coa-badge <?php echo e($row['posting_allowed'] ? 'posting' : 'group'); ?>"><?php echo e($row['ledger_type'] ?: 'Group'); ?></span>
@@ -1055,6 +1196,151 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const importForm = document.querySelector('[data-coa-import-form]');
+    if (importForm) {
+        const importFile = importForm.querySelector('[data-coa-import-file]');
+        const importSubmit = importForm.querySelector('[data-coa-import-submit]');
+        const importProgress = importForm.querySelector('[data-coa-import-progress]');
+        const importStatus = importForm.querySelector('[data-coa-import-status]');
+        const importPercent = importForm.querySelector('[data-coa-import-percent]');
+        const importDetail = importForm.querySelector('[data-coa-import-detail]');
+        const importTrack = importForm.querySelector('[data-coa-import-track]');
+        const importBar = importForm.querySelector('[data-coa-import-bar]');
+        let processingTimer = null;
+        let currentProgress = 0;
+
+        function setImportProgress(value, status, detail) {
+            currentProgress = Math.max(currentProgress, Math.min(100, Math.round(value)));
+            if (importProgress) {
+                importProgress.classList.add('is-active');
+                importProgress.setAttribute('aria-hidden', 'false');
+            }
+            if (importStatus && status) importStatus.textContent = status;
+            if (importDetail && detail) importDetail.textContent = detail;
+            if (importPercent) importPercent.textContent = `${currentProgress}%`;
+            if (importTrack) importTrack.setAttribute('aria-valuenow', String(currentProgress));
+            if (importBar) importBar.style.width = `${currentProgress}%`;
+        }
+
+        function stopProcessingTimer() {
+            if (processingTimer) {
+                clearInterval(processingTimer);
+                processingTimer = null;
+            }
+        }
+
+        function startProcessingTimer() {
+            stopProcessingTimer();
+            processingTimer = setInterval(() => {
+                if (currentProgress < 94) {
+                    setImportProgress(currentProgress + 1, 'Importing rows...', 'The server is validating hierarchy, duplicates, and accounting rules.');
+                }
+            }, 650);
+        }
+
+        importFile?.addEventListener('change', () => {
+            const fileName = importFile.files?.[0]?.name || 'Selected file';
+            currentProgress = 0;
+            setImportProgress(0, 'Ready to import', fileName);
+        });
+
+        importForm.addEventListener('submit', (event) => {
+            if (!window.XMLHttpRequest || !window.FormData) {
+                return;
+            }
+
+            event.preventDefault();
+
+            if (!importFile?.files?.length) {
+                importFile?.reportValidity?.();
+                return;
+            }
+
+            stopProcessingTimer();
+            currentProgress = 0;
+            importForm.classList.add('is-importing');
+            importSubmit?.setAttribute('disabled', 'disabled');
+
+            const formData = new FormData(importForm);
+            const xhr = new XMLHttpRequest();
+            const fileName = importFile.files[0]?.name || 'selected file';
+
+            setImportProgress(1, 'Starting import...', `Preparing ${fileName}.`);
+
+            xhr.upload.addEventListener('progress', (progressEvent) => {
+                if (!progressEvent.lengthComputable) {
+                    setImportProgress(8, 'Uploading file...', 'Uploading file to the server.');
+                    return;
+                }
+
+                const uploadPercent = Math.round((progressEvent.loaded / progressEvent.total) * 65);
+                setImportProgress(Math.max(1, uploadPercent), 'Uploading file...', `${Math.round((progressEvent.loaded / progressEvent.total) * 100)}% of the file uploaded.`);
+            });
+
+            xhr.upload.addEventListener('load', () => {
+                setImportProgress(70, 'File uploaded', 'Server import has started.');
+                startProcessingTimer();
+            });
+
+            xhr.addEventListener('load', () => {
+                stopProcessingTimer();
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    let response = {};
+                    try {
+                        response = JSON.parse(xhr.responseText || '{}');
+                    } catch (error) {
+                        response = {};
+                    }
+
+                    const resultParts = [];
+                    if (typeof response.created !== 'undefined') resultParts.push(`Created: ${response.created}`);
+                    if (typeof response.skipped !== 'undefined') resultParts.push(`Skipped/review: ${response.skipped}`);
+
+                    setImportProgress(100, 'Import completed', resultParts.join(' · ') || 'Redirecting to the updated Chart of Accounts.');
+
+                    window.setTimeout(() => {
+                        window.location.assign(response.redirect_url || importForm.dataset.successUrl || window.location.href);
+                    }, 500);
+                    return;
+                }
+
+                let errorMessage = 'Please check the selected file and try again.';
+                try {
+                    const errorResponse = JSON.parse(xhr.responseText || '{}');
+                    const validationErrors = errorResponse.errors ? Object.values(errorResponse.errors).flat() : [];
+                    errorMessage = validationErrors[0] || errorResponse.message || errorMessage;
+                } catch (error) {
+                    // Keep the generic message when the response is not JSON.
+                }
+
+                importForm.classList.remove('is-importing');
+                importSubmit?.removeAttribute('disabled');
+                setImportProgress(100, 'Import failed', errorMessage);
+            });
+
+            xhr.addEventListener('error', () => {
+                stopProcessingTimer();
+                importForm.classList.remove('is-importing');
+                importSubmit?.removeAttribute('disabled');
+                setImportProgress(100, 'Network error', 'The file could not be uploaded. Check your connection and try again.');
+            });
+
+            xhr.open('POST', importForm.action, true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.addEventListener('readystatechange', () => {
+                if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED || xhr.readyState === XMLHttpRequest.LOADING) {
+                    if (currentProgress < 70) {
+                        setImportProgress(70, 'File uploaded', 'Server import has started.');
+                    }
+                    startProcessingTimer();
+                }
+            });
+            xhr.send(formData);
+        });
+    }
+
     document.querySelectorAll('[data-discard-import-review]').forEach((form) => {
         form.addEventListener('submit', (event) => {
             if (! confirm('Discard the pending Chart of Accounts import review? These skipped rows will not be imported and this popup will not appear again unless you import another file.')) {
@@ -1066,6 +1352,336 @@ document.addEventListener('DOMContentLoaded', () => {
     const accountRows = <?php echo json_encode($accountRows->keyBy('id')->toArray(), 15, 512) ?>;
     const levelMap = <?php echo json_encode($coaLevels, 15, 512) ?>;
     const normalByNature = { Asset: 'Debit', Expense: 'Debit', 'Equity Contra': 'Debit', Liability: 'Credit', Equity: 'Credit', Income: 'Credit', "Owner's Equity": 'Credit', 'Owner’s Equity': 'Credit' };
+    let activeCoaTab = 'tree';
+    let visibleLimit = Number(document.getElementById('coaLoadSize')?.value || 50);
+    const validCoaTabs = ['tree', 'posting', 'full'];
+    const selectedCoaIds = {
+        tree: new Set(),
+        posting: new Set(),
+        full: new Set(),
+    };
+    const viewToolbar = document.querySelector('[data-coa-view-toolbar]');
+    const bulkToolbar = document.querySelector('[data-coa-bulk-toolbar]');
+    const selectVisibleCheckbox = document.getElementById('coaSelectVisible');
+    const selectedCountLabel = document.getElementById('coaSelectedCount');
+    const clearSelectedButton = document.getElementById('coaClearSelected');
+    const deleteSelectedButton = document.getElementById('coaDeleteSelected');
+
+    function showCoaToast(message) {
+        if (window.AccountingUI?.showToast) {
+            window.AccountingUI.showToast(message);
+            return;
+        }
+
+        alert(message);
+    }
+
+    function showCoaReassignmentNotice(result) {
+        if (!result?.reassignment_message) return;
+
+        alert(result.reassignment_message);
+    }
+
+    function currentCoaSelection() {
+        return selectedCoaIds[activeCoaTab] || selectedCoaIds.tree;
+    }
+
+    function syncCoaSelectionCheckboxes(tabName, accountId, checked) {
+        document.querySelectorAll(`[data-coa-select][data-select-tab="${tabName}"][value="${accountId}"]`).forEach((checkbox) => {
+            checkbox.checked = checked;
+        });
+    }
+
+    function visibleAccountIdsForSelection() {
+        return activeRowsFor(activeCoaTab)
+            .filter((row) => row.isConnected && row.style.display !== 'none' && row.dataset.filterMatch !== '0')
+            .map((row) => String(row.dataset.coaAccountId || ''))
+            .filter(Boolean);
+    }
+
+    function refreshBulkSelectionUi() {
+        if (!bulkToolbar) return;
+
+        const selection = currentCoaSelection();
+        const visibleIds = Array.from(new Set(visibleAccountIdsForSelection()));
+        const selectedVisibleCount = visibleIds.filter((id) => selection.has(id)).length;
+        const selectedCount = selection.size;
+
+        if (selectedCountLabel) {
+            selectedCountLabel.textContent = `${selectedCount} selected in ${activeCoaTab === 'tree' ? 'CoA Tree' : (activeCoaTab === 'posting' ? 'Posting Ledgers' : 'Full CoA List')}`;
+        }
+
+        if (selectVisibleCheckbox) {
+            selectVisibleCheckbox.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+            selectVisibleCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+            selectVisibleCheckbox.disabled = visibleIds.length === 0;
+        }
+
+        if (clearSelectedButton) clearSelectedButton.disabled = selectedCount === 0;
+        if (deleteSelectedButton) deleteSelectedButton.disabled = selectedCount === 0;
+    }
+
+    function clearDeletedCoaSelections(deletedIds) {
+        const ids = Array.from(new Set((deletedIds || []).map((id) => String(id))));
+
+        Object.entries(selectedCoaIds).forEach(([tabName, selection]) => {
+            ids.forEach((id) => {
+                selection.delete(id);
+                syncCoaSelectionCheckboxes(tabName, id, false);
+            });
+        });
+
+        refreshBulkSelectionUi();
+    }
+
+    async function submitBulkCoaDelete(accountIds, confirmed = false) {
+        if (!bulkToolbar?.dataset.deleteUrl) {
+            throw new Error('Bulk deletion is not available for this user.');
+        }
+
+        const formData = new FormData();
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        formData.set('_token', csrfToken);
+        formData.set('_method', 'DELETE');
+        formData.set('return_tab', activeCoaTab);
+        accountIds.forEach((id) => formData.append('account_ids[]', id));
+        if (confirmed) formData.set('confirm_cascade', '1');
+
+        const response = await fetch(bulkToolbar.dataset.deleteUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: formData,
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.status === 409 && data.requires_confirmation) {
+            const approved = confirm(data.confirmation_message || data.message || 'Delete all selected Chart of Accounts branches?');
+            if (!approved) return { cancelled: true };
+
+            return submitBulkCoaDelete(accountIds, true);
+        }
+
+        if (!response.ok || data.success === false) {
+            const validationMessage = data?.errors
+                ? Object.values(data.errors).flat().join('\n')
+                : '';
+            throw new Error(validationMessage || data.message || 'Selected Chart of Accounts records could not be deleted.');
+        }
+
+        return data;
+    }
+
+    document.querySelectorAll('[data-coa-select]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+            const tabName = checkbox.dataset.selectTab;
+            const accountId = String(checkbox.value || '');
+            const selection = selectedCoaIds[tabName];
+
+            if (!selection || !accountId) return;
+
+            if (checkbox.checked) selection.add(accountId);
+            else selection.delete(accountId);
+
+            syncCoaSelectionCheckboxes(tabName, accountId, checkbox.checked);
+            refreshBulkSelectionUi();
+        });
+    });
+
+    selectVisibleCheckbox?.addEventListener('change', () => {
+        const selection = currentCoaSelection();
+        const shouldSelect = selectVisibleCheckbox.checked;
+
+        visibleAccountIdsForSelection().forEach((accountId) => {
+            if (shouldSelect) selection.add(accountId);
+            else selection.delete(accountId);
+
+            syncCoaSelectionCheckboxes(activeCoaTab, accountId, shouldSelect);
+        });
+
+        refreshBulkSelectionUi();
+    });
+
+    clearSelectedButton?.addEventListener('click', () => {
+        const selection = currentCoaSelection();
+        Array.from(selection).forEach((accountId) => syncCoaSelectionCheckboxes(activeCoaTab, accountId, false));
+        selection.clear();
+        refreshBulkSelectionUi();
+    });
+
+    deleteSelectedButton?.addEventListener('click', async () => {
+        const selectedIds = Array.from(currentCoaSelection());
+        if (selectedIds.length === 0) return;
+
+        const originalText = deleteSelectedButton.textContent;
+        deleteSelectedButton.disabled = true;
+        deleteSelectedButton.textContent = 'Checking selection…';
+
+        try {
+            const result = await submitBulkCoaDelete(selectedIds, false);
+            if (result?.cancelled) return;
+
+            removeDeletedCoaRecords(result.deleted_ids || selectedIds);
+            showCoaToast(result.message || 'Selected Chart of Accounts records were deleted successfully.');
+            showCoaReassignmentNotice(result);
+        } catch (error) {
+            showCoaToast(error.message || 'Selected Chart of Accounts records could not be deleted.');
+        } finally {
+            if (deleteSelectedButton?.isConnected) {
+                deleteSelectedButton.textContent = originalText;
+                refreshBulkSelectionUi();
+            }
+        }
+    });
+
+    function updateCoaStat(name, decreaseBy) {
+        const element = document.querySelector(`[data-coa-stat="${name}"]`);
+        if (!element) return;
+
+        const current = Number(element.textContent || 0);
+        element.textContent = String(Math.max(0, current - Number(decreaseBy || 0)));
+    }
+
+    function updateCoaStatsForDeletedRows(deletedRows) {
+        updateCoaStat('total', deletedRows.length);
+        updateCoaStat('posting', deletedRows.filter((row) => Boolean(row?.posting_allowed)).length);
+        updateCoaStat('groups', deletedRows.filter((row) => !Boolean(row?.posting_allowed)).length);
+        updateCoaStat('cash_bank', deletedRows.filter((row) => Boolean(row?.is_cash_bank)).length);
+        updateCoaStat('party_control', deletedRows.filter((row) => Boolean(row?.is_party_control)).length);
+        updateCoaStat('active', deletedRows.filter((row) => row?.status === 'Active').length);
+    }
+
+    function addEmptyCoaState(container, message, isTable = false) {
+        if (!container || container.querySelector('[data-coa-generated-empty]')) return;
+
+        if (isTable) {
+            const row = document.createElement('tr');
+            row.dataset.coaGeneratedEmpty = '1';
+            const columnCount = container.closest('table')?.querySelectorAll('thead th').length || 13;
+            row.innerHTML = `<td colspan="${columnCount}" class="coa-table-empty">${message}</td>`;
+            container.appendChild(row);
+            return;
+        }
+
+        const item = document.createElement('div');
+        item.dataset.coaGeneratedEmpty = '1';
+        item.className = 'coa-table-empty';
+        item.textContent = message;
+        container.appendChild(item);
+    }
+
+    function refreshCoaEmptyStates() {
+        const tree = document.getElementById('tree');
+        if (tree && !tree.querySelector('[data-coa-tree-row]')) {
+            addEmptyCoaState(tree, 'No accounts found. Use the guided form to create the first CoA account.');
+        }
+
+        const fullBody = document.querySelector('#fullCoaTable tbody');
+        if (fullBody && !fullBody.querySelector('[data-full-row]')) {
+            fullBody.querySelectorAll('tr:not([data-full-row])').forEach((item) => {
+                if (item.querySelector('.coa-table-empty')) item.remove();
+            });
+            addEmptyCoaState(fullBody, 'No accounts found.', true);
+        }
+
+        const postingBody = document.querySelector('#postingCoaTable tbody');
+        if (postingBody && !postingBody.querySelector('[data-posting-row]')) {
+            postingBody.querySelectorAll('tr:not([data-posting-row])').forEach((item) => {
+                if (item.querySelector('.coa-table-empty')) item.remove();
+            });
+            addEmptyCoaState(postingBody, 'No posting ledgers found.', true);
+        }
+
+        const fullMobile = document.getElementById('fullMobileList');
+        if (fullMobile && !fullMobile.querySelector('[data-full-mobile-row]')) {
+            addEmptyCoaState(fullMobile, 'No accounts found.');
+        }
+    }
+
+    function removeDeletedCoaRecords(deletedIds) {
+        const normalizedIds = Array.from(new Set((deletedIds || []).map((id) => String(id))));
+        const deletedRows = normalizedIds.map((id) => accountRows[id]).filter(Boolean);
+
+        normalizedIds.forEach((id) => {
+            document.querySelectorAll(`[data-coa-account-id="${id}"]`).forEach((element) => element.remove());
+            delete accountRows[id];
+        });
+
+        updateCoaStatsForDeletedRows(deletedRows);
+        clearDeletedCoaSelections(normalizedIds);
+        refreshCoaEmptyStates();
+
+        if (typeof applyFullFilters === 'function') applyFullFilters(false);
+        if (typeof applyProgressiveLimit === 'function') applyProgressiveLimit(true);
+    }
+
+    async function submitCoaDelete(form, confirmed = false) {
+        const formData = new FormData(form);
+        if (confirmed) formData.set('confirm_cascade', '1');
+
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: formData,
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.status === 409 && data.requires_confirmation) {
+            const approved = confirm(data.confirmation_message || data.message || 'Delete this complete Chart of Accounts branch?');
+            if (!approved) return { cancelled: true };
+
+            return submitCoaDelete(form, true);
+        }
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Chart of Accounts deletion failed.');
+        }
+
+        return data;
+    }
+
+    document.querySelectorAll('form[data-coa-delete-form]').forEach((deleteForm) => {
+        deleteForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            const submitButton = event.submitter || deleteForm.querySelector('button[type="submit"]');
+            const originalText = submitButton?.textContent || 'Delete';
+
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Deleting…';
+            }
+
+            try {
+                const result = await submitCoaDelete(deleteForm, false);
+
+                if (result?.cancelled) return;
+
+                removeDeletedCoaRecords(result.deleted_ids || [deleteForm.dataset.accountId]);
+                showCoaToast(result.message || 'Chart of Accounts record deleted successfully.');
+                showCoaReassignmentNotice(result);
+            } catch (error) {
+                showCoaToast(error.message || 'Chart of Accounts deletion failed.');
+            } finally {
+                if (submitButton?.isConnected) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = originalText;
+                }
+            }
+        });
+    });
 
     const form = document.getElementById('accountForm');
     if (!form) return;
@@ -1342,8 +1958,12 @@ document.addEventListener('DOMContentLoaded', () => {
         form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    let activeCoaTab = 'tree';
-    let visibleLimit = Number(document.getElementById('coaLoadSize')?.value || 50);
+    function preferredCoaTab() {
+        const requestedTab = new URLSearchParams(window.location.search).get('coa_tab');
+        if (validCoaTabs.includes(requestedTab)) return requestedTab;
+
+        return 'tree';
+    }
 
     function selectedLoadSize() {
         const value = document.getElementById('coaLoadSize')?.value || '50';
@@ -1392,6 +2012,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         updateVisibleSummary(Math.min(visibleLimit, rows.length), rows.length);
+        refreshBulkSelectionUi();
     }
 
     function loadMoreVisibleRows() {
@@ -1414,8 +2035,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function placeCoaToolbar(tabName) {
+        if (!viewToolbar) return;
+
+        const slot = document.querySelector(`[data-coa-toolbar-slot="${tabName}"]`);
+        if (slot && viewToolbar.parentElement !== slot) {
+            slot.appendChild(viewToolbar);
+        }
+    }
+
     function showTab(name) {
+        name = validCoaTabs.includes(name) ? name : 'tree';
         activeCoaTab = name;
+        placeCoaToolbar(name);
         document.querySelectorAll('[data-coa-tab-panel]').forEach((panel) => {
             panel.classList.toggle('coa-hidden', panel.dataset.coaTabPanel !== name);
         });
@@ -1423,8 +2055,18 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.toggle('active', button.dataset.coaTabButton === name);
         });
         if (name === 'full') applyFullFilters(false);
+
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('coa_tab', name);
+            window.history.replaceState({}, '', url);
+        } catch (error) {
+            // Tab switching still works if URL updates are unavailable.
+        }
+
         bindProgressiveScroll();
         applyProgressiveLimit(true);
+        refreshBulkSelectionUi();
     }
 
     function applyFullFilters(resetLimit = true) {
@@ -1483,10 +2125,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('[data-edit-row-id]').forEach((element) => {
         element.addEventListener('click', (event) => {
-            if (event.target.closest('form')) return;
+            if (event.target.closest('form, [data-coa-select-control], input[type="checkbox"]')) return;
             loadForEdit(element.dataset.editRowId);
         });
         element.addEventListener('keydown', (event) => {
+            if (event.target.closest('[data-coa-select-control], input[type="checkbox"]')) return;
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 loadForEdit(element.dataset.editRowId);
@@ -1510,7 +2153,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     resetForm(false);
-    showTab('tree');
+    showTab(preferredCoaTab());
 });
 </script>
 <?php $__env->stopSection(); ?>

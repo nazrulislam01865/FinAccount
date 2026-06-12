@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\AccountingRuleLine;
 use App\Models\ChartOfAccount;
 use App\Models\LedgerMappingRule;
 use App\Models\SettlementType;
@@ -188,6 +189,13 @@ class LedgerMappingRuleRequest extends FormRequest
             'primary_ledger_source' => ['required', Rule::in([
                 'Fixed Ledger',
                 'User Selected Cash/Bank Ledger',
+                'Party Receivable Ledger',
+                'Party Payable Ledger',
+                'Party Advance Paid Ledger',
+                'Party Advance Received Ledger',
+                'Party Loan Payable Ledger',
+                'Party Salary Payable Ledger',
+                'Party Capital Ledger',
                 'Transaction Head Based Ledger',
                 'System Derived Ledger',
             ])],
@@ -199,6 +207,13 @@ class LedgerMappingRuleRequest extends FormRequest
                 'Fixed Ledger',
                 'User Selected Cash/Bank Ledger',
                 'User Selected Party Control Ledger',
+                'Party Receivable Ledger',
+                'Party Payable Ledger',
+                'Party Advance Paid Ledger',
+                'Party Advance Received Ledger',
+                'Party Loan Payable Ledger',
+                'Party Salary Payable Ledger',
+                'Party Capital Ledger',
                 'Transaction Head Based Ledger',
                 'Payment Method Based Ledger',
                 'Party Type Based Ledger',
@@ -236,7 +251,7 @@ class LedgerMappingRuleRequest extends FormRequest
             'status' => ['required', Rule::in(['Active', 'Inactive', 'Draft', 'Pending Review'])],
             'rule_lines' => ['required', 'array', 'min:2'],
             'rule_lines.*.line_role' => ['nullable', 'string', 'max:30'],
-            'rule_lines.*.ledger_source' => ['required', Rule::in(['fixed', 'user_cash_bank', 'party_control', 'transaction_head', 'system_derived'])],
+            'rule_lines.*.ledger_source' => ['required', Rule::in(AccountingRuleLine::LEDGER_SOURCES)],
             'rule_lines.*.ledger_id' => ['required', 'integer', $postingLedgerRule],
             'rule_lines.*.side' => ['required', Rule::in(['Debit', 'Credit'])],
             'rule_lines.*.movement' => ['nullable', Rule::in(['Increase', 'Decrease'])],
@@ -596,6 +611,13 @@ class LedgerMappingRuleRequest extends FormRequest
         $value = strtolower(trim(str_replace(['_', '-'], ' ', (string) $source)));
 
         return match (true) {
+            str_contains($value, 'party receivable'), str_contains($value, 'customer receivable') => 'party_receivable',
+            str_contains($value, 'party payable'), str_contains($value, 'supplier payable') => 'party_payable',
+            str_contains($value, 'party advance paid') => 'party_advance_paid',
+            str_contains($value, 'party advance received') => 'party_advance_received',
+            str_contains($value, 'party loan payable') => 'party_loan_payable',
+            str_contains($value, 'party salary payable') => 'party_salary_payable',
+            str_contains($value, 'party capital'), str_contains($value, 'owner capital') => 'party_capital',
             $value === 'user cash bank',
             str_contains($value, 'cash/bank'),
             str_contains($value, 'cash bank') => 'user_cash_bank',
@@ -610,6 +632,13 @@ class LedgerMappingRuleRequest extends FormRequest
     {
         return match ($source) {
             'user_cash_bank' => 'User Selected Cash/Bank Ledger',
+            'party_receivable' => 'Party Receivable Ledger',
+            'party_payable' => 'Party Payable Ledger',
+            'party_advance_paid' => 'Party Advance Paid Ledger',
+            'party_advance_received' => 'Party Advance Received Ledger',
+            'party_loan_payable' => 'Party Loan Payable Ledger',
+            'party_salary_payable' => 'Party Salary Payable Ledger',
+            'party_capital' => 'Party Capital Ledger',
             'party_control' => 'User Selected Party Control Ledger',
             'transaction_head' => 'Transaction Head Based Ledger',
             'system_derived' => 'System Derived Ledger',

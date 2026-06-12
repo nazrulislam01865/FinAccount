@@ -43,11 +43,16 @@ class IncomeStatementReportService
             ->leftJoinSub($periodSub, 'period', 'period.account_id', '=', 'a.id')
             ->leftJoinSub($ytdSub, 'ytd', 'ytd.account_id', '=', 'a.id')
             ->leftJoinSub($previousSub, 'previous_period', 'previous_period.account_id', '=', 'a.id')
-            ->whereNull('a.deleted_at')
             ->when($companyId, fn (Builder $query) => $query->where('a.company_id', $companyId))
-            ->when(! $includeInactive, fn (Builder $query) => $query->where('a.status', 'Active'))
+            ->when(! $includeInactive, fn (Builder $query) => $query->where(function (Builder $statusQuery) {
+                $statusQuery->where('a.status', 'Active')
+                    ->orWhereNotNull('a.deleted_at');
+            }))
             ->where(function (Builder $query) {
-                $query->where('a.posting_allowed', 1)
+                $query->where(function (Builder $activeAccount) {
+                    $activeAccount->whereNull('a.deleted_at')
+                        ->where('a.posting_allowed', 1);
+                })
                     ->orWhereNotNull('period.account_id')
                     ->orWhereNotNull('ytd.account_id')
                     ->orWhereNotNull('previous_period.account_id');

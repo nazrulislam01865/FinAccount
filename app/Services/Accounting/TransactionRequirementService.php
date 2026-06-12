@@ -77,21 +77,24 @@ class TransactionRequirementService
      */
     private function headDefaults(?TransactionHead $head): array
     {
-        $partyMode = $this->normalizePartyMode($head?->party_required_mode ?: ($head?->requires_party ? 'Required' : 'No'));
+        $category = TransactionHead::normaliseCategory($head?->category, $head?->name, $head?->nature);
 
+        // Transaction Head contains only the business activity and Posting COA.
+        // Party, money-account and other input requirements are intentionally
+        // neutral here and are supplied by the selected Accounting Rule.
         return [
             'source' => 'transaction_head',
             'transaction_head_id' => $head?->id,
-            'transaction_screen' => $head?->transaction_screen ?: 'Transaction Entry',
-            'category' => $head?->category ?: $head?->nature,
-            'party_required_mode' => $partyMode,
-            'party_required' => $partyMode === 'Required',
-            'party_optional' => $partyMode === 'Optional',
-            'party_type_id' => $head?->default_party_type_id,
-            'party_type_name' => $head?->defaultPartyType?->name,
-            'payment_method_required' => (bool) ($head?->payment_method_required ?? false),
-            'cash_bank_required' => (bool) ($head?->payment_method_required ?? false),
-            'requires_reference' => (bool) ($head?->requires_reference ?? false),
+            'transaction_screen' => $this->screenFromCategory($category),
+            'category' => $category,
+            'party_required_mode' => 'No',
+            'party_required' => false,
+            'party_optional' => false,
+            'party_type_id' => null,
+            'party_type_name' => null,
+            'payment_method_required' => false,
+            'cash_bank_required' => false,
+            'requires_reference' => false,
             'help_text' => $head?->help_text,
         ];
     }
@@ -118,7 +121,7 @@ class TransactionRequirementService
     private function activeLegacyRule(int $transactionHeadId, ?int $settlementTypeId, int $companyId): ?LedgerMappingRule
     {
         return LedgerMappingRule::query()
-            ->with(['debitAccount.accountType', 'creditAccount.accountType'])
+            ->with(['debitAccount.accountType', 'creditAccount.accountType', 'transactionHead.defaultPartyType'])
             ->where(function ($query) use ($companyId) {
                 $query->where('company_id', $companyId)->orWhereNull('company_id');
             })
@@ -136,7 +139,8 @@ class TransactionRequirementService
     private function mergeRuleRequirements(array $requirements, AccountingRule $rule): array
     {
         $lineRequiresParty = $rule->lines->contains(function (AccountingRuleLine $line): bool {
-            return $this->ledgerSource($line->ledger_source) === 'party_control'
+            return str_starts_with($this->ledgerSource($line->ledger_source), 'party_')
+                || $this->ledgerSource($line->ledger_source) === 'party_control'
                 || (bool) $line->ledger?->is_party_control;
         });
 
@@ -144,6 +148,13 @@ class TransactionRequirementService
             return $this->ledgerSource($line->ledger_source) === 'user_cash_bank'
                 || (bool) $line->ledger?->is_cash_bank;
         });
+
+        $requiredMappingPurposes = $rule->lines
+            ->map(fn (AccountingRuleLine $line) => $this->partyMappingPurpose($this->ledgerSource($line->ledger_source)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         $partyMode = $this->normalizePartyMode($rule->party_required_mode);
         if ($partyMode === 'No' && $lineRequiresParty) {
@@ -163,6 +174,7 @@ class TransactionRequirementService
             'party_optional' => $partyMode === 'Optional',
             'party_type_id' => $rule->party_type_id ?: $requirements['party_type_id'],
             'party_type_name' => $rule->partyType?->name ?: $requirements['party_type_name'],
+            'required_party_mapping_purposes' => $requiredMappingPurposes,
             'payment_method_required' => (bool) $rule->payment_method_required || $cashBankRequired,
             'cash_bank_required' => $cashBankRequired,
             'transaction_screen' => $rule->transaction_screen ?: $requirements['transaction_screen'],
@@ -186,12 +198,16 @@ class TransactionRequirementService
             || (bool) $rule->creditAccount?->is_cash_bank
             || $this->settlementLooksLikeCashBank($rule->settlementType?->code, $rule->settlementType?->name);
 
+        $legacyPartyType = $rule->transactionHead?->defaultPartyType;
+
         return array_merge($requirements, [
             'source' => 'legacy_mapping_rule',
             'legacy_ledger_mapping_rule_id' => $rule->id,
             'party_required_mode' => $partyMode,
             'party_required' => $partyMode === 'Required',
             'party_optional' => $partyMode === 'Optional',
+            'party_type_id' => $legacyPartyType?->id,
+            'party_type_name' => $legacyPartyType?->name,
             'payment_method_required' => (bool) $rule->payment_method_required || $cashBankRequired,
             'cash_bank_required' => $cashBankRequired,
             'transaction_screen' => $rule->transaction_screen ?: $requirements['transaction_screen'],
@@ -213,10 +229,32 @@ class TransactionRequirementService
 
         return match (true) {
             $source === 'user_cash_bank', str_contains($source, 'cash'), str_contains($source, 'bank'), str_contains($source, 'payment method') => 'user_cash_bank',
+            $source === 'party_receivable', str_contains($source, 'party_receivable'), str_contains($source, 'customer_receivable') => 'party_receivable',
+            $source === 'party_payable', str_contains($source, 'party_payable'), str_contains($source, 'supplier_payable') => 'party_payable',
+            str_contains($source, 'party_advance_paid') => 'party_advance_paid',
+            str_contains($source, 'party_advance_received') => 'party_advance_received',
+            str_contains($source, 'party_loan_payable') => 'party_loan_payable',
+            str_contains($source, 'party_salary_payable') => 'party_salary_payable',
+            str_contains($source, 'party_capital') => 'party_capital',
             $source === 'party_control', str_contains($source, 'party') => 'party_control',
             $source === 'transaction_head', str_contains($source, 'transaction head') => 'transaction_head',
             $source === 'system_derived', str_contains($source, 'system') => 'system_derived',
             default => 'fixed',
+        };
+    }
+
+
+    private function partyMappingPurpose(string $source): ?string
+    {
+        return match ($source) {
+            'party_receivable' => 'receivable',
+            'party_payable' => 'payable',
+            'party_advance_paid' => 'advance_paid',
+            'party_advance_received' => 'advance_received',
+            'party_loan_payable' => 'loan_payable',
+            'party_salary_payable' => 'salary_payable',
+            'party_capital' => 'capital',
+            default => null,
         };
     }
 
@@ -230,6 +268,15 @@ class TransactionRequirementService
             || str_contains($value, 'ADVANCE PAID')
             || str_contains($value, 'ADVANCE_RECEIVED')
             || str_contains($value, 'ADVANCE RECEIVED');
+    }
+
+    private function screenFromCategory(?string $category): string
+    {
+        return match (TransactionHead::normaliseCategory($category)) {
+            'Opening' => 'Opening Balance Entry',
+            'Owner / Equity' => 'Owner / Equity Entry',
+            default => TransactionHead::normaliseCategory($category) . ' Entry',
+        };
     }
 
     private function companyId(?int $companyId): int
