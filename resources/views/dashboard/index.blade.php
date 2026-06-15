@@ -7,7 +7,7 @@
         <div class="hg-actions">
             <form method="POST" action="{{ route('dashboard.reset-demo') }}" onsubmit="return confirm('Reset all data to sample dataset?')">
                 @csrf
-                <button class="hg-btn" type="submit">Reset Sample Data</button>
+                <button class="hg-btn" type="submit">Reset Sample data</button>
             </form>
             <a class="hg-btn hg-btn-primary" href="{{ route('transactions.create', ['category' => 'Sales']) }}">+ Sale</a>
             <a class="hg-btn hg-btn-danger" href="{{ route('transactions.create', ['category' => 'Payment']) }}">+ Payment</a>
