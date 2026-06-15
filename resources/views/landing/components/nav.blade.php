@@ -35,6 +35,8 @@
         <button id="bnBtn" class="{{ $defaultLang === 'bn' ? 'active' : '' }}" type="button">বাংলা</button>
         <button id="enBtn" class="{{ $defaultLang === 'en' ? 'active' : '' }}" type="button">EN</button>
       </div>
+      <a class="btn btn-outline landing-system-login" href="{{ url('/login') }}" data-bn="লগইন" data-en="Login">{{ $defaultLang === 'bn' ? 'লগইন' : 'Login' }}</a>
+      <a class="btn btn-dark landing-admin-entry" href="{{ route('landing-admin.login') }}" data-bn="ল্যান্ডিং অ্যাডমিন" data-en="Landing Admin">{{ $defaultLang === 'bn' ? 'ল্যান্ডিং অ্যাডমিন' : 'Landing Admin' }}</a>
       <a class="btn btn-primary" href="{{ $landingHref(data_get($landing, 'cta.primary.href', '#contact'), data_get($landing, 'cta.primary.label')) }}" data-bn="{{ $txt(data_get($landing, 'cta.primary.label'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'cta.primary.label'), 'en') }}">{{ $txt(data_get($landing, 'cta.primary.label'), $defaultLang) }}</a>
       <button class="mobile-menu-toggle" type="button" id="landingMenuToggle" aria-controls="landingMobileMenu" aria-expanded="false" aria-label="Open landing page menu">
         <span></span><span></span><span></span>
@@ -48,6 +50,8 @@
         <a href="{{ data_get($link, 'href', '#') }}" data-bn="{{ $txt(data_get($link, 'label'), 'bn') }}" data-en="{{ $txt(data_get($link, 'label'), 'en') }}">{{ $txt(data_get($link, 'label'), $defaultLang) }}</a>
       @endforeach
       <div class="mobile-nav-actions">
+        <a class="btn btn-outline" href="{{ url('/login') }}" data-bn="সিস্টেম লগইন" data-en="System Login">{{ $defaultLang === 'bn' ? 'সিস্টেম লগইন' : 'System Login' }}</a>
+        <a class="btn btn-dark" href="{{ route('landing-admin.login') }}" data-bn="ল্যান্ডিং অ্যাডমিন" data-en="Landing Admin">{{ $defaultLang === 'bn' ? 'ল্যান্ডিং অ্যাডমিন' : 'Landing Admin' }}</a>
         <a class="btn btn-primary" href="{{ $landingHref(data_get($landing, 'cta.primary.href', '#contact'), data_get($landing, 'cta.primary.label')) }}" data-bn="{{ $txt(data_get($landing, 'cta.primary.label'), 'bn') }}" data-en="{{ $txt(data_get($landing, 'cta.primary.label'), 'en') }}">{{ $txt(data_get($landing, 'cta.primary.label'), $defaultLang) }}</a>
       </div>
     </div>

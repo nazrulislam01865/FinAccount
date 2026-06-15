@@ -9,6 +9,7 @@ use App\Support\LandingPageContent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class LandingPageController extends Controller
@@ -16,9 +17,13 @@ class LandingPageController extends Controller
     public function show(Request $request): View
     {
         $user = $request->user();
-        $canPreview = $request->boolean('preview') && ($user?->hasPermission('landing-page.manage') ?? false);
+        $systemUserCanPreview = $user
+            && method_exists($user, 'hasPermission')
+            && $user->hasPermission('landing-page.manage');
+        $canPreview = $request->boolean('preview')
+            && (Auth::guard('landing_admin')->check() || $systemUserCanPreview);
 
-        abort_if(!LandingPageContent::isPublished() && !$canPreview, 404);
+        abort_if(! LandingPageContent::isPublished() && ! $canPreview, 404);
 
         return view('landing.show', [
             'landing' => LandingPageContent::current($canPreview),

@@ -33,7 +33,8 @@ The `.env` values are only used by the seeder to create/update the account.
 ```env
 LANDING_ADMIN_SEED_ENABLED=true
 LANDING_ADMIN_NAME=Landing Page Admin
-LANDING_ADMIN_EMAIL=landingadmin@example.com
+LANDING_ADMIN_USERNAME=landingadmin
+LANDING_ADMIN_EMAIL=landingadmin@hisebghor.test
 LANDING_ADMIN_PASSWORD=LandingAdmin@12345
 ```
 

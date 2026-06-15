@@ -20,7 +20,7 @@ return [
         'brand' => [
             'name' => 'HisebGhor',
             'logo_text' => 'হি',
-            'logo' => ['path' => '', 'name' => ''],
+            'logo' => ['path' => 'images/landing/hisebghor-logo.png', 'name' => 'HisebGhor'],
             'tagline' => ['bn' => 'সহজ হিসাব সফটওয়্যার', 'en' => 'Simple Accounting Software'],
         ],
         'nav_links' => [
@@ -51,7 +51,7 @@ return [
                 'title' => ['bn' => 'আজকের হিসাব', 'en' => "Today's Accounts"],
                 'subtitle' => ['bn' => 'লাইভ ড্যাশবোর্ড', 'en' => 'Live dashboard'],
                 'chip' => ['bn' => 'সক্রিয়', 'en' => 'Active'],
-                'image' => ['path' => '', 'name' => ''],
+                'image' => ['path' => 'images/landing/hero-dashboard.png', 'name' => 'HisebGhor dashboard preview'],
                 'stats' => [
                     ['label' => ['bn' => 'নগদ', 'en' => 'Cash'], 'value' => '৳ ১,৫০,০০০'],
                     ['label' => ['bn' => 'ব্যাংক', 'en' => 'Bank'], 'value' => '৳ ৮,৫০,০০০'],
@@ -87,10 +87,10 @@ return [
             'subtitle' => ['bn' => 'ব্যবহারকারী যেন হিসাববিদ না হয়েও লেনদেন করতে পারে—এই ভাবনা থেকে UI তৈরি।', 'en' => 'The UI is designed so a user can enter transactions even without being an accountant.'],
         ],
         'screens' => [
-            ['image' => ['path' => '', 'name' => ''], 'badges' => [['bn' => 'Auto Ledger Preview', 'en' => 'Auto Ledger Preview'], ['bn' => 'Cash / Bank / Due', 'en' => 'Cash / Bank / Due']], 'title' => ['bn' => 'Daily Transaction Entry', 'en' => 'Daily Transaction Entry'], 'body' => ['bn' => 'লেনদেন এন্ট্রি করার সময়ই ডেবিট-ক্রেডিট দেখা যাবে। ভুল কমবে।', 'en' => 'Debit-credit preview appears while entering transaction. It reduces mistakes.']],
-            ['image' => ['path' => '', 'name' => ''], 'badges' => [['bn' => 'Due Payable', 'en' => 'Due Payable'], ['bn' => 'Due Receivable', 'en' => 'Due Receivable']], 'title' => ['bn' => 'Due Management', 'en' => 'Due Management'], 'body' => ['bn' => 'বাকি তৈরি, আংশিক পেমেন্ট, কালেকশন এবং ব্যালেন্স—সব ট্র্যাক হবে।', 'en' => 'Create due, partial payment, collection and balance tracking in one screen.']],
-            ['image' => ['path' => '', 'name' => ''], 'badges' => [['bn' => 'Advance Paid', 'en' => 'Advance Paid'], ['bn' => 'Advance Received', 'en' => 'Advance Received']], 'title' => ['bn' => 'Advance Tracking', 'en' => 'Advance Tracking'], 'body' => ['bn' => 'সাপ্লায়ার, কর্মী বা কাস্টমারের অগ্রিম সহজে দেখা ও অ্যাডজাস্ট করা যাবে।', 'en' => 'Track and adjust supplier, employee or customer advances easily.']],
-            ['image' => ['path' => '', 'name' => ''], 'badges' => [['bn' => 'Ledger Report', 'en' => 'Ledger Report'], ['bn' => 'Cash/Bank Book', 'en' => 'Cash/Bank Book']], 'title' => ['bn' => 'Reports', 'en' => 'Reports'], 'body' => ['bn' => 'লেনদেন, লেজার, ভাউচার ও cash/bank movement দ্রুত দেখা যাবে।', 'en' => 'View transactions, ledger, voucher and cash/bank movement quickly.']],
+            ['image' => ['path' => 'images/landing/feature-screen.png', 'name' => 'HisebGhor feature preview'], 'badges' => [['bn' => 'Auto Ledger Preview', 'en' => 'Auto Ledger Preview'], ['bn' => 'Cash / Bank / Due', 'en' => 'Cash / Bank / Due']], 'title' => ['bn' => 'Daily Transaction Entry', 'en' => 'Daily Transaction Entry'], 'body' => ['bn' => 'লেনদেন এন্ট্রি করার সময়ই ডেবিট-ক্রেডিট দেখা যাবে। ভুল কমবে।', 'en' => 'Debit-credit preview appears while entering transaction. It reduces mistakes.']],
+            ['image' => ['path' => 'images/landing/feature-screen.png', 'name' => 'HisebGhor feature preview'], 'badges' => [['bn' => 'Due Payable', 'en' => 'Due Payable'], ['bn' => 'Due Receivable', 'en' => 'Due Receivable']], 'title' => ['bn' => 'Due Management', 'en' => 'Due Management'], 'body' => ['bn' => 'বাকি তৈরি, আংশিক পেমেন্ট, কালেকশন এবং ব্যালেন্স—সব ট্র্যাক হবে।', 'en' => 'Create due, partial payment, collection and balance tracking in one screen.']],
+            ['image' => ['path' => 'images/landing/feature-screen.png', 'name' => 'HisebGhor feature preview'], 'badges' => [['bn' => 'Advance Paid', 'en' => 'Advance Paid'], ['bn' => 'Advance Received', 'en' => 'Advance Received']], 'title' => ['bn' => 'Advance Tracking', 'en' => 'Advance Tracking'], 'body' => ['bn' => 'সাপ্লায়ার, কর্মী বা কাস্টমারের অগ্রিম সহজে দেখা ও অ্যাডজাস্ট করা যাবে।', 'en' => 'Track and adjust supplier, employee or customer advances easily.']],
+            ['image' => ['path' => 'images/landing/feature-screen.png', 'name' => 'HisebGhor feature preview'], 'badges' => [['bn' => 'Ledger Report', 'en' => 'Ledger Report'], ['bn' => 'Cash/Bank Book', 'en' => 'Cash/Bank Book']], 'title' => ['bn' => 'Reports', 'en' => 'Reports'], 'body' => ['bn' => 'লেনদেন, লেজার, ভাউচার ও cash/bank movement দ্রুত দেখা যাবে।', 'en' => 'View transactions, ledger, voucher and cash/bank movement quickly.']],
         ],
         'audience' => [
             'enabled' => true,

@@ -1,0 +1,40 @@
+<div class="hg-notice">
+    <b>Rule:</b> {{ $rule->name }}<br>
+    Debit: {{ $rule->sourceLabel($rule->debit_source) }}. Credit: {{ $rule->sourceLabel($rule->credit_source) }}.<br>
+    Required party: {{ $rule->party_required ? $rule->party_type : 'No' }} |
+    Money account: {{ $rule->money_required ? 'Yes' : 'No' }}<br>
+    Head posting COA: {{ $head->postingAccount->name }}
+</div>
+
+<div class="hg-preview-space"></div>
+
+<div class="hg-journal">
+    @if ($previewError)
+        <div class="hg-muted">{{ $previewError }}</div>
+    @elseif (empty($lines))
+        <div class="hg-muted">Select the required fields.</div>
+    @else
+        <div class="hg-table-wrap">
+            <table class="hg-table">
+                <thead>
+                <tr>
+                    <th>Account</th>
+                    <th class="right">Debit</th>
+                    <th class="right">Credit</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach ($lines as $line)
+                    <tr>
+                        <td>{{ $line['account']->code }} — {{ $line['account']->name }}</td>
+                        <td class="right">৳ {{ number_format((float) $line['debit'], 2) }}</td>
+                        <td class="right">৳ {{ number_format((float) $line['credit'], 2) }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+</div>
+
+<div class="hg-preview-space"></div>

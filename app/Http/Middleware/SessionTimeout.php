@@ -62,7 +62,7 @@ class SessionTimeout
             $request->session()->regenerateToken();
 
             return redirect()->route('landing-admin.login')->withErrors([
-                'email' => 'Your Landing Admin session expired due to inactivity. Please log in again.',
+                'username' => 'Your Landing Admin session expired due to inactivity. Please log in again.',
             ]);
         }
 

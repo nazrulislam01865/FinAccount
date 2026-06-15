@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landing Admin Login | HisebGhor</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/landing-admin.css'])
     <style>
         body{background:#f8fafc}.landing-admin-login-note{margin-top:12px;color:#667085;font-size:13px;line-height:1.5;text-align:center}.landing-admin-login-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:7px 12px;background:#e9fff5;color:#087a52;font-weight:900;font-size:12px;margin-bottom:12px}.landing-admin-url{margin-top:18px;padding:12px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;color:#475467;font-size:13px;text-align:center}
     </style>
@@ -35,9 +35,9 @@
         <form method="POST" action="{{ route('landing-admin.login.store') }}" class="auth-form">
             @csrf
             <div>
-                <label>Email</label>
-                <input type="email" name="email" value="{{ old('email') }}" required autofocus autocomplete="username">
-                @error('email')<div class="field-error">{{ $message }}</div>@enderror
+                <label>Username</label>
+                <input type="text" name="username" value="{{ old('username') }}" required autofocus autocomplete="username" maxlength="100">
+                @error('username')<div class="field-error">{{ $message }}</div>@enderror
             </div>
             <div>
                 <label>Password</label>

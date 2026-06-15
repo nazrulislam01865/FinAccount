@@ -45,7 +45,8 @@ return [
 
         /*
          * Login throttles are failure-based and controlled from .env.
-         * Supported key_strategy values: email_ip, email, ip, global.
+         * System login supports: email_ip, email, ip, global.
+         * Landing Admin supports: username_ip, username, ip, global.
          * MAC address cannot be used by a web application because browsers do
          * not send the client's MAC address to the server.
          */
@@ -60,7 +61,7 @@ return [
             'enabled' => env('RATE_LIMIT_LANDING_ADMIN_LOGIN_ENABLED', true),
             'max_attempts' => env('RATE_LIMIT_LANDING_ADMIN_LOGIN_MAX_ATTEMPTS', 5),
             'lock_minutes' => env('RATE_LIMIT_LANDING_ADMIN_LOGIN_LOCK_MINUTES', 120),
-            'key_strategy' => env('RATE_LIMIT_LANDING_ADMIN_LOGIN_KEY_STRATEGY', 'email_ip'),
+            'key_strategy' => env('RATE_LIMIT_LANDING_ADMIN_LOGIN_KEY_STRATEGY', 'username_ip'),
         ],
 
         /*

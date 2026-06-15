@@ -1,557 +1,108 @@
 <?php
 
-use App\Http\Controllers\Api\DropdownController;
-use App\Http\Controllers\Approvals\ApprovalController;
-use App\Http\Controllers\Audit\AuditTrailController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\System\HealthController;
-use App\Http\Controllers\Settings\UserRoleController;
-use App\Http\Controllers\Setup\CashBankAccountController;
-use App\Http\Controllers\Setup\ChartOfAccountController;
-use App\Http\Controllers\Setup\CompanyController;
-use App\Http\Controllers\Setup\LedgerMappingController;
-use App\Http\Controllers\Setup\MasterDataController;
-use App\Http\Controllers\Setup\OpeningBalanceController;
-use App\Http\Controllers\Setup\PartyController;
-use App\Http\Controllers\Setup\TransactionHeadController;
-use App\Http\Controllers\Setup\VoucherNumberingController;
-use App\Http\Controllers\AdvanceManagementController;
-use App\Http\Controllers\DueManagementController;
-use App\Http\Controllers\LedgerReportController;
+use App\Http\Controllers\Accounting\AccountingRuleController;
+use App\Http\Controllers\Accounting\BalanceController;
+use App\Http\Controllers\Accounting\BasicStatementController;
+use App\Http\Controllers\Accounting\JournalEntryController;
+use App\Http\Controllers\Accounting\MoneyAccountController;
+use App\Http\Controllers\Accounting\PartyController;
+use App\Http\Controllers\Accounting\TransactionHeadController;
+use App\Http\Controllers\Accounting\ChartOfAccountController;
+use App\Http\Controllers\Accounting\DashboardController;
+use App\Http\Controllers\Accounting\TransactionEntryController;
+use App\Http\Controllers\Accounting\TransactionRegisterController;
 use App\Http\Controllers\Landing\LandingAdminAuthController;
 use App\Http\Controllers\Landing\LandingPageAdminController;
 use App\Http\Controllers\Landing\LandingPageController;
-use App\Http\Controllers\ManualJournalController;
-use App\Http\Controllers\ReleaseNoteController;
-use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/health', HealthController::class)->name('health');
-
 Route::get('/', [LandingPageController::class, 'show'])->name('landing.show');
+Route::get('/home', [LandingPageController::class, 'show'])->name('home');
 Route::get('/landing', [LandingPageController::class, 'show'])->name('landing.public');
 Route::post('/landing-page/inquiry', [LandingPageController::class, 'storeInquiry'])
     ->middleware('throttle:landing-inquiry')
     ->name('landing.inquiries.store');
 
-
-/*
-|--------------------------------------------------------------------------
-| Separate Landing Page Admin Authentication
-|--------------------------------------------------------------------------
-| /landing-admin is isolated from the normal /login accounting-system guard.
-| Demo/system users use /login. Landing managers use /landing-admin only.
-*/
 Route::get('/landing-admin', [LandingAdminAuthController::class, 'create'])->name('landing-admin.login');
-Route::post('/landing-admin', [LandingAdminAuthController::class, 'store'])
-    ->name('landing-admin.login.store');
+Route::post('/landing-admin', [LandingAdminAuthController::class, 'store'])->name('landing-admin.login.store');
 Route::post('/landing-admin/logout', [LandingAdminAuthController::class, 'destroy'])->name('landing-admin.logout');
 
-Route::middleware(['landing.admin.auth'])->prefix('landing-admin')->name('landing-admin.')->group(function () {
-    Route::get('/dashboard', [LandingPageAdminController::class, 'dashboard'])->name('dashboard');
-    Route::get('/page', [LandingPageAdminController::class, 'edit'])->name('edit');
-    Route::put('/page', [LandingPageAdminController::class, 'update'])->name('update');
-    Route::post('/page/reset', [LandingPageAdminController::class, 'reset'])->name('reset');
-    Route::put('/inquiries/{inquiry}', [LandingPageAdminController::class, 'updateInquiry'])->name('inquiries.update');
-    Route::delete('/inquiries/{inquiry}', [LandingPageAdminController::class, 'destroyInquiry'])->name('inquiries.destroy');
-});
+Route::middleware(['session.timeout', 'landing.admin.auth'])
+    ->prefix('landing-admin')
+    ->name('landing-admin.')
+    ->group(function () {
+        Route::get('/dashboard', [LandingPageAdminController::class, 'dashboard'])->name('dashboard');
+        Route::get('/page', [LandingPageAdminController::class, 'edit'])->name('edit');
+        Route::put('/page', [LandingPageAdminController::class, 'update'])->name('update');
+        Route::post('/page/reset', [LandingPageAdminController::class, 'reset'])->name('reset');
+        Route::put('/inquiries/{inquiry}', [LandingPageAdminController::class, 'updateInquiry'])->name('inquiries.update');
+        Route::delete('/inquiries/{inquiry}', [LandingPageAdminController::class, 'destroyInquiry'])->name('inquiries.destroy');
+    });
 
-Route::middleware(['auth', 'active.user'])->group(function () {
-    Route::get('/dashboard', DashboardController::class)
-        ->middleware('permission:dashboard.view')
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
 
-    Route::get('/approvals', [ApprovalController::class, 'index'])
-        ->middleware('permission:approvals.view|approvals.manage')
-        ->name('approvals.index');
+    Route::post('/dashboard/reset-demo', [DashboardController::class, 'resetDemo'])
+        ->name('dashboard.reset-demo');
 
-    Route::post('/approvals/{voucher}/approve', [ApprovalController::class, 'approve'])
-        ->middleware('permission:approvals.manage')
-        ->name('approvals.approve');
+    Route::get('/transactions', [TransactionRegisterController::class, 'index'])
+        ->name('transactions.index');
 
-    Route::post('/approvals/{voucher}/reject', [ApprovalController::class, 'reject'])
-        ->middleware('permission:approvals.manage')
-        ->name('approvals.reject');
-
-    Route::get('/audit-trail', [AuditTrailController::class, 'index'])
-        ->middleware('permission:audit-trail.view')
-        ->name('audit-trail.index');
-
-    Route::get('/audit-trail/export', [AuditTrailController::class, 'export'])
-        ->middleware('permission:audit-trail.view')
-        ->name('audit-trail.export');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Transaction Entry
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/transactions/create', [TransactionController::class, 'create'])
-        ->middleware('permission:transactions.create|transactions.draft')
+    Route::get('/transactions/create', [TransactionEntryController::class, 'create'])
         ->name('transactions.create');
 
-    Route::get('/manual-journals', [ManualJournalController::class, 'index'])
-        ->middleware('permission:transactions.journal.create')
-        ->name('manual-journals.index');
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Due Management and Ledger Reports
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/due-management', [DueManagementController::class, 'index'])
-        ->middleware('permission:due-management.view|customer-ledgers.view|supplier-ledgers.view|reports.view')
-        ->name('due-management.index');
-
-    Route::post('/api/due-management/settle', [DueManagementController::class, 'settle'])
-        ->middleware('permission:due-management.manage|transactions.create')
-        ->name('api.due-management.settle');
-
-    Route::get('/advance-management', [AdvanceManagementController::class, 'index'])
-        ->middleware('permission:advance-management.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
-        ->name('advance-management.index');
-
-    Route::post('/api/advance-management', [AdvanceManagementController::class, 'store'])
-        ->middleware('permission:advance-management.manage|transactions.create')
-        ->name('api.advance-management.store');
-
-    Route::get('/ledger-report', fn () => redirect()->route('accounting-reports.ledger-report.index'))
-        ->middleware('permission:ledger-report.view|reports.view|customer-ledgers.view|supplier-ledgers.view')
-        ->name('ledger-report.index');
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Release Tracker
-    |--------------------------------------------------------------------------
-    | Access is controlled by the editable role permission matrix.
-    */
-    Route::prefix('release-notes')->name('release-notes.')->group(function () {
-        Route::get('/', [ReleaseNoteController::class, 'index'])
-            ->middleware('permission:release-notes.view')
-            ->name('index');
-
-        Route::post('/', [ReleaseNoteController::class, 'store'])
-            ->middleware('permission:release-notes.manage')
-            ->name('store');
-
-        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])
-            ->middleware('permission:release-notes.manage')
-            ->name('update');
-
-        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])
-            ->middleware('permission:release-notes.manage')
-            ->name('destroy');
-    });
-
-    Route::prefix('api/release-notes')->name('api.release-notes.')->group(function () {
-        Route::post('/', [ReleaseNoteController::class, 'store'])
-            ->middleware('permission:release-notes.manage')
-            ->name('store');
-
-        Route::match(['post', 'put'], '/{releaseItem}', [ReleaseNoteController::class, 'update'])
-            ->middleware('permission:release-notes.manage')
-            ->name('update');
-
-        Route::delete('/{releaseItem}', [ReleaseNoteController::class, 'destroy'])
-            ->middleware('permission:release-notes.manage')
-            ->name('destroy');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Setup Pages
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('setup')->name('setup.')->group(function () {
-        Route::get('/company', [CompanyController::class, 'edit'])
-            ->middleware('permission:company.view')
-            ->name('company');
-
-        Route::get('/master-data', [MasterDataController::class, 'index'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data');
-
-        Route::get('/master-data/business-types', [MasterDataController::class, 'businessTypes'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data.business-types');
-
-        Route::get('/master-data/currencies', [MasterDataController::class, 'currencies'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data.currencies');
-
-        Route::get('/master-data/settlement-types', [MasterDataController::class, 'settlementTypes'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data.settlement-types');
-
-        Route::get('/master-data/party-types', [MasterDataController::class, 'partyTypes'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data.party-types');
-
-        Route::get('/master-data/ledger-types', [MasterDataController::class, 'ledgerTypes'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data.ledger-types');
-
-        Route::get('/master-data/financial-years', [MasterDataController::class, 'financialYears'])
-            ->middleware('permission:master-data.view')
-            ->name('master-data.financial-years');
-
-        Route::delete('/master-data/business-types/{business_type}', [MasterDataController::class, 'destroyBusinessType'])
-            ->middleware('permission:master-data.manage')
-            ->name('master-data.business-types.destroy');
-
-        Route::delete('/master-data/currencies/{currency}', [MasterDataController::class, 'destroyCurrency'])
-            ->middleware('permission:master-data.manage')
-            ->name('master-data.currencies.destroy');
-
-        Route::delete('/master-data/settlement-types/{settlement_type}', [MasterDataController::class, 'destroySettlementType'])
-            ->middleware('permission:master-data.manage')
-            ->name('master-data.settlement-types.destroy');
-
-        Route::delete('/master-data/party-types/{party_type}', [MasterDataController::class, 'destroyPartyType'])
-            ->middleware('permission:master-data.manage')
-            ->name('master-data.party-types.destroy');
-
-        Route::delete('/master-data/ledger-types/{ledger_type}', [MasterDataController::class, 'destroyLedgerType'])
-            ->middleware('permission:master-data.manage')
-            ->name('master-data.ledger-types.destroy');
-
-        Route::delete('/master-data/financial-years/{financial_year}', [MasterDataController::class, 'destroyFinancialYear'])
-            ->middleware('permission:master-data.manage')
-            ->name('master-data.financial-years.destroy');
-
-        Route::get('/chart-of-accounts', [ChartOfAccountController::class, 'index'])
-            ->middleware('permission:chart-of-accounts.view')
-            ->name('chart-of-accounts');
-
-        Route::get('/chart-of-accounts/export', [ChartOfAccountController::class, 'export'])
-            ->middleware('permission:chart-of-accounts.view')
-            ->name('chart-of-accounts.export');
-
-        Route::get('/chart-of-accounts/import-template', [ChartOfAccountController::class, 'importTemplate'])
-            ->middleware('permission:chart-of-accounts.view')
-            ->name('chart-of-accounts.import-template');
-
-        Route::post('/chart-of-accounts/import', [ChartOfAccountController::class, 'import'])
-            ->middleware('permission:chart-of-accounts.manage')
-            ->name('chart-of-accounts.import');
-
-        Route::post('/chart-of-accounts/import/resolve', [ChartOfAccountController::class, 'resolveImportIssue'])
-            ->middleware('permission:chart-of-accounts.manage')
-            ->name('chart-of-accounts.import.resolve');
-
-        Route::post('/chart-of-accounts/import/discard', [ChartOfAccountController::class, 'discardImportReview'])
-            ->middleware('permission:chart-of-accounts.manage')
-            ->name('chart-of-accounts.import.discard');
-
-        Route::delete('/chart-of-accounts/bulk', [ChartOfAccountController::class, 'bulkDestroy'])
-            ->middleware('permission:chart-of-accounts.manage')
-            ->name('chart-of-accounts.bulk-destroy');
-
-        Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
-            ->middleware('permission:chart-of-accounts.manage')
-            ->name('chart-of-accounts.destroy');
-
-        Route::get('/cash-bank-accounts', [CashBankAccountController::class, 'index'])
-            ->middleware('permission:cash-bank.view')
-            ->name('cash-bank-accounts');
-
-        Route::delete('/cash-bank-accounts/{cash_bank_account}', [CashBankAccountController::class, 'destroy'])
-            ->middleware('permission:cash-bank.manage')
-            ->name('cash-bank-accounts.destroy');
-
-        Route::get('/parties', [PartyController::class, 'index'])
-            ->middleware('permission:parties.view')
-            ->name('parties');
-
-        Route::delete('/parties/{party}', [PartyController::class, 'destroy'])
-            ->middleware('permission:parties.manage')
-            ->name('parties.destroy');
-
-        Route::get('/transaction-heads', [TransactionHeadController::class, 'index'])
-            ->middleware('permission:transaction-heads.view')
-            ->name('transaction-heads');
-
-        Route::delete('/transaction-heads/{transaction_head}', [TransactionHeadController::class, 'destroy'])
-            ->middleware('permission:transaction-heads.manage')
-            ->name('transaction-heads.destroy');
-
-        Route::get('/accounting-rules-setup', [LedgerMappingController::class, 'index'])
-            ->middleware('permission:ledger-mapping.view')
-            ->name('accounting-rules-setup');
-
-        Route::get('/ledger-mapping', fn () => redirect()->route('setup.accounting-rules-setup'))
-            ->middleware('permission:ledger-mapping.view')
-            ->name('ledger-mapping');
-
-        Route::delete('/accounting-rules-setup/{ledger_mapping_rule}', [LedgerMappingController::class, 'destroy'])
-            ->middleware('permission:ledger-mapping.manage')
-            ->name('accounting-rules-setup.destroy');
-
-        Route::delete('/ledger-mapping/{ledger_mapping_rule}', [LedgerMappingController::class, 'destroy'])
-            ->middleware('permission:ledger-mapping.manage')
-            ->name('ledger-mapping.destroy');
-
-        Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])
-            ->middleware('permission:opening-balances.view')
-            ->name('opening-balances');
-
-        Route::get('/voucher-numbering', [VoucherNumberingController::class, 'index'])
-            ->middleware('permission:voucher-numbering.view')
-            ->name('voucher-numbering');
-
-        Route::delete('/voucher-numbering/{voucher_numbering_rule}', [VoucherNumberingController::class, 'destroy'])
-            ->middleware('permission:voucher-numbering.manage')
-            ->name('voucher-numbering.destroy');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Settings Pages
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/settings/users-roles', [UserRoleController::class, 'index'])
-        ->middleware('permission:users.view|roles.manage')
-        ->name('settings.users-roles');
-
-    Route::delete('/settings/users/{user}', [UserRoleController::class, 'destroyUser'])
-        ->middleware('permission:users.manage')
-        ->name('settings.users.destroy');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Dropdown APIs
-    |--------------------------------------------------------------------------
-    */
-    $companyDropdownPermission = 'permission:company.view|company.manage|master-data.view|master-data.manage';
-    $ledgerDropdownPermission = 'permission:chart-of-accounts.view|chart-of-accounts.manage|cash-bank.view|cash-bank.manage|parties.view|parties.manage|ledger-mapping.view|ledger-mapping.manage|opening-balances.view|opening-balances.manage|transactions.view|transactions.create|transactions.draft';
-    $cashBankDropdownPermission = 'permission:cash-bank.view|cash-bank.manage|ledger-mapping.view|ledger-mapping.manage|transactions.view|transactions.create|transactions.draft|cash-bank-book.view|reports.view';
-    $partyDropdownPermission = 'permission:parties.view|parties.manage|transactions.view|transactions.create|transactions.draft|due-management.view|due-management.manage|advance-management.view|advance-management.manage|customer-ledgers.view|supplier-ledgers.view|reports.view';
-    $transactionDropdownPermission = 'permission:transaction-heads.view|transaction-heads.manage|transactions.view|transactions.create|transactions.draft|ledger-mapping.view|ledger-mapping.manage|due-management.view|due-management.manage|advance-management.view|advance-management.manage|reports.view';
-    $settlementDropdownPermission = 'permission:master-data.view|master-data.manage|ledger-mapping.view|ledger-mapping.manage|transactions.view|transactions.create|transactions.draft|due-management.view|due-management.manage|advance-management.view|advance-management.manage|reports.view';
-
-    Route::prefix('api/dropdowns')->name('api.dropdowns.')->group(function () use (
-        $companyDropdownPermission,
-        $ledgerDropdownPermission,
-        $cashBankDropdownPermission,
-        $partyDropdownPermission,
-        $transactionDropdownPermission,
-        $settlementDropdownPermission
-    ) {
-        Route::get('/business-types', [DropdownController::class, 'businessTypes'])
-            ->middleware($companyDropdownPermission)
-            ->name('business-types');
-        Route::get('/currencies', [DropdownController::class, 'currencies'])
-            ->middleware($companyDropdownPermission)
-            ->name('currencies');
-        Route::get('/time-zones', [DropdownController::class, 'timeZones'])
-            ->middleware($companyDropdownPermission)
-            ->name('time-zones');
-        Route::get('/coa-levels', [DropdownController::class, 'coaLevels'])
-            ->middleware($ledgerDropdownPermission)
-            ->name('coa-levels');
-        Route::get('/ledger-types', [DropdownController::class, 'ledgerTypes'])
-            ->middleware($ledgerDropdownPermission)
-            ->name('ledger-types');
-        Route::get('/account-types', [DropdownController::class, 'accountTypes'])
-            ->middleware($ledgerDropdownPermission)
-            ->name('account-types');
-        Route::get('/parent-accounts', [DropdownController::class, 'parentAccounts'])
-            ->middleware($ledgerDropdownPermission)
-            ->name('parent-accounts');
-        Route::get('/party-types', [DropdownController::class, 'partyTypes'])
-            ->middleware($partyDropdownPermission . '|master-data.view|master-data.manage|transaction-heads.view|transaction-heads.manage')
-            ->name('party-types');
-        Route::get('/banks', [DropdownController::class, 'banks'])
-            ->middleware($cashBankDropdownPermission . '|master-data.view|master-data.manage')
-            ->name('banks');
-        Route::get('/cash-bank-account-types', [DropdownController::class, 'cashBankAccountTypes'])
-            ->middleware($cashBankDropdownPermission)
-            ->name('cash-bank-account-types');
-        Route::get('/cash-bank-ledgers', [DropdownController::class, 'cashBankLedgers'])
-            ->middleware($cashBankDropdownPermission)
-            ->name('cash-bank-ledgers');
-        Route::get('/cash-bank-accounts', [DropdownController::class, 'cashBankAccounts'])
-            ->middleware($cashBankDropdownPermission)
-            ->name('cash-bank-accounts');
-        Route::get('/ledger-accounts', [DropdownController::class, 'ledgerAccounts'])
-            ->middleware($ledgerDropdownPermission)
-            ->name('ledger-accounts');
-        Route::get('/linked-ledgers', [DropdownController::class, 'ledgerAccounts'])
-            ->middleware($ledgerDropdownPermission)
-            ->name('linked-ledgers');
-        Route::get('/party-balance-types', [DropdownController::class, 'partyBalanceTypes'])
-            ->middleware($partyDropdownPermission . '|opening-balances.view|opening-balances.manage')
-            ->name('party-balance-types');
-        Route::get('/transaction-head-natures', [DropdownController::class, 'transactionHeadNatures'])
-            ->middleware($transactionDropdownPermission)
-            ->name('transaction-head-natures');
-        Route::get('/party-ledger-effects', [DropdownController::class, 'partyLedgerEffects'])
-            ->middleware($transactionDropdownPermission . '|ledger-mapping.view|ledger-mapping.manage')
-            ->name('party-ledger-effects');
-        Route::get('/yes-no-options', [DropdownController::class, 'yesNoOptions'])
-            ->middleware('permission:company.view|master-data.view|chart-of-accounts.view|cash-bank.view|parties.view|transaction-heads.view|ledger-mapping.view|opening-balances.view|voucher-numbering.view|transactions.view|transactions.create|transactions.draft')
-            ->name('yes-no-options');
-        Route::get('/transaction-heads', [DropdownController::class, 'transactionHeads'])
-            ->middleware($transactionDropdownPermission)
-            ->name('transaction-heads');
-        Route::get('/settlement-types', [DropdownController::class, 'settlementTypes'])
-            ->middleware($settlementDropdownPermission)
-            ->name('settlement-types');
-        Route::get('/parties', [DropdownController::class, 'parties'])
-            ->middleware($partyDropdownPermission)
-            ->name('parties');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Setup APIs
-    |--------------------------------------------------------------------------
-    */
-    Route::post('/api/company', [CompanyController::class, 'store'])
-        ->middleware('permission:company.manage')
-        ->name('api.company.store');
-
-    Route::post('/api/master-data/business-types', [MasterDataController::class, 'storeBusinessType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.business-types.store');
-    Route::match(['post', 'put'], '/api/master-data/business-types/{business_type}', [MasterDataController::class, 'updateBusinessType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.business-types.update');
-
-    Route::post('/api/master-data/currencies', [MasterDataController::class, 'storeCurrency'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.currencies.store');
-    Route::match(['post', 'put'], '/api/master-data/currencies/{currency}', [MasterDataController::class, 'updateCurrency'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.currencies.update');
-
-    Route::post('/api/master-data/settlement-types', [MasterDataController::class, 'storeSettlementType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.settlement-types.store');
-    Route::match(['post', 'put'], '/api/master-data/settlement-types/{settlement_type}', [MasterDataController::class, 'updateSettlementType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.settlement-types.update');
-
-    Route::post('/api/master-data/party-types', [MasterDataController::class, 'storePartyType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.party-types.store');
-    Route::match(['post', 'put'], '/api/master-data/party-types/{party_type}', [MasterDataController::class, 'updatePartyType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.party-types.update');
-
-    Route::post('/api/master-data/ledger-types', [MasterDataController::class, 'storeLedgerType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.ledger-types.store');
-    Route::match(['post', 'put'], '/api/master-data/ledger-types/{ledger_type}', [MasterDataController::class, 'updateLedgerType'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.ledger-types.update');
-
-    Route::post('/api/master-data/financial-years', [MasterDataController::class, 'storeFinancialYear'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.financial-years.store');
-    Route::match(['post', 'put'], '/api/master-data/financial-years/{financial_year}', [MasterDataController::class, 'updateFinancialYear'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.financial-years.update');
-
-    Route::post('/api/master-data/financial-years/{financial_year}/set-current', [MasterDataController::class, 'setCurrentFinancialYear'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.financial-years.set-current');
-    Route::post('/api/master-data/financial-years/{financial_year}/close', [MasterDataController::class, 'closeFinancialYear'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.financial-years.close');
-    Route::post('/api/master-data/financial-years/{financial_year}/reopen', [MasterDataController::class, 'reopenFinancialYear'])
-        ->middleware('permission:master-data.manage')
-        ->name('api.master-data.financial-years.reopen');
-
-    Route::post('/api/chart-of-accounts', [ChartOfAccountController::class, 'store'])
-        ->middleware('permission:chart-of-accounts.manage')
-        ->name('api.chart-of-accounts.store');
-    Route::match(['post', 'put'], '/api/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'update'])
-        ->middleware('permission:chart-of-accounts.manage')
-        ->name('api.chart-of-accounts.update');
-
-    Route::post('/api/cash-bank-accounts', [CashBankAccountController::class, 'store'])
-        ->middleware('permission:cash-bank.manage')
-        ->name('api.cash-bank-accounts.store');
-    Route::match(['post', 'put'], '/api/cash-bank-accounts/{cash_bank_account}', [CashBankAccountController::class, 'update'])
-        ->middleware('permission:cash-bank.manage')
-        ->name('api.cash-bank-accounts.update');
-
-    Route::post('/api/parties', [PartyController::class, 'store'])
-        ->middleware('permission:parties.manage')
-        ->name('api.parties.store');
-    Route::match(['post', 'put'], '/api/parties/{party}', [PartyController::class, 'update'])
-        ->middleware('permission:parties.manage')
-        ->name('api.parties.update');
-
-    Route::post('/api/transaction-heads', [TransactionHeadController::class, 'store'])
-        ->middleware('permission:transaction-heads.manage')
-        ->name('api.transaction-heads.store');
-    Route::match(['post', 'put'], '/api/transaction-heads/{transaction_head}', [TransactionHeadController::class, 'update'])
-        ->middleware('permission:transaction-heads.manage')
-        ->name('api.transaction-heads.update');
-
-    Route::post('/api/accounting-rules-setup', [LedgerMappingController::class, 'store'])
-        ->middleware('permission:ledger-mapping.manage')
-        ->name('api.accounting-rules-setup.store');
-    Route::match(['post', 'put'], '/api/accounting-rules-setup/{ledger_mapping_rule}', [LedgerMappingController::class, 'update'])
-        ->middleware('permission:ledger-mapping.manage')
-        ->name('api.accounting-rules-setup.update');
-
-    // Legacy API aliases kept so older cached pages or bookmarks do not break immediately after deployment.
-    Route::post('/api/ledger-mapping', [LedgerMappingController::class, 'store'])
-        ->middleware('permission:ledger-mapping.manage')
-        ->name('api.ledger-mapping.store');
-    Route::match(['post', 'put'], '/api/ledger-mapping/{ledger_mapping_rule}', [LedgerMappingController::class, 'update'])
-        ->middleware('permission:ledger-mapping.manage')
-        ->name('api.ledger-mapping.update');
-
-    Route::post('/api/opening-balances', [OpeningBalanceController::class, 'store'])
-        ->middleware('permission:opening-balances.manage')
-        ->name('api.opening-balances.store');
-
-    Route::post('/api/voucher-numbering', [VoucherNumberingController::class, 'store'])
-        ->middleware('permission:voucher-numbering.manage')
-        ->name('api.voucher-numbering.store');
-    Route::match(['post', 'put'], '/api/voucher-numbering/{voucher_numbering_rule}', [VoucherNumberingController::class, 'update'])
-        ->middleware('permission:voucher-numbering.manage')
-        ->name('api.voucher-numbering.update');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Transaction APIs
-    |--------------------------------------------------------------------------
-    */
-    Route::post('/api/transactions/preview', [TransactionController::class, 'preview'])
-        ->middleware('permission:transactions.create|transactions.draft')
-        ->name('api.transactions.preview');
-
-    Route::post('/api/transactions', [TransactionController::class, 'store'])
-        ->middleware('permission:transactions.create|transactions.draft')
-        ->name('api.transactions.store');
-
-    Route::post('/api/manual-journals', [ManualJournalController::class, 'store'])
-        ->middleware('permission:transactions.journal.create')
-        ->name('api.manual-journals.store');
-
-    /*
-    |--------------------------------------------------------------------------
-    | User APIs
-    |--------------------------------------------------------------------------
-    */
-    Route::post('/api/users', [UserRoleController::class, 'storeUser'])
-        ->middleware('permission:users.manage')
-        ->name('api.users.store');
-
-    Route::match(['post', 'put'], '/api/users/{user}', [UserRoleController::class, 'updateUser'])
-        ->middleware('permission:users.manage')
-        ->name('api.users.update');
-
-    Route::post('/api/roles/permissions', [UserRoleController::class, 'updateRolePermissions'])
-        ->middleware('permission:roles.manage')
-        ->name('api.roles.permissions.update');
+    Route::get('/transactions/preview', [TransactionEntryController::class, 'preview'])
+        ->name('transactions.preview');
+
+    Route::get('/transactions/export', [TransactionRegisterController::class, 'export'])
+        ->name('transactions.export');
+
+    Route::post('/transactions', [TransactionEntryController::class, 'store'])
+        ->name('transactions.store');
+
+    Route::get('/transactions/{transaction}/edit', [TransactionRegisterController::class, 'edit'])
+        ->name('transactions.edit');
+
+    Route::put('/transactions/{transaction}', [TransactionRegisterController::class, 'update'])
+        ->name('transactions.update');
+
+    Route::delete('/transactions/{transaction}', [TransactionRegisterController::class, 'destroy'])
+        ->name('transactions.destroy');
+
+    Route::get('/chart-of-accounts', [ChartOfAccountController::class, 'index'])
+        ->name('chart-of-accounts.index');
+
+    Route::post('/chart-of-accounts', [ChartOfAccountController::class, 'store'])
+        ->name('chart-of-accounts.store');
+
+    Route::put('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'update'])
+        ->name('chart-of-accounts.update');
+
+    Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
+        ->name('chart-of-accounts.destroy');
+
+
+    Route::resource('money-accounts', MoneyAccountController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
+
+    Route::resource('parties', PartyController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
+
+    Route::resource('accounting-rules', AccountingRuleController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
+
+    Route::resource('transaction-heads', TransactionHeadController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
+
+    Route::get('/journal-entries', [JournalEntryController::class, 'index'])
+        ->name('journal-entries.index');
+
+    Route::get('/balances', [BalanceController::class, 'index'])
+        ->name('balances.index');
+
+    Route::get('/basic-statements', [BasicStatementController::class, 'index'])
+        ->name('basic-statements.index');
 });
 
-require __DIR__.'/auth.php';
+require __DIR__.'/settings.php';

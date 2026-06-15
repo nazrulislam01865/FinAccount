@@ -3,99 +3,42 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountingRule extends Model
 {
-    use SoftDeletes;
-
-    public const STATUSES = [
-        'Draft',
-        'Pending Review',
-        'Active',
-        'Inactive',
-    ];
-
-    public const PARTY_REQUIRED_MODES = [
-        'No',
-        'Yes',
-        'Optional',
-    ];
+    public const SOURCE_SELECTED_MONEY = 'selected_money';
+    public const SOURCE_HEAD_ACCOUNT = 'head_account';
+    public const SOURCE_PARTY_RECEIVABLE = 'party_receivable';
+    public const SOURCE_PARTY_PAYABLE = 'party_payable';
 
     protected $fillable = [
-        'company_id',
-        'legacy_ledger_mapping_rule_id',
-        'rule_code',
-        'rule_name',
-        'transaction_head_id',
-        'settlement_type_id',
-        'transaction_screen',
-        'rule_trigger',
-        'amount_required',
-        'party_required_mode',
-        'party_type_id',
-        'party_sub_ledger_type',
-        'payment_method_required',
-        'allowed_payment_methods',
-        'cash_bank_ledger_required',
-        'party_ledger_effect',
-        'auto_post',
-        'description',
-        'status',
-        'created_by',
-        'updated_by',
+        'company_id', 'code', 'name', 'category', 'debit_source', 'credit_source',
+        'party_required', 'party_type', 'money_required', 'is_active',
     ];
 
-    protected $casts = [
-        'amount_required' => 'boolean',
-        'payment_method_required' => 'boolean',
-        'allowed_payment_methods' => 'array',
-        'cash_bank_ledger_required' => 'boolean',
-        'auto_post' => 'boolean',
-    ];
-
-    public function company()
+    protected function casts(): array
     {
-        return $this->belongsTo(Company::class);
+        return [
+            'party_required' => 'boolean',
+            'money_required' => 'boolean',
+            'is_active' => 'boolean',
+        ];
     }
 
-    public function legacyLedgerMappingRule()
+    public function transactionHeads(): HasMany
     {
-        return $this->belongsTo(LedgerMappingRule::class, 'legacy_ledger_mapping_rule_id');
+        return $this->hasMany(TransactionHead::class);
     }
 
-    public function transactionHead()
+    public function sourceLabel(string $source): string
     {
-        return $this->belongsTo(TransactionHead::class);
-    }
-
-    public function settlementType()
-    {
-        return $this->belongsTo(SettlementType::class);
-    }
-
-    public function partyType()
-    {
-        return $this->belongsTo(PartyType::class);
-    }
-
-    public function lines()
-    {
-        return $this->hasMany(AccountingRuleLine::class)->orderBy('sort_order')->orderBy('id');
-    }
-
-    public function scopeActive($query)
-    {
-        return $query->where('status', 'Active');
-    }
-
-    public function requiresParty(): bool
-    {
-        return in_array($this->party_required_mode, ['Yes', 'Required'], true);
-    }
-
-    public function allowsOptionalParty(): bool
-    {
-        return $this->party_required_mode === 'Optional';
+        return match ($source) {
+            self::SOURCE_SELECTED_MONEY => 'Selected Money Account',
+            self::SOURCE_HEAD_ACCOUNT => 'Transaction Head COA',
+            self::SOURCE_PARTY_RECEIVABLE => 'Party Receivable COA',
+            self::SOURCE_PARTY_PAYABLE => 'Party Payable COA',
+            default => $source,
+        };
     }
 }

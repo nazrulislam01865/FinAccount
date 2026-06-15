@@ -13,6 +13,7 @@ class LandingAdminUser extends Authenticatable
 
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
         'status',

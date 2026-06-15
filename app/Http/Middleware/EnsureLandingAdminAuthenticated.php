@@ -23,7 +23,7 @@ class EnsureLandingAdminAuthenticated
 
             return redirect()
                 ->route('landing-admin.login')
-                ->withErrors(['email' => 'Landing Admin account is inactive.']);
+                ->withErrors(['username' => 'Landing Admin account is inactive.']);
         }
 
         return $next($request);

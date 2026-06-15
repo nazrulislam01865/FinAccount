@@ -26,9 +26,11 @@ class LandingAdminAuthController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'username' => ['required', 'string', 'max:100'],
             'password' => ['required', 'string'],
         ]);
+
+        $credentials['username'] = Str::lower(trim($credentials['username']));
 
         $this->ensureIsNotRateLimited($request);
 
@@ -36,7 +38,7 @@ class LandingAdminAuthController extends Controller
             $this->hitLoginLimiter($request);
 
             throw ValidationException::withMessages([
-                'email' => 'These Landing Admin credentials do not match our records.',
+                'username' => 'These Landing Admin credentials do not match our records.',
             ]);
         }
 
@@ -47,7 +49,7 @@ class LandingAdminAuthController extends Controller
             $this->hitLoginLimiter($request);
 
             throw ValidationException::withMessages([
-                'email' => 'Landing Admin account is inactive.',
+                'username' => 'Landing Admin account is inactive.',
             ]);
         }
 
@@ -87,7 +89,7 @@ class LandingAdminAuthController extends Controller
         $this->flashLockoutCountdown($request, $seconds);
 
         throw ValidationException::withMessages([
-            'email' => 'Too many Landing Admin login attempts. Please try again in ' . $this->formatSeconds($seconds) . '.',
+            'username' => 'Too many Landing Admin login attempts. Please try again in ' . $this->formatSeconds($seconds) . '.',
         ]);
     }
 
@@ -106,15 +108,15 @@ class LandingAdminAuthController extends Controller
 
     private function throttleKey(Request $request): string
     {
-        $strategy = (string) config('security.rate_limits.landing_admin_login.key_strategy', 'email_ip');
-        $email = Str::lower((string) $request->input('email', 'guest'));
+        $strategy = (string) config('security.rate_limits.landing_admin_login.key_strategy', 'username_ip');
+        $username = Str::lower(trim((string) $request->input('username', 'guest')));
         $ip = (string) ($request->ip() ?: 'unknown');
 
         return Str::transliterate(match ($strategy) {
-            'email' => 'landing-admin-login|email|' . $email,
+            'username' => 'landing-admin-login|username|' . $username,
             'ip' => 'landing-admin-login|ip|' . $ip,
             'global' => 'landing-admin-login|global',
-            default => 'landing-admin-login|email-ip|' . $email . '|' . $ip,
+            default => 'landing-admin-login|username-ip|' . $username . '|' . $ip,
         });
     }
 

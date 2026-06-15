@@ -3,8 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\LandingAdminUser;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -18,12 +16,19 @@ class LandingAdminUserSeeder extends Seeder
             return;
         }
 
-        $email = Str::lower(trim((string) config('landing_admin.credentials.email', '')));
+        $username = Str::lower(trim((string) config('landing_admin.credentials.username', '')));
         $password = (string) config('landing_admin.credentials.password', '');
         $name = trim((string) config('landing_admin.credentials.name', 'Landing Page Admin')) ?: 'Landing Page Admin';
+        $configuredEmail = Str::lower(trim((string) config('landing_admin.credentials.email', '')));
+        $email = $configuredEmail !== '' ? $configuredEmail : $username.'@hisebghor.test';
 
-        if ($email === '' || $password === '') {
-            Log::info('Landing Admin user was not seeded because LANDING_ADMIN_EMAIL and LANDING_ADMIN_PASSWORD are not configured.');
+        if ($username === '' || $password === '') {
+            Log::info('Landing Admin user was not seeded because LANDING_ADMIN_USERNAME and LANDING_ADMIN_PASSWORD are not configured.');
+            return;
+        }
+
+        if (! preg_match('/^[a-z0-9._-]{3,100}$/', $username)) {
+            Log::warning('Landing Admin user was not seeded because LANDING_ADMIN_USERNAME contains unsupported characters.');
             return;
         }
 
@@ -32,21 +37,17 @@ class LandingAdminUserSeeder extends Seeder
             return;
         }
 
-        LandingAdminUser::updateOrCreate(
-            ['email' => $email],
-            [
-                'name' => $name,
-                'password' => Hash::make($password),
-                'status' => 'Active',
-            ]
-        );
+        $admin = LandingAdminUser::query()
+            ->where('username', $username)
+            ->orWhere('email', $email)
+            ->first() ?? new LandingAdminUser();
 
-        $legacyRole = Role::where('name', 'Landing Page Admin')->first();
-
-        if ($legacyRole) {
-            User::where('email', $email)->get()->each(function (User $user) use ($legacyRole) {
-                $user->roles()->detach($legacyRole->id);
-            });
-        }
+        $admin->fill([
+            'name' => $name,
+            'username' => $username,
+            'email' => $email,
+            'password' => Hash::make($password),
+            'status' => 'Active',
+        ])->save();
     }
 }

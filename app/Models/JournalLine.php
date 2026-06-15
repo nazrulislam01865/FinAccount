@@ -3,46 +3,27 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class JournalLine extends Model
 {
     protected $fillable = [
-        'journal_header_id',
-        'voucher_detail_id',
-        'line_no',
-        'ledger_id',
-        'party_id',
-        'branch_id',
-        'rule_line_id',
-        'amount_source',
-        'entry_type',
-        'debit_amount',
-        'credit_amount',
-        'line_narration',
+        'company_id', 'journal_entry_id', 'chart_of_account_id', 'money_account_id',
+        'party_id', 'sequence', 'description', 'debit', 'credit',
     ];
 
-    protected $casts = [
-        'debit_amount' => 'decimal:2',
-        'credit_amount' => 'decimal:2',
-    ];
-
-    public function journalHeader()
+    protected function casts(): array
     {
-        return $this->belongsTo(JournalHeader::class);
+        return ['debit' => 'decimal:2', 'credit' => 'decimal:2'];
     }
 
-    public function voucherDetail()
+    public function journalEntry(): BelongsTo
     {
-        return $this->belongsTo(VoucherDetail::class);
+        return $this->belongsTo(JournalEntry::class);
     }
 
-    public function ledger()
+    public function chartOfAccount(): BelongsTo
     {
-        return $this->belongsTo(ChartOfAccount::class, 'ledger_id')->withTrashed();
-    }
-
-    public function party()
-    {
-        return $this->belongsTo(Party::class);
+        return $this->belongsTo(ChartOfAccount::class);
     }
 }

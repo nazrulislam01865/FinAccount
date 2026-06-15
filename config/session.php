@@ -34,8 +34,6 @@ return [
 
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
 
-    'inactive_timeout' => (int) env('SESSION_INACTIVE_TIMEOUT', 15),
-
     'landing_admin_inactive_timeout' => (int) env('LANDING_ADMIN_SESSION_INACTIVE_TIMEOUT', 15),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
@@ -51,7 +49,7 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', true),
+    'encrypt' => env('SESSION_ENCRYPT', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -133,7 +131,7 @@ return [
 
     'cookie' => env(
         'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
+        Str::slug((string) env('APP_NAME', 'laravel')).'-session',
     ),
 
     /*

@@ -2,234 +2,162 @@
 
 namespace App\Services\Accounting;
 
-use App\AccountingEngine\Services\AuditTrailService;
-use App\AccountingEngine\Services\FinancialPeriodGuard;
-use App\AccountingEngine\Services\JournalBuilder;
-use App\AccountingEngine\Services\JournalValidator;
-use App\AccountingEngine\Services\PartyRegisterService;
-use App\AccountingEngine\Services\PostingService;
-use App\AccountingEngine\Services\VoucherNumberService;
-use App\Services\Approval\ApprovalWorkflowService;
-use App\Models\CashBankAccount;
-use App\Models\Company;
-use App\Models\SettlementType;
+use App\Models\JournalEntry;
+use App\Models\MoneyAccount;
+use App\Models\Party;
+use App\Models\Transaction;
 use App\Models\TransactionHead;
-use App\Models\VoucherHeader;
-use Carbon\Carbon;
-use Illuminate\Http\UploadedFile;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TransactionPostingService
 {
     public function __construct(
         private readonly JournalBuilder $journalBuilder,
-        private readonly JournalValidator $journalValidator,
-        private readonly FinancialPeriodGuard $financialPeriodGuard,
-        private readonly TransactionVoucherTypeService $voucherTypeService,
         private readonly VoucherNumberService $voucherNumberService,
-        private readonly PostingService $postingService,
-        private readonly PartyRegisterService $partyRegisterService,
-        private readonly AuditTrailService $auditTrailService,
-        private readonly MappingResolverService $mappingResolver,
-        private readonly ApprovalWorkflowService $approvalWorkflowService
-    ) {
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     * @return array<string, mixed>
-     */
-    public function preview(array $data, ?int $userId = null, bool $draft = false): array
-    {
-        $voucherDate = isset($data['voucher_date'])
-            ? Carbon::parse($data['voucher_date'])
-            : now();
-        $companyId = $this->resolveCompanyId($data, $userId);
-        $financialYear = $this->financialPeriodGuard->resolveOpenPeriod($companyId, $voucherDate);
-
-        $transactionHead = TransactionHead::query()
-            ->where('status', 'Active')
-            ->findOrFail($data['transaction_head_id']);
-
-        $settlementType = SettlementType::query()
-            ->where('status', 'Active')
-            ->findOrFail($data['settlement_type_id']);
-
-        $amount = round((float) ($data['amount'] ?? 0), 2);
-
-        $mapping = $this->journalBuilder->buildFromTransaction(
-            transactionHeadId: (int) $data['transaction_head_id'],
-            settlementTypeId: (int) $data['settlement_type_id'],
-            amount: $amount,
-            cashBankAccountId: $data['cash_bank_account_id'] ?? null,
-            partyId: $data['party_id'] ?? null,
-            companyId: $companyId,
-            userId: $userId,
-            voucherDate: $voucherDate->toDateString()
-        );
-
-        $entries = collect($mapping['entries'] ?? []);
-        $cashBankRequired = $this->mappingResolver->requiresCashBank(
-            (int) $data['transaction_head_id'],
-            (int) $data['settlement_type_id'],
-            $companyId
-        );
-
-        $this->journalValidator->assertValid(
-            entries: $entries->all(),
-            amount: $amount,
-            partyId: $data['party_id'] ?? null,
-            cashBankRequired: $cashBankRequired,
-            cashBankAccountId: $data['cash_bank_account_id'] ?? null
-        );
-
-        $totalDebit = round((float) $entries->sum('debit'), 2);
-        $totalCredit = round((float) $entries->sum('credit'), 2);
-
-        $voucherType = $this->voucherTypeService->resolve(
-            transactionHead: $transactionHead,
-            settlementType: $settlementType,
-            mappingRule: $mapping['rule'] ?? null,
-            entries: $mapping['entries'] ?? [],
-            draft: $draft
-        );
-
-        $voucherNumber = $this->voucherNumberService->preview(
-            $voucherType,
-            $financialYear,
-            $voucherDate
-        );
-
-        $cashBankEffect = $this->cashBankEffect($mapping['cash_bank_account'] ?? null, $entries->all());
-
-        return [
-            'company_id' => $companyId,
-            'financial_year_id' => $financialYear->id,
-            'financial_year_name' => $financialYear->display_name,
-            'voucher_type' => $voucherType,
-            'voucher_number' => $voucherNumber,
-            'voucher_date' => $voucherDate->toDateString(),
-            'transaction_head' => $transactionHead->name,
-            'nature' => $transactionHead->nature,
-            'settlement_type' => $settlementType->name,
-            'party_ledger_effect' => $mapping['party_ledger_effect'] ?? 'No Effect',
-            'cash_bank_effect' => $cashBankEffect,
-            'cash_bank_account_id' => $mapping['cash_bank_account_id'] ?? (($mapping['cash_bank_account'] ?? null)?->id),
-            'entries' => $entries->values()->all(),
-            'total_debit' => $totalDebit,
-            'total_credit' => $totalCredit,
-            'balanced' => $totalDebit === $totalCredit,
-            'mapping_found' => true,
-            'accounting_rule_id' => $mapping['accounting_rule_id'] ?? null,
-            'accounting_rule_code' => $mapping['accounting_rule_code'] ?? null,
-            'legacy_ledger_mapping_rule_id' => $mapping['legacy_ledger_mapping_rule_id'] ?? ($mapping['rule']->id ?? null),
-            'accounting_principle' => 'Assets and Expenses normally increase by Debit. Liabilities, Equity, and Income normally increase by Credit. Opposite-side posting decreases the account balance.',
-        ];
-    }
+        private readonly DecimalAmount $decimalAmount,
+    ) {}
 
     /**
      * @param array<string, mixed> $data
      */
-    public function save(array $data, ?UploadedFile $attachment = null, ?int $userId = null): VoucherHeader
+    public function post(array $data, User $user): Transaction
     {
-        return DB::transaction(function () use ($data, $attachment, $userId): VoucherHeader {
-            $status = $data['status'] ?? VoucherHeader::STATUS_POSTED;
-            $draft = $status === VoucherHeader::STATUS_DRAFT;
+        if (! $user->company_id) {
+            throw ValidationException::withMessages([
+                'company' => 'Your user account is not connected to a company.',
+            ]);
+        }
 
-            if (! in_array($status, [VoucherHeader::STATUS_DRAFT, VoucherHeader::STATUS_POSTED, VoucherHeader::STATUS_PENDING_REVIEW], true)) {
+        return DB::transaction(function () use ($data, $user): Transaction {
+            $existing = Transaction::query()
+                ->where('company_id', $user->company_id)
+                ->where('request_token', $data['request_token'])
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $head = TransactionHead::query()
+                ->with(['accountingRule', 'postingAccount'])
+                ->where('company_id', $user->company_id)
+                ->where('is_active', true)
+                ->findOrFail($data['transaction_head_id']);
+
+            $rule = $head->accountingRule;
+
+            if (! $rule->is_active || $rule->category !== $data['category'] || $head->category !== $data['category']) {
                 throw ValidationException::withMessages([
-                    'status' => 'Transaction status must be Draft, Submitted, or Posted.',
+                    'transaction_head_id' => 'The selected transaction head is not valid for this category.',
                 ]);
             }
 
-            $preview = $this->preview($data, $userId, $draft);
-            $voucherDate = Carbon::parse($preview['voucher_date']);
-            $companyId = (int) ($preview['company_id'] ?? $this->resolveCompanyId($data, $userId));
-            $financialYear = $this->financialPeriodGuard->resolveOpenPeriod($companyId, $voucherDate);
+            $moneyAccount = filled($data['money_account_id'] ?? null)
+                ? MoneyAccount::query()
+                    ->with('chartOfAccount')
+                    ->where('company_id', $user->company_id)
+                    ->where('is_active', true)
+                    ->findOrFail($data['money_account_id'])
+                : null;
 
-            $voucherNumber = $this->voucherNumberService->reserveWithLock(
-                $preview['voucher_type'],
-                $financialYear,
-                $voucherDate
-            );
+            $party = filled($data['party_id'] ?? null)
+                ? Party::query()
+                    ->with(['receivableAccount', 'payableAccount'])
+                    ->where('company_id', $user->company_id)
+                    ->where('is_active', true)
+                    ->findOrFail($data['party_id'])
+                : null;
 
-            $requiresApproval = $status === VoucherHeader::STATUS_POSTED
-                && $this->approvalWorkflowService->shouldSubmitForApproval($data, (string) $preview['voucher_type'], $companyId);
-
-            $data['status'] = $requiresApproval ? VoucherHeader::STATUS_PENDING_REVIEW : $status;
-            $data['lifecycle_state'] = $requiresApproval
-                ? 'Submitted'
-                : ($status === VoucherHeader::STATUS_DRAFT ? 'Draft' : 'Posted');
-
-            $voucher = $this->postingService->createVoucher(
-                data: $data,
-                preview: array_merge($preview, ['voucher_number' => $voucherNumber]),
-                entries: $preview['entries'],
-                companyId: $companyId,
-                financialYearId: (int) $financialYear->id,
-                voucherNumber: $voucherNumber,
-                voucherDate: $voucherDate,
-                attachment: $attachment,
-                userId: $userId
-            );
-
-            if ($requiresApproval) {
-                $this->approvalWorkflowService->markSubmitted($voucher, $userId);
-                $this->auditTrailService->record($voucher, (int) $voucher->id, 'voucher_submitted', null, $voucher->toArray(), $userId);
+            if ($rule->money_required && ! $moneyAccount) {
+                throw ValidationException::withMessages([
+                    'money_account_id' => 'A money account is required for this accounting rule.',
+                ]);
             }
 
-            if (!$requiresApproval && $status === VoucherHeader::STATUS_POSTED) {
-                $this->partyRegisterService->recordIfNeeded($voucher, $preview);
-                $this->auditTrailService->recordPostedVoucher($voucher, $userId);
+            if ($rule->party_required && ! $party) {
+                throw ValidationException::withMessages([
+                    'party_id' => 'A party is required for this accounting rule.',
+                ]);
             }
 
-            return $voucher->fresh([
-                'transactionHead',
-                'settlementType',
-                'party',
-                'cashBankAccount',
-                'details.account.accountType',
-                'details.party',
-                'attachments',
+            if ($rule->party_required && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
+                throw ValidationException::withMessages([
+                    'party_id' => 'This transaction requires a '.$rule->party_type.' party.',
+                ]);
+            }
+
+            $amount = $this->decimalAmount->normalize($data['amount']);
+            $lines = $this->journalBuilder->build($head, $moneyAccount, $party, $amount);
+
+            $sequence = $this->voucherNumberService->lock($user->company_id, $data['category']);
+
+            // Recheck after acquiring the sequence lock. This makes a repeated
+            // browser/network submission return the first completed transaction
+            // instead of consuming a second voucher number.
+            $existing = Transaction::query()
+                ->where('company_id', $user->company_id)
+                ->where('request_token', $data['request_token'])
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $voucherNo = $this->voucherNumberService->issue($sequence);
+            $now = now();
+
+            $transaction = Transaction::query()->create([
+                'uuid' => (string) Str::uuid(),
+                'company_id' => $user->company_id,
+                'transaction_head_id' => $head->id,
+                'money_account_id' => $rule->money_required ? $moneyAccount?->id : null,
+                'party_id' => $rule->party_required ? $party?->id : null,
+                'created_by' => $user->id,
+                'voucher_no' => $voucherNo,
+                'category' => $data['category'],
+                'transaction_date' => $data['transaction_date'],
+                'amount' => $amount,
+                'reference' => $data['reference'] ?? null,
+                'description' => $data['description'] ?? null,
+                'request_token' => $data['request_token'],
+                'status' => 'posted',
+                'posted_at' => $now,
             ]);
-        });
-    }
 
-    private function resolveCompanyId(array $data, ?int $userId = null): int
-    {
-        $companyId = (int) ($data['company_id'] ?? 0);
+            $journalEntry = JournalEntry::query()->create([
+                'uuid' => (string) Str::uuid(),
+                'company_id' => $user->company_id,
+                'transaction_id' => $transaction->id,
+                'posted_by' => $user->id,
+                'voucher_no' => $voucherNo,
+                'entry_date' => $data['transaction_date'],
+                'narration' => filled($data['description'] ?? null) ? $data['description'] : $head->name,
+                'status' => 'posted',
+                'posted_at' => $now,
+            ]);
 
-        if ($companyId > 0) {
-            return $companyId;
-        }
-
-        return (int) Company::query()->orderBy('id')->value('id');
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $entries
-     */
-    private function cashBankEffect(?CashBankAccount $cashBankAccount, array $entries): string
-    {
-        if (! $cashBankAccount) {
-            return 'No Cash/Bank';
-        }
-
-        $ledgerId = (int) $cashBankAccount->linked_ledger_account_id;
-
-        foreach ($entries as $entry) {
-            if ((int) ($entry['account_id'] ?? 0) !== $ledgerId) {
-                continue;
+            foreach ($lines as $index => $line) {
+                $journalEntry->lines()->create([
+                    'company_id' => $user->company_id,
+                    'chart_of_account_id' => $line['account']->id,
+                    'money_account_id' => $moneyAccount?->chart_of_account_id === $line['account']->id
+                        ? $moneyAccount?->id
+                        : null,
+                    'party_id' => in_array($line['account']->id, [
+                        $party?->receivable_account_id,
+                        $party?->payable_account_id,
+                    ], true) ? $party?->id : null,
+                    'sequence' => $index + 1,
+                    'description' => filled($data['description'] ?? null) ? $data['description'] : $head->name,
+                    'debit' => $line['debit'],
+                    'credit' => $line['credit'],
+                ]);
             }
 
-            $base = $cashBankAccount->type === 'Cash' ? 'Cash' : 'Bank';
-
-            return ((float) ($entry['debit'] ?? 0)) > 0
-                ? "{$base} In"
-                : "{$base} Out";
-        }
-
-        return 'No Cash/Bank';
+            return $transaction->load(['transactionHead', 'moneyAccount', 'party', 'journalEntry.lines.chartOfAccount']);
+        }, attempts: 5);
     }
 }

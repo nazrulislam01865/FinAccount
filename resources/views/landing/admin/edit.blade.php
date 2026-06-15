@@ -187,7 +187,7 @@
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'nav' ? 'is-active' : '' }}" id="nav" data-section-panel="nav">
                 <div class="landing-card-head">
-                    <div><h3>Landing Navigation</h3><p>Add or edit public landing-page menu items. Login/admin buttons are intentionally hidden from the public landing page; Landing Admin uses the direct URL.</p></div>
+                    <div><h3>Landing Navigation</h3><p>Add or edit public landing-page menu items. System Login and Landing Admin access buttons remain available in the public header so visitors can continue to the correct area.</p></div>
                     <button type="button" class="button btn-outline btn-small" data-add="nav_links">Add Menu</button>
                 </div>
                 <div class="landing-card-body">

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Landing Admin | HisebGhor')</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/landing-admin.css'])
     <style>
         :root{--landing-green:#00a86b;--landing-green-dark:#087a52;--landing-green-soft:#e9fff5;--landing-ink:#101828;--landing-muted:#667085;--landing-line:#e5e7eb;--landing-bg:#f8fafc;--landing-card:#fff;--landing-shadow:0 16px 38px rgba(16,24,40,.07)}
         body{background:var(--landing-bg)}

@@ -1,9 +1,9 @@
 <?php
 
-use App\Providers\AccountingReportsServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\FortifyServiceProvider;
 
 return [
     AppServiceProvider::class,
-    AccountingReportsServiceProvider::class,
+    FortifyServiceProvider::class,
 ];

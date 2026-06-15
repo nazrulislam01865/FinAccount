@@ -9,8 +9,7 @@ Landing Page Admin now uses a separate login guard and a separate database table
 - Landing Admin login/dashboard: `/landing-admin`
 - Landing Admin editor: `/landing-admin/page?section=basic`
 
-If a visitor clicks Demo/Demo Chai/Request Demo on the landing page, they go to `/login`.
-If a landing manager needs to edit landing content, they manually open `/landing-admin`.
+The root URL `/` always opens the public landing page. Its header provides separate buttons for `/login` and `/landing-admin`, while demo/contact buttons continue to use the configured landing-page destination.
 
 ## Environment variables
 
@@ -19,11 +18,12 @@ Add these values to the server `.env` file:
 ```env
 LANDING_ADMIN_SEED_ENABLED=true
 LANDING_ADMIN_NAME=Landing Page Admin
-LANDING_ADMIN_EMAIL=landingadmin@example.com
+LANDING_ADMIN_USERNAME=landingadmin
+LANDING_ADMIN_EMAIL=landingadmin@hisebghor.test
 LANDING_ADMIN_PASSWORD=LandingAdmin@12345
 ```
 
-Use a strong password in production and change the example email/password before deployment.
+Use a strong password in production and change the example username, email, and password before deployment.
 
 ## Create/update the Landing Admin user
 
@@ -49,7 +49,7 @@ php artisan optimize:clear
 ## Separation rules
 
 - `/login` uses the normal Laravel `web` guard for demo/accounting users.
-- `/landing-admin` uses the dedicated `landing_admin` guard for landing managers.
+- `/landing-admin` uses the dedicated `landing_admin` guard and authenticates with the `.env` username and password.
 - Normal Super Admin credentials do not automatically open the landing admin dashboard.
 - Landing admin credentials do not open the accounting dashboard.
 - The landing admin dashboard does not link to the accounting dashboard.

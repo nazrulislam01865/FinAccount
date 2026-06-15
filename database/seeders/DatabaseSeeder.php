@@ -2,25 +2,18 @@
 
 namespace Database\Seeders;
 
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
+    use WithoutModelEvents;
+
     public function run(): void
     {
         $this->call([
-            MasterDataSeeder::class,
-            RolePermissionSeeder::class,
-            AdminUserSeeder::class,
+            HisebGhorDemoSeeder::class,
             LandingAdminUserSeeder::class,
-            ChartOfAccountSeeder::class,
-            SettlementTypeSeeder::class,
-            TransactionHeadSeeder::class,
-            CashBankAccountSeeder::class,
-            LedgerMappingRuleSeeder::class,
-            AdvanceAccountingRuleSeeder::class,
-            VoucherNumberingRuleSeeder::class,
-            AccountingRegisterBackfillSeeder::class,
         ]);
     }
 }
