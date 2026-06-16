@@ -44,7 +44,7 @@ class TransactionPostingTest extends TestCase
             'request_token' => (string) Str::uuid(),
         ]);
 
-        $response->assertRedirect(route('transactions.create', ['category' => 'Sales']));
+        $response->assertRedirect(route('transactions.index'));
 
         $transaction = Transaction::query()->where('reference', 'TEST-SALE')->firstOrFail();
         $journal = JournalEntry::query()->where('transaction_id', $transaction->id)->firstOrFail();

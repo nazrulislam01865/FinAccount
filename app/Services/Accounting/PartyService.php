@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
 use App\Models\JournalLine;
 use App\Models\Party;
@@ -11,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class PartyService
 {
+    public function __construct(private readonly AccountingOptionService $optionService) {}
     /**
      * @return array{parties: Collection<int, Party>, receivableAccounts: Collection<int, ChartOfAccount>, payableAccounts: Collection<int, ChartOfAccount>, balances: array<int, float>}
      */
@@ -39,6 +41,8 @@ class PartyService
             'receivableAccounts' => $receivableAccounts,
             'payableAccounts' => $payableAccounts,
             'balances' => $this->balancesFor($parties, $companyId),
+            'partyTypes' => $this->optionService->forGroup(AccountingOption::GROUP_PARTY_TYPE),
+            'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
         ];
     }
 
@@ -51,6 +55,7 @@ class PartyService
         $movements = JournalLine::query()
             ->with('chartOfAccount:id,normal_balance')
             ->where('company_id', $companyId)
+            ->whereHas('journalEntry', fn ($query) => $query->where('status', 'posted'))
             ->whereNotNull('party_id')
             ->get(['id', 'party_id', 'chart_of_account_id', 'debit', 'credit'])
             ->groupBy('party_id')

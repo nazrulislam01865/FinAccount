@@ -1,7 +1,7 @@
 <div class="hg-notice">
     <b>Rule:</b> {{ $rule->name }}<br>
-    Debit: {{ $rule->sourceLabel($rule->debit_source) }}. Credit: {{ $rule->sourceLabel($rule->credit_source) }}.<br>
-    Required party: {{ $rule->party_required ? $rule->party_type : 'No' }} |
+    Debit: {{ $sourceLabels[$rule->debit_source] ?? $rule->debit_source }}. Credit: {{ $sourceLabels[$rule->credit_source] ?? $rule->credit_source }}.<br>
+    Required party: {{ $rule->party_required ? ($partyTypeLabels[$rule->party_type] ?? $rule->party_type) : 'No' }} |
     Money account: {{ $rule->money_required ? 'Yes' : 'No' }}<br>
     Head posting COA: {{ $head->postingAccount->name }}
 </div>

@@ -2,37 +2,45 @@
 
 namespace App\Http\Requests\Accounting;
 
-use App\Models\AccountingRule;
+use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
+use App\Models\AccountingOption;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreAccountingRuleRequest extends FormRequest
 {
+    use ValidatesAccountingOptions;
+
     public function authorize(): bool
     {
-        return true;
+        return $this->user() !== null;
     }
 
     public function rules(): array
     {
         $companyId = $this->user()->company_id;
-        $sources = [
-            AccountingRule::SOURCE_SELECTED_MONEY,
-            AccountingRule::SOURCE_HEAD_ACCOUNT,
-            AccountingRule::SOURCE_PARTY_RECEIVABLE,
-            AccountingRule::SOURCE_PARTY_PAYABLE,
-        ];
 
         return [
             'code' => ['required', 'string', 'max:50', Rule::unique('accounting_rules')->where('company_id', $companyId)],
             'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', Rule::in(['Sales', 'Payment', 'Liability'])],
-            'party_type' => ['required', Rule::in(['Any', 'Customer', 'Supplier', 'Worker', 'Owner', 'Lender'])],
-            'debit_source' => ['required', Rule::in($sources)],
-            'credit_source' => ['required', Rule::in($sources)],
+            'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
+            'party_type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_RULE_PARTY_TYPE)],
+            'debit_source' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_ACCOUNTING_SOURCE)],
+            'credit_source' => ['required', 'different:debit_source', $this->activeAccountingOption(AccountingOption::GROUP_ACCOUNTING_SOURCE)],
             'money_required' => ['required', 'boolean'],
             'party_required' => ['required', 'boolean'],
             'is_active' => ['required', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'code' => trim((string) $this->input('code')),
+            'name' => trim((string) $this->input('name')),
+            'money_required' => $this->boolean('money_required'),
+            'party_required' => $this->boolean('party_required'),
+            'is_active' => $this->boolean('is_active'),
+        ]);
     }
 }

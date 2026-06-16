@@ -4,24 +4,35 @@
     $formAction = $isEditing
         ? route('transactions.update', $transaction)
         : route('transactions.store');
+    $categoryRepairRequired = $categoryRepairRequired ?? false;
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
     <div class="hg-page-header">
         <div>
-            <h1>Record {{ $category }} Transaction</h1>
-            <p>The user selects transaction category, transaction head, amount and required business fields. The journal preview shows what the system will post.</p>
+            <h1>Record {{ $categoryOption?->label ?? $category }} Transaction</h1>
         </div>
     </div>
 
-    <div class="hg-tabs">
-        @foreach (['Sales', 'Payment', 'Liability'] as $tab)
-            <a
-                href="{{ route('transactions.create', ['category' => $tab]) }}"
-                class="{{ $category === $tab ? 'active' : '' }}"
-            >{{ $tab }}</a>
-        @endforeach
-    </div>
+    @if (! $isEditing || $categoryRepairRequired)
+        <div class="hg-tabs">
+            @foreach ($transactionCategories as $categoryTab)
+                <a
+                    href="{{ $isEditing
+                        ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value])
+                        : route('transactions.create', ['category' => $categoryTab->value]) }}"
+                    class="{{ $category === $categoryTab->value ? 'active' : '' }}"
+                >{{ $categoryTab->label }}</a>
+            @endforeach
+        </div>
+    @endif
+
+    @if ($isEditing && $transaction->status === 'incomplete')
+        <div class="hg-notice" style="margin-bottom:14px">
+            <strong>This transaction is incomplete.</strong>
+            A related setup record was deleted. Select valid active dependencies and update the transaction to rebuild its journal and return it to Posted status.
+        </div>
+    @endif
 
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
@@ -50,7 +61,11 @@
                 <div class="hg-field">
                     <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
                     <select id="transaction_head_id" name="transaction_head_id" required>
-                        <option value="">Select transaction head</option>
+                        <option value="">
+                            {{ $transactionHeads->isEmpty()
+                                ? 'No active '.($categoryOption?->label ?? $category).' transaction head available'
+                                : 'Select transaction head' }}
+                        </option>
                         @foreach ($transactionHeads as $head)
                             <option
                                 value="{{ $head->id }}"
@@ -65,17 +80,19 @@
 
                 <div class="hg-field" id="money-field">
                     <label for="money_account_id">
-                        <span id="money-label">{{ $category === 'Sales' ? 'Receive In' : 'Pay/Receive Through' }}</span>
+                        <span id="money-label">{{ $categoryOption?->metadata['money_label'] ?? 'Money Account' }}</span>
                         <span class="hg-required">*</span>
                     </label>
                     <select id="money_account_id" name="money_account_id">
-                        <option value="">Select money account</option>
+                        <option value="">
+                            {{ $moneyAccounts->isEmpty() ? 'No active money account available' : 'Select money account' }}
+                        </option>
                         @foreach ($moneyAccounts as $moneyAccount)
                             <option
                                 value="{{ $moneyAccount->id }}"
                                 @selected((string) old('money_account_id', $isEditing ? $transaction->money_account_id : '') === (string) $moneyAccount->id)
                             >
-                                {{ $moneyAccount->name }} — {{ $moneyAccount->kind }}
+                                {{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}
                             </option>
                         @endforeach
                     </select>
@@ -92,7 +109,7 @@
                                 data-party-type="{{ $party->type }}"
                                 @selected((string) old('party_id', $isEditing ? $transaction->party_id : '') === (string) $party->id)
                             >
-                                {{ $party->code }} — {{ $party->name }} ({{ $party->type }})
+                                {{ $party->code }} — {{ $party->name }} ({{ $partyTypeLabels[$party->type] ?? $party->type }})
                             </option>
                         @endforeach
                     </select>
@@ -145,11 +162,6 @@
             <h2 class="hg-card-title">Automatic Journal Preview</h2>
             <div id="journal-preview" data-preview-url="{{ route('transactions.preview') }}">
                 @include('transactions.partials.preview-empty')
-            </div>
-            <div class="hg-preview-space"></div>
-            <div class="hg-info">
-                <b>No debit/credit selection in transaction entry.</b><br>
-                The selected transaction head calls the linked rule. The rule resolves accounts from money account, party mapping or head posting COA.
             </div>
         </section>
     </div>

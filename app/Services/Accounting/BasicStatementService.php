@@ -34,6 +34,8 @@ class BasicStatementService
 
         $moneyAccountIds = MoneyAccount::query()
             ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNotNull('chart_of_account_id')
             ->pluck('chart_of_account_id');
 
         $cash = (float) $moneyAccountIds->sum(fn (int $accountId): float => (float) ($balances[$accountId] ?? 0));

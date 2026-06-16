@@ -6,6 +6,7 @@ use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\MoneyAccount;
 use App\Models\User;
+use Database\Seeders\AccountingOptionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -64,6 +65,7 @@ class AccountingSetupPagesTest extends TestCase
 
     private function companyUser(): User
     {
+        $this->seed(AccountingOptionSeeder::class);
         $company = Company::query()->create([
             'code' => 'TEST-'.uniqid(),
             'name' => 'Test Company',

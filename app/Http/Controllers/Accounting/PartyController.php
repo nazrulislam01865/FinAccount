@@ -3,17 +3,25 @@
 namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\PerformsSafeDelete;
 use App\Http\Requests\Accounting\StorePartyRequest;
 use App\Http\Requests\Accounting\UpdatePartyRequest;
 use App\Models\Party;
 use App\Services\Accounting\PartyService;
+use App\Services\Accounting\SafeDelete\SafeDeleteService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class PartyController extends Controller
 {
-    public function __construct(private readonly PartyService $service) {}
+    use PerformsSafeDelete;
+
+    public function __construct(
+        private readonly PartyService $service,
+        private readonly SafeDeleteService $safeDeleteService,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -35,12 +43,18 @@ class PartyController extends Controller
         return redirect()->route('parties.index')->with('success', 'Record saved');
     }
 
-    public function destroy(Request $request, Party $party): RedirectResponse
+    public function destroy(Request $request, Party $party): JsonResponse|RedirectResponse
     {
         $this->ensureCompany($request, $party);
-        $this->service->delete($party);
+        $plan = $this->safeDeleteService->inspectParty($party);
 
-        return redirect()->route('parties.index')->with('success', 'Record deleted');
+        return $this->performSafeDelete(
+            $request,
+            $plan,
+            fn () => $this->safeDeleteService->deleteParty($party),
+            'parties.index',
+            'Party deleted permanently. Dependent records were detached and made incomplete.',
+        );
     }
 
     private function ensureCompany(Request $request, Party $party): void

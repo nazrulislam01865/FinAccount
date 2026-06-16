@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingOption;
 use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
 use App\Models\TransactionHead;
@@ -11,8 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class TransactionHeadService
 {
+    public function __construct(private readonly AccountingOptionService $optionService) {}
+
     /**
-     * @return array{transactionHeads: Collection<int, TransactionHead>, accountingRules: Collection<int, AccountingRule>, postingAccounts: Collection<int, ChartOfAccount>}
+     * @return array{transactionHeads: Collection<int, TransactionHead>, accountingRules: Collection<int, AccountingRule>, postingAccounts: Collection<int, ChartOfAccount>, transactionCategories: Collection<int, AccountingOption>}
      */
     public function pageData(int $companyId): array
     {
@@ -30,13 +33,15 @@ class TransactionHeadService
                 ->where('company_id', $companyId)
                 ->orderBy('code')
                 ->get(),
+            'transactionCategories' => $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY),
+            'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
         ];
     }
 
     /** @param array<string, mixed> $data */
     public function create(array $data, int $companyId): TransactionHead
     {
-        $this->validateRuleCategory($data, $companyId);
+        $this->validateSetup($data, $companyId);
 
         return DB::transaction(fn (): TransactionHead => TransactionHead::query()->create([
             'company_id' => $companyId,
@@ -47,7 +52,7 @@ class TransactionHeadService
     /** @param array<string, mixed> $data */
     public function update(TransactionHead $head, array $data): TransactionHead
     {
-        $this->validateRuleCategory($data, $head->company_id);
+        $this->validateSetup($data, $head->company_id);
         DB::transaction(fn () => $head->update($this->normalized($data)), attempts: 5);
 
         return $head->refresh();
@@ -65,17 +70,33 @@ class TransactionHeadService
     }
 
     /** @param array<string, mixed> $data */
-    private function validateRuleCategory(array $data, int $companyId): void
+    private function validateSetup(array $data, int $companyId): void
     {
-        $valid = AccountingRule::query()
+        $rule = AccountingRule::query()
             ->whereKey($data['accounting_rule_id'])
             ->where('company_id', $companyId)
-            ->where('category', $data['category'])
-            ->exists();
+            ->first();
 
-        if (! $valid) {
+        if (! $rule || $rule->category !== $data['category']) {
             throw ValidationException::withMessages([
                 'accounting_rule_id' => 'The accounting rule category must match the transaction head category.',
+            ]);
+        }
+
+        $account = ChartOfAccount::query()
+            ->whereKey($data['posting_account_id'])
+            ->where('company_id', $companyId)
+            ->first();
+
+        if (! $account) {
+            throw ValidationException::withMessages([
+                'posting_account_id' => 'The posting COA does not belong to this company.',
+            ]);
+        }
+
+        if ((bool) $data['is_active'] && (! $rule->is_active || ! $account->is_active)) {
+            throw ValidationException::withMessages([
+                'is_active' => 'An active transaction head must use an active accounting rule and active posting COA.',
             ]);
         }
     }

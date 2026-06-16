@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingOption;
 use App\Models\DocumentSequence;
 use Illuminate\Validation\ValidationException;
 
@@ -9,15 +10,28 @@ class VoucherNumberService
 {
     public function lock(int $companyId, string $category): DocumentSequence
     {
+        $categoryOption = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->active()
+            ->where('value', $category)
+            ->first();
+
+        if (! $categoryOption) {
+            throw ValidationException::withMessages([
+                'category' => 'The selected transaction category is not configured.',
+            ]);
+        }
+
         $sequence = DocumentSequence::query()
             ->where('company_id', $companyId)
             ->where('category', $category)
+            ->where('is_active', true)
             ->lockForUpdate()
             ->first();
 
         if (! $sequence) {
             throw ValidationException::withMessages([
-                'category' => 'The voucher sequence for this transaction category is not configured.',
+                'category' => 'Voucher numbering is not configured for this category. Add it from Master > Voucher Numbering.',
             ]);
         }
 

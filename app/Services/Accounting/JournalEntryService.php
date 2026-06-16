@@ -19,7 +19,6 @@ class JournalEntryService
             ->whereHas('journalEntry', fn ($query) => $query->where('status', 'posted'))
             ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
             ->select('journal_lines.*')
-            ->orderBy('journal_entries.entry_date')
             ->orderBy('journal_entries.id')
             ->orderBy('journal_lines.sequence')
             ->get();

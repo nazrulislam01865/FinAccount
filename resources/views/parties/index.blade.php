@@ -2,6 +2,7 @@
     $modalRecordId = (int) old('record_id', 0);
     $editingParty = $modalRecordId > 0 ? $parties->firstWhere('id', $modalRecordId) : null;
     $reopenModal = old('setup_modal') === 'party';
+    $defaultPartyType = $partyTypes->first()?->value ?? '';
 @endphp
 
 <x-layouts::accounting title="Parties">
@@ -15,7 +16,7 @@
             class="hg-btn hg-btn-primary"
             data-setup-open="create"
             data-setup-target="party-modal"
-            data-defaults="{{ json_encode(['record_id' => '', 'type' => 'Customer', 'opening_balance' => '0', 'is_active' => '1']) }}"
+            data-defaults="{{ json_encode(['record_id' => '', 'type' => $defaultPartyType, 'opening_balance' => '0', 'is_active' => '1']) }}"
         >+ Add Party</button>
     </div>
 
@@ -39,7 +40,7 @@
                 @foreach ($parties as $party)
                     <tr>
                         <td><strong>{{ $party->code }} — {{ $party->name }}</strong></td>
-                        <td><span class="hg-badge">{{ $party->type }}</span></td>
+                        <td><span class="hg-badge">{{ $party->type ? ($partyTypeLabels[$party->type] ?? $party->type) : 'Relationship removed' }}</span></td>
                         <td>{{ $party->receivableAccount?->name ?? '-' }}</td>
                         <td>{{ $party->payableAccount?->name ?? '-' }}</td>
                         <td class="right">৳ {{ number_format($balances[$party->id] ?? 0, 2) }}</td>
@@ -64,7 +65,7 @@
                                         'is_active' => $party->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
-                                <form method="POST" action="{{ route('parties.destroy', $party) }}" onsubmit="return confirm('Delete this record?')">
+                                <form method="POST" action="{{ route('parties.destroy', $party) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
@@ -104,8 +105,8 @@
             <div class="hg-field">
                 <label for="party-type">Party Type</label>
                 <select id="party-type" name="type" required>
-                    @foreach (['Customer', 'Supplier', 'Worker', 'Owner', 'Lender'] as $type)
-                        <option value="{{ $type }}" @selected(old('type', $editingParty?->type ?? 'Customer') === $type)>{{ $type }}</option>
+                    @foreach ($partyTypes as $typeOption)
+                        <option value="{{ $typeOption->value }}" @selected(old('type', $editingParty?->type ?? $defaultPartyType) === $typeOption->value)>{{ $typeOption->label }}</option>
                     @endforeach
                 </select>
                 @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror

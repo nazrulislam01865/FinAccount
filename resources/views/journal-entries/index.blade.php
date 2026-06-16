@@ -25,7 +25,7 @@
                     @php($transaction = $line->journalEntry?->transaction)
                     <tr>
                         <td><strong>{{ $line->journalEntry?->voucher_no }}</strong><br><span class="hg-muted">{{ $line->journalEntry?->entry_date?->format('Y-m-d') }}</span></td>
-                        <td><span class="hg-badge {{ strtolower($transaction?->category ?? '') }}">{{ $transaction?->category }}</span></td>
+                        <td><span class="hg-badge {{ strtolower($transaction?->category ?? '') }}">{{ $categoryLabels[$transaction?->category] ?? $transaction?->category }}</span></td>
                         <td>{{ $line->chartOfAccount?->code }} — {{ $line->chartOfAccount?->name }}</td>
                         <td class="right">৳ {{ number_format((float) $line->debit, 2) }}</td>
                         <td class="right">৳ {{ number_format((float) $line->credit, 2) }}</td>

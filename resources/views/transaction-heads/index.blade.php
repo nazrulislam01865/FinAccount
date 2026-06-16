@@ -2,6 +2,7 @@
     $modalRecordId = (int) old('record_id', 0);
     $editingHead = $modalRecordId > 0 ? $transactionHeads->firstWhere('id', $modalRecordId) : null;
     $reopenModal = old('setup_modal') === 'transaction-head';
+    $defaultCategory = $transactionCategories->first()?->value ?? '';
 @endphp
 
 <x-layouts::accounting title="Transaction Heads">
@@ -15,7 +16,7 @@
             class="hg-btn hg-btn-primary"
             data-setup-open="create"
             data-setup-target="transaction-head-modal"
-            data-defaults="{{ json_encode(['record_id' => '', 'category' => 'Sales', 'is_active' => '1']) }}"
+            data-defaults="{{ json_encode(['record_id' => '', 'category' => $defaultCategory, 'is_active' => '1']) }}"
         >+ Add Transaction Head</button>
     </div>
 
@@ -38,9 +39,9 @@
                 @foreach ($transactionHeads as $head)
                     <tr>
                         <td><strong>{{ $head->code }}</strong><br>{{ $head->name }}</td>
-                        <td><span class="hg-badge {{ strtolower($head->category) }}">{{ $head->category }}</span></td>
-                        <td>{{ $head->accountingRule?->name }}</td>
-                        <td>{{ $head->postingAccount?->code }} — {{ $head->postingAccount?->name }}</td>
+                        <td><span class="hg-badge {{ strtolower($head->category ?? '') }}">{{ $head->category ? ($categoryLabels[$head->category] ?? $head->category) : 'Relationship removed' }}</span></td>
+                        <td>{{ $head->accountingRule?->name ?? 'Relationship removed' }}</td>
+                        <td>{{ $head->postingAccount ? ($head->postingAccount->code.' — '.$head->postingAccount->name) : 'Relationship removed' }}</td>
                         <td><span class="hg-badge {{ $head->is_active ? 'on' : 'off' }}">{{ $head->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
@@ -61,7 +62,7 @@
                                         'is_active' => $head->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
-                                <form method="POST" action="{{ route('transaction-heads.destroy', $head) }}" onsubmit="return confirm('Delete this record?')">
+                                <form method="POST" action="{{ route('transaction-heads.destroy', $head) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
@@ -101,8 +102,8 @@
             <div class="hg-field">
                 <label for="head-category">Category</label>
                 <select id="head-category" name="category" required>
-                    @foreach (['Sales', 'Payment', 'Liability'] as $category)
-                        <option value="{{ $category }}" @selected(old('category', $editingHead?->category ?? 'Sales') === $category)>{{ $category }}</option>
+                    @foreach ($transactionCategories as $categoryOption)
+                        <option value="{{ $categoryOption->value }}" @selected(old('category', $editingHead?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
                     @endforeach
                 </select>
                 @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -113,7 +114,7 @@
                     <option value="">Select rule</option>
                     @foreach ($accountingRules as $rule)
                         <option value="{{ $rule->id }}" @selected((string) old('accounting_rule_id', $editingHead?->accounting_rule_id) === (string) $rule->id)>
-                            {{ $rule->code }} — {{ $rule->name }} ({{ $rule->category }})
+                            {{ $rule->code }} — {{ $rule->name }} ({{ $categoryLabels[$rule->category] ?? $rule->category }})
                         </option>
                     @endforeach
                 </select>

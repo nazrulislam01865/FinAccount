@@ -3,63 +3,43 @@
 namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\PerformsSafeDelete;
 use App\Http\Requests\Accounting\StoreChartOfAccountRequest;
 use App\Http\Requests\Accounting\UpdateChartOfAccountRequest;
 use App\Models\ChartOfAccount;
-use App\Services\Accounting\ChartOfAccountBalanceService;
+use App\Services\Accounting\ChartOfAccountService;
+use App\Services\Accounting\SafeDelete\SafeDeleteService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class ChartOfAccountController extends Controller
 {
+    use PerformsSafeDelete;
+
     public function __construct(
-        private readonly ChartOfAccountBalanceService $balanceService,
+        private readonly ChartOfAccountService $service,
+        private readonly SafeDeleteService $safeDeleteService,
     ) {}
 
     public function index(Request $request): View
     {
         $search = trim($request->string('search')->toString());
-        $companyId = $request->user()->company_id;
+        $oldAccountId = (int) $request->old('account_id', '0');
 
-        $accounts = ChartOfAccount::query()
-            ->where('company_id', $companyId)
-            ->when($search !== '', function ($query) use ($search): void {
-                $query->where(function ($query) use ($search): void {
-                    $query->where('code', 'like', "%{$search}%")
-                        ->orWhere('name', 'like', "%{$search}%")
-                        ->orWhere('type', 'like', "%{$search}%");
-                });
-            })
-            ->orderBy('code')
-            ->get();
-
-        $oldAccountId = (int) $request->old('account_id', 0);
-        $modalAccount = $oldAccountId > 0
-            ? ChartOfAccount::query()
-                ->where('company_id', $companyId)
-                ->find($oldAccountId)
-            : null;
-
-        return view('chart-of-accounts.index', [
-            'accounts' => $accounts,
-            'balances' => $this->balanceService->balancesFor($accounts, $companyId),
-            'search' => $search,
-            'modalAccount' => $modalAccount,
-        ]);
+        return view('chart-of-accounts.index', $this->service->pageData(
+            $request->user()->company_id,
+            $search,
+            $oldAccountId,
+        ));
     }
 
     public function store(StoreChartOfAccountRequest $request): RedirectResponse
     {
-        ChartOfAccount::query()->create([
-            'company_id' => $request->user()->company_id,
-            ...$request->validated(),
-        ]);
+        $this->service->create($request->validated(), $request->user()->company_id);
 
-        return redirect()
-            ->route('chart-of-accounts.index')
-            ->with('success', 'Record saved');
+        return redirect()->route('chart-of-accounts.index')->with('success', 'Record saved');
     }
 
     public function update(
@@ -67,35 +47,23 @@ class ChartOfAccountController extends Controller
         ChartOfAccount $chartOfAccount,
     ): RedirectResponse {
         $this->ensureCompany($request, $chartOfAccount);
-        $chartOfAccount->update($request->validated());
+        $this->service->update($chartOfAccount, $request->validated());
 
-        return redirect()
-            ->route('chart-of-accounts.index')
-            ->with('success', 'Record saved');
+        return redirect()->route('chart-of-accounts.index')->with('success', 'Record saved');
     }
 
-    public function destroy(Request $request, ChartOfAccount $chartOfAccount): RedirectResponse
+    public function destroy(Request $request, ChartOfAccount $chartOfAccount): JsonResponse|RedirectResponse
     {
         $this->ensureCompany($request, $chartOfAccount);
+        $plan = $this->safeDeleteService->inspectChartOfAccount($chartOfAccount);
 
-        $uses = collect([
-            'money account' => $chartOfAccount->moneyAccounts()->exists(),
-            'party' => $chartOfAccount->receivableParties()->exists() || $chartOfAccount->payableParties()->exists(),
-            'transaction head' => $chartOfAccount->transactionHeads()->exists(),
-            'journal' => $chartOfAccount->journalLines()->exists(),
-        ])->filter()->keys();
-
-        if ($uses->isNotEmpty()) {
-            throw ValidationException::withMessages([
-                'account' => 'Cannot delete. Used by '.$uses->implode(', ').'.',
-            ]);
-        }
-
-        $chartOfAccount->delete();
-
-        return redirect()
-            ->route('chart-of-accounts.index')
-            ->with('success', 'Record deleted');
+        return $this->performSafeDelete(
+            $request,
+            $plan,
+            fn () => $this->safeDeleteService->deleteChartOfAccount($chartOfAccount),
+            'chart-of-accounts.index',
+            'Chart of Account deleted permanently. Dependent records were detached and made inactive or incomplete.',
+        );
     }
 
     private function ensureCompany(Request $request, ChartOfAccount $account): void

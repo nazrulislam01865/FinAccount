@@ -1,3 +1,7 @@
+@php
+    $masterMenuActive = request()->routeIs('master.*');
+@endphp
+
 <aside class="hg-side">
     <div class="hg-brand">
         <div class="hg-logo">HG</div>
@@ -26,6 +30,45 @@
         <a href="{{ route('parties.index') }}" class="{{ request()->routeIs('parties.*') ? 'active' : '' }}">
             <span class="hg-nav-icon">👥</span><span class="hg-nav-text">Parties</span>
         </a>
+
+        <details class="hg-nav-group" @if($masterMenuActive) open @endif>
+            <summary class="{{ $masterMenuActive ? 'active' : '' }}">
+                <span class="hg-nav-icon">🗂️</span>
+                <span class="hg-nav-text">Master</span>
+                <span class="hg-nav-caret" aria-hidden="true">›</span>
+            </summary>
+
+            <div class="hg-nav-submenu">
+                <span class="hg-nav-subheading">Business Masters</span>
+                <a
+                    href="{{ route('master.index', 'party-types') }}"
+                    class="{{ request()->routeIs('master.index') && request()->route('section') === 'party-types' ? 'active' : '' }}"
+                >
+                    <span class="hg-nav-icon">👥</span><span class="hg-nav-text">Party Types</span>
+                </a>
+                <a
+                    href="{{ route('master.index', 'money-account-types') }}"
+                    class="{{ request()->routeIs('master.index') && request()->route('section') === 'money-account-types' ? 'active' : '' }}"
+                >
+                    <span class="hg-nav-icon">🏦</span><span class="hg-nav-text">Money Account Types</span>
+                </a>
+
+                <span class="hg-nav-subheading">Transaction Setup</span>
+                <a
+                    href="{{ route('master.index', 'transaction-categories') }}"
+                    class="{{ request()->routeIs('master.index') && request()->route('section') === 'transaction-categories' ? 'active' : '' }}"
+                >
+                    <span class="hg-nav-icon">🏷️</span><span class="hg-nav-text">Transaction Categories</span>
+                </a>
+                <a
+                    href="{{ route('master.voucher-sequences.index') }}"
+                    class="{{ request()->routeIs('master.voucher-sequences.*') ? 'active' : '' }}"
+                >
+                    <span class="hg-nav-icon">🔢</span><span class="hg-nav-text">Voucher Numbering</span>
+                </a>
+            </div>
+        </details>
+
         <a href="{{ route('accounting-rules.index') }}" class="{{ request()->routeIs('accounting-rules.*') ? 'active' : '' }}">
             <span class="hg-nav-icon">⚙️</span><span class="hg-nav-text">Accounting Rules</span>
         </a>

@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingRule;
 use App\Models\JournalEntry;
 use App\Models\MoneyAccount;
 use App\Models\Party;
@@ -44,7 +45,17 @@ class TransactionPostingService
             $head = TransactionHead::query()
                 ->with(['accountingRule', 'postingAccount'])
                 ->where('company_id', $user->company_id)
+                ->where('category', $data['category'])
                 ->where('is_active', true)
+                ->whereNotNull('accounting_rule_id')
+                ->whereNotNull('posting_account_id')
+                ->whereHas('accountingRule', fn ($query) => $query
+                    ->where('company_id', $user->company_id)
+                    ->where('category', $data['category'])
+                    ->where('is_active', true))
+                ->whereHas('postingAccount', fn ($query) => $query
+                    ->where('company_id', $user->company_id)
+                    ->where('is_active', true))
                 ->findOrFail($data['transaction_head_id']);
 
             $rule = $head->accountingRule;
@@ -60,6 +71,10 @@ class TransactionPostingService
                     ->with('chartOfAccount')
                     ->where('company_id', $user->company_id)
                     ->where('is_active', true)
+                    ->whereNotNull('chart_of_account_id')
+                    ->whereHas('chartOfAccount', fn ($query) => $query
+                        ->where('company_id', $user->company_id)
+                        ->where('is_active', true))
                     ->findOrFail($data['money_account_id'])
                 : null;
 
@@ -100,6 +115,7 @@ class TransactionPostingService
             $existing = Transaction::query()
                 ->where('company_id', $user->company_id)
                 ->where('request_token', $data['request_token'])
+                ->lockForUpdate()
                 ->first();
 
             if ($existing) {
@@ -114,7 +130,7 @@ class TransactionPostingService
                 'company_id' => $user->company_id,
                 'transaction_head_id' => $head->id,
                 'money_account_id' => $rule->money_required ? $moneyAccount?->id : null,
-                'party_id' => $rule->party_required ? $party?->id : null,
+                'party_id' => $party?->id,
                 'created_by' => $user->id,
                 'voucher_no' => $voucherNo,
                 'category' => $data['category'],
@@ -143,12 +159,12 @@ class TransactionPostingService
                 $journalEntry->lines()->create([
                     'company_id' => $user->company_id,
                     'chart_of_account_id' => $line['account']->id,
-                    'money_account_id' => $moneyAccount?->chart_of_account_id === $line['account']->id
+                    'money_account_id' => $line['source'] === AccountingRule::SOURCE_SELECTED_MONEY
                         ? $moneyAccount?->id
                         : null,
-                    'party_id' => in_array($line['account']->id, [
-                        $party?->receivable_account_id,
-                        $party?->payable_account_id,
+                    'party_id' => in_array($line['source'], [
+                        AccountingRule::SOURCE_PARTY_RECEIVABLE,
+                        AccountingRule::SOURCE_PARTY_PAYABLE,
                     ], true) ? $party?->id : null,
                     'sequence' => $index + 1,
                     'description' => filled($data['description'] ?? null) ? $data['description'] : $head->name,

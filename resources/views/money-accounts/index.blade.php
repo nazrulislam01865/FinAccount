@@ -2,20 +2,20 @@
     $modalRecordId = (int) old('record_id', 0);
     $editingAccount = $modalRecordId > 0 ? $moneyAccounts->firstWhere('id', $modalRecordId) : null;
     $reopenModal = old('setup_modal') === 'money-account';
+    $defaultMoneyKind = $moneyKinds->first()?->value ?? '';
 @endphp
 
 <x-layouts::accounting title="Money Accounts">
     <div class="hg-page-header">
         <div>
             <h1>Money Accounts</h1>
-            <p>Cash, bank and digital wallet accounts. Each money account must map to one COA account.</p>
         </div>
         <button
             type="button"
             class="hg-btn hg-btn-primary"
             data-setup-open="create"
             data-setup-target="money-account-modal"
-            data-defaults="{{ json_encode(['record_id' => '', 'kind' => 'Cash', 'opening_balance' => '0', 'is_active' => '1']) }}"
+            data-defaults="{{ json_encode(['record_id' => '', 'kind' => $defaultMoneyKind, 'opening_balance' => '0', 'is_active' => '1']) }}"
         >+ Add Money Account</button>
     </div>
 
@@ -37,8 +37,8 @@
                 <tbody>
                 @foreach ($moneyAccounts as $moneyAccount)
                     <tr>
-                        <td><strong>{{ $moneyAccount->name }}</strong><br><span class="hg-muted">{{ $moneyAccount->kind }}</span></td>
-                        <td>{{ $moneyAccount->chartOfAccount?->code }} — {{ $moneyAccount->chartOfAccount?->name }}</td>
+                        <td><strong>{{ $moneyAccount->name }}</strong><br><span class="hg-muted">{{ $moneyAccount->kind ? ($moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind) : 'Relationship removed' }}</span></td>
+                        <td>{{ $moneyAccount->chartOfAccount ? ($moneyAccount->chartOfAccount->code.' — '.$moneyAccount->chartOfAccount->name) : 'Relationship removed' }}</td>
                         <td class="right">৳ {{ number_format((float) $moneyAccount->opening_balance, 2) }}</td>
                         <td class="right">৳ {{ number_format($balances[$moneyAccount->id] ?? 0, 2) }}</td>
                         <td><span class="hg-badge {{ $moneyAccount->is_active ? 'on' : 'off' }}">{{ $moneyAccount->is_active ? 'Active' : 'Inactive' }}</span></td>
@@ -60,7 +60,7 @@
                                         'is_active' => $moneyAccount->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
-                                <form method="POST" action="{{ route('money-accounts.destroy', $moneyAccount) }}" onsubmit="return confirm('Delete this record?')">
+                                <form method="POST" action="{{ route('money-accounts.destroy', $moneyAccount) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
@@ -100,8 +100,8 @@
             <div class="hg-field">
                 <label for="money-kind">Kind</label>
                 <select id="money-kind" name="kind" required>
-                    @foreach (['Cash', 'Bank', 'Digital'] as $kind)
-                        <option value="{{ $kind }}" @selected(old('kind', $editingAccount?->kind ?? 'Cash') === $kind)>{{ $kind }}</option>
+                    @foreach ($moneyKinds as $kindOption)
+                        <option value="{{ $kindOption->value }}" @selected(old('kind', $editingAccount?->kind ?? $defaultMoneyKind) === $kindOption->value)>{{ $kindOption->label }}</option>
                     @endforeach
                 </select>
                 @error('kind')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -109,13 +109,16 @@
             <div class="hg-field">
                 <label for="money-coa">Mapped Asset COA <span class="hg-required">*</span></label>
                 <select id="money-coa" name="chart_of_account_id" required>
-                    <option value="">Select</option>
+                    <option value="">Select from Chart of Accounts</option>
                     @foreach ($assetAccounts as $account)
                         <option value="{{ $account->id }}" @selected((string) old('chart_of_account_id', $editingAccount?->chart_of_account_id) === (string) $account->id)>
                             {{ $account->code }} — {{ $account->name }}
                         </option>
                     @endforeach
                 </select>
+                @if ($assetAccounts->isEmpty())
+                    <small class="hg-field-error">No active Asset COA is available. Add or activate an Asset account in Chart of Accounts first.</small>
+                @endif
                 @error('chart_of_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
             <div class="hg-field">

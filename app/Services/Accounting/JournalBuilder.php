@@ -12,7 +12,7 @@ class JournalBuilder
     public function __construct(private readonly AccountResolver $accountResolver) {}
 
     /**
-     * @return array<int, array{account: \App\Models\ChartOfAccount, debit: string, credit: string}>
+     * @return array<int, array{account: \App\Models\ChartOfAccount, source: string, debit: string, credit: string}>
      */
     public function build(
         TransactionHead $head,
@@ -45,11 +45,13 @@ class JournalBuilder
         return [
             [
                 'account' => $debitAccount,
+                'source' => $rule->debit_source,
                 'debit' => $amount,
                 'credit' => '0.00',
             ],
             [
                 'account' => $creditAccount,
+                'source' => $rule->credit_source,
                 'debit' => '0.00',
                 'credit' => $amount,
             ],

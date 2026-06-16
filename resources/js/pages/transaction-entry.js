@@ -42,7 +42,9 @@ if (page) {
             return;
         }
 
+        const category = form.querySelector('[name="category"]')?.value || '';
         const params = new URLSearchParams({
+            category,
             transaction_head_id: head.value,
             money_account_id: money.value,
             party_id: party.value,

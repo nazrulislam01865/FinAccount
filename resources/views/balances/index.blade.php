@@ -41,7 +41,7 @@
                         @foreach ($parties as $party)
                             <tr>
                                 <td>{{ $party->code }} — {{ $party->name }}</td>
-                                <td><span class="hg-badge">{{ $party->type }}</span></td>
+                                <td><span class="hg-badge">{{ $partyTypeLabels[$party->type] ?? $party->type }}</span></td>
                                 <td class="right">৳ {{ number_format($partyBalances[$party->id] ?? 0, 2) }}</td>
                             </tr>
                         @endforeach

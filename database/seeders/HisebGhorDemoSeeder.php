@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\AccountingOption;
 use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
@@ -39,6 +40,13 @@ class HisebGhorDemoSeeder extends Seeder
                 'password' => Hash::make('password'),
             ],
         );
+
+        $this->seedCompany($company, $user, $postingService);
+    }
+
+    public function seedCompany(Company $company, User $user, TransactionPostingService $postingService): void
+    {
+        $this->call(AccountingOptionSeeder::class);
 
         $accounts = [
             'cash' => ['1111', 'Cash in Hand', 'Asset', 'Debit'],
@@ -83,27 +91,27 @@ class HisebGhorDemoSeeder extends Seeder
         $parties = [
             'customer1' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'C-001'],
-                ['name' => 'Rahim Traders', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'is_active' => true],
+                ['name' => 'Rahim Traders', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'payable_account_id' => null, 'opening_balance' => 0, 'is_active' => true],
             ),
             'customer2' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'C-002'],
-                ['name' => 'Local Vegetable Shop', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'is_active' => true],
+                ['name' => 'Local Vegetable Shop', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'payable_account_id' => null, 'opening_balance' => 0, 'is_active' => true],
             ),
             'supplier' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'S-001'],
-                ['name' => 'Molla Feed Supplier', 'type' => 'Supplier', 'payable_account_id' => $accounts['supplier_payable']->id, 'is_active' => true],
+                ['name' => 'Molla Feed Supplier', 'type' => 'Supplier', 'receivable_account_id' => null, 'payable_account_id' => $accounts['supplier_payable']->id, 'opening_balance' => 0, 'is_active' => true],
             ),
             'worker' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'W-001'],
-                ['name' => 'Farm Worker Group', 'type' => 'Worker', 'is_active' => true],
+                ['name' => 'Farm Worker Group', 'type' => 'Worker', 'receivable_account_id' => null, 'payable_account_id' => null, 'opening_balance' => 0, 'is_active' => true],
             ),
             'lender' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'L-001'],
-                ['name' => 'Agrani Bank Loan', 'type' => 'Lender', 'payable_account_id' => $accounts['loan']->id, 'is_active' => true],
+                ['name' => 'Agrani Bank Loan', 'type' => 'Lender', 'receivable_account_id' => null, 'payable_account_id' => $accounts['loan']->id, 'opening_balance' => 0, 'is_active' => true],
             ),
             'owner' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'O-001'],
-                ['name' => 'Business Owner', 'type' => 'Owner', 'payable_account_id' => $accounts['capital']->id, 'is_active' => true],
+                ['name' => 'Business Owner', 'type' => 'Owner', 'receivable_account_id' => null, 'payable_account_id' => $accounts['capital']->id, 'opening_balance' => 0, 'is_active' => true],
             ),
         ];
 
@@ -156,10 +164,21 @@ class HisebGhorDemoSeeder extends Seeder
             );
         }
 
-        foreach (['Sales' => 'SAL', 'Payment' => 'PAY', 'Liability' => 'LIA'] as $category => $prefix) {
+        $transactionCategories = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->active()
+            ->orderBy('sort_order')
+            ->get()
+            ->filter(fn (AccountingOption $categoryOption): bool => filled($categoryOption->metadata['voucher_prefix'] ?? null));
+
+        foreach ($transactionCategories as $categoryOption) {
             DocumentSequence::query()->firstOrCreate(
-                ['company_id' => $company->id, 'category' => $category],
-                ['prefix' => $prefix, 'next_number' => 1, 'padding' => 4],
+                ['company_id' => $company->id, 'category' => $categoryOption->value],
+                [
+                    'prefix' => $categoryOption->metadata['voucher_prefix'],
+                    'next_number' => 1,
+                    'padding' => 4,
+                ],
             );
         }
 
@@ -167,7 +186,7 @@ class HisebGhorDemoSeeder extends Seeder
             $samples = [
                 ['Sales', 'milk_cash', 'cash', null, 2500, 'INV-101', 'Cow milk sold in cash'],
                 ['Sales', 'vegetable_credit', null, 'customer2', 4200, 'INV-102', 'Vegetables sold on credit'],
-                ['Payment', 'salary', 'cash', null, 3000, 'PAY-201', 'Farm worker salary paid'],
+                ['Payment', 'salary', 'cash', 'worker', 3000, 'PAY-201', 'Farm worker salary paid'],
                 ['Liability', 'feed_credit', null, 'supplier', 8000, 'BILL-301', 'Fish and cow feed purchased on credit'],
                 ['Payment', 'supplier_payment', 'bank', 'supplier', 3000, 'PAY-302', 'Partial supplier due paid'],
                 ['Liability', 'loan_received', 'bank', 'lender', 50000, 'LOAN-01', 'Loan received in bank account'],

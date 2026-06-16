@@ -30,15 +30,4 @@ class AccountingRule extends Model
     {
         return $this->hasMany(TransactionHead::class);
     }
-
-    public function sourceLabel(string $source): string
-    {
-        return match ($source) {
-            self::SOURCE_SELECTED_MONEY => 'Selected Money Account',
-            self::SOURCE_HEAD_ACCOUNT => 'Transaction Head COA',
-            self::SOURCE_PARTY_RECEIVABLE => 'Party Receivable COA',
-            self::SOURCE_PARTY_PAYABLE => 'Party Payable COA',
-            default => $source,
-        };
-    }
 }

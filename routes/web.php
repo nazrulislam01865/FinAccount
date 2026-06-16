@@ -4,6 +4,7 @@ use App\Http\Controllers\Accounting\AccountingRuleController;
 use App\Http\Controllers\Accounting\BalanceController;
 use App\Http\Controllers\Accounting\BasicStatementController;
 use App\Http\Controllers\Accounting\JournalEntryController;
+use App\Http\Controllers\Accounting\MasterDataController;
 use App\Http\Controllers\Accounting\MoneyAccountController;
 use App\Http\Controllers\Accounting\PartyController;
 use App\Http\Controllers\Accounting\TransactionHeadController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Accounting\ChartOfAccountController;
 use App\Http\Controllers\Accounting\DashboardController;
 use App\Http\Controllers\Accounting\TransactionEntryController;
 use App\Http\Controllers\Accounting\TransactionRegisterController;
+use App\Http\Controllers\Accounting\VoucherSequenceController;
 use App\Http\Controllers\Landing\LandingAdminAuthController;
 use App\Http\Controllers\Landing\LandingPageAdminController;
 use App\Http\Controllers\Landing\LandingPageController;
@@ -103,6 +105,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/basic-statements', [BasicStatementController::class, 'index'])
         ->name('basic-statements.index');
+
+    Route::prefix('master')->name('master.')->group(function () {
+        Route::get('/voucher-sequences', [VoucherSequenceController::class, 'index'])
+            ->name('voucher-sequences.index');
+
+        Route::post('/voucher-sequences', [VoucherSequenceController::class, 'store'])
+            ->name('voucher-sequences.store');
+
+        Route::put('/voucher-sequences/{documentSequence}', [VoucherSequenceController::class, 'update'])
+            ->name('voucher-sequences.update');
+
+        Route::delete('/voucher-sequences/{documentSequence}', [VoucherSequenceController::class, 'destroy'])
+            ->name('voucher-sequences.destroy');
+
+        Route::get('/{section}', [MasterDataController::class, 'index'])
+            ->whereIn('section', ['party-types', 'money-account-types', 'transaction-categories'])
+            ->name('index');
+
+        Route::post('/{section}', [MasterDataController::class, 'store'])
+            ->whereIn('section', ['party-types', 'money-account-types', 'transaction-categories'])
+            ->name('store');
+
+        Route::put('/{section}/{accountingOption}', [MasterDataController::class, 'update'])
+            ->whereIn('section', ['party-types', 'money-account-types', 'transaction-categories'])
+            ->name('update');
+
+        Route::delete('/{section}/{accountingOption}', [MasterDataController::class, 'destroy'])
+            ->whereIn('section', ['party-types', 'money-account-types', 'transaction-categories'])
+            ->name('destroy');
+    });
 });
 
 require __DIR__.'/settings.php';

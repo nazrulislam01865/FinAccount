@@ -2,6 +2,8 @@
     $reopenModal = $errors->any() && old('coa_modal') === '1';
     $editingId = old('account_id');
     $editingAccount = $modalAccount;
+    $defaultAccountType = $accountTypes->first()?->value ?? '';
+    $defaultNormalBalance = $normalBalances->first()?->value ?? '';
 @endphp
 
 <x-layouts::accounting title="Chart of Accounts">
@@ -40,7 +42,6 @@
                         <th>Account Name</th>
                         <th>Type</th>
                         <th>Normal</th>
-                        <th class="right">Balance</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -52,7 +53,6 @@
                             <td>{{ $account->name }}</td>
                             <td><span class="hg-badge {{ strtolower($account->type) }}">{{ $account->type }}</span></td>
                             <td>{{ $account->normal_balance }}</td>
-                            <td class="right">৳ {{ number_format($balances[$account->id] ?? 0, 2) }}</td>
                             <td>
                                 <span class="hg-badge {{ $account->is_active ? 'on' : 'off' }}">
                                     {{ $account->is_active ? 'Active' : 'Inactive' }}
@@ -76,8 +76,7 @@
                                     <form
                                         method="POST"
                                         action="{{ route('chart-of-accounts.destroy', $account) }}"
-                                        onsubmit="return confirm('Delete this record?')"
-                                    >
+                                     data-safe-delete-form>
                                         @csrf
                                         @method('DELETE')
                                         <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
@@ -95,6 +94,8 @@
         class="hg-modal {{ $reopenModal ? 'show' : '' }}"
         id="coa-modal"
         data-store-url="{{ route('chart-of-accounts.store') }}"
+        data-default-type="{{ $defaultAccountType }}"
+        data-default-normal="{{ $defaultNormalBalance }}"
         aria-hidden="{{ $reopenModal ? 'false' : 'true' }}"
     >
         <div class="hg-modal-box" role="dialog" aria-modal="true" aria-labelledby="coa-modal-title">
@@ -130,8 +131,8 @@
                     <div class="hg-field">
                         <label for="coa-type">Type <span class="hg-required">*</span></label>
                         <select id="coa-type" name="type" required>
-                            @foreach (['Asset', 'Liability', 'Income', 'Expense', 'Equity'] as $type)
-                                <option value="{{ $type }}" @selected(old('type', $editingAccount?->type ?? 'Asset') === $type)>{{ $type }}</option>
+                            @foreach ($accountTypes as $typeOption)
+                                <option value="{{ $typeOption->value }}" @selected(old('type', $editingAccount?->type ?? $defaultAccountType) === $typeOption->value)>{{ $typeOption->label }}</option>
                             @endforeach
                         </select>
                         @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -140,8 +141,8 @@
                     <div class="hg-field">
                         <label for="coa-normal">Normal Balance</label>
                         <select id="coa-normal" name="normal_balance" required>
-                            @foreach (['Debit', 'Credit'] as $normal)
-                                <option value="{{ $normal }}" @selected(old('normal_balance', $editingAccount?->normal_balance ?? 'Debit') === $normal)>{{ $normal }}</option>
+                            @foreach ($normalBalances as $normalOption)
+                                <option value="{{ $normalOption->value }}" @selected(old('normal_balance', $editingAccount?->normal_balance ?? $defaultNormalBalance) === $normalOption->value)>{{ $normalOption->label }}</option>
                             @endforeach
                         </select>
                         @error('normal_balance')<small class="hg-field-error">{{ $message }}</small>@enderror

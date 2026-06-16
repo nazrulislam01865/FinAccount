@@ -10,12 +10,15 @@
     <main class="hg-main">
         <header class="hg-topbar">
             <div class="hg-topbar-title">{{ $title ?? 'HisebGhor' }}</div>
-            <span class="hg-pill">Data saved securely in MySQL</span>
         </header>
 
         <div class="hg-content">
             @if (session('success'))
                 <div class="hg-alert hg-alert-success">{{ session('success') }}</div>
+            @endif
+
+            @if (session('error'))
+                <div class="hg-alert hg-alert-danger">{{ session('error') }}</div>
             @endif
 
             @if ($errors->any())
@@ -33,6 +36,8 @@
         </div>
     </main>
 </div>
+
+<x-accounting.safe-delete-modal />
 
 @stack('scripts')
 </body>

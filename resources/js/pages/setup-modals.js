@@ -25,6 +25,24 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
         });
     };
 
+    const setModeVisibility = (mode) => {
+        const isEdit = mode === 'edit';
+
+        form.querySelectorAll('[data-create-only]').forEach((container) => {
+            container.hidden = isEdit;
+            container.querySelectorAll('input, select, textarea, button').forEach((field) => {
+                field.disabled = isEdit;
+            });
+        });
+
+        form.querySelectorAll('[data-edit-only]').forEach((container) => {
+            container.hidden = !isEdit;
+            container.querySelectorAll('input, select, textarea, button').forEach((field) => {
+                field.disabled = !isEdit;
+            });
+        });
+    };
+
     const clearFieldErrors = () => {
         form.querySelectorAll('.hg-field-error').forEach((error) => error.remove());
     };
@@ -33,7 +51,7 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
         modal.classList.add('show');
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('hg-modal-open');
-        window.setTimeout(() => form.querySelector('input:not([type="hidden"]), select, textarea')?.focus(), 0);
+        window.setTimeout(() => form.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])')?.focus(), 0);
     };
 
     const closeModal = () => {
@@ -48,6 +66,7 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
         form.action = button.dataset.storeUrl || modal.dataset.storeUrl;
         title.textContent = button.dataset.createTitle || modal.dataset.createTitle;
         if (method) method.disabled = true;
+        setModeVisibility('create');
         applyValues(JSON.parse(button.dataset.defaults || '{}'));
         showModal();
     };
@@ -61,6 +80,7 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
             method.disabled = false;
             method.value = 'PUT';
         }
+        setModeVisibility('edit');
         applyValues(JSON.parse(button.dataset.values || '{}'));
         showModal();
     };

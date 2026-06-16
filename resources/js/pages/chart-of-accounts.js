@@ -36,8 +36,8 @@ if (modal) {
         accountId.value = '';
         code.value = '';
         name.value = '';
-        type.value = 'Asset';
-        normal.value = 'Debit';
+        type.value = modal.dataset.defaultType || '';
+        normal.value = modal.dataset.defaultNormal || '';
         active.checked = true;
         showModal();
     };

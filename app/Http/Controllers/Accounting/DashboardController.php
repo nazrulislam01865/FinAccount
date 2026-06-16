@@ -30,9 +30,11 @@ class DashboardController extends Controller
 
     public function resetDemo(Request $request): RedirectResponse
     {
-        $companyId = $request->user()->company_id;
+        $user = $request->user();
+        $companyId = $user->company_id;
+        abort_unless($companyId && $user->company, 422, 'Your user account is not connected to a company.');
 
-        DB::transaction(function () use ($companyId): void {
+        DB::transaction(function () use ($companyId, $user): void {
             JournalEntry::query()->where('company_id', $companyId)->delete();
             Transaction::query()->where('company_id', $companyId)->delete();
             TransactionHead::query()->where('company_id', $companyId)->delete();
@@ -41,9 +43,13 @@ class DashboardController extends Controller
             MoneyAccount::query()->where('company_id', $companyId)->delete();
             DocumentSequence::query()->where('company_id', $companyId)->delete();
             ChartOfAccount::query()->where('company_id', $companyId)->delete();
-        });
 
-        app(HisebGhorDemoSeeder::class)->run(app(TransactionPostingService::class));
+            app(HisebGhorDemoSeeder::class)->seedCompany(
+                $user->company,
+                $user,
+                app(TransactionPostingService::class),
+            );
+        }, attempts: 5);
 
         return redirect()
             ->route('dashboard')

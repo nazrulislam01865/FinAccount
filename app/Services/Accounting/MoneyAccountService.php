@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
 use App\Models\MoneyAccount;
 use Illuminate\Support\Collection;
@@ -10,7 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class MoneyAccountService
 {
-    public function __construct(private readonly ChartOfAccountBalanceService $balanceService) {}
+    public function __construct(
+        private readonly ChartOfAccountBalanceService $balanceService,
+        private readonly AccountingOptionService $optionService,
+    ) {}
 
     /**
      * @return array{moneyAccounts: Collection<int, MoneyAccount>, assetAccounts: Collection<int, ChartOfAccount>, balances: array<int, float>}
@@ -26,6 +30,7 @@ class MoneyAccountService
         $assetAccounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
             ->where('type', 'Asset')
+            ->where('is_active', true)
             ->orderBy('code')
             ->get();
 
@@ -38,7 +43,10 @@ class MoneyAccountService
             $account->id => (float) ($accountBalances[$account->chart_of_account_id] ?? 0),
         ])->all();
 
-        return compact('moneyAccounts', 'assetAccounts', 'balances');
+        return compact('moneyAccounts', 'assetAccounts', 'balances') + [
+            'moneyKinds' => $this->optionService->forGroup(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
+            'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
+        ];
     }
 
     /** @param array<string, mixed> $data */
@@ -58,7 +66,8 @@ class MoneyAccountService
         $this->ensureAssetAccount((int) $data['chart_of_account_id'], $moneyAccount->company_id);
 
         if (
-            $moneyAccount->chart_of_account_id !== (int) $data['chart_of_account_id']
+            $moneyAccount->chart_of_account_id !== null
+            && $moneyAccount->chart_of_account_id !== (int) $data['chart_of_account_id']
             && $moneyAccount->transactions()->exists()
         ) {
             throw ValidationException::withMessages([
@@ -88,11 +97,12 @@ class MoneyAccountService
             ->whereKey($accountId)
             ->where('company_id', $companyId)
             ->where('type', 'Asset')
+            ->where('is_active', true)
             ->exists();
 
         if (! $valid) {
             throw ValidationException::withMessages([
-                'chart_of_account_id' => 'Money accounts must be mapped to an Asset COA.',
+                'chart_of_account_id' => 'Select an active Asset COA from the Chart of Accounts list.',
             ]);
         }
     }

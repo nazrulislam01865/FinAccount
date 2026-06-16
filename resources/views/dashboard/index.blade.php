@@ -7,27 +7,27 @@
         <div class="hg-actions">
             <form method="POST" action="{{ route('dashboard.reset-demo') }}" onsubmit="return confirm('Reset all data to sample dataset?')">
                 @csrf
-                <button class="hg-btn" type="submit">Reset Sample data</button>
+                <button class="hg-btn" type="submit">Reset Sample Data</button>
             </form>
-            <a class="hg-btn hg-btn-primary" href="{{ route('transactions.create', ['category' => 'Sales']) }}">+ Sale</a>
-            <a class="hg-btn hg-btn-danger" href="{{ route('transactions.create', ['category' => 'Payment']) }}">+ Payment</a>
-            <a class="hg-btn hg-btn-warning" href="{{ route('transactions.create', ['category' => 'Liability']) }}">+ Liability</a>
+            <a class="hg-btn hg-btn-primary" href="{{ route('transactions.create', ['category' => 'Sales']) }}">+ {{ $categoryLabels['Sales'] ?? 'Sale' }}</a>
+            <a class="hg-btn hg-btn-danger" href="{{ route('transactions.create', ['category' => 'Payment']) }}">+ {{ $categoryLabels['Payment'] ?? 'Payment' }}</a>
+            <a class="hg-btn hg-btn-warning" href="{{ route('transactions.create', ['category' => 'Liability']) }}">+ {{ $categoryLabels['Liability'] ?? 'Liability' }}</a>
         </div>
     </div>
 
     <div class="hg-grid hg-grid-4">
         <article class="hg-card hg-metric">
-            <div class="label">Total Sales</div>
+            <div class="label">Total {{ $categoryLabels['Sales'] ?? 'Sales' }}</div>
             <div class="value">৳ {{ number_format($metrics['sales'], 2) }}</div>
             <div class="hint">Income posted from sales heads</div>
         </article>
         <article class="hg-card hg-metric">
-            <div class="label">Payments</div>
+            <div class="label">{{ $categoryLabels['Payment'] ?? 'Payments' }}</div>
             <div class="value">৳ {{ number_format($metrics['payments'], 2) }}</div>
             <div class="hint">Money out for expenses and supplier dues</div>
         </article>
         <article class="hg-card hg-metric">
-            <div class="label">Liability Activity</div>
+            <div class="label">{{ $categoryLabels['Liability'] ?? 'Liability' }} Activity</div>
             <div class="value">৳ {{ number_format($metrics['liability'], 2) }}</div>
             <div class="hint">Loan and credit purchase activity</div>
         </article>
@@ -74,7 +74,7 @@
                         @foreach ($recentTransactions as $transaction)
                             <tr>
                                 <td><b>{{ $transaction->voucher_no }}</b><br><span class="hg-muted">{{ $transaction->transaction_date->format('Y-m-d') }}</span></td>
-                                <td><span class="hg-badge {{ strtolower($transaction->category) }}">{{ $transaction->category }}</span></td>
+                                <td><span class="hg-badge {{ strtolower($transaction->category) }}">{{ $categoryLabels[$transaction->category] ?? $transaction->category }}</span></td>
                                 <td>{{ $transaction->transactionHead->name }}</td>
                                 <td class="right">৳ {{ number_format((float) $transaction->amount, 2) }}</td>
                             </tr>

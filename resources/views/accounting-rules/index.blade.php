@@ -1,15 +1,19 @@
 @php
-    use App\Models\AccountingRule;
-
     $modalRecordId = (int) old('record_id', 0);
     $editingRule = $modalRecordId > 0 ? $rules->firstWhere('id', $modalRecordId) : null;
     $reopenModal = old('setup_modal') === 'accounting-rule';
-    $sources = [
-        AccountingRule::SOURCE_SELECTED_MONEY => 'Selected Money Account',
-        AccountingRule::SOURCE_HEAD_ACCOUNT => 'Transaction Head COA',
-        AccountingRule::SOURCE_PARTY_RECEIVABLE => 'Party Receivable COA',
-        AccountingRule::SOURCE_PARTY_PAYABLE => 'Party Payable COA',
-    ];
+    $defaultCategory = $transactionCategories->first()?->value ?? '';
+    $defaultPartyType = $rulePartyTypes->first()?->value ?? '';
+    $defaultDebitSource = $accountingSources->first(fn ($option) => (bool) ($option->metadata['default_debit'] ?? false))?->value
+        ?? $accountingSources->first()?->value
+        ?? '';
+    $defaultCreditSource = $accountingSources->first(fn ($option) => (bool) ($option->metadata['default_credit'] ?? false))?->value
+        ?? $accountingSources->skip(1)->first()?->value
+        ?? $defaultDebitSource;
+    $defaultMoneyRequired = (bool) ($accountingSources->firstWhere('value', $defaultDebitSource)?->metadata['requires_money'] ?? false)
+        || (bool) ($accountingSources->firstWhere('value', $defaultCreditSource)?->metadata['requires_money'] ?? false);
+    $defaultPartyRequired = (bool) ($accountingSources->firstWhere('value', $defaultDebitSource)?->metadata['requires_party'] ?? false)
+        || (bool) ($accountingSources->firstWhere('value', $defaultCreditSource)?->metadata['requires_party'] ?? false);
 @endphp
 
 <x-layouts::accounting title="Accounting Rules">
@@ -25,12 +29,12 @@
             data-setup-target="accounting-rule-modal"
             data-defaults="{{ json_encode([
                 'record_id' => '',
-                'category' => 'Sales',
-                'party_type' => 'Any',
-                'debit_source' => AccountingRule::SOURCE_HEAD_ACCOUNT,
-                'credit_source' => AccountingRule::SOURCE_SELECTED_MONEY,
-                'money_required' => '0',
-                'party_required' => '0',
+                'category' => $defaultCategory,
+                'party_type' => $defaultPartyType,
+                'debit_source' => $defaultDebitSource,
+                'credit_source' => $defaultCreditSource,
+                'money_required' => $defaultMoneyRequired ? '1' : '0',
+                'party_required' => $defaultPartyRequired ? '1' : '0',
                 'is_active' => '1',
             ]) }}"
         >+ Add Rule</button>
@@ -57,11 +61,11 @@
                 @foreach ($rules as $rule)
                     <tr>
                         <td><strong>{{ $rule->code }}</strong><br>{{ $rule->name }}</td>
-                        <td><span class="hg-badge {{ strtolower($rule->category) }}">{{ $rule->category }}</span></td>
-                        <td>{{ $rule->sourceLabel($rule->debit_source) }}</td>
-                        <td>{{ $rule->sourceLabel($rule->credit_source) }}</td>
+                        <td><span class="hg-badge {{ strtolower($rule->category ?? '') }}">{{ $rule->category ? ($categoryLabels[$rule->category] ?? $rule->category) : 'Relationship removed' }}</span></td>
+                        <td>{{ $sourceLabels[$rule->debit_source] ?? $rule->debit_source }}</td>
+                        <td>{{ $sourceLabels[$rule->credit_source] ?? $rule->credit_source }}</td>
                         <td>{{ $rule->money_required ? 'Yes' : 'No' }}</td>
-                        <td>{{ $rule->party_required ? $rule->party_type : 'No' }}</td>
+                        <td>{{ $rule->party_required ? ($partyTypeLabels[$rule->party_type] ?? $rule->party_type) : 'No' }}</td>
                         <td><span class="hg-badge {{ $rule->is_active ? 'on' : 'off' }}">{{ $rule->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
@@ -85,7 +89,7 @@
                                         'is_active' => $rule->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
-                                <form method="POST" action="{{ route('accounting-rules.destroy', $rule) }}" onsubmit="return confirm('Delete this record?')">
+                                <form method="POST" action="{{ route('accounting-rules.destroy', $rule) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
@@ -106,7 +110,7 @@
         :store-url="route('accounting-rules.store')"
         create-title="Add Accounting Rule"
     >
-        <form method="POST" action="{{ $editingRule ? route('accounting-rules.update', $editingRule) : route('accounting-rules.store') }}" class="hg-form-grid" data-setup-form>
+        <form method="POST" action="{{ $editingRule ? route('accounting-rules.update', $editingRule) : route('accounting-rules.store') }}" class="hg-form-grid" data-setup-form data-accounting-rule-form>
             @csrf
             <input type="hidden" name="_method" value="PUT" data-setup-method @disabled(! $editingRule)>
             <input type="hidden" name="setup_modal" value="accounting-rule">
@@ -125,8 +129,8 @@
             <div class="hg-field">
                 <label for="rule-category">Category</label>
                 <select id="rule-category" name="category" required>
-                    @foreach (['Sales', 'Payment', 'Liability'] as $category)
-                        <option value="{{ $category }}" @selected(old('category', $editingRule?->category ?? 'Sales') === $category)>{{ $category }}</option>
+                    @foreach ($transactionCategories as $categoryOption)
+                        <option value="{{ $categoryOption->value }}" @selected(old('category', $editingRule?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
                     @endforeach
                 </select>
                 @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -134,8 +138,8 @@
             <div class="hg-field">
                 <label for="rule-party-type">Party Type</label>
                 <select id="rule-party-type" name="party_type" required>
-                    @foreach (['Any', 'Customer', 'Supplier', 'Worker', 'Owner', 'Lender'] as $partyType)
-                        <option value="{{ $partyType }}" @selected(old('party_type', $editingRule?->party_type ?? 'Any') === $partyType)>{{ $partyType }}</option>
+                    @foreach ($rulePartyTypes as $partyTypeOption)
+                        <option value="{{ $partyTypeOption->value }}" @selected(old('party_type', $editingRule?->party_type ?? $defaultPartyType) === $partyTypeOption->value)>{{ $partyTypeOption->label }}</option>
                     @endforeach
                 </select>
                 @error('party_type')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -143,8 +147,13 @@
             <div class="hg-field">
                 <label for="rule-debit">Debit Source</label>
                 <select id="rule-debit" name="debit_source" required>
-                    @foreach ($sources as $source => $label)
-                        <option value="{{ $source }}" @selected(old('debit_source', $editingRule?->debit_source ?? AccountingRule::SOURCE_HEAD_ACCOUNT) === $source)>{{ $label }}</option>
+                    @foreach ($accountingSources as $sourceOption)
+                        <option
+                            value="{{ $sourceOption->value }}"
+                            data-requires-money="{{ (bool) ($sourceOption->metadata['requires_money'] ?? false) ? '1' : '0' }}"
+                            data-requires-party="{{ (bool) ($sourceOption->metadata['requires_party'] ?? false) ? '1' : '0' }}"
+                            @selected(old('debit_source', $editingRule?->debit_source ?? $defaultDebitSource) === $sourceOption->value)
+                        >{{ $sourceOption->label }}</option>
                     @endforeach
                 </select>
                 @error('debit_source')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -152,8 +161,13 @@
             <div class="hg-field">
                 <label for="rule-credit">Credit Source</label>
                 <select id="rule-credit" name="credit_source" required>
-                    @foreach ($sources as $source => $label)
-                        <option value="{{ $source }}" @selected(old('credit_source', $editingRule?->credit_source ?? AccountingRule::SOURCE_SELECTED_MONEY) === $source)>{{ $label }}</option>
+                    @foreach ($accountingSources as $sourceOption)
+                        <option
+                            value="{{ $sourceOption->value }}"
+                            data-requires-money="{{ (bool) ($sourceOption->metadata['requires_money'] ?? false) ? '1' : '0' }}"
+                            data-requires-party="{{ (bool) ($sourceOption->metadata['requires_party'] ?? false) ? '1' : '0' }}"
+                            @selected(old('credit_source', $editingRule?->credit_source ?? $defaultCreditSource) === $sourceOption->value)
+                        >{{ $sourceOption->label }}</option>
                     @endforeach
                 </select>
                 @error('credit_source')<small class="hg-field-error">{{ $message }}</small>@enderror

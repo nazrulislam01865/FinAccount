@@ -19,6 +19,7 @@ class ChartOfAccountBalanceService
         $journalMovement = JournalLine::query()
             ->selectRaw('chart_of_account_id, SUM(debit - credit) AS movement')
             ->where('company_id', $companyId)
+            ->whereHas('journalEntry', fn ($query) => $query->where('status', 'posted'))
             ->groupBy('chart_of_account_id')
             ->pluck('movement', 'chart_of_account_id');
 

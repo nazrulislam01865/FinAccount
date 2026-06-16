@@ -21,12 +21,22 @@ class TransactionDeletionService
                 ->findOrFail($transaction->id);
 
             $journalEntry = $lockedTransaction->journalEntry()->first();
+            $journalEntryId = $journalEntry?->id;
 
             if ($journalEntry) {
                 $journalEntry->delete();
             }
 
+            $transactionId = $lockedTransaction->id;
             $lockedTransaction->delete();
+
+            if (Transaction::query()->whereKey($transactionId)->exists()) {
+                throw new \RuntimeException('Transaction database deletion verification failed.');
+            }
+
+            if ($journalEntryId !== null && \App\Models\JournalEntry::query()->whereKey($journalEntryId)->exists()) {
+                throw new \RuntimeException('Journal database deletion verification failed.');
+            }
         }, attempts: 5);
     }
 }
