@@ -9,12 +9,15 @@ use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
+use App\Services\Accounting\SafeDelete\SafeDeleteService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class MasterDataService
 {
+    public function __construct(private readonly SafeDeleteService $safeDeleteService) {}
+
     public const CORE_TRANSACTION_CATEGORIES = ['Sales', 'Payment', 'Liability'];
 
     /** @return array<string, array<string, mixed>> */
@@ -24,7 +27,8 @@ class MasterDataService
             'party-types' => [
                 'group' => AccountingOption::GROUP_PARTY_TYPE,
                 'title' => 'Party Types',
-                'description' => 'Manage the party classifications used in Party Setup and Accounting Rules.',
+                'description' => '',
+                'value_placeholder' => 'Use letters, numbers, spaces, hyphens, or underscores.',
                 'menu_group' => 'Business Masters',
                 'creatable' => true,
                 'editable' => true,
@@ -34,7 +38,8 @@ class MasterDataService
             'money-account-types' => [
                 'group' => AccountingOption::GROUP_MONEY_ACCOUNT_KIND,
                 'title' => 'Money Account Types',
-                'description' => 'Manage the account types shown in Money Account Setup, such as Cash, Bank, or Digital.',
+                'description' => '',
+                'value_placeholder' => 'Use letters, numbers, spaces, hyphens, or underscores.',
                 'menu_group' => 'Business Masters',
                 'creatable' => true,
                 'editable' => true,
@@ -44,7 +49,7 @@ class MasterDataService
             'transaction-categories' => [
                 'group' => AccountingOption::GROUP_TRANSACTION_CATEGORY,
                 'title' => 'Transaction Categories',
-                'description' => 'Add and manage transaction categories used by Accounting Rules, Transaction Heads, Transaction Entry, and Voucher Numbering.',
+                'description' => '',
                 'menu_group' => 'Transaction Setup',
                 'creatable' => true,
                 'editable' => true,
@@ -197,49 +202,8 @@ class MasterDataService
 
     public function delete(string $section, AccountingOption $option): void
     {
-        $configuration = $this->configuration($section);
-        $this->ensureOptionMatchesSection($option, $configuration['group']);
-
-        if (! $configuration['deletable']) {
-            throw ValidationException::withMessages([
-                'master_data' => 'This protected master value cannot be deleted.',
-            ]);
-        }
-
-        if ($this->isCoreTransactionCategory($option)) {
-            throw ValidationException::withMessages([
-                'master_data' => 'Sales, Payment, and Liability are core template categories and cannot be deleted.',
-            ]);
-        }
-
-        $usage = $this->usageFor($option);
-
-        if ($usage['count'] > 0) {
-            throw ValidationException::withMessages([
-                'master_data' => 'Cannot delete this value because it is used by '.$usage['summary'].'.',
-            ]);
-        }
-
-        if ($option->is_active && $this->activeCount($option->option_group) <= 1) {
-            throw ValidationException::withMessages([
-                'master_data' => 'At least one active value must remain.',
-            ]);
-        }
-
-        DB::transaction(function () use ($option): void {
-            if ($option->option_group === AccountingOption::GROUP_PARTY_TYPE) {
-                AccountingOption::query()
-                    ->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE)
-                    ->where('value', $option->value)
-                    ->delete();
-            }
-
-            if ($option->option_group === AccountingOption::GROUP_TRANSACTION_CATEGORY) {
-                DocumentSequence::query()->where('category', $option->value)->delete();
-            }
-
-            $option->delete();
-        }, attempts: 5);
+        $this->assertSafeDeletable($section, $option);
+        $this->safeDeleteService->deleteAccountingOption($option);
     }
 
     /** @return array{count:int,summary:string} */
@@ -256,6 +220,7 @@ class MasterDataService
             AccountingOption::GROUP_TRANSACTION_CATEGORY => $this->nonZeroParts([
                 'accounting rules' => AccountingRule::query()->where('category', $option->value)->count(),
                 'transaction heads' => TransactionHead::query()->where('category', $option->value)->count(),
+                'voucher numbering' => DocumentSequence::query()->where('category', $option->value)->count(),
                 'transactions' => Transaction::query()->where('category', $option->value)->count(),
             ]),
             default => [],
@@ -269,7 +234,10 @@ class MasterDataService
         ];
     }
 
-    /** @param array<string, int> $items @return array<int, array{label:string,count:int}> */
+    /**
+     * @param array<string, int> $items
+     * @return array<int, array{label:string,count:int}>
+     */
     private function nonZeroParts(array $items): array
     {
         $parts = [];
@@ -286,12 +254,16 @@ class MasterDataService
     /** @param array<string, mixed> $data */
     private function createTransactionCategory(array $data): AccountingOption
     {
+        $prefix = strtoupper(trim((string) $data['voucher_prefix']));
+        $this->assertVoucherPrefixAvailable($prefix);
+
         return DB::transaction(fn (): AccountingOption => AccountingOption::query()->create([
             'option_group' => AccountingOption::GROUP_TRANSACTION_CATEGORY,
             'value' => trim((string) $data['value']),
             'label' => trim((string) $data['label']),
             'sort_order' => (int) $data['sort_order'],
             'metadata' => [
+                'voucher_prefix' => $prefix,
                 'money_label' => trim((string) $data['money_label']),
             ],
             'is_active' => (bool) $data['is_active'],
@@ -306,6 +278,18 @@ class MasterDataService
         $isChangingValue = $newValue !== $option->value;
         $isDeactivating = $option->is_active && ! (bool) $data['is_active'];
         $usage = $this->usageFor($option);
+        $newPrefix = strtoupper(trim((string) $data['voucher_prefix']));
+        $currentMetadata = is_array($option->metadata) ? $option->metadata : [];
+        $oldPrefix = strtoupper(trim((string) ($currentMetadata['voucher_prefix'] ?? '')));
+        $isChangingPrefix = $newPrefix !== $oldPrefix;
+
+        $this->assertVoucherPrefixAvailable($newPrefix, $option->id);
+
+        if ($isChangingPrefix && DocumentSequence::query()->where('category', $option->value)->exists()) {
+            throw ValidationException::withMessages([
+                'voucher_prefix' => 'The voucher prefix cannot be changed after Voucher Numbering exists for this category.',
+            ]);
+        }
 
         if ($isCore && $isChangingValue) {
             throw ValidationException::withMessages([
@@ -337,9 +321,10 @@ class MasterDataService
             ]);
         }
 
-        return DB::transaction(function () use ($option, $data, $newValue, $isChangingValue): AccountingOption {
+        return DB::transaction(function () use ($option, $data, $newValue, $newPrefix, $isChangingValue): AccountingOption {
             $oldValue = $option->value;
-            $metadata = $option->metadata ?? [];
+            $metadata = is_array($option->metadata) ? $option->metadata : [];
+            $metadata['voucher_prefix'] = $newPrefix;
             $metadata['money_label'] = trim((string) $data['money_label']);
 
             $option->update([
@@ -358,6 +343,25 @@ class MasterDataService
 
             return $option->refresh();
         }, attempts: 5);
+    }
+
+    private function assertVoucherPrefixAvailable(string $prefix, ?int $ignoreOptionId = null): void
+    {
+        $used = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->when($ignoreOptionId !== null, fn ($query) => $query->where('id', '!=', $ignoreOptionId))
+            ->get(['id', 'metadata'])
+            ->contains(function (AccountingOption $option) use ($prefix): bool {
+                $metadata = is_array($option->metadata) ? $option->metadata : [];
+
+                return strtoupper((string) ($metadata['voucher_prefix'] ?? '')) === $prefix;
+            });
+
+        if ($used) {
+            throw ValidationException::withMessages([
+                'voucher_prefix' => 'This voucher prefix is already assigned to another transaction category.',
+            ]);
+        }
     }
 
     private function syncRulePartyType(?string $oldValue, AccountingOption $partyType): void

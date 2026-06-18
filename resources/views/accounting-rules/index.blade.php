@@ -1,7 +1,8 @@
 @php
     $modalRecordId = (int) old('record_id', 0);
     $editingRule = $modalRecordId > 0 ? $rules->firstWhere('id', $modalRecordId) : null;
-    $reopenModal = old('setup_modal') === 'accounting-rule';
+    $addOnlyMode = (bool) ($addOnlyMode ?? false);
+    $reopenModal = old('setup_modal') === 'accounting-rule' || $addOnlyMode;
     $defaultCategory = $transactionCategories->first()?->value ?? '';
     $defaultPartyType = $rulePartyTypes->first()?->value ?? '';
     $defaultDebitSource = $accountingSources->first(fn ($option) => (bool) ($option->metadata['default_debit'] ?? false))?->value
@@ -14,14 +15,17 @@
         || (bool) ($accountingSources->firstWhere('value', $defaultCreditSource)?->metadata['requires_money'] ?? false);
     $defaultPartyRequired = (bool) ($accountingSources->firstWhere('value', $defaultDebitSource)?->metadata['requires_party'] ?? false)
         || (bool) ($accountingSources->firstWhere('value', $defaultCreditSource)?->metadata['requires_party'] ?? false);
+    $canManage = auth()->user()?->canAccounting('accounting_rules.manage') ?? false;
+    $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
+    $draftRows = \App\Support\VisibleFormDrafts::forBase('accounting-rules');
 @endphp
 
 <x-layouts::accounting title="Accounting Rules">
     <div class="hg-page-header">
         <div>
             <h1>Accounting Rules</h1>
-            <p>Rules decide debit and credit sources. Keep this setup hidden from daily users and available only to admin/accounting setup users.</p>
         </div>
+        @if($canManage)
         <button
             type="button"
             class="hg-btn hg-btn-primary"
@@ -38,10 +42,11 @@
                 'is_active' => '1',
             ]) }}"
         >+ Add Rule</button>
+        @endif
     </div>
 
-    @if ($rules->isEmpty())
-        <div class="hg-empty">No records found.</div>
+    @if ($rules->isEmpty() && $draftRows->isEmpty())
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
@@ -69,12 +74,14 @@
                         <td><span class="hg-badge {{ $rule->is_active ? 'on' : 'off' }}">{{ $rule->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
+                                @if($canManage)
                                 <button
                                     type="button"
                                     class="hg-btn hg-btn-small"
                                     data-setup-open="edit"
                                     data-setup-target="accounting-rule-modal"
                                     data-edit-title="Edit Accounting Rule"
+                                    data-draft-edit-key="accounting-rules.edit.{{ $rule->id }}"
                                     data-update-url="{{ route('accounting-rules.update', $rule) }}"
                                     data-values="{{ json_encode([
                                         'record_id' => $rule->id,
@@ -89,19 +96,41 @@
                                         'is_active' => $rule->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
+                                @endif
+                                @if($canDelete)
                                 <form method="POST" action="{{ route('accounting-rules.destroy', $rule) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                 </form>
+                                @endif
                             </div>
                         </td>
+                    </tr>
+                @endforeach
+
+                @foreach ($draftRows as $draft)
+                    @php
+                        $fields = \App\Support\VisibleFormDrafts::fields($draft);
+                        $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
+                    @endphp
+                    <tr class="hg-table-draft-row">
+                        <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Accounting Rule' }}<br><span class="hg-muted">{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</span></td>
+                        <td><span class="hg-badge {{ strtolower((string) ($fields['category'] ?? '')) }}">{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</span></td>
+                        <td>{{ $sourceLabels[$fields['debit_source'] ?? ''] ?? ($fields['debit_source'] ?? '—') }}</td>
+                        <td>{{ $sourceLabels[$fields['credit_source'] ?? ''] ?? ($fields['credit_source'] ?? '—') }}</td>
+                        <td>{{ \App\Support\VisibleFormDrafts::boolField($draft, 'money_required') ? 'Yes' : 'No' }}</td>
+                        <td>{{ \App\Support\VisibleFormDrafts::boolField($draft, 'party_required') ? ($partyTypeLabels[$fields['party_type'] ?? ''] ?? ($fields['party_type'] ?? 'Any')) : 'No' }}</td>
+                        <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
+                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id'=>'','category'=>$defaultCategory,'party_type'=>$defaultPartyType,'debit_source'=>$defaultDebitSource,'credit_source'=>$defaultCreditSource,'money_required'=>$defaultMoneyRequired?'1':'0','party_required'=>$defaultPartyRequired?'1':'0','is_active'=>'1'])) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
                     </tr>
                 @endforeach
                 </tbody>
             </table>
         </div>
     @endif
+
+    @if($canManage)
 
     <x-accounting.setup-modal
         id="accounting-rule-modal"
@@ -110,7 +139,12 @@
         :store-url="route('accounting-rules.store')"
         create-title="Add Accounting Rule"
     >
-        <form method="POST" action="{{ $editingRule ? route('accounting-rules.update', $editingRule) : route('accounting-rules.store') }}" class="hg-form-grid" data-setup-form data-accounting-rule-form>
+        <form method="POST" action="{{ $editingRule ? route('accounting-rules.update', $editingRule) : route('accounting-rules.store') }}" class="hg-form-grid" data-setup-form data-accounting-rule-form
+            data-draft-form
+            data-draft-defer
+            data-draft-key-base="accounting-rules"
+            data-draft-key="{{ $editingRule ? 'accounting-rules.edit.'.$editingRule->id : 'accounting-rules.create' }}"
+            data-draft-title="Accounting Rule">
             @csrf
             <input type="hidden" name="_method" value="PUT" data-setup-method @disabled(! $editingRule)>
             <input type="hidden" name="setup_modal" value="accounting-rule">
@@ -193,7 +227,9 @@
                     Active
                 </label>
             </div>
-            <div class="hg-field full"><button class="hg-btn hg-btn-primary" type="submit">Save</button></div>
+            <div class="hg-field full"><x-accounting.form-actions submit-label="Save Accounting Rule" /></div>
         </form>
     </x-accounting.setup-modal>
+
+    @endif
 </x-layouts::accounting>

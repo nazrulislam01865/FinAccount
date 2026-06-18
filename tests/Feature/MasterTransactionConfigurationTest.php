@@ -23,6 +23,7 @@ class MasterTransactionConfigurationTest extends TestCase
                 'value' => 'Refund',
                 'label' => 'Refund',
                 'money_label' => 'Refund Through',
+                'voucher_prefix' => 'REF',
                 'sort_order' => 40,
                 'is_active' => 1,
             ])
@@ -34,6 +35,7 @@ class MasterTransactionConfigurationTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame('Refund Through', $category->metadata['money_label']);
+        $this->assertSame('REF', $category->metadata['voucher_prefix']);
         $this->assertTrue($category->is_active);
     }
 
@@ -46,7 +48,7 @@ class MasterTransactionConfigurationTest extends TestCase
             'value' => 'Refund',
             'label' => 'Refund',
             'sort_order' => 40,
-            'metadata' => ['money_label' => 'Refund Through'],
+            'metadata' => ['voucher_prefix' => 'REF', 'money_label' => 'Refund Through'],
             'is_active' => true,
         ]);
 
@@ -108,6 +110,7 @@ class MasterTransactionConfigurationTest extends TestCase
                 'value' => 'Revenue',
                 'label' => 'Sales',
                 'money_label' => 'Receive In',
+                'voucher_prefix' => 'SAL',
                 'sort_order' => 10,
                 'is_active' => 1,
             ])

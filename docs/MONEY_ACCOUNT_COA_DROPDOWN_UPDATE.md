@@ -11,4 +11,4 @@
 
 ## Unchanged
 
-- Existing Money Account CRUD, safe dependency deletion, Master menu, transaction posting, balances, and database persistence behavior remain unchanged.
+- Existing Money Account CRUD, dependency-protected deletion, Master menu, transaction posting, balances, and database persistence behavior remain unchanged.

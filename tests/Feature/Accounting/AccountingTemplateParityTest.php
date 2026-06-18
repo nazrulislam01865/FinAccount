@@ -361,7 +361,7 @@ class AccountingTemplateParityTest extends TestCase
         $journalId = $transaction->journalEntry()->value('id');
 
         $this->actingAs($this->user)
-            ->delete(route('transactions.destroy', $transaction))
+            ->delete(route('transactions.destroy', $transaction), ['confirmed' => true])
             ->assertRedirect(route('transactions.index'));
 
         $this->assertDatabaseMissing('transactions', ['id' => $transaction->id]);
@@ -578,6 +578,27 @@ class AccountingTemplateParityTest extends TestCase
         $this->actingAs($this->user)
             ->get(route('transactions.edit', $foreignTransaction))
             ->assertNotFound();
+    }
+
+
+    public function test_historical_cash_reports_do_not_change_when_rules_are_edited_later(): void
+    {
+        $before = app(BasicStatementService::class)->summary($this->user->company_id);
+        $dashboardBefore = app(DashboardService::class)->summary($this->user->company_id, 'month');
+
+        AccountingRule::query()->where('code', 'R-PAY-01')->update([
+            'credit_source' => AccountingRule::SOURCE_PARTY_PAYABLE,
+        ]);
+        AccountingRule::query()->where('code', 'R-SAL-01')->update([
+            'debit_source' => AccountingRule::SOURCE_PARTY_RECEIVABLE,
+        ]);
+
+        $after = app(BasicStatementService::class)->summary($this->user->company_id);
+        $dashboardAfter = app(DashboardService::class)->summary($this->user->company_id, 'month');
+
+        $this->assertSame($before['sales_collected'], $after['sales_collected']);
+        $this->assertSame($before['payments_made'], $after['payments_made']);
+        $this->assertSame($dashboardBefore['invoiceStatus']->all(), $dashboardAfter['invoiceStatus']->all());
     }
 
     public function test_used_setup_record_can_be_safely_deleted_after_dependency_confirmation(): void

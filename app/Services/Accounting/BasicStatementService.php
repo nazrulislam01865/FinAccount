@@ -2,10 +2,9 @@
 
 namespace App\Services\Accounting;
 
-use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
+use App\Models\JournalLine;
 use App\Models\MoneyAccount;
-use App\Models\Transaction;
 
 class BasicStatementService
 {
@@ -40,20 +39,31 @@ class BasicStatementService
 
         $cash = (float) $moneyAccountIds->sum(fn (int $accountId): float => (float) ($balances[$accountId] ?? 0));
 
-        $salesCollected = (float) Transaction::query()
-            ->where('company_id', $companyId)
-            ->where('status', 'posted')
-            ->where('category', 'Sales')
-            ->whereNotNull('money_account_id')
-            ->sum('amount');
-
-        $paymentsMade = (float) Transaction::query()
+        // Historical cash classifications must come from the journal lines that
+        // were stored at posting time. They must not change if a rule is edited later.
+        $salesCollected = (float) JournalLine::query()
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->join('transactions', 'transactions.id', '=', 'journal_entries.transaction_id')
+            ->where('journal_lines.company_id', $companyId)
+            ->where('journal_entries.company_id', $companyId)
             ->where('transactions.company_id', $companyId)
+            ->where('journal_entries.status', 'posted')
             ->where('transactions.status', 'posted')
-            ->whereNotNull('transactions.money_account_id')
+            ->where('transactions.category', 'Sales')
+            ->whereNotNull('journal_lines.money_account_id')
+            ->sum('journal_lines.debit');
+
+        $paymentsMade = (float) JournalLine::query()
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->join('transactions', 'transactions.id', '=', 'journal_entries.transaction_id')
+            ->where('journal_lines.company_id', $companyId)
+            ->where('journal_entries.company_id', $companyId)
+            ->where('transactions.company_id', $companyId)
+            ->where('journal_entries.status', 'posted')
+            ->where('transactions.status', 'posted')
             ->whereIn('transactions.category', ['Payment', 'Liability'])
-            ->whereHas('transactionHead.accountingRule', fn ($query) => $query->where('credit_source', AccountingRule::SOURCE_SELECTED_MONEY))
-            ->sum('amount');
+            ->whereNotNull('journal_lines.money_account_id')
+            ->sum('journal_lines.credit');
 
         return [
             'income' => $income,

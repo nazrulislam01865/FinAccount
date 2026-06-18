@@ -25,6 +25,10 @@
             <div class="alert-success">{{ session('status') }}</div>
         @endif
 
+        @if (! empty($logoutNotice ?? ''))
+            <div class="auth-lockout" role="alert">{{ $logoutNotice }}</div>
+        @endif
+
         @if ((int) session('landing_admin_lockout_seconds', 0) > 0)
             <div class="auth-lockout" data-login-countdown data-seconds="{{ (int) session('landing_admin_lockout_seconds', 0) }}" aria-live="polite">
                 <strong>Landing Admin login temporarily locked</strong>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StoreMoneyAccountRequest;
 use App\Http\Requests\Accounting\UpdateMoneyAccountRequest;
 use App\Models\MoneyAccount;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 
 class MoneyAccountController extends Controller
 {
-    use PerformsSafeDelete;
+    use PerformsSafeDelete, RedirectsByAccountingAccess;
 
     public function __construct(
         private readonly MoneyAccountService $service,
@@ -25,14 +26,21 @@ class MoneyAccountController extends Controller
 
     public function index(Request $request): View
     {
-        return view('money-accounts.index', $this->service->pageData($request->user()->company_id));
+        $data = $this->service->pageData($request->user()->company_id);
+        $data['addOnlyMode'] = ! $request->user()->canAccounting('money_accounts.view');
+        if ($data['addOnlyMode']) {
+            $data['moneyAccounts'] = collect();
+            $data['balances'] = [];
+        }
+
+        return view('money-accounts.index', $data);
     }
 
     public function store(StoreMoneyAccountRequest $request): RedirectResponse
     {
         $this->service->create($request->validated(), $request->user()->company_id);
 
-        return redirect()->route('money-accounts.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'money_accounts.view', 'money-accounts.index', 'Record saved');
     }
 
     public function update(UpdateMoneyAccountRequest $request, MoneyAccount $moneyAccount): RedirectResponse
@@ -40,7 +48,7 @@ class MoneyAccountController extends Controller
         $this->ensureCompany($request, $moneyAccount);
         $this->service->update($moneyAccount, $request->validated());
 
-        return redirect()->route('money-accounts.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'money_accounts.view', 'money-accounts.index', 'Record saved');
     }
 
     public function destroy(Request $request, MoneyAccount $moneyAccount): JsonResponse|RedirectResponse
@@ -53,7 +61,7 @@ class MoneyAccountController extends Controller
             $plan,
             fn () => $this->safeDeleteService->deleteMoneyAccount($moneyAccount),
             'money-accounts.index',
-            'Money Account deleted permanently. Dependent records were detached and made incomplete.',
+            'Money Account deleted permanently.',
         );
     }
 

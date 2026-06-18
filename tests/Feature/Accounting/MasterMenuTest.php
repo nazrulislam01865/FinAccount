@@ -23,16 +23,35 @@ class MasterMenuTest extends TestCase
         $this->user = User::query()->where('email', 'admin@hisebghor.test')->firstOrFail();
     }
 
-    public function test_master_menu_and_required_submenus_are_visible(): void
+    public function test_exact_accounting_menu_flow_is_visible(): void
     {
         $this->actingAs($this->user)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Master')
-            ->assertSee('Party Types')
-            ->assertSee('Money Account Types')
-            ->assertSee('Transaction Categories')
-            ->assertSee('Voucher Numbering');
+            ->assertSeeInOrder([
+                'Dashboard',
+                'Transactions',
+                'Transaction Entry',
+                'Transaction Register',
+                'Journal Entries',
+                'Reports',
+                'Account Balances',
+                'Party Balances',
+                'Income Statement',
+                'Balance Sheet',
+                'Cash Flow Statement',
+                'Configuration',
+                'Chart of Accounts',
+                'Accounting Rules',
+                'Transaction Heads',
+                'Transaction Categories',
+                'Voucher Numbering',
+                'Party Types',
+                'Parties',
+                'Money Account Types',
+                'Money Accounts',
+                'Other Master Data',
+            ]);
     }
 
     public function test_business_master_pages_are_available(): void
@@ -46,6 +65,11 @@ class MasterMenuTest extends TestCase
         $this->actingAs($this->user)
             ->get(route('master.voucher-sequences.index'))
             ->assertOk();
+
+        $this->actingAs($this->user)
+            ->get(route('master.overview'))
+            ->assertOk()
+            ->assertSee('Other Master Data');
     }
 
     public function test_new_party_type_is_available_to_party_and_rule_dropdowns(): void
@@ -106,6 +130,7 @@ class MasterMenuTest extends TestCase
             ->put(route('master.update', ['transaction-categories', $sales]), [
                 'label' => 'Sales & Revenue',
                 'money_label' => 'Receive Through',
+                'voucher_prefix' => 'SAL',
                 'sort_order' => 15,
             ])
             ->assertRedirect(route('master.index', 'transaction-categories'));

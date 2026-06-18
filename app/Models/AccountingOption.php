@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property array<string, mixed>|null $metadata
+ */
 class AccountingOption extends Model
 {
     public const GROUP_ACCOUNT_TYPE = 'account_type';
@@ -33,11 +36,19 @@ class AccountingOption extends Model
         ];
     }
 
+    /**
+     * @param Builder<AccountingOption> $query
+     * @return Builder<AccountingOption>
+     */
     public function scopeForGroup(Builder $query, string $group): Builder
     {
         return $query->where('option_group', $group);
     }
 
+    /**
+     * @param Builder<AccountingOption> $query
+     * @return Builder<AccountingOption>
+     */
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

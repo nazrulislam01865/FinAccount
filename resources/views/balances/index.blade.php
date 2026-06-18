@@ -2,12 +2,11 @@
     <div class="hg-page-header">
         <div>
             <h1>Balances</h1>
-            <p>Live balances calculated from posted journals and party movement.</p>
         </div>
     </div>
 
     <div class="hg-grid hg-grid-2">
-        <section class="hg-card">
+        <section class="hg-card" id="account-balances">
             <h2 class="hg-card-title">Account Balances</h2>
             @if ($accounts->isEmpty())
                 <div class="hg-empty">No records found.</div>
@@ -20,7 +19,7 @@
                             <tr>
                                 <td>{{ $account->code }} — {{ $account->name }}</td>
                                 <td><span class="hg-badge {{ strtolower($account->type) }}">{{ $account->type }}</span></td>
-                                <td class="right">৳ {{ number_format($accountBalances[$account->id] ?? 0, 2) }}</td>
+                                <td class="right">{{ \App\Support\CompanyContext::money($accountBalances[$account->id] ?? 0) }}</td>
                             </tr>
                         @endforeach
                         </tbody>
@@ -29,7 +28,7 @@
             @endif
         </section>
 
-        <section class="hg-card">
+        <section class="hg-card" id="party-balances">
             <h2 class="hg-card-title">Party Balances</h2>
             @if ($parties->isEmpty())
                 <div class="hg-empty">No records found.</div>
@@ -42,7 +41,7 @@
                             <tr>
                                 <td>{{ $party->code }} — {{ $party->name }}</td>
                                 <td><span class="hg-badge">{{ $partyTypeLabels[$party->type] ?? $party->type }}</span></td>
-                                <td class="right">৳ {{ number_format($partyBalances[$party->id] ?? 0, 2) }}</td>
+                                <td class="right">{{ \App\Support\CompanyContext::money($partyBalances[$party->id] ?? 0) }}</td>
                             </tr>
                         @endforeach
                         </tbody>

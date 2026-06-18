@@ -5,6 +5,12 @@
         ? route('transactions.update', $transaction)
         : route('transactions.store');
     $categoryRepairRequired = $categoryRepairRequired ?? false;
+    $transactionDateContext = $transactionDateContext ?? [
+        'min' => null,
+        'max' => null,
+        'default' => now()->toDateString(),
+        'label' => null,
+    ];
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
@@ -36,7 +42,16 @@
 
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
-            <form method="POST" action="{{ $formAction }}" class="hg-form-grid" data-transaction-form>
+            <form
+                method="POST"
+                action="{{ $formAction }}"
+                enctype="multipart/form-data"
+                class="hg-form-grid"
+                data-transaction-form
+                data-draft-form
+                data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}"
+                data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}"
+            >
                 @csrf
                 @if ($isEditing)
                     @method('PUT')
@@ -52,9 +67,12 @@
                         id="transaction_date"
                         name="transaction_date"
                         type="date"
-                        value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : now()->toDateString()) }}"
+                        value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : $transactionDateContext['default']) }}"
+                        @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif
+                        @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif
                         required
                     >
+                    @if($transactionDateContext['label'])<small class="hg-field-help">Open period: {{ $transactionDateContext['label'] }}</small>@endif
                     @error('transaction_date')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
@@ -117,13 +135,13 @@
                 </div>
 
                 <div class="hg-field">
-                    <label for="amount">Amount (BDT) <span class="hg-required">*</span></label>
+                    <label for="amount">Amount ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
                     <input
                         id="amount"
                         name="amount"
                         type="number"
-                        min="0.01"
-                        step="0.01"
+                        min="{{ \App\Support\CompanyContext::amountStep() }}"
+                        step="{{ \App\Support\CompanyContext::amountStep() }}"
                         value="{{ old('amount', $isEditing ? $transaction->amount : '') }}"
                         required
                     >
@@ -147,13 +165,91 @@
                     @error('description')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
-                <div class="hg-field full">
-                    <div class="hg-actions">
-                        <a class="hg-btn" href="{{ route('transactions.create', ['category' => $category]) }}">Clear</a>
-                        <button class="hg-btn hg-btn-primary" type="submit" data-submit-button>
-                            {{ $isEditing ? 'Update Transaction' : 'Post Transaction' }}
-                        </button>
+                <div class="hg-field full hg-transaction-attachment-field">
+                    <label>Attachment</label>
+                    <div class="hg-attachment-box hg-attachment-desktop">
+                        <div>
+                            <strong>Upload receipt or reference file</strong>
+                            <small>Images, PDF, Word, Excel, CSV or text files. Maximum 10 MB each.</small>
+                        </div>
+                        <label class="hg-btn hg-btn-small" for="transaction_attachments_desktop">Choose Files</label>
+                        <input
+                            id="transaction_attachments_desktop"
+                            class="hg-file-input"
+                            type="file"
+                            name="transaction_attachments[]"
+                            multiple
+                            accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*,application/pdf"
+                            data-attachment-input
+                        >
                     </div>
+
+                    <div class="hg-attachment-box hg-attachment-mobile" data-camera-widget>
+                        <div class="hg-attachment-camera-copy">
+                            <strong>Take receipt photo</strong>
+                            <small>On phone or tablet this section opens the camera directly. The normal file-upload option stays hidden on mobile/tablet.</small>
+                        </div>
+
+                        <div class="hg-camera-actions">
+                            <button class="hg-btn hg-btn-small hg-btn-camera-primary" type="button" data-camera-start>Open Camera</button>
+                            <label class="hg-btn hg-btn-small hg-btn-soft hg-camera-fallback" for="transaction_attachments_mobile" data-camera-fallback hidden>Choose from Gallery</label>
+                        </div>
+
+                        <input
+                            id="transaction_attachments_mobile"
+                            class="hg-file-input"
+                            type="file"
+                            name="transaction_attachments[]"
+                            accept="image/*"
+                            capture="environment"
+                            data-attachment-input
+                            data-camera-file-input
+                        >
+
+                        <div class="hg-camera-panel" data-camera-panel hidden>
+                            <video class="hg-camera-video" data-camera-video playsinline autoplay muted></video>
+                            <canvas data-camera-canvas hidden></canvas>
+                            <div class="hg-camera-preview" data-camera-preview hidden></div>
+                            <div class="hg-camera-controls">
+                                <button class="hg-btn hg-btn-small" type="button" data-camera-capture>Use This Photo</button>
+                                <button class="hg-btn hg-btn-small hg-btn-soft" type="button" data-camera-retake hidden>Retake</button>
+                                <button class="hg-btn hg-btn-small hg-btn-danger" type="button" data-camera-close>Close Camera</button>
+                            </div>
+                        </div>
+
+                        <div class="hg-camera-message" data-camera-message hidden></div>
+                    </div>
+
+                    <div class="hg-attachment-selected" data-attachment-selected hidden></div>
+                    @error('transaction_attachments')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    @error('transaction_attachments.*')<small class="hg-field-error">{{ $message }}</small>@enderror
+
+                    @if($isEditing && $transaction->attachments->isNotEmpty())
+                        <div class="hg-existing-attachments">
+                            <strong>Existing attachments</strong>
+                            <div class="hg-attachment-list">
+                                @foreach($transaction->attachments as $attachment)
+                                    <div class="hg-attachment-pill">
+                                        <a href="{{ route('transactions.attachments.show', [$transaction, $attachment]) }}" target="_blank" rel="noopener">
+                                            {{ $attachment->display_name }}
+                                        </a>
+                                        <span>{{ number_format(($attachment->size_bytes ?: 0) / 1024, 1) }} KB</span>
+                                        <form method="POST" action="{{ route('transactions.attachments.destroy', [$transaction, $attachment]) }}">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="hg-btn-link-danger">Remove</button>
+                                        </form>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="hg-field full">
+                    <x-accounting.form-actions :submit-label="$isEditing ? 'Update Transaction' : 'Post Transaction'">
+                        <button type="button" class="hg-btn" data-draft-clear data-draft-clear-url="{{ route('transactions.create', ['category' => $category]) }}">Clear</button>
+                    </x-accounting.form-actions>
                 </div>
             </form>
         </section>

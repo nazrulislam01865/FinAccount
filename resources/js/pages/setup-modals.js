@@ -47,6 +47,22 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
         form.querySelectorAll('.hg-field-error').forEach((error) => error.remove());
     };
 
+    const setDraftContext = (mode, values = {}) => {
+        const base = form.dataset.draftKeyBase;
+        if (!base) return;
+
+        const recordId = values.record_id || form.elements.namedItem('record_id')?.value || '';
+        const key = mode === 'edit' && recordId
+            ? `${base}.edit.${recordId}`
+            : `${base}.create`;
+        const modeTitle = mode === 'edit' ? `Edit ${form.dataset.draftTitle || 'Record'}` : `Add ${form.dataset.draftTitle || 'Record'}`;
+
+        form.dataset.draftKey = key;
+        form.dispatchEvent(new CustomEvent('hisebghor:draft-context', {
+            detail: { key, title: modeTitle },
+        }));
+    };
+
     const showModal = () => {
         modal.classList.add('show');
         modal.setAttribute('aria-hidden', 'false');
@@ -67,8 +83,10 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
         title.textContent = button.dataset.createTitle || modal.dataset.createTitle;
         if (method) method.disabled = true;
         setModeVisibility('create');
-        applyValues(JSON.parse(button.dataset.defaults || '{}'));
+        const values = JSON.parse(button.dataset.defaults || '{}');
+        applyValues(values);
         showModal();
+        setDraftContext('create', values);
     };
 
     const openEdit = (button) => {
@@ -81,8 +99,10 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
             method.value = 'PUT';
         }
         setModeVisibility('edit');
-        applyValues(JSON.parse(button.dataset.values || '{}'));
+        const values = JSON.parse(button.dataset.values || '{}');
+        applyValues(values);
         showModal();
+        setDraftContext('edit', values);
     };
 
     document.querySelectorAll(`[data-setup-target="${modal.id}"]`).forEach((button) => {

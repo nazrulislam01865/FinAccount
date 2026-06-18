@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StoreTransactionHeadRequest;
 use App\Http\Requests\Accounting\UpdateTransactionHeadRequest;
 use App\Models\TransactionHead;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 
 class TransactionHeadController extends Controller
 {
-    use PerformsSafeDelete;
+    use PerformsSafeDelete, RedirectsByAccountingAccess;
 
     public function __construct(
         private readonly TransactionHeadService $service,
@@ -25,14 +26,20 @@ class TransactionHeadController extends Controller
 
     public function index(Request $request): View
     {
-        return view('transaction-heads.index', $this->service->pageData($request->user()->company_id));
+        $data = $this->service->pageData($request->user()->company_id);
+        $data['addOnlyMode'] = ! $request->user()->canAccounting('transaction_heads.view');
+        if ($data['addOnlyMode']) {
+            $data['transactionHeads'] = collect();
+        }
+
+        return view('transaction-heads.index', $data);
     }
 
     public function store(StoreTransactionHeadRequest $request): RedirectResponse
     {
         $this->service->create($request->validated(), $request->user()->company_id);
 
-        return redirect()->route('transaction-heads.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'transaction_heads.view', 'transaction-heads.index', 'Record saved');
     }
 
     public function update(UpdateTransactionHeadRequest $request, TransactionHead $transactionHead): RedirectResponse
@@ -40,7 +47,7 @@ class TransactionHeadController extends Controller
         $this->ensureCompany($request, $transactionHead);
         $this->service->update($transactionHead, $request->validated());
 
-        return redirect()->route('transaction-heads.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'transaction_heads.view', 'transaction-heads.index', 'Record saved');
     }
 
     public function destroy(Request $request, TransactionHead $transactionHead): JsonResponse|RedirectResponse
@@ -53,7 +60,7 @@ class TransactionHeadController extends Controller
             $plan,
             fn () => $this->safeDeleteService->deleteTransactionHead($transactionHead),
             'transaction-heads.index',
-            'Transaction Head deleted permanently. Dependent transactions were detached and made incomplete.',
+            'Transaction Head deleted permanently.',
         );
     }
 

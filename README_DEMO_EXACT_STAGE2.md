@@ -39,7 +39,7 @@ No parent account, level, group, ledger, posting permission, description, roll-u
 
 ## Safe deletion behavior
 
-As in the demo, a COA account cannot be deleted if it is already used by a money account, party, transaction head, or journal line.
+Safe delete is preserved: deleting a used COA first shows its dependencies, requires explicit confirmation, clears dependent links, deactivates affected setup records, and marks affected transactions/journals incomplete for repair.
 
 ## Routes
 

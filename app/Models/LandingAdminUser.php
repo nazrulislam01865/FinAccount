@@ -22,6 +22,7 @@ class LandingAdminUser extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'active_session_id',
     ];
 
     protected function casts(): array

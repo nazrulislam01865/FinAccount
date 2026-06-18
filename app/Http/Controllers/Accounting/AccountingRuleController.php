@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StoreAccountingRuleRequest;
 use App\Http\Requests\Accounting\UpdateAccountingRuleRequest;
 use App\Models\AccountingRule;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 
 class AccountingRuleController extends Controller
 {
-    use PerformsSafeDelete;
+    use PerformsSafeDelete, RedirectsByAccountingAccess;
 
     public function __construct(
         private readonly AccountingRuleService $service,
@@ -25,17 +26,20 @@ class AccountingRuleController extends Controller
 
     public function index(Request $request): View
     {
-        return view(
-            'accounting-rules.index',
-            $this->service->pageData($request->user()->company_id),
-        );
+        $data = $this->service->pageData($request->user()->company_id);
+        $data['addOnlyMode'] = ! $request->user()->canAccounting('accounting_rules.view');
+        if ($data['addOnlyMode']) {
+            $data['rules'] = collect();
+        }
+
+        return view('accounting-rules.index', $data);
     }
 
     public function store(StoreAccountingRuleRequest $request): RedirectResponse
     {
         $this->service->create($request->validated(), $request->user()->company_id);
 
-        return redirect()->route('accounting-rules.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'accounting_rules.view', 'accounting-rules.index', 'Record saved');
     }
 
     public function update(UpdateAccountingRuleRequest $request, AccountingRule $accountingRule): RedirectResponse
@@ -43,7 +47,7 @@ class AccountingRuleController extends Controller
         $this->ensureCompany($request, $accountingRule);
         $this->service->update($accountingRule, $request->validated());
 
-        return redirect()->route('accounting-rules.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'accounting_rules.view', 'accounting-rules.index', 'Record saved');
     }
 
     public function destroy(Request $request, AccountingRule $accountingRule): JsonResponse|RedirectResponse
@@ -56,7 +60,7 @@ class AccountingRuleController extends Controller
             $plan,
             fn () => $this->safeDeleteService->deleteAccountingRule($accountingRule),
             'accounting-rules.index',
-            'Accounting Rule deleted permanently. Dependent transaction heads were detached and made inactive.',
+            'Accounting Rule deleted permanently.',
         );
     }
 

@@ -1,23 +1,28 @@
 @php
-    $reopenModal = $errors->any() && old('coa_modal') === '1';
+    $addOnlyMode = (bool) ($addOnlyMode ?? false);
+    $reopenModal = ($errors->any() && old('coa_modal') === '1') || $addOnlyMode;
     $editingId = old('account_id');
     $editingAccount = $modalAccount;
     $defaultAccountType = $accountTypes->first()?->value ?? '';
     $defaultNormalBalance = $normalBalances->first()?->value ?? '';
+    $canManage = auth()->user()?->canAccounting('chart_of_accounts.manage') ?? false;
+    $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
+    $draftRows = \App\Support\VisibleFormDrafts::forBase('chart-of-accounts');
 @endphp
 
 <x-layouts::accounting title="Chart of Accounts">
     <div class="hg-page-header">
         <div>
             <h1>Chart of Accounts</h1>
-            <p>Minimum COA required to post transactions and generate balances.</p>
         </div>
+        @if($canManage)
         <button
             type="button"
             class="hg-btn hg-btn-primary"
             data-coa-open="create"
             data-store-url="{{ route('chart-of-accounts.store') }}"
         >+ Add COA</button>
+        @endif
     </div>
 
     <form method="GET" action="{{ route('chart-of-accounts.index') }}" class="hg-toolbar">
@@ -31,8 +36,8 @@
         >
     </form>
 
-    @if ($accounts->isEmpty())
-        <div class="hg-empty">No records found.</div>
+    @if ($accounts->isEmpty() && $draftRows->isEmpty())
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
@@ -60,6 +65,7 @@
                             </td>
                             <td>
                                 <div class="hg-actions">
+                                    @if($canManage)
                                     <button
                                         type="button"
                                         class="hg-btn hg-btn-small"
@@ -70,8 +76,12 @@
                                         data-type="{{ $account->type }}"
                                         data-normal="{{ $account->normal_balance }}"
                                         data-active="{{ $account->is_active ? '1' : '0' }}"
+                                        data-draft-edit-key="chart-of-accounts.edit.{{ $account->id }}"
                                         data-update-url="{{ route('chart-of-accounts.update', $account) }}"
                                     >Edit</button>
+                                    @endif
+
+                                    @if($canDelete)
 
                                     <form
                                         method="POST"
@@ -81,6 +91,38 @@
                                         @method('DELETE')
                                         <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                     </form>
+
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @endforeach
+
+                    @foreach ($draftRows as $draft)
+                        @php
+                            $fields = \App\Support\VisibleFormDrafts::fields($draft);
+                            $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
+                        @endphp
+                        <tr class="hg-table-draft-row">
+                            <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br><small>{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</small></td>
+                            <td>{{ $fields['name'] ?? 'Draft Chart of Account' }}</td>
+                            <td><span class="hg-badge {{ strtolower((string) ($fields['type'] ?? '')) }}">{{ $fields['type'] ?? '—' }}</span></td>
+                            <td>{{ $fields['normal_balance'] ?? '—' }}</td>
+                            <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
+                            <td>
+                                <div class="hg-actions">
+                                    @if($canManage)
+                                        @if($isEditDraft)
+                                            <button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>
+                                        @else
+                                            <button type="button" class="hg-btn hg-btn-small" data-coa-open="create" data-store-url="{{ route('chart-of-accounts.store') }}">Continue</button>
+                                        @endif
+                                    @endif
+                                    <form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -89,6 +131,8 @@
             </table>
         </div>
     @endif
+
+    @if($canManage)
 
     <div
         class="hg-modal {{ $reopenModal ? 'show' : '' }}"
@@ -110,6 +154,11 @@
                     method="POST"
                     action="{{ $editingAccount ? route('chart-of-accounts.update', $editingAccount) : route('chart-of-accounts.store') }}"
                     class="hg-form-grid"
+                    data-draft-form
+                    data-draft-defer
+                    data-draft-key-base="chart-of-accounts"
+                    data-draft-key="{{ $editingAccount ? 'chart-of-accounts.edit.'.$editingAccount->id : 'chart-of-accounts.create' }}"
+                    data-draft-title="Chart of Account"
                 >
                     @csrf
                     <input id="coa-method" type="hidden" name="_method" value="PUT" @disabled(! $editingAccount)>
@@ -163,10 +212,12 @@
                     </div>
 
                     <div class="hg-field full">
-                        <button class="hg-btn hg-btn-primary" type="submit">Save</button>
+                        <x-accounting.form-actions submit-label="Save Account" />
                     </div>
                 </form>
             </div>
         </div>
     </div>
+
+    @endif
 </x-layouts::accounting>

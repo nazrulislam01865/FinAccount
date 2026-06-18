@@ -8,6 +8,16 @@
 
         <x-auth-session-status class="hg-auth-status" :status="session('status')" />
 
+        @if (! empty($logoutNotice ?? ''))
+            <div class="hg-auth-error-summary" role="alert">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 8v4m0 4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M10.3 3.85 2.8 17a2 2 0 0 0 1.73 3h14.94a2 2 0 0 0 1.73-3L13.7 3.85a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                </svg>
+                <span>{{ $logoutNotice }}</span>
+            </div>
+        @endif
+
         @if ($errors->any())
             <div class="hg-auth-error-summary" role="alert">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -17,8 +27,6 @@
                 <span>{{ __('We could not sign you in. Please check your details and try again.') }}</span>
             </div>
         @endif
-
-        <x-passkey-verify />
 
         <form method="POST" action="{{ route('login.store') }}" class="hg-login-form">
             @csrf

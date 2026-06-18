@@ -49,7 +49,11 @@ if (safeDeleteModal) {
         }));
 
         if (!response.ok) {
-            throw new Error(payload.message || payload.errors?.master_data?.[0] || 'Deletion could not be completed.');
+            const firstValidationError = Object.values(payload.errors || {})
+                .flat()
+                .find((message) => typeof message === 'string' && message.length > 0);
+
+            throw new Error(payload.message || firstValidationError || 'Deletion could not be completed.');
         }
 
         return payload;
@@ -88,6 +92,9 @@ if (safeDeleteModal) {
             event.preventDefault();
             activeForm = form;
             errorBox.hidden = true;
+            const trigger = event.submitter || form.querySelector('button[type="submit"]');
+            const execution = window.HisebGhorExecution;
+            if (execution && !execution.begin(trigger)) return;
 
             try {
                 const payload = await submitRequest(form, { preview: '1', confirmed: '0' });
@@ -96,6 +103,8 @@ if (safeDeleteModal) {
             } catch (error) {
                 window.alert(error.message);
                 activeForm = null;
+            } finally {
+                execution?.end();
             }
         });
     });
@@ -103,8 +112,8 @@ if (safeDeleteModal) {
     confirmButton.addEventListener('click', async () => {
         if (!activeForm) return;
 
-        confirmButton.disabled = true;
-        confirmButton.textContent = 'Deleting...';
+        const execution = window.HisebGhorExecution;
+        if (execution && !execution.begin(confirmButton)) return;
         errorBox.hidden = true;
 
         try {
@@ -113,8 +122,7 @@ if (safeDeleteModal) {
         } catch (error) {
             errorBox.textContent = error.message;
             errorBox.hidden = false;
-            confirmButton.disabled = false;
-            confirmButton.textContent = 'Yes, delete permanently';
+            execution?.end();
         }
     });
 

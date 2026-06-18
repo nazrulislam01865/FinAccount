@@ -4,6 +4,9 @@
     @include('partials.head')
 </head>
 <body class="hg-auth-body">
+    @php
+        $brand = \App\Support\HisebGhorBrand::data();
+    @endphp
     <main class="hg-auth-page">
         <section class="hg-auth-shell" aria-label="HisebGhor authentication">
             <aside class="hg-auth-intro">
@@ -11,9 +14,13 @@
                 <div class="hg-auth-decoration hg-auth-decoration-two" aria-hidden="true"></div>
 
                 <a href="{{ route('home') }}" class="hg-auth-brand" wire:navigate>
-                    <span class="hg-auth-brand-mark" aria-hidden="true">HG</span>
+                    @if(!empty($brand['logo_url']))
+                        <span class="hg-auth-brand-mark hg-auth-brand-image"><img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] }} logo"></span>
+                    @else
+                        <span class="hg-auth-brand-mark" aria-hidden="true">HG</span>
+                    @endif
                     <span class="hg-auth-brand-copy">
-                        <strong>HisebGhor</strong>
+                        <strong>{{ $brand['name'] ?? 'HisebGhor' }}</strong>
                         <small>Smart Accounting Workspace</small>
                     </span>
                 </a>
@@ -21,11 +28,6 @@
                 <div class="hg-auth-intro-content">
                     <span class="hg-auth-eyebrow">Accounting made understandable</span>
                     <h1>Run daily accounts with clarity and confidence.</h1>
-                    <p>
-                        Record sales, payments and liabilities while HisebGhor keeps the
-                        accounting structure and journal flow organised for you.
-                    </p>
-
                     <div class="hg-auth-benefits" aria-label="HisebGhor benefits">
                         <div class="hg-auth-benefit">
                             <span class="hg-auth-benefit-icon" aria-hidden="true">
@@ -63,9 +65,13 @@
             <section class="hg-auth-panel">
                 <div class="hg-auth-mobile-brand">
                     <a href="{{ route('home') }}" class="hg-auth-brand" wire:navigate>
+                        @if(!empty($brand['logo_url']))
+                        <span class="hg-auth-brand-mark hg-auth-brand-image"><img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] }} logo"></span>
+                    @else
                         <span class="hg-auth-brand-mark" aria-hidden="true">HG</span>
+                    @endif
                         <span class="hg-auth-brand-copy">
-                            <strong>HisebGhor</strong>
+                            <strong>{{ $brand['name'] ?? 'HisebGhor' }}</strong>
                             <small>Smart Accounting Workspace</small>
                         </span>
                     </a>
@@ -75,9 +81,7 @@
                     {{ $slot }}
                 </div>
 
-                <p class="hg-auth-copyright">
-                    &copy; {{ now()->year }} HisebGhor. Secure accounting workspace.
-                </p>
+                <x-accounting.footer :brand="$brand" class="hg-auth-system-footer" />
             </section>
         </section>
     </main>

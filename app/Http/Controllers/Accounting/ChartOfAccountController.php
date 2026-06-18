@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StoreChartOfAccountRequest;
 use App\Http\Requests\Accounting\UpdateChartOfAccountRequest;
 use App\Models\ChartOfAccount;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 
 class ChartOfAccountController extends Controller
 {
-    use PerformsSafeDelete;
+    use PerformsSafeDelete, RedirectsByAccountingAccess;
 
     public function __construct(
         private readonly ChartOfAccountService $service,
@@ -28,18 +29,26 @@ class ChartOfAccountController extends Controller
         $search = trim($request->string('search')->toString());
         $oldAccountId = (int) $request->old('account_id', '0');
 
-        return view('chart-of-accounts.index', $this->service->pageData(
+        $data = $this->service->pageData(
             $request->user()->company_id,
             $search,
             $oldAccountId,
-        ));
+        );
+        $data['addOnlyMode'] = ! $request->user()->canAccounting('chart_of_accounts.view');
+        if ($data['addOnlyMode']) {
+            $data['accounts'] = collect();
+            $data['balances'] = [];
+            $data['modalAccount'] = null;
+        }
+
+        return view('chart-of-accounts.index', $data);
     }
 
     public function store(StoreChartOfAccountRequest $request): RedirectResponse
     {
         $this->service->create($request->validated(), $request->user()->company_id);
 
-        return redirect()->route('chart-of-accounts.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'chart_of_accounts.view', 'chart-of-accounts.index', 'Record saved');
     }
 
     public function update(
@@ -49,7 +58,7 @@ class ChartOfAccountController extends Controller
         $this->ensureCompany($request, $chartOfAccount);
         $this->service->update($chartOfAccount, $request->validated());
 
-        return redirect()->route('chart-of-accounts.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'chart_of_accounts.view', 'chart-of-accounts.index', 'Record saved');
     }
 
     public function destroy(Request $request, ChartOfAccount $chartOfAccount): JsonResponse|RedirectResponse
@@ -62,7 +71,7 @@ class ChartOfAccountController extends Controller
             $plan,
             fn () => $this->safeDeleteService->deleteChartOfAccount($chartOfAccount),
             'chart-of-accounts.index',
-            'Chart of Account deleted permanently. Dependent records were detached and made inactive or incomplete.',
+            'Chart of Account deleted permanently.',
         );
     }
 

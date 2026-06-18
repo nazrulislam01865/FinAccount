@@ -1,6 +1,13 @@
 <?php
 
+use App\Http\Middleware\ApplyCompanyTimeZone;
+use App\Http\Middleware\CaptureAccountingActivityNotifications;
+use App\Http\Middleware\ClearSavedFormDraft;
+use App\Http\Middleware\EnsureAccountingAccountActive;
+use App\Http\Middleware\EnsureAccountingPermission;
 use App\Http\Middleware\EnsureLandingAdminAuthenticated;
+use App\Http\Middleware\EnsureMasterDataPermission;
+use App\Http\Middleware\EnsureSystemAdmin;
 use App\Http\Middleware\SessionTimeout;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -15,8 +22,15 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
+            'account.active' => EnsureAccountingAccountActive::class,
+            'accounting.activity.notifications' => CaptureAccountingActivityNotifications::class,
+            'company.context' => ApplyCompanyTimeZone::class,
+            'form.draft.cleanup' => ClearSavedFormDraft::class,
+            'accounting.permission' => EnsureAccountingPermission::class,
+            'master.permission' => EnsureMasterDataPermission::class,
             'landing.admin.auth' => EnsureLandingAdminAuthenticated::class,
             'session.timeout' => SessionTimeout::class,
+            'system.admin' => EnsureSystemAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -25,7 +25,10 @@ class DashboardController extends Controller
 
     public function index(Request $request): View
     {
-        return view('dashboard.index', $this->dashboardService->summary($request->user()->company_id));
+        return view('dashboard.index', $this->dashboardService->summary(
+            $request->user()->company_id,
+            $request->string('period')->toString(),
+        ));
     }
 
     public function resetDemo(Request $request): RedirectResponse

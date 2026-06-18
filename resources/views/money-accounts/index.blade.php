@@ -1,8 +1,12 @@
 @php
     $modalRecordId = (int) old('record_id', 0);
     $editingAccount = $modalRecordId > 0 ? $moneyAccounts->firstWhere('id', $modalRecordId) : null;
-    $reopenModal = old('setup_modal') === 'money-account';
+    $addOnlyMode = (bool) ($addOnlyMode ?? false);
+    $reopenModal = old('setup_modal') === 'money-account' || $addOnlyMode;
     $defaultMoneyKind = $moneyKinds->first()?->value ?? '';
+    $canManage = auth()->user()?->canAccounting('money_accounts.manage') ?? false;
+    $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
+    $draftRows = \App\Support\VisibleFormDrafts::forBase('money-accounts');
 @endphp
 
 <x-layouts::accounting title="Money Accounts">
@@ -10,6 +14,7 @@
         <div>
             <h1>Money Accounts</h1>
         </div>
+        @if($canManage)
         <button
             type="button"
             class="hg-btn hg-btn-primary"
@@ -17,10 +22,11 @@
             data-setup-target="money-account-modal"
             data-defaults="{{ json_encode(['record_id' => '', 'kind' => $defaultMoneyKind, 'opening_balance' => '0', 'is_active' => '1']) }}"
         >+ Add Money Account</button>
+        @endif
     </div>
 
-    @if ($moneyAccounts->isEmpty())
-        <div class="hg-empty">No records found.</div>
+    @if ($moneyAccounts->isEmpty() && $draftRows->isEmpty())
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
@@ -39,17 +45,19 @@
                     <tr>
                         <td><strong>{{ $moneyAccount->name }}</strong><br><span class="hg-muted">{{ $moneyAccount->kind ? ($moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind) : 'Relationship removed' }}</span></td>
                         <td>{{ $moneyAccount->chartOfAccount ? ($moneyAccount->chartOfAccount->code.' — '.$moneyAccount->chartOfAccount->name) : 'Relationship removed' }}</td>
-                        <td class="right">৳ {{ number_format((float) $moneyAccount->opening_balance, 2) }}</td>
-                        <td class="right">৳ {{ number_format($balances[$moneyAccount->id] ?? 0, 2) }}</td>
+                        <td class="right">{{ \App\Support\CompanyContext::money((float) $moneyAccount->opening_balance) }}</td>
+                        <td class="right">{{ \App\Support\CompanyContext::money($balances[$moneyAccount->id] ?? 0) }}</td>
                         <td><span class="hg-badge {{ $moneyAccount->is_active ? 'on' : 'off' }}">{{ $moneyAccount->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
+                                @if($canManage)
                                 <button
                                     type="button"
                                     class="hg-btn hg-btn-small"
                                     data-setup-open="edit"
                                     data-setup-target="money-account-modal"
                                     data-edit-title="Edit Money Account"
+                                    data-draft-edit-key="money-accounts.edit.{{ $moneyAccount->id }}"
                                     data-update-url="{{ route('money-accounts.update', $moneyAccount) }}"
                                     data-values="{{ json_encode([
                                         'record_id' => $moneyAccount->id,
@@ -60,11 +68,40 @@
                                         'is_active' => $moneyAccount->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
+                                @endif
+                                @if($canDelete)
                                 <form method="POST" action="{{ route('money-accounts.destroy', $moneyAccount) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                 </form>
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                @endforeach
+
+                @foreach ($draftRows as $draft)
+                    @php
+                        $fields = \App\Support\VisibleFormDrafts::fields($draft);
+                        $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
+                    @endphp
+                    <tr class="hg-table-draft-row">
+                        <td><strong>{{ $fields['name'] ?? 'Draft Money Account' }}</strong><br><span class="hg-muted">{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</span></td>
+                        <td>{{ filled($fields['chart_of_account_id'] ?? null) ? 'COA ID #'.$fields['chart_of_account_id'] : 'Not selected' }}</td>
+                        <td class="right">{{ \App\Support\CompanyContext::money((float) ($fields['opening_balance'] ?? 0)) }}</td>
+                        <td class="right">—</td>
+                        <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
+                        <td>
+                            <div class="hg-actions">
+                                @if($canManage)
+                                    @if($isEditDraft)
+                                        <button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>
+                                    @else
+                                        <button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="money-account-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id' => '', 'kind' => $defaultMoneyKind, 'opening_balance' => '0', 'is_active' => '1'])) }}">Continue</button>
+                                    @endif
+                                @endif
+                                <form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form>
                             </div>
                         </td>
                     </tr>
@@ -73,6 +110,8 @@
             </table>
         </div>
     @endif
+
+    @if($canManage)
 
     <x-accounting.setup-modal
         id="money-account-modal"
@@ -86,6 +125,11 @@
             action="{{ $editingAccount ? route('money-accounts.update', $editingAccount) : route('money-accounts.store') }}"
             class="hg-form-grid"
             data-setup-form
+            data-draft-form
+            data-draft-defer
+            data-draft-key-base="money-accounts"
+            data-draft-key="{{ $editingAccount ? 'money-accounts.edit.'.$editingAccount->id : 'money-accounts.create' }}"
+            data-draft-title="Money Account"
         >
             @csrf
             <input type="hidden" name="_method" value="PUT" data-setup-method @disabled(! $editingAccount)>
@@ -123,7 +167,7 @@
             </div>
             <div class="hg-field">
                 <label for="money-opening">Opening Balance</label>
-                <input id="money-opening" type="number" step="0.01" name="opening_balance" value="{{ old('opening_balance', $editingAccount?->opening_balance ?? 0) }}">
+                <input id="money-opening" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" name="opening_balance" value="{{ old('opening_balance', $editingAccount?->opening_balance ?? 0) }}">
                 @error('opening_balance')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
             <div class="hg-field full">
@@ -133,7 +177,9 @@
                     Active
                 </label>
             </div>
-            <div class="hg-field full"><button class="hg-btn hg-btn-primary" type="submit">Save</button></div>
+            <div class="hg-field full"><x-accounting.form-actions submit-label="Save Money Account" /></div>
         </form>
     </x-accounting.setup-modal>
+
+    @endif
 </x-layouts::accounting>

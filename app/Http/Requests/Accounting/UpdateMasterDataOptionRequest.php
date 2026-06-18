@@ -11,7 +11,14 @@ class UpdateMasterDataOptionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        $permission = match ((string) $this->route('section')) {
+            'party-types' => 'party_types.manage',
+            'money-account-types' => 'money_account_types.manage',
+            'transaction-categories' => 'transaction_categories.manage',
+            default => null,
+        };
+
+        return $permission !== null && ($this->user()?->canAccounting($permission) ?? false);
     }
 
     public function rules(): array
@@ -44,6 +51,7 @@ class UpdateMasterDataOptionRequest extends FormRequest
 
         if ($isTransactionCategory) {
             $rules['money_label'] = ['required', 'string', 'max:120'];
+            $rules['voucher_prefix'] = ['required', 'string', 'min:2', 'max:10', 'regex:/^[A-Z0-9]+$/'];
         }
 
         return $rules;
@@ -65,6 +73,12 @@ class UpdateMasterDataOptionRequest extends FormRequest
             $payload['money_label'] = trim((string) $this->input('money_label'));
         } elseif ($option?->option_group === AccountingOption::GROUP_TRANSACTION_CATEGORY) {
             $payload['money_label'] = trim((string) ($option->metadata['money_label'] ?? 'Money Account'));
+        }
+
+        if ($this->has('voucher_prefix')) {
+            $payload['voucher_prefix'] = strtoupper(trim((string) $this->input('voucher_prefix')));
+        } elseif ($option?->option_group === AccountingOption::GROUP_TRANSACTION_CATEGORY) {
+            $payload['voucher_prefix'] = strtoupper(trim((string) ($option->metadata['voucher_prefix'] ?? '')));
         }
 
         $this->merge($payload);

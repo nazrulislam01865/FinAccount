@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StorePartyRequest;
 use App\Http\Requests\Accounting\UpdatePartyRequest;
 use App\Models\Party;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 
 class PartyController extends Controller
 {
-    use PerformsSafeDelete;
+    use PerformsSafeDelete, RedirectsByAccountingAccess;
 
     public function __construct(
         private readonly PartyService $service,
@@ -25,14 +26,21 @@ class PartyController extends Controller
 
     public function index(Request $request): View
     {
-        return view('parties.index', $this->service->pageData($request->user()->company_id));
+        $data = $this->service->pageData($request->user()->company_id);
+        $data['addOnlyMode'] = ! $request->user()->canAccounting('parties.view');
+        if ($data['addOnlyMode']) {
+            $data['parties'] = collect();
+            $data['balances'] = [];
+        }
+
+        return view('parties.index', $data);
     }
 
     public function store(StorePartyRequest $request): RedirectResponse
     {
         $this->service->create($request->validated(), $request->user()->company_id);
 
-        return redirect()->route('parties.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'parties.view', 'parties.index', 'Record saved');
     }
 
     public function update(UpdatePartyRequest $request, Party $party): RedirectResponse
@@ -40,7 +48,7 @@ class PartyController extends Controller
         $this->ensureCompany($request, $party);
         $this->service->update($party, $request->validated());
 
-        return redirect()->route('parties.index')->with('success', 'Record saved');
+        return $this->redirectAfterAccountingSave($request, 'parties.view', 'parties.index', 'Record saved');
     }
 
     public function destroy(Request $request, Party $party): JsonResponse|RedirectResponse
@@ -53,7 +61,7 @@ class PartyController extends Controller
             $plan,
             fn () => $this->safeDeleteService->deleteParty($party),
             'parties.index',
-            'Party deleted permanently. Dependent records were detached and made incomplete.',
+            'Party deleted permanently.',
         );
     }
 

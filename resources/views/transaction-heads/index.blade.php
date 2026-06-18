@@ -1,16 +1,20 @@
 @php
     $modalRecordId = (int) old('record_id', 0);
     $editingHead = $modalRecordId > 0 ? $transactionHeads->firstWhere('id', $modalRecordId) : null;
-    $reopenModal = old('setup_modal') === 'transaction-head';
+    $addOnlyMode = (bool) ($addOnlyMode ?? false);
+    $reopenModal = old('setup_modal') === 'transaction-head' || $addOnlyMode;
     $defaultCategory = $transactionCategories->first()?->value ?? '';
+    $canManage = auth()->user()?->canAccounting('transaction_heads.manage') ?? false;
+    $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
+    $draftRows = \App\Support\VisibleFormDrafts::forBase('transaction-heads');
 @endphp
 
 <x-layouts::accounting title="Transaction Heads">
     <div class="hg-page-header">
         <div>
             <h1>Transaction Heads</h1>
-            <p>Simple business activities shown to users. Each head is linked to an accounting rule and a posting COA.</p>
         </div>
+        @if($canManage)
         <button
             type="button"
             class="hg-btn hg-btn-primary"
@@ -18,10 +22,11 @@
             data-setup-target="transaction-head-modal"
             data-defaults="{{ json_encode(['record_id' => '', 'category' => $defaultCategory, 'is_active' => '1']) }}"
         >+ Add Transaction Head</button>
+        @endif
     </div>
 
-    @if ($transactionHeads->isEmpty())
-        <div class="hg-empty">No records found.</div>
+    @if ($transactionHeads->isEmpty() && $draftRows->isEmpty())
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
@@ -45,12 +50,14 @@
                         <td><span class="hg-badge {{ $head->is_active ? 'on' : 'off' }}">{{ $head->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
+                                @if($canManage)
                                 <button
                                     type="button"
                                     class="hg-btn hg-btn-small"
                                     data-setup-open="edit"
                                     data-setup-target="transaction-head-modal"
                                     data-edit-title="Edit Transaction Head"
+                                    data-draft-edit-key="transaction-heads.edit.{{ $head->id }}"
                                     data-update-url="{{ route('transaction-heads.update', $head) }}"
                                     data-values="{{ json_encode([
                                         'record_id' => $head->id,
@@ -62,19 +69,39 @@
                                         'is_active' => $head->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
+                                @endif
+                                @if($canDelete)
                                 <form method="POST" action="{{ route('transaction-heads.destroy', $head) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                 </form>
+                                @endif
                             </div>
                         </td>
+                    </tr>
+                @endforeach
+
+                @foreach ($draftRows as $draft)
+                    @php
+                        $fields = \App\Support\VisibleFormDrafts::fields($draft);
+                        $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
+                    @endphp
+                    <tr class="hg-table-draft-row">
+                        <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Transaction Head' }}<br><span class="hg-muted">{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</span></td>
+                        <td><span class="hg-badge {{ strtolower((string) ($fields['category'] ?? '')) }}">{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</span></td>
+                        <td>{{ filled($fields['accounting_rule_id'] ?? null) ? 'Rule ID #'.$fields['accounting_rule_id'] : 'Not selected' }}</td>
+                        <td>{{ filled($fields['posting_account_id'] ?? null) ? 'COA ID #'.$fields['posting_account_id'] : 'Not selected' }}</td>
+                        <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
+                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="transaction-head-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id'=>'','category'=>$defaultCategory,'is_active'=>'1'])) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
                     </tr>
                 @endforeach
                 </tbody>
             </table>
         </div>
     @endif
+
+    @if($canManage)
 
     <x-accounting.setup-modal
         id="transaction-head-modal"
@@ -83,7 +110,12 @@
         :store-url="route('transaction-heads.store')"
         create-title="Add Transaction Head"
     >
-        <form method="POST" action="{{ $editingHead ? route('transaction-heads.update', $editingHead) : route('transaction-heads.store') }}" class="hg-form-grid" data-setup-form>
+        <form method="POST" action="{{ $editingHead ? route('transaction-heads.update', $editingHead) : route('transaction-heads.store') }}" class="hg-form-grid" data-setup-form
+            data-draft-form
+            data-draft-defer
+            data-draft-key-base="transaction-heads"
+            data-draft-key="{{ $editingHead ? 'transaction-heads.edit.'.$editingHead->id : 'transaction-heads.create' }}"
+            data-draft-title="Transaction Head">
             @csrf
             <input type="hidden" name="_method" value="PUT" data-setup-method @disabled(! $editingHead)>
             <input type="hidden" name="setup_modal" value="transaction-head">
@@ -139,7 +171,9 @@
                     Active
                 </label>
             </div>
-            <div class="hg-field full"><button class="hg-btn hg-btn-primary" type="submit">Save</button></div>
+            <div class="hg-field full"><x-accounting.form-actions submit-label="Save Transaction Head" /></div>
         </form>
     </x-accounting.setup-modal>
+
+    @endif
 </x-layouts::accounting>

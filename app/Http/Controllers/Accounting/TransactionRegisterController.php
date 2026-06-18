@@ -10,8 +10,10 @@ use App\Models\Transaction;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\TransactionDeletionService;
 use App\Services\Accounting\TransactionEntryOptionService;
+use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Accounting\TransactionUpdateService;
 use App\Services\Accounting\SafeDelete\SafeDeleteService;
+use App\Services\Company\CompanyAccountingPeriodService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +31,8 @@ class TransactionRegisterController extends Controller
         private readonly AccountingOptionService $optionService,
         private readonly SafeDeleteService $safeDeleteService,
         private readonly TransactionEntryOptionService $entryOptionService,
+        private readonly TransactionAttachmentService $transactionAttachmentService,
+        private readonly CompanyAccountingPeriodService $accountingPeriodService,
     ) {}
 
     public function index(Request $request): View
@@ -50,8 +54,10 @@ class TransactionRegisterController extends Controller
     {
         $this->ensureCompany($request, $transaction);
 
-        $transaction->load(['transactionHead.accountingRule', 'moneyAccount', 'party']);
-        $companyId = $request->user()->company_id;
+        $transaction->load(['transactionHead.accountingRule', 'moneyAccount', 'party', 'attachments.uploader']);
+        $company = $request->user()->company;
+        abort_unless($company, 404);
+        $companyId = $company->id;
 
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
         $storedCategoryOption = $transactionCategories->firstWhere('value', $transaction->category);
@@ -72,6 +78,10 @@ class TransactionRegisterController extends Controller
             'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
             'parties' => $this->entryOptionService->parties($companyId),
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
+            'transactionDateContext' => $this->accountingPeriodService->transactionDateContext(
+                $company,
+                $transaction->transaction_date?->toDateString(),
+            ),
         ]);
     }
 
@@ -86,10 +96,21 @@ class TransactionRegisterController extends Controller
             $request->validated(),
             $request->user(),
         );
+        $this->transactionAttachmentService->storeUploaded(
+            $updated,
+            $request->file('transaction_attachments'),
+            $request->user(),
+        );
+
+        $message = 'Transaction '.$updated->voucher_no.' updated successfully.';
+        if ($request->user()->canAccounting('transactions.view')) {
+            return redirect()->route('transactions.index')->with('success', $message);
+        }
 
         return redirect()
-            ->route('transactions.index')
-            ->with('success', 'Transaction '.$updated->voucher_no.' updated successfully.');
+            ->route('transactions.create', ['category' => $updated->category])
+            ->with('success', $message)
+            ->with('warning', 'The transaction was updated, but your role is not allowed to view the register. You have been returned to Transaction Entry.');
     }
 
     public function destroy(Request $request, Transaction $transaction): JsonResponse|RedirectResponse
@@ -155,7 +176,7 @@ class TransactionRegisterController extends Controller
         $category = $this->validatedCategoryFilter($request);
 
         return Transaction::query()
-            ->with(['transactionHead', 'moneyAccount', 'party'])
+            ->with(['transactionHead', 'moneyAccount', 'party', 'attachments'])
             ->where('company_id', $companyId)
             ->when($category !== '', fn (Builder $query) => $query->where('category', $category))
             ->when($search !== '', function (Builder $query) use ($search): void {

@@ -26,4 +26,14 @@ class JournalLine extends Model
     {
         return $this->belongsTo(ChartOfAccount::class);
     }
+
+    public function party(): BelongsTo
+    {
+        return $this->belongsTo(Party::class);
+    }
+
+    public function moneyAccount(): BelongsTo
+    {
+        return $this->belongsTo(MoneyAccount::class);
+    }
 }

@@ -13,7 +13,7 @@ class UpdateAccountingRuleRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->canAccounting('accounting_rules.manage') ?? false;
     }
 
     public function rules(): array

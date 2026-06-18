@@ -2,9 +2,14 @@
 
 namespace Database\Factories;
 
+use App\Models\Access\AccountingRole;
+use App\Models\Company;
 use App\Models\User;
+use App\Services\Company\CompanySetupDefaultsService;
+use App\Support\AccountingRbac;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -17,6 +22,48 @@ class UserFactory extends Factory
      */
     protected static ?string $password;
 
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            if (! $user->company_id && Schema::hasTable('companies')) {
+                $company = Company::query()->create([
+                    'code' => 'TEST-'.Str::upper(Str::random(10)),
+                    'name' => $user->name.' Company',
+                    'currency_code' => 'BDT',
+                    'timezone' => 'Asia/Dhaka',
+                    'status' => 'active',
+                ]);
+                $user->forceFill(['company_id' => $company->id])->saveQuietly();
+            }
+
+            if ($user->company_id) {
+                $company = Company::query()->find($user->company_id);
+                if ($company) {
+                    app(CompanySetupDefaultsService::class)->ensureForCompany($company);
+                }
+            }
+
+            if (! $user->company_id || ! Schema::hasTable('accounting_roles')) {
+                return;
+            }
+
+            AccountingRbac::syncCompany((int) $user->company_id);
+            $slug = $user->role === User::ROLE_SYSTEM_ADMIN ? 'super_admin' : 'data_entry';
+            $role = AccountingRole::query()
+                ->where('company_id', $user->company_id)
+                ->where('slug', $slug)
+                ->first();
+
+            if ($role) {
+                $user->forceFill([
+                    'accounting_role_id' => $role->id,
+                    'account_status' => User::ACCOUNT_STATUS_ACTIVE,
+                ])->saveQuietly();
+                AccountingRbac::syncUserPermissionsFromRole($user);
+            }
+        });
+    }
+
     /**
      * Define the model's default state.
      *
@@ -25,6 +72,7 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            'role' => User::ROLE_SYSTEM_ADMIN,
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
@@ -37,8 +85,15 @@ class UserFactory extends Factory
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Create a user who can enter transactions and view reports, but cannot manage setup.
      */
+    public function accountingUser(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => User::ROLE_ACCOUNTING_USER,
+        ]);
+    }
+
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [

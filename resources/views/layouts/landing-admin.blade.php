@@ -10,13 +10,14 @@
         :root{--landing-green:#00a86b;--landing-green-dark:#087a52;--landing-green-soft:#e9fff5;--landing-ink:#101828;--landing-muted:#667085;--landing-line:#e5e7eb;--landing-bg:#f8fafc;--landing-card:#fff;--landing-shadow:0 16px 38px rgba(16,24,40,.07)}
         body{background:var(--landing-bg)}
         .landing-admin-shell{min-height:100vh;display:grid;grid-template-columns:292px minmax(0,1fr);background:var(--landing-bg)}
-        .landing-admin-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid var(--landing-line);padding:20px 16px;z-index:30}
+        .landing-admin-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid var(--landing-line);padding:20px 16px;z-index:30;display:flex;flex-direction:column}
         .landing-admin-brand{display:flex;align-items:center;gap:12px;padding:0 8px 20px;border-bottom:1px solid var(--landing-line)}
         .landing-admin-brand-mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--landing-green),#16a34a);color:#fff;display:grid;place-items:center;font-size:22px;font-weight:950;box-shadow:0 14px 25px rgba(0,168,107,.22)}
         .landing-admin-brand h1{margin:0;font-size:19px;letter-spacing:-.03em}.landing-admin-brand p{margin:3px 0 0;color:var(--landing-muted);font-size:12px}
         .landing-admin-nav-title{margin:22px 8px 10px;color:#344054;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
         .landing-admin-nav{display:grid;gap:7px}.landing-admin-link{display:flex;align-items:center;gap:12px;padding:12px 13px;border-radius:14px;color:#475467;font-size:14px;font-weight:800;border:1px solid transparent;transition:.14s ease}.landing-admin-link:hover{background:#f0fdf4;color:var(--landing-green-dark)}.landing-admin-link.active{background:var(--landing-green-soft);color:var(--landing-green-dark);border-color:#bbf7d0;box-shadow:inset 4px 0 0 var(--landing-green)}
         .landing-admin-icon{width:28px;height:28px;border-radius:999px;background:#eef2f6;color:#667085;display:grid;place-items:center;font-size:12px;font-weight:900;flex:0 0 auto}.landing-admin-link.active .landing-admin-icon{background:var(--landing-green);color:#fff}
+        .landing-admin-account{margin-top:auto;padding:18px 6px 0;border-top:1px solid var(--landing-line)}.landing-admin-user{display:flex;align-items:center;gap:10px;margin-bottom:11px}.landing-admin-user-avatar{width:36px;height:36px;flex:0 0 36px;border-radius:11px;background:var(--landing-green-soft);color:var(--landing-green-dark);display:grid;place-items:center;font-weight:950}.landing-admin-user-copy{min-width:0;display:grid;gap:2px}.landing-admin-user-copy strong,.landing-admin-user-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.landing-admin-user-copy strong{font-size:13px;color:var(--landing-ink)}.landing-admin-user-copy span{font-size:11px;color:var(--landing-muted)}.landing-admin-logout{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid #fecaca;border-radius:13px;background:#fff;color:#b42318;cursor:pointer;font:inherit;font-size:14px;font-weight:850;text-align:left;transition:.14s ease}.landing-admin-logout:hover{background:#fef2f2;border-color:#fda29b}.landing-admin-logout .landing-admin-icon{background:#fef2f2;color:#b42318}
         .landing-admin-main{min-width:0}.landing-admin-topbar{height:74px;background:#fff;border-bottom:1px solid var(--landing-line);display:flex;align-items:center;gap:14px;padding:0 28px;position:sticky;top:0;z-index:20}.landing-admin-menu-button{width:40px;height:40px;border:1px solid var(--landing-line);border-radius:12px;background:#fff;color:#344054;font-size:22px;display:none;place-items:center;cursor:pointer}.landing-admin-topbar h2{margin:0;font-size:19px;letter-spacing:-.02em}.landing-admin-topbar p{margin:2px 0 0;color:var(--landing-muted);font-size:12px}.landing-admin-top-actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.landing-admin-content{padding:30px 34px 42px}.landing-admin-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:25}.landing-admin-backdrop.show{display:block}
         .landing-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:18px}.landing-dashboard-card{background:#fff;border:1px solid var(--landing-line);border-radius:22px;box-shadow:var(--landing-shadow);padding:20px}.landing-dashboard-card small{display:block;color:var(--landing-muted);font-size:13px;font-weight:800;margin-bottom:7px}.landing-dashboard-card strong{font-size:28px;letter-spacing:-.04em;color:var(--landing-green-dark)}.landing-dashboard-card p{margin:8px 0 0;color:var(--landing-muted);font-size:13px;line-height:1.45}.landing-admin-panel{background:#fff;border:1px solid var(--landing-line);border-radius:22px;box-shadow:var(--landing-shadow);overflow:hidden}.landing-admin-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid #eef2f7;background:linear-gradient(180deg,#fff,#fbfcfd)}.landing-admin-panel-head h3{margin:0;font-size:18px}.landing-admin-panel-head p{margin:5px 0 0;color:var(--landing-muted);font-size:13px}.landing-admin-panel-body{padding:20px}.landing-admin-quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.landing-admin-quick-card{border:1px solid var(--landing-line);border-radius:18px;padding:16px;background:#fbfcfd;display:flex;justify-content:space-between;gap:14px;align-items:center}.landing-admin-quick-card strong{display:block;margin-bottom:4px}.landing-admin-quick-card span{display:block;color:var(--landing-muted);font-size:12px}.landing-admin-table-wrap{overflow-x:auto;border:1px solid #cfe1ef;border-radius:14px;background:#fff}.landing-admin-table{width:100%;border-collapse:collapse;min-width:760px}.landing-admin-table th,.landing-admin-table td{text-align:left;padding:13px 12px;border-right:1px solid #dbe9f4;border-bottom:1px solid #dbe9f4;font-size:13px}.landing-admin-table th:last-child,.landing-admin-table td:last-child{border-right:0}.landing-admin-table th{color:#fff;background:#194f7d;font-weight:900}.landing-admin-table tbody tr:nth-child(odd) td{background:#fff}.landing-admin-table tbody tr:nth-child(even) td{background:#f2fbff}.landing-admin-table tbody tr:hover td{background:#eaf7fd}.landing-admin-table tbody tr:last-child td{border-bottom:0}.landing-admin-status{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;background:#f0fdf4;color:#067647;font-weight:900;font-size:12px}.landing-admin-status.muted{background:#f2f4f7;color:#475467}.landing-admin-status.warning{background:#fff7ed;color:#9a3412}.landing-admin-mobile-heading{display:none}
         @media(max-width:1180px){.landing-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.landing-admin-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -74,13 +75,24 @@
             <a class="landing-admin-link" href="{{ route('landing.public') }}" target="_blank">
                 <span class="landing-admin-icon">↗</span><span>Open Public Page</span>
             </a>
+        </nav>
+
+        <div class="landing-admin-account">
+            <div class="landing-admin-user">
+                <span class="landing-admin-user-avatar" aria-hidden="true">{{ strtoupper(substr((string) ($currentUser?->name ?? 'A'), 0, 1)) }}</span>
+                <span class="landing-admin-user-copy">
+                    <strong>{{ $currentUser?->name ?? 'Landing Admin' }}</strong>
+                    <span>Landing Admin</span>
+                </span>
+            </div>
             <form method="POST" action="{{ route('landing-admin.logout') }}">
                 @csrf
-                <button type="submit" class="landing-admin-link" style="width:100%;border:1px solid transparent;background:transparent;cursor:pointer;text-align:left">
-                    <span class="landing-admin-icon">⏻</span><span>Logout</span>
+                <button type="submit" class="landing-admin-logout" data-test="landing-admin-logout-button">
+                    <span class="landing-admin-icon" aria-hidden="true">⏻</span>
+                    <span>Logout</span>
                 </button>
             </form>
-        </nav>
+        </div>
     </aside>
 
     <div class="landing-admin-backdrop" data-landing-admin-close></div>
@@ -129,6 +141,21 @@
     });
 })();
 </script>
+@php
+    $landingSessionAsset = public_path('js/hisebghor-session-timeout.js');
+    $landingSessionAssetVersion = is_file($landingSessionAsset) ? filemtime($landingSessionAsset) : time();
+    $landingSessionTimeoutMinutes = (int) config('session.landing_admin_inactive_timeout', env('LANDING_ADMIN_SESSION_INACTIVE_TIMEOUT', 15));
+@endphp
+<script>
+    window.HISEBGHOR_SESSION = {
+        timeoutMs: {{ max(1, $landingSessionTimeoutMinutes) * 60 * 1000 }},
+        keepAliveUrl: @json(route('landing-admin.session.keep-alive')),
+        timeoutUrl: @json(route('landing-admin.session.timeout')),
+        loginUrl: @json(route('landing-admin.login')),
+        storagePrefix: 'hisebghor.landing-admin.session'
+    };
+</script>
+<script src="{{ asset('js/hisebghor-session-timeout.js') }}?v={{ $landingSessionAssetVersion }}"></script>
 @stack('scripts')
 </body>
 </html>

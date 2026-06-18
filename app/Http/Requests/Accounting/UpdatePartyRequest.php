@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Support\CompanyContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -13,7 +14,7 @@ class UpdatePartyRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->canAccounting('parties.manage') ?? false;
     }
 
     public function rules(): array
@@ -28,7 +29,7 @@ class UpdatePartyRequest extends FormRequest
             ],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_PARTY_TYPE)],
-            'opening_balance' => ['nullable', 'numeric', 'decimal:0,2'],
+            'opening_balance' => ['nullable', 'numeric', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'receivable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
             'payable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
             'is_active' => ['required', 'boolean'],

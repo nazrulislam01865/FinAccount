@@ -13,13 +13,18 @@ use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Models\User;
 use App\Services\Accounting\TransactionPostingService;
+use App\Services\Company\CompanySetupDefaultsService;
+use App\Support\AccountingRbac;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class HisebGhorDemoSeeder extends Seeder
 {
-    public function run(TransactionPostingService $postingService): void
+    public function run(
+        TransactionPostingService $postingService,
+        CompanySetupDefaultsService $companySetupDefaults,
+    ): void
     {
         $company = Company::query()->updateOrCreate(
             ['code' => 'HG-DEMO'],
@@ -31,21 +36,34 @@ class HisebGhorDemoSeeder extends Seeder
             ],
         );
 
+        $company = $companySetupDefaults->ensureForCompany($company);
+
+        AccountingRbac::syncCompany((int) $company->id, true);
+        $superAdminRoleId = \App\Models\Access\AccountingRole::query()
+            ->where('company_id', $company->id)
+            ->where('slug', 'super_admin')
+            ->value('id');
+
         $user = User::query()->updateOrCreate(
             ['email' => 'admin@hisebghor.test'],
             [
                 'company_id' => $company->id,
+                'accounting_role_id' => $superAdminRoleId,
+                'role' => User::ROLE_SYSTEM_ADMIN,
+                'account_status' => User::ACCOUNT_STATUS_ACTIVE,
                 'name' => 'HisebGhor Admin',
                 'email_verified_at' => now(),
                 'password' => Hash::make('password'),
             ],
         );
+        AccountingRbac::syncUserPermissionsFromRole($user);
 
         $this->seedCompany($company, $user, $postingService);
     }
 
     public function seedCompany(Company $company, User $user, TransactionPostingService $postingService): void
     {
+        $company = app(CompanySetupDefaultsService::class)->ensureForCompany($company);
         $this->call(AccountingOptionSeeder::class);
 
         $accounts = [

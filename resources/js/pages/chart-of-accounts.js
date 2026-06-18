@@ -15,6 +15,16 @@ if (modal) {
         form.querySelectorAll('.hg-field-error').forEach((error) => error.remove());
     };
 
+    const setDraftContext = (mode, id = '') => {
+        const base = form.dataset.draftKeyBase;
+        if (!base) return;
+        const key = mode === 'edit' && id ? `${base}.edit.${id}` : `${base}.create`;
+        form.dataset.draftKey = key;
+        form.dispatchEvent(new CustomEvent('hisebghor:draft-context', {
+            detail: { key, title: mode === 'edit' ? 'Edit Chart of Account' : 'Add Chart of Account' },
+        }));
+    };
+
     const showModal = () => {
         modal.classList.add('show');
         modal.setAttribute('aria-hidden', 'false');
@@ -40,6 +50,7 @@ if (modal) {
         normal.value = modal.dataset.defaultNormal || '';
         active.checked = true;
         showModal();
+        setDraftContext('create');
     };
 
     const openEdit = (button) => {
@@ -55,6 +66,7 @@ if (modal) {
         normal.value = button.dataset.normal;
         active.checked = button.dataset.active === '1';
         showModal();
+        setDraftContext('edit', button.dataset.accountId);
     };
 
     document.querySelectorAll('[data-coa-open]').forEach((button) => {

@@ -3,12 +3,14 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingRule;
+use App\Models\Company;
 use App\Models\JournalEntry;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Models\User;
+use App\Services\Company\CompanyAccountingPeriodService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +21,7 @@ class TransactionPostingService
         private readonly JournalBuilder $journalBuilder,
         private readonly VoucherNumberService $voucherNumberService,
         private readonly DecimalAmount $decimalAmount,
+        private readonly CompanyAccountingPeriodService $accountingPeriodService,
     ) {}
 
     /**
@@ -33,6 +36,16 @@ class TransactionPostingService
         }
 
         return DB::transaction(function () use ($data, $user): Transaction {
+            $company = Company::query()
+                ->with(['defaultFinancialYear', 'currency', 'timeZone'])
+                ->lockForUpdate()
+                ->findOrFail($user->company_id);
+
+            $this->accountingPeriodService->assertPostingAllowed(
+                $company,
+                (string) $data['transaction_date'],
+            );
+
             $existing = Transaction::query()
                 ->where('company_id', $user->company_id)
                 ->where('request_token', $data['request_token'])
@@ -104,7 +117,10 @@ class TransactionPostingService
                 ]);
             }
 
-            $amount = $this->decimalAmount->normalize($data['amount']);
+            $amount = $this->decimalAmount->normalize(
+                $data['amount'],
+                (int) ($company->currency?->decimal_places ?? 2),
+            );
             $lines = $this->journalBuilder->build($head, $moneyAccount, $party, $amount);
 
             $sequence = $this->voucherNumberService->lock($user->company_id, $data['category']);

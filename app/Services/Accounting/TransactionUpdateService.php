@@ -3,11 +3,13 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingRule;
+use App\Models\Company;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Models\User;
+use App\Services\Company\CompanyAccountingPeriodService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -16,6 +18,7 @@ class TransactionUpdateService
     public function __construct(
         private readonly JournalBuilder $journalBuilder,
         private readonly DecimalAmount $decimalAmount,
+        private readonly CompanyAccountingPeriodService $accountingPeriodService,
     ) {}
 
     /**
@@ -38,6 +41,16 @@ class TransactionUpdateService
         }
 
         return DB::transaction(function () use ($transaction, $data, $user): Transaction {
+            $company = Company::query()
+                ->with(['defaultFinancialYear', 'currency', 'timeZone'])
+                ->lockForUpdate()
+                ->findOrFail($user->company_id);
+
+            $this->accountingPeriodService->assertPostingAllowed(
+                $company,
+                (string) $data['transaction_date'],
+            );
+
             $lockedTransaction = Transaction::query()
                 ->where('company_id', $user->company_id)
                 ->lockForUpdate()
@@ -105,7 +118,10 @@ class TransactionUpdateService
                 ]);
             }
 
-            $amount = $this->decimalAmount->normalize($data['amount']);
+            $amount = $this->decimalAmount->normalize(
+                $data['amount'],
+                (int) ($company->currency?->decimal_places ?? 2),
+            );
             $lines = $this->journalBuilder->build($head, $moneyAccount, $party, $amount);
             $narration = filled($data['description'] ?? null) ? $data['description'] : $head->name;
 

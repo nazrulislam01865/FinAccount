@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Landing;
 
 use App\Http\Controllers\Controller;
+use App\Support\ActiveLoginSession;
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,16 +16,27 @@ use Illuminate\View\View;
 
 class LandingAdminAuthController extends Controller
 {
-    public function create(): View|RedirectResponse
+    public function create(Request $request): View|RedirectResponse
     {
         if (Auth::guard('landing_admin')->check()) {
             return redirect()->route('landing-admin.dashboard');
         }
 
-        return view('landing.admin.login');
+        $logoutNotice = '';
+        if (! $request->expectsJson() && ! $request->ajax()) {
+            $logoutNotice = trim((string) $request->session()->pull('landing_admin_logout_notice', ''));
+
+            if ($logoutNotice === '' && $request->query('reason') === 'session-replaced') {
+                $logoutNotice = 'You were logged out because this Landing Admin account was signed in on another device or browser. Only one active login is allowed per user.';
+            }
+        }
+
+        return view('landing.admin.login', [
+            'logoutNotice' => $logoutNotice,
+        ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ActiveLoginSession $activeLoginSession): RedirectResponse
     {
         $credentials = $request->validate([
             'username' => ['required', 'string', 'max:100'],
@@ -60,15 +73,82 @@ class LandingAdminAuthController extends Controller
         $request->session()->regenerate();
         $request->session()->put('landing_admin_last_activity_at', time());
 
-        return redirect()->intended(route('landing-admin.dashboard', absolute: false));
+        $replacedAnotherSession = $activeLoginSession->claim($request, $admin);
+        $redirect = redirect()->intended(route('landing-admin.dashboard', absolute: false));
+
+        if ($replacedAnotherSession) {
+            $redirect->with('status', 'Login successful. The previous Landing Admin device or browser was logged out because only one active login is allowed per user.');
+        }
+
+        return $redirect;
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request, ActiveLoginSession $activeLoginSession): RedirectResponse
     {
+        $activeLoginSession->release($request, Auth::guard('landing_admin')->user());
         Auth::guard('landing_admin')->logout();
 
         $request->session()->forget('landing_admin_last_activity_at');
+        $request->session()->migrate(true);
         $request->session()->regenerateToken();
+
+        return redirect()
+            ->route('landing-admin.login')
+            ->with('status', 'You have been logged out successfully.');
+    }
+
+    public function keepAlive(Request $request, ActiveLoginSession $activeLoginSession): JsonResponse
+    {
+        $admin = Auth::guard('landing_admin')->user();
+
+        if ($admin && method_exists($admin, 'isActive') && ! $admin->isActive()) {
+            $activeLoginSession->release($request, $admin);
+            Auth::guard('landing_admin')->logout();
+            $request->session()->migrate(true);
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'active' => false,
+                'reason' => 'account-inactive',
+                'message' => 'Landing Admin account is inactive.',
+                'redirect' => route('landing-admin.login'),
+            ], 401);
+        }
+
+        if ($admin && ! $activeLoginSession->isCurrent($request, $admin)) {
+            Auth::guard('landing_admin')->logout();
+            $request->session()->migrate(true);
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'active' => false,
+                'reason' => 'session-replaced',
+                'message' => 'You were logged out because this Landing Admin account was signed in on another device or browser.',
+                'redirect' => route('landing-admin.login', ['reason' => 'session-replaced']),
+            ], 401);
+        }
+
+        $request->session()->put('landing_admin_last_activity_at', time());
+
+        return response()->json(['active' => true]);
+    }
+
+    public function timeout(Request $request, ActiveLoginSession $activeLoginSession): JsonResponse|RedirectResponse
+    {
+        $activeLoginSession->release($request, Auth::guard('landing_admin')->user());
+        Auth::guard('landing_admin')->logout();
+
+        $request->session()->forget('landing_admin_last_activity_at');
+        $request->session()->migrate(true);
+        $request->session()->regenerateToken();
+        $request->session()->flash('status', 'Your Landing Admin session expired after 15 minutes of inactivity. Please log in again.');
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Your Landing Admin session expired after 15 minutes of inactivity.',
+                'redirect' => route('landing-admin.login'),
+            ]);
+        }
 
         return redirect()->route('landing-admin.login');
     }

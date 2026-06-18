@@ -2,7 +2,6 @@
     <div class="hg-page-header">
         <div>
             <h1>Journal Entries</h1>
-            <p>System-generated accounting lines. Users do not manually select debit or credit.</p>
         </div>
     </div>
 
@@ -22,13 +21,15 @@
                 </thead>
                 <tbody>
                 @foreach ($journalLines as $line)
-                    @php($transaction = $line->journalEntry?->transaction)
+                    @php
+                        $transaction = $line->journalEntry?->transaction;
+                    @endphp
                     <tr>
                         <td><strong>{{ $line->journalEntry?->voucher_no }}</strong><br><span class="hg-muted">{{ $line->journalEntry?->entry_date?->format('Y-m-d') }}</span></td>
                         <td><span class="hg-badge {{ strtolower($transaction?->category ?? '') }}">{{ $categoryLabels[$transaction?->category] ?? $transaction?->category }}</span></td>
                         <td>{{ $line->chartOfAccount?->code }} — {{ $line->chartOfAccount?->name }}</td>
-                        <td class="right">৳ {{ number_format((float) $line->debit, 2) }}</td>
-                        <td class="right">৳ {{ number_format((float) $line->credit, 2) }}</td>
+                        <td class="right">{{ \App\Support\CompanyContext::money((float) $line->debit) }}</td>
+                        <td class="right">{{ \App\Support\CompanyContext::money((float) $line->credit) }}</td>
                     </tr>
                 @endforeach
                 </tbody>

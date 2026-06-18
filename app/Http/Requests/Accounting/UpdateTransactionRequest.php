@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Support\CompanyContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -13,7 +14,7 @@ class UpdateTransactionRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->canAccounting('transactions.manage') ?? false;
     }
 
     public function rules(): array
@@ -46,9 +47,11 @@ class UpdateTransactionRequest extends FormRequest
                     ->where('company_id', $companyId)
                     ->where('is_active', true)),
             ],
-            'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'reference' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'transaction_attachments' => ['nullable', 'array', 'max:5'],
+            'transaction_attachments.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,csv,txt'],
         ];
     }
 

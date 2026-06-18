@@ -13,7 +13,7 @@ class UpdateTransactionHeadRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->canAccounting('transaction_heads.manage') ?? false;
     }
 
     public function rules(): array

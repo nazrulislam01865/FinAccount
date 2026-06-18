@@ -4,6 +4,9 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Models\User;
+use App\Support\ActiveLoginSession;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
 
@@ -24,6 +27,13 @@ class ResetUserPassword implements ResetsUserPasswords
 
         $user->forceFill([
             'password' => $input['password'],
+            'remember_token' => null,
         ])->save();
+
+        app(ActiveLoginSession::class)->clearForUser($user);
+
+        if (Schema::hasTable('sessions') && Schema::hasColumn('sessions', 'user_id')) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
     }
 }

@@ -13,6 +13,8 @@ use App\Services\Accounting\DecimalAmount;
 use App\Services\Accounting\JournalBuilder;
 use App\Services\Accounting\TransactionEntryOptionService;
 use App\Services\Accounting\TransactionPostingService;
+use App\Services\Accounting\TransactionAttachmentService;
+use App\Services\Company\CompanyAccountingPeriodService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -26,9 +28,11 @@ class TransactionEntryController extends Controller
     public function __construct(
         private readonly JournalBuilder $journalBuilder,
         private readonly TransactionPostingService $transactionPostingService,
+        private readonly TransactionAttachmentService $transactionAttachmentService,
         private readonly DecimalAmount $decimalAmount,
         private readonly AccountingOptionService $optionService,
         private readonly TransactionEntryOptionService $entryOptionService,
+        private readonly CompanyAccountingPeriodService $accountingPeriodService,
     ) {}
 
     public function create(Request $request): View
@@ -38,7 +42,9 @@ class TransactionEntryController extends Controller
         $category = $transactionCategories->contains('value', $requestedCategory)
             ? $requestedCategory
             : ($transactionCategories->first()?->value ?? '');
-        $companyId = $request->user()->company_id;
+        $company = $request->user()->company;
+        abort_unless($company, 404);
+        $companyId = $company->id;
 
         return view('transactions.create', [
             'category' => $category,
@@ -50,6 +56,7 @@ class TransactionEntryController extends Controller
             'parties' => $this->entryOptionService->parties($companyId),
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
             'requestToken' => old('request_token', (string) Str::uuid()),
+            'transactionDateContext' => $this->accountingPeriodService->transactionDateContext($company),
         ]);
     }
 
@@ -128,7 +135,10 @@ class TransactionEntryController extends Controller
                 ->find($validated['party_id'])
             : null;
 
-        $amount = $this->decimalAmount->normalize($validated['amount'] ?? 0);
+        $amount = $this->decimalAmount->normalize(
+            $validated['amount'] ?? 0,
+            \App\Support\CompanyContext::decimalPlaces(),
+        );
         $lines = [];
         $previewError = null;
 
@@ -175,10 +185,21 @@ class TransactionEntryController extends Controller
     public function store(StoreTransactionRequest $request): RedirectResponse
     {
         $transaction = $this->transactionPostingService->post($request->validated(), $request->user());
+        $this->transactionAttachmentService->storeUploaded(
+            $transaction,
+            $request->file('transaction_attachments'),
+            $request->user(),
+        );
+
+        $message = 'Transaction '.$transaction->voucher_no.' posted successfully.';
+        if ($request->user()->canAccounting('transactions.view')) {
+            return redirect()->route('transactions.index')->with('success', $message);
+        }
 
         return redirect()
-            ->route('transactions.index')
-            ->with('success', 'Transaction '.$transaction->voucher_no.' posted successfully.');
+            ->route('transactions.create', ['category' => $transaction->category])
+            ->with('success', $message)
+            ->with('warning', 'The transaction was saved, but your role is not allowed to view the register. You have been returned to Transaction Entry.');
     }
 
 }

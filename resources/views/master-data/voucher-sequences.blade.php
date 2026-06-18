@@ -1,9 +1,13 @@
 @php
     $modalRecordId = (int) old('record_id', 0);
     $editingSequence = $modalRecordId > 0 ? $sequences->firstWhere('id', $modalRecordId) : null;
-    $reopenModal = old('setup_modal') === 'voucher-sequence';
+    $addOnlyMode = (bool) ($addOnlyMode ?? false);
+    $reopenModal = old('setup_modal') === 'voucher-sequence' || $addOnlyMode;
     $formMode = old('form_mode', $editingSequence ? 'edit' : 'create');
     $isCreateMode = $formMode === 'create';
+    $canManage = auth()->user()?->canAccounting('voucher_numbering.manage') ?? false;
+    $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
+    $draftRows = \App\Support\VisibleFormDrafts::forBase('voucher-sequences');
 @endphp
 
 <x-layouts::accounting title="Voucher Numbering">
@@ -11,10 +15,10 @@
         <div>
             <div class="hg-page-kicker">Master / Transaction Setup</div>
             <h1>Voucher Numbering</h1>
-            <p>Add and manage the prefix, next number, number length, category relationship, and active status for each voucher sequence.</p>
         </div>
 
         @if ($availableCategories->isNotEmpty())
+            @if($canManage)
             <button
                 type="button"
                 class="hg-btn hg-btn-primary"
@@ -30,6 +34,7 @@
                     'is_active' => '1',
                 ]) }}"
             >+ Add Voucher Numbering</button>
+            @endif
         @else
             <div class="hg-actions">
                 <button type="button" class="hg-btn hg-btn-primary" disabled>+ Add Voucher Numbering</button>
@@ -43,8 +48,8 @@
     </div>
     <div class="hg-spacer"></div>
 
-    @if ($sequences->isEmpty())
-        <div class="hg-empty">No voucher numbering has been configured.</div>
+    @if ($sequences->isEmpty() && $draftRows->isEmpty())
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No voucher numbering has been configured.' }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
@@ -78,12 +83,14 @@
                         <td><span class="hg-badge {{ $sequence->is_active ? 'on' : 'off' }}">{{ $sequence->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
+                                @if($canManage)
                                 <button
                                     type="button"
                                     class="hg-btn hg-btn-small"
                                     data-setup-open="edit"
                                     data-setup-target="voucher-sequence-modal"
                                     data-edit-title="Edit Voucher Numbering"
+                                    data-draft-edit-key="voucher-sequences.edit.{{ $sequence->id }}"
                                     data-update-url="{{ route('master.voucher-sequences.update', $sequence) }}"
                                     data-values="{{ json_encode([
                                         'form_mode' => 'edit',
@@ -95,19 +102,40 @@
                                         'is_active' => $sequence->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
+                                @endif
+                                @if($canDelete)
                                 <form method="POST" action="{{ route('master.voucher-sequences.destroy', $sequence) }}" data-safe-delete-form>
                                     @csrf
                                     @method('DELETE')
                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                 </form>
+                                @endif
                             </div>
                         </td>
+                    </tr>
+                @endforeach
+
+                @foreach ($draftRows as $draft)
+                    @php
+                        $fields = \App\Support\VisibleFormDrafts::fields($draft);
+                        $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
+                    @endphp
+                    <tr class="hg-table-draft-row">
+                        <td><strong>{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? 'Draft Category') }}</strong><br><span class="hg-muted">{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</span></td>
+                        <td><span class="hg-code-chip">{{ $fields['prefix'] ?? '—' }}</span></td>
+                        <td>{{ number_format((int) ($fields['next_number'] ?? 1)) }}</td>
+                        <td>{{ $fields['padding'] ?? 4 }} digits</td>
+                        <td><strong>{{ ($fields['prefix'] ?? 'DRAFT') }}-{{ str_pad((string) ($fields['next_number'] ?? 1), (int) ($fields['padding'] ?? 4), '0', STR_PAD_LEFT) }}</strong></td>
+                        <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
+                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="voucher-sequence-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['form_mode'=>'create','record_id'=>'','category'=>'','prefix'=>'','next_number'=>1,'padding'=>4,'is_active'=>'1'])) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
                     </tr>
                 @endforeach
                 </tbody>
             </table>
         </div>
     @endif
+
+    @if($canManage)
 
     <x-accounting.setup-modal
         id="voucher-sequence-modal"
@@ -121,6 +149,11 @@
             action="{{ $editingSequence ? route('master.voucher-sequences.update', $editingSequence) : route('master.voucher-sequences.store') }}"
             class="hg-form-grid"
             data-setup-form
+            data-draft-form
+            data-draft-defer
+            data-draft-key-base="voucher-sequences"
+            data-draft-key="{{ $editingSequence ? 'voucher-sequences.edit.'.$editingSequence->id : 'voucher-sequences.create' }}"
+            data-draft-title="Voucher Numbering"
         >
             @csrf
             <input type="hidden" name="_method" value="PUT" data-setup-method @disabled(! $editingSequence)>
@@ -136,14 +169,12 @@
                         <option value="{{ $categoryOption->value }}" @selected(old('category', $editingSequence?->category) === $categoryOption->value)>{{ $categoryOption->label }} ({{ $categoryOption->value }})</option>
                     @endforeach
                 </select>
-                <small class="hg-field-help">A category may have only one numbering setup. Use this field to repair an unlinked inactive sequence.</small>
                 @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
 
             <div class="hg-field">
                 <label for="sequence-prefix">Prefix <span class="hg-required">*</span></label>
-                <input id="sequence-prefix" name="prefix" value="{{ old('prefix', $editingSequence?->prefix) }}" minlength="2" maxlength="10" required>
-                <small class="hg-field-help">Uppercase letters, numbers, hyphens, and underscores only.</small>
+                <input id="sequence-prefix" name="prefix" value="{{ old('prefix', $editingSequence?->prefix) }}" minlength="2" maxlength="10" placeholder="Uppercase letters, numbers, hyphens, and underscores only." required>
                 @error('prefix')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
 
@@ -169,11 +200,12 @@
                     <input id="sequence-active" type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $editingSequence?->is_active ?? true))>
                     Active
                 </label>
-                <small class="hg-field-help">An inactive sequence cannot issue a new voucher number.</small>
                 @error('is_active')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
 
-            <div class="hg-field full"><button class="hg-btn hg-btn-primary" type="submit">Save Numbering</button></div>
+            <div class="hg-field full"><x-accounting.form-actions submit-label="Save Numbering" /></div>
         </form>
     </x-accounting.setup-modal>
+
+    @endif
 </x-layouts::accounting>

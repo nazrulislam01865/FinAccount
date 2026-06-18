@@ -118,6 +118,9 @@ return [
     |
     */
 
+    'footer_owner' => env('APP_FOOTER_OWNER', 'ITQAN Consulting'),
+    'footer_owner_url' => env('APP_FOOTER_OWNER_URL', 'https://itqanconsulting.com/'),
+
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),

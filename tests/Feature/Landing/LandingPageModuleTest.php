@@ -53,7 +53,32 @@ class LandingPageModuleTest extends TestCase
 
         $this->get(route('landing-admin.dashboard'))
             ->assertOk()
-            ->assertSee('Landing Page Admin Dashboard');
+            ->assertSee('Landing Page Admin Dashboard')
+            ->assertSee('data-test="landing-admin-logout-button"', false)
+            ->assertSee(route('landing-admin.logout'), false);
+    }
+
+    public function test_active_landing_admin_can_logout(): void
+    {
+        $admin = LandingAdminUser::query()->create([
+            'name' => 'Landing Admin',
+            'username' => 'landingadmin',
+            'email' => 'landing@example.com',
+            'password' => Hash::make('StrongPassword@123'),
+            'status' => 'Active',
+        ]);
+
+        $response = $this
+            ->actingAs($admin, 'landing_admin')
+            ->withSession(['landing_admin_last_activity_at' => time()])
+            ->post(route('landing-admin.logout'));
+
+        $response
+            ->assertRedirect(route('landing-admin.login'))
+            ->assertSessionHas('status', 'You have been logged out successfully.')
+            ->assertSessionMissing('landing_admin_last_activity_at');
+
+        $this->assertGuest('landing_admin');
     }
 
     public function test_public_inquiry_is_saved(): void

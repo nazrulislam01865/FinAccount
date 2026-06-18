@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Transaction extends Model
@@ -46,5 +47,10 @@ class Transaction extends Model
     public function journalEntry(): HasOne
     {
         return $this->hasOne(JournalEntry::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(TransactionAttachment::class);
     }
 }

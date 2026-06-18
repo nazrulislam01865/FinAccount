@@ -13,7 +13,7 @@ class StoreChartOfAccountRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->canAccounting('chart_of_accounts.manage') ?? false;
     }
 
     public function rules(): array
