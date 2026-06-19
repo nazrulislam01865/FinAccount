@@ -91,9 +91,10 @@ class DependencyInspector
             $this->nonZero([
                 ['Generated Journal Entry', $journalEntry ? 1 : 0, 'The generated journal entry will be permanently deleted with the transaction.'],
                 ['Generated Journal Lines', (int) ($journalEntry?->lines_count ?? 0), 'The generated debit/credit lines will be permanently deleted with the transaction.'],
+                ['Generated Sales Invoice', $transaction->salesInvoice()->exists() ? 1 : 0, 'The customer-facing invoice generated from this sales transaction will also be deleted.'],
             ]),
             'The transaction and its generated journal records will be permanently deleted from the database.',
-            'Journal entries and lines are generated children of the transaction, so they will be deleted together rather than left unlinked.',
+            'Journal entries, journal lines, attachments, and generated sales invoices are children of the transaction, so they will be deleted together rather than left unlinked.',
         );
     }
 

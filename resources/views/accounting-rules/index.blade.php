@@ -18,6 +18,19 @@
     $canManage = auth()->user()?->canAccounting('accounting_rules.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
     $draftRows = \App\Support\VisibleFormDrafts::forBase('accounting-rules');
+    $defaultRuleValues = [
+        'record_id' => '',
+        'category' => $defaultCategory,
+        'party_type' => $defaultPartyType,
+        'money_required' => $defaultMoneyRequired ? '1' : '0',
+        'party_required' => $defaultPartyRequired ? '1' : '0',
+        'generates_invoice' => '0',
+        'invoice_title' => 'Sales Invoice',
+        'supports_split_transaction' => '0',
+        'debit_source' => $defaultDebitSource,
+        'credit_source' => $defaultCreditSource,
+        'is_active' => '1',
+    ];
 @endphp
 
 <x-layouts::accounting title="Accounting Rules">
@@ -31,16 +44,7 @@
             class="hg-btn hg-btn-primary"
             data-setup-open="create"
             data-setup-target="accounting-rule-modal"
-            data-defaults="{{ json_encode([
-                'record_id' => '',
-                'category' => $defaultCategory,
-                'party_type' => $defaultPartyType,
-                'debit_source' => $defaultDebitSource,
-                'credit_source' => $defaultCreditSource,
-                'money_required' => $defaultMoneyRequired ? '1' : '0',
-                'party_required' => $defaultPartyRequired ? '1' : '0',
-                'is_active' => '1',
-            ]) }}"
+            data-defaults="{{ json_encode($defaultRuleValues) }}"
         >+ Add Rule</button>
         @endif
     </div>
@@ -54,23 +58,53 @@
                 <tr>
                     <th>Rule</th>
                     <th>Category</th>
-                    <th>Debit Source</th>
-                    <th>Credit Source</th>
+                    <th>Debit / Credit</th>
                     <th>Money?</th>
                     <th>Party?</th>
+                    <th>Invoice?</th>
                     <th>Status</th>
                     <th>Action</th>
                 </tr>
                 </thead>
                 <tbody>
                 @foreach ($rules as $rule)
+                    @php
+                        $editValues = [
+                            'record_id' => $rule->id,
+                            'code' => $rule->code,
+                            'name' => $rule->name,
+                            'category' => $rule->category,
+                            'party_type' => $rule->party_type,
+                            'money_required' => $rule->money_required ? '1' : '0',
+                            'party_required' => $rule->party_required ? '1' : '0',
+                            'generates_invoice' => $rule->generates_invoice ? '1' : '0',
+                            'invoice_title' => $rule->invoice_title ?: 'Sales Invoice',
+                            'supports_split_transaction' => $rule->lines->contains(fn ($line) => in_array($line->amount_basis, [\App\Models\AccountingRuleLine::BASIS_PAID, \App\Models\AccountingRuleLine::BASIS_DUE], true)) ? '1' : '0',
+                            'debit_source' => $rule->debit_source,
+                            'credit_source' => $rule->credit_source,
+                            'is_active' => $rule->is_active ? '1' : '0',
+                        ];
+                    @endphp
                     <tr>
                         <td><strong>{{ $rule->code }}</strong><br>{{ $rule->name }}</td>
                         <td><span class="hg-badge {{ strtolower($rule->category ?? '') }}">{{ $rule->category ? ($categoryLabels[$rule->category] ?? $rule->category) : 'Relationship removed' }}</span></td>
-                        <td>{{ $sourceLabels[$rule->debit_source] ?? $rule->debit_source }}</td>
-                        <td>{{ $sourceLabels[$rule->credit_source] ?? $rule->credit_source }}</td>
+                        <td>
+                            <div><strong>Debit</strong> {{ $sourceLabels[$rule->debit_source] ?? $rule->debit_source }}</div>
+                            <div><strong>Credit</strong> {{ $sourceLabels[$rule->credit_source] ?? $rule->credit_source }}</div>
+                            @if($rule->lines->contains(fn ($line) => in_array($line->amount_basis, [\App\Models\AccountingRuleLine::BASIS_PAID, \App\Models\AccountingRuleLine::BASIS_DUE], true)))
+                                <small class="hg-muted">Partial payment supported by this rule.</small>
+                            @endif
+                        </td>
                         <td>{{ $rule->money_required ? 'Yes' : 'No' }}</td>
                         <td>{{ $rule->party_required ? ($partyTypeLabels[$rule->party_type] ?? $rule->party_type) : 'No' }}</td>
+                        <td>
+                            @if($rule->generates_invoice)
+                                <span class="hg-badge sales">Yes</span><br>
+                                <small class="hg-muted">{{ $rule->invoice_title ?: 'Sales Invoice' }}</small>
+                            @else
+                                <span class="hg-muted">No</span>
+                            @endif
+                        </td>
                         <td><span class="hg-badge {{ $rule->is_active ? 'on' : 'off' }}">{{ $rule->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
                             <div class="hg-actions">
@@ -83,18 +117,7 @@
                                     data-edit-title="Edit Accounting Rule"
                                     data-draft-edit-key="accounting-rules.edit.{{ $rule->id }}"
                                     data-update-url="{{ route('accounting-rules.update', $rule) }}"
-                                    data-values="{{ json_encode([
-                                        'record_id' => $rule->id,
-                                        'code' => $rule->code,
-                                        'name' => $rule->name,
-                                        'category' => $rule->category,
-                                        'party_type' => $rule->party_type,
-                                        'debit_source' => $rule->debit_source,
-                                        'credit_source' => $rule->credit_source,
-                                        'money_required' => $rule->money_required ? '1' : '0',
-                                        'party_required' => $rule->party_required ? '1' : '0',
-                                        'is_active' => $rule->is_active ? '1' : '0',
-                                    ]) }}"
+                                    data-values="{{ json_encode($editValues) }}"
                                 >Edit</button>
                                 @endif
                                 @if($canDelete)
@@ -117,12 +140,12 @@
                     <tr class="hg-table-draft-row">
                         <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Accounting Rule' }}<br><span class="hg-muted">{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</span></td>
                         <td><span class="hg-badge {{ strtolower((string) ($fields['category'] ?? '')) }}">{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</span></td>
-                        <td>{{ $sourceLabels[$fields['debit_source'] ?? ''] ?? ($fields['debit_source'] ?? '—') }}</td>
-                        <td>{{ $sourceLabels[$fields['credit_source'] ?? ''] ?? ($fields['credit_source'] ?? '—') }}</td>
+                        <td><span class="hg-muted">Draft debit/credit setup will appear after saving.</span></td>
                         <td>{{ \App\Support\VisibleFormDrafts::boolField($draft, 'money_required') ? 'Yes' : 'No' }}</td>
                         <td>{{ \App\Support\VisibleFormDrafts::boolField($draft, 'party_required') ? ($partyTypeLabels[$fields['party_type'] ?? ''] ?? ($fields['party_type'] ?? 'Any')) : 'No' }}</td>
+                        <td>{{ \App\Support\VisibleFormDrafts::boolField($draft, 'generates_invoice') ? 'Yes' : 'No' }}</td>
                         <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
-                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id'=>'','category'=>$defaultCategory,'party_type'=>$defaultPartyType,'debit_source'=>$defaultDebitSource,'credit_source'=>$defaultCreditSource,'money_required'=>$defaultMoneyRequired?'1':'0','party_required'=>$defaultPartyRequired?'1':'0','is_active'=>'1'])) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
+                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, $defaultRuleValues)) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
                     </tr>
                 @endforeach
                 </tbody>
@@ -178,9 +201,10 @@
                 </select>
                 @error('party_type')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
+
             <div class="hg-field">
-                <label for="rule-debit">Debit Source</label>
-                <select id="rule-debit" name="debit_source" required>
+                <label for="rule-debit-source">Debit Source</label>
+                <select id="rule-debit-source" name="debit_source" required data-rule-source>
                     @foreach ($accountingSources as $sourceOption)
                         <option
                             value="{{ $sourceOption->value }}"
@@ -193,8 +217,8 @@
                 @error('debit_source')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
             <div class="hg-field">
-                <label for="rule-credit">Credit Source</label>
-                <select id="rule-credit" name="credit_source" required>
+                <label for="rule-credit-source">Credit Source</label>
+                <select id="rule-credit-source" name="credit_source" required data-rule-source>
                     @foreach ($accountingSources as $sourceOption)
                         <option
                             value="{{ $sourceOption->value }}"
@@ -206,6 +230,32 @@
                 </select>
                 @error('credit_source')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
+
+            <div class="hg-field">
+                <input type="hidden" name="supports_split_transaction" value="0">
+                <label class="hg-checkbox-label" for="rule-supports-split">
+                    <input id="rule-supports-split" type="checkbox" name="supports_split_transaction" value="1" @checked(old('supports_split_transaction', $editingRule ? $editingRule->lines->contains(fn ($line) => in_array($line->amount_basis, [\App\Models\AccountingRuleLine::BASIS_PAID, \App\Models\AccountingRuleLine::BASIS_DUE], true)) : false))>
+                    Allow partial payment / due split
+                </label>
+                <small class="hg-field-help">For sales: paid amount goes to money account and due amount goes to customer receivable. For purchase/expense: paid amount goes from money account and due amount goes to supplier payable.</small>
+                @error('supports_split_transaction')<small class="hg-field-error">{{ $message }}</small>@enderror
+                @error('lines')<small class="hg-field-error">{{ $message }}</small>@enderror
+            </div>
+            <div class="hg-field" data-invoice-field>
+                <input type="hidden" name="generates_invoice" value="0">
+                <label class="hg-checkbox-label" for="rule-generates-invoice">
+                    <input id="rule-generates-invoice" type="checkbox" name="generates_invoice" value="1" @checked(old('generates_invoice', $editingRule?->generates_invoice ?? false))>
+                    Generate sales invoice
+                </label>
+                <small class="hg-field-help">Enable for sales rules that should create and download invoice after posting.</small>
+                @error('generates_invoice')<small class="hg-field-error">{{ $message }}</small>@enderror
+            </div>
+            <div class="hg-field" data-invoice-field>
+                <label for="rule-invoice-title">Invoice Title</label>
+                <input id="rule-invoice-title" name="invoice_title" value="{{ old('invoice_title', $editingRule?->invoice_title ?? 'Sales Invoice') }}" maxlength="120" placeholder="Sales Invoice">
+                @error('invoice_title')<small class="hg-field-error">{{ $message }}</small>@enderror
+            </div>
+
             <div class="hg-field">
                 <input type="hidden" name="money_required" value="0">
                 <label class="hg-checkbox-label" for="rule-money-required">

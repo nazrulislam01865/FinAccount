@@ -19,13 +19,57 @@ if (page) {
     const money = document.getElementById('money_account_id');
     const party = document.getElementById('party_id');
     const amount = document.getElementById('amount');
+    const paidAmount = document.getElementById('paid_amount');
+    const dueAmountPreview = document.getElementById('due_amount_preview');
     const moneyField = document.getElementById('money-field');
     const partyField = document.getElementById('party-field');
+    const paidAmountField = document.getElementById('paid-amount-field');
+    const dueAmountField = document.getElementById('due-amount-field');
+    const dueDateField = document.getElementById('due-date-field');
+    const dueDate = document.getElementById('due_date');
     const preview = document.getElementById('journal-preview');
     const emptyPreviewTemplate = document.getElementById('journal-preview-empty-template');
     const form = document.querySelector('[data-transaction-form]');
     const previewUrl = preview.dataset.previewUrl;
     let previewTimer;
+    let ruleRequiresSplit = false;
+
+    const amountScale = () => {
+        const step = amount?.getAttribute('step') || '0.01';
+        return step.includes('.') ? step.split('.')[1].length : 0;
+    };
+
+    const updateSplitFields = () => {
+        const split = ruleRequiresSplit === true;
+
+        [paidAmountField, dueAmountField, dueDateField].forEach((field) => {
+            if (field) field.classList.toggle('hidden', !split);
+        });
+
+        if (paidAmount) {
+            paidAmount.required = split;
+            paidAmount.disabled = !split;
+        }
+
+        if (dueDate) {
+            dueDate.disabled = !split;
+        }
+
+        if (!split) {
+            if (paidAmount) paidAmount.value = '';
+            if (dueAmountPreview) dueAmountPreview.value = '';
+            return;
+        }
+
+        const total = Number.parseFloat(amount?.value || '0');
+        const paid = Number.parseFloat(paidAmount?.value || '0');
+        const due = Math.max(total - paid, 0);
+        const scale = amountScale();
+
+        if (dueAmountPreview) {
+            dueAmountPreview.value = Number.isFinite(due) ? due.toFixed(scale) : (0).toFixed(scale);
+        }
+    };
 
     const filterPartyOptions = (partyType) => {
         [...party.options].forEach((option) => {
@@ -47,7 +91,11 @@ if (page) {
     };
 
     const refreshPreview = async () => {
+        updateSplitFields();
+
         if (!head.value) {
+            ruleRequiresSplit = false;
+            updateSplitFields();
             preview.innerHTML = emptyPreviewTemplate.innerHTML;
             moneyField.classList.add('hidden');
             partyField.classList.add('hidden');
@@ -63,6 +111,7 @@ if (page) {
             money_account_id: money.value,
             party_id: party.value,
             amount: amount.value || '0',
+            paid_amount: paidAmount?.value || '0',
         });
 
         try {
@@ -75,6 +124,8 @@ if (page) {
             }
 
             const data = await response.json();
+            ruleRequiresSplit = data.splitRequired === true;
+            updateSplitFields();
             preview.innerHTML = data.html;
             moneyField.classList.toggle('hidden', !data.moneyRequired);
             partyField.classList.toggle('hidden', !data.partyRequired);
@@ -96,9 +147,19 @@ if (page) {
         previewTimer = setTimeout(refreshPreview, 180);
     };
 
-    [head, money, party].forEach((element) => element.addEventListener('change', refreshPreview));
-    amount.addEventListener('input', schedulePreview);
+    [head, money, party].forEach((element) => element?.addEventListener('change', refreshPreview));
 
+    amount?.addEventListener('input', () => {
+        updateSplitFields();
+        schedulePreview();
+    });
+
+    paidAmount?.addEventListener('input', () => {
+        updateSplitFields();
+        schedulePreview();
+    });
+
+    updateSplitFields();
     refreshPreview();
 }
 

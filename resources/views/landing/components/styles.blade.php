@@ -48,4 +48,44 @@
   @media(max-width:1120px){.navlinks{display:none}.mobile-menu-toggle{display:flex}}
   @media(max-width:1000px){.hero-grid,.for-grid,.contact-grid{grid-template-columns:1fr}.hero h1{font-size:46px}.grid-3,.packages,.testimonials,.screen-grid{grid-template-columns:1fr 1fr}}
   @media(max-width:720px){.mobile-nav-actions{grid-template-columns:1fr}.container{width:min(100% - 24px,1180px)}.hero{padding:46px 0}.hero h1{font-size:38px}.section{padding:54px 0}.section-title h2{font-size:32px}.grid-3,.packages,.testimonials,.screen-grid,.audience-list{grid-template-columns:1fr}.package.popular{transform:none}.footer-grid{display:grid}.actions .btn-primary{display:none}.mock-stats{grid-template-columns:1fr}.dashboard-preview-placeholder{min-height:210px}.nav{height:68px}.brand strong{font-size:19px}.brand-logo-full{max-width:170px;height:46px}.actions .btn-outline{display:none}}
+  /* Landing responsive navigation fix: desktop action buttons move into the mobile menu before they can overlap. */
+  @media(max-width:1120px){
+    .nav{gap:12px;min-width:0}
+    .brand{min-width:0;flex:1 1 auto;overflow:hidden}
+    .brand-logo-full{max-width:190px}
+    .brand-fallback-text{min-width:0}
+    .brand-fallback-text strong,.brand-fallback-text span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+    .actions{flex:0 0 auto;gap:8px}
+    .actions>a.btn{display:none}
+    .mobile-menu-toggle{display:flex}
+    .mobile-nav-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+  }
+
+  @media(max-width:640px){
+    body{overflow-x:hidden}
+    .topbar{overflow:visible}
+    .nav{height:64px;gap:8px}
+    .container{width:min(100% - 22px,1180px)}
+    .brand-logo-full{max-width:142px;height:42px}
+    .brand-fallback-mark{width:40px;height:40px;border-radius:13px;font-size:19px}
+    .brand-fallback-text strong{font-size:18px;max-width:126px}
+    .brand-fallback-text span{font-size:11px;max-width:126px}
+    .actions{gap:6px}
+    .lang-toggle{height:38px;padding:3px}
+    .lang-toggle button{padding:7px 9px;font-size:12px}
+    .mobile-menu-toggle{width:40px;height:40px;border-radius:13px}
+    .mobile-nav-actions{grid-template-columns:1fr}
+    .mobile-nav-inner{padding:12px 0 16px}
+    .mobile-nav-inner>a,.mobile-nav-actions .btn{min-height:42px}
+    .hero-buttons .btn{width:100%}
+  }
+
+  @media(max-width:390px){
+    .container{width:min(100% - 18px,1180px)}
+    .brand-logo-full{max-width:118px;height:38px}
+    .brand-fallback-text{display:none}
+    .lang-toggle button{padding:6px 8px;font-size:11px}
+    .mobile-menu-toggle{width:38px;height:38px}
+  }
+
 </style>

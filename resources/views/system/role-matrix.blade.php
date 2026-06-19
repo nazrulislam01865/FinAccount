@@ -3,6 +3,7 @@
 @endphp
 
 <x-layouts::accounting title="Role Matrix">
+    <div class="hg-role-matrix-page">
     <div class="hg-page-header">
         <div>
             <h1>Role Based Access Matrix</h1>
@@ -100,6 +101,8 @@
             </div>
         </section>
     </form>
+
+    </div>
 
     @push('scripts')
     <script>

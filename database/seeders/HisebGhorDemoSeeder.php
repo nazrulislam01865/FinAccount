@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\AccountingOption;
 use App\Models\AccountingRule;
+use App\Models\AccountingRuleLine;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\DocumentSequence;
@@ -134,37 +135,101 @@ class HisebGhorDemoSeeder extends Seeder
         ];
 
         $rules = [
-            'sale_cash' => ['R-SAL-01', 'Immediate Sale - Receive Money', 'Sales', AccountingRule::SOURCE_SELECTED_MONEY, AccountingRule::SOURCE_HEAD_ACCOUNT, false, 'Any', true],
-            'sale_credit' => ['R-SAL-02', 'Credit Sale - Customer Receivable', 'Sales', AccountingRule::SOURCE_PARTY_RECEIVABLE, AccountingRule::SOURCE_HEAD_ACCOUNT, true, 'Customer', false],
-            'expense' => ['R-PAY-01', 'Expense Payment - Money Out', 'Payment', AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRule::SOURCE_SELECTED_MONEY, false, 'Any', true],
-            'supplier_payment' => ['R-PAY-02', 'Supplier Due Payment', 'Payment', AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRule::SOURCE_SELECTED_MONEY, true, 'Supplier', true],
-            'credit_purchase' => ['R-LIA-01', 'Credit Purchase - Increase Supplier Payable', 'Liability', AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRule::SOURCE_PARTY_PAYABLE, true, 'Supplier', false],
-            'loan_received' => ['R-LIA-02', 'Loan Received - Increase Loan Payable', 'Liability', AccountingRule::SOURCE_SELECTED_MONEY, AccountingRule::SOURCE_PARTY_PAYABLE, true, 'Lender', true],
-            'loan_repayment' => ['R-LIA-03', 'Loan Repayment - Reduce Loan Payable', 'Liability', AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRule::SOURCE_SELECTED_MONEY, true, 'Lender', true],
+            'sale_cash' => [
+                'R-SAL-01', 'Immediate Sale - Receive Money', 'Sales', AccountingRule::SOURCE_SELECTED_MONEY, AccountingRule::SOURCE_HEAD_ACCOUNT, false, 'Any', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'sale_credit' => [
+                'R-SAL-02', 'Credit Sale - Customer Receivable', 'Sales', AccountingRule::SOURCE_PARTY_RECEIVABLE, AccountingRule::SOURCE_HEAD_ACCOUNT, true, 'Customer', false,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_PARTY_RECEIVABLE, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'sale_partial' => [
+                'R-SAL-03', 'Partial Sale - Money Plus Customer Due', 'Sales', AccountingRule::SOURCE_SELECTED_MONEY, AccountingRule::SOURCE_HEAD_ACCOUNT, true, 'Customer', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_PAID],
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_PARTY_RECEIVABLE, AccountingRuleLine::BASIS_DUE],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'expense' => [
+                'R-PAY-01', 'Expense Payment - Money Out', 'Payment', AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRule::SOURCE_SELECTED_MONEY, false, 'Any', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'supplier_payment' => [
+                'R-PAY-02', 'Supplier Due Payment', 'Payment', AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRule::SOURCE_SELECTED_MONEY, true, 'Supplier', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'credit_purchase' => [
+                'R-LIA-01', 'Credit Purchase - Increase Supplier Payable', 'Liability', AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRule::SOURCE_PARTY_PAYABLE, true, 'Supplier', false,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'partial_purchase' => [
+                'R-LIA-04', 'Partial Purchase - Money Plus Supplier Due', 'Liability', AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRule::SOURCE_SELECTED_MONEY, true, 'Supplier', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_HEAD_ACCOUNT, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_PAID],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRuleLine::BASIS_DUE],
+                ],
+            ],
+            'loan_received' => [
+                'R-LIA-02', 'Loan Received - Increase Loan Payable', 'Liability', AccountingRule::SOURCE_SELECTED_MONEY, AccountingRule::SOURCE_PARTY_PAYABLE, true, 'Lender', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
+            'loan_repayment' => [
+                'R-LIA-03', 'Loan Repayment - Reduce Loan Payable', 'Liability', AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRule::SOURCE_SELECTED_MONEY, true, 'Lender', true,
+                [
+                    [AccountingRuleLine::SIDE_DEBIT, AccountingRule::SOURCE_PARTY_PAYABLE, AccountingRuleLine::BASIS_TOTAL],
+                    [AccountingRuleLine::SIDE_CREDIT, AccountingRule::SOURCE_SELECTED_MONEY, AccountingRuleLine::BASIS_TOTAL],
+                ],
+            ],
         ];
 
-        foreach ($rules as $key => [$code, $name, $category, $debit, $credit, $partyRequired, $partyType, $moneyRequired]) {
+        foreach ($rules as $key => [$code, $name, $category, $debit, $credit, $partyRequired, $partyType, $moneyRequired, $postingLines]) {
             $rules[$key] = AccountingRule::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => $code],
                 compact('name', 'category') + [
                     'debit_source' => $debit,
                     'credit_source' => $credit,
                     'party_required' => $partyRequired,
-                    'party_type' => $partyType,
+                    'party_type' => $partyRequired ? $partyType : 'Any',
                     'money_required' => $moneyRequired,
+                    'generates_invoice' => $category === 'Sales',
+                    'invoice_title' => $category === 'Sales' ? 'Sales Invoice' : null,
                     'is_active' => true,
                 ],
             );
+
+            $this->syncRuleLines($rules[$key], $postingLines);
         }
 
         $heads = [
             'milk_cash' => ['TH-S-001', 'Milk Sale - Immediate Payment', 'Sales', 'sale_cash', 'sales'],
             'fish_cash' => ['TH-S-002', 'Fish Sale - Immediate Payment', 'Sales', 'sale_cash', 'sales'],
             'vegetable_credit' => ['TH-S-003', 'Vegetable Sale - Credit', 'Sales', 'sale_credit', 'sales'],
+            'milk_partial' => ['TH-S-004', 'Milk Sale - Partial Payment', 'Sales', 'sale_partial', 'sales'],
             'salary' => ['TH-P-001', 'Farm Worker Salary Payment', 'Payment', 'expense', 'salary'],
             'internet' => ['TH-P-002', 'Internet & Mobile Bill Payment', 'Payment', 'expense', 'internet'],
             'supplier_payment' => ['TH-P-003', 'Supplier Due Payment', 'Payment', 'supplier_payment', 'supplier_payable'],
             'feed_credit' => ['TH-L-001', 'Feed Purchase on Credit', 'Liability', 'credit_purchase', 'feed_expense'],
+            'feed_partial' => ['TH-L-004', 'Feed Purchase - Partial Payment', 'Liability', 'partial_purchase', 'feed_expense'],
             'loan_received' => ['TH-L-002', 'Loan Received from Bank/Lender', 'Liability', 'loan_received', 'loan'],
             'loan_repayment' => ['TH-L-003', 'Loan Principal Repayment', 'Liability', 'loan_repayment', 'loan'],
         ];
@@ -226,4 +291,22 @@ class HisebGhorDemoSeeder extends Seeder
             }
         }
     }
+
+    /**
+     * @param array<int, array{0: string, 1: string, 2: string}> $postingLines
+     */
+    private function syncRuleLines(AccountingRule $rule, array $postingLines): void
+    {
+        $rule->lines()->delete();
+
+        foreach ($postingLines as $index => [$side, $source, $basis]) {
+            $rule->lines()->create([
+                'line_side' => $side,
+                'account_source' => $source,
+                'amount_basis' => $basis,
+                'sort_order' => $index + 1,
+            ]);
+        }
+    }
+
 }

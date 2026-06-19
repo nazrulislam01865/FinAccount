@@ -4,6 +4,7 @@ namespace App\Services\Accounting;
 
 use App\Models\AccountingOption;
 use App\Models\AccountingRule;
+use App\Models\AccountingRuleLine;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,7 @@ class AccountingRuleService
             'partyTypeLabels' => $rulePartyTypes->pluck('label', 'value')->all(),
             'accountingSources' => $sources,
             'sourceLabels' => $sources->pluck('label', 'value')->all(),
+            'amountBasisLabels' => $this->amountBasisLabels(),
         ];
     }
 
@@ -34,6 +36,7 @@ class AccountingRuleService
     public function allForCompany(int $companyId): Collection
     {
         return AccountingRule::query()
+            ->with('lines')
             ->where('company_id', $companyId)
             ->orderBy('code')
             ->get();
@@ -44,10 +47,16 @@ class AccountingRuleService
     {
         $this->validateConfiguration($data);
 
-        return DB::transaction(fn (): AccountingRule => AccountingRule::query()->create([
-            'company_id' => $companyId,
-            ...$this->normalized($data),
-        ]), attempts: 5);
+        return DB::transaction(function () use ($data, $companyId): AccountingRule {
+            $rule = AccountingRule::query()->create([
+                'company_id' => $companyId,
+                ...$this->normalized($data),
+            ]);
+
+            $this->syncLines($rule, $data['lines']);
+
+            return $rule->load('lines');
+        }, attempts: 5);
     }
 
     /** @param array<string, mixed> $data */
@@ -64,9 +73,12 @@ class AccountingRuleService
             ]);
         }
 
-        DB::transaction(fn () => $rule->update($this->normalized($data)), attempts: 5);
+        DB::transaction(function () use ($rule, $data): void {
+            $rule->update($this->normalized($data));
+            $this->syncLines($rule, $data['lines']);
+        }, attempts: 5);
 
-        return $rule->refresh();
+        return $rule->refresh()->load('lines');
     }
 
     public function delete(AccountingRule $rule): void
@@ -83,9 +95,31 @@ class AccountingRuleService
     /** @param array<string, mixed> $data */
     private function validateConfiguration(array $data): void
     {
-        if ($data['debit_source'] === $data['credit_source']) {
+        $lines = collect($data['lines'] ?? [])->values();
+
+        if ($lines->count() < 2) {
             throw ValidationException::withMessages([
-                'credit_source' => 'Debit and credit sources must be different.',
+                'lines' => 'At least one debit line and one credit line are required.',
+            ]);
+        }
+
+        if (! $lines->contains('line_side', AccountingRuleLine::SIDE_DEBIT)) {
+            throw ValidationException::withMessages([
+                'lines' => 'At least one debit posting line is required.',
+            ]);
+        }
+
+        if (! $lines->contains('line_side', AccountingRuleLine::SIDE_CREDIT)) {
+            throw ValidationException::withMessages([
+                'lines' => 'At least one credit posting line is required.',
+            ]);
+        }
+
+        $this->assertAmountFormulaBalances($lines);
+
+        if ((bool) ($data['generates_invoice'] ?? false) && ($data['category'] ?? null) !== 'Sales') {
+            throw ValidationException::withMessages([
+                'generates_invoice' => 'Only sales category accounting rules can generate sales invoices.',
             ]);
         }
 
@@ -93,21 +127,54 @@ class AccountingRuleService
             ->forGroup(AccountingOption::GROUP_ACCOUNTING_SOURCE)
             ->keyBy('value');
 
-        $selected = collect([$data['debit_source'], $data['credit_source']])
-            ->map(fn (string $source) => $sourceOptions->get($source))
+        $selected = $lines
+            ->map(fn (array $line) => $sourceOptions->get($line['account_source']))
             ->filter();
 
-        if ($selected->contains(fn (AccountingOption $option): bool => (bool) ($option->metadata['requires_money'] ?? false))
-            && ! (bool) $data['money_required']) {
+        $requiresMoney = $selected->contains(fn (AccountingOption $option): bool => (bool) ($option->metadata['requires_money'] ?? false));
+        $requiresParty = $selected->contains(fn (AccountingOption $option): bool => (bool) ($option->metadata['requires_party'] ?? false));
+
+        if ($requiresMoney && ! (bool) $data['money_required']) {
             throw ValidationException::withMessages([
-                'money_required' => 'Money account must be required because the rule uses Selected Money Account.',
+                'money_required' => 'Money account must be required because at least one posting line uses Selected Money Account.',
             ]);
         }
 
-        if ($selected->contains(fn (AccountingOption $option): bool => (bool) ($option->metadata['requires_party'] ?? false))
-            && ! (bool) $data['party_required']) {
+        if ($requiresParty && ! (bool) $data['party_required']) {
             throw ValidationException::withMessages([
-                'party_required' => 'Party must be required because the rule uses a party receivable or payable account.',
+                'party_required' => 'Party must be required because at least one posting line uses Party Receivable or Party Payable.',
+            ]);
+        }
+    }
+
+    /** @param Collection<int, array{line_side: string, account_source: string, amount_basis: string}> $lines */
+    private function assertAmountFormulaBalances(Collection $lines): void
+    {
+        $debitPaid = 0;
+        $debitDue = 0;
+        $creditPaid = 0;
+        $creditDue = 0;
+
+        foreach ($lines as $line) {
+            [$paidCoefficient, $dueCoefficient] = match ($line['amount_basis']) {
+                AccountingRuleLine::BASIS_TOTAL => [1, 1],
+                AccountingRuleLine::BASIS_PAID => [1, 0],
+                AccountingRuleLine::BASIS_DUE => [0, 1],
+                default => [0, 0],
+            };
+
+            if ($line['line_side'] === AccountingRuleLine::SIDE_DEBIT) {
+                $debitPaid += $paidCoefficient;
+                $debitDue += $dueCoefficient;
+            } else {
+                $creditPaid += $paidCoefficient;
+                $creditDue += $dueCoefficient;
+            }
+        }
+
+        if ($debitPaid !== $creditPaid || $debitDue !== $creditDue) {
+            throw ValidationException::withMessages([
+                'lines' => 'Posting lines are not balanced. Debit amount formula must equal credit amount formula. Example: paid + due on one side must equal total on the other side.',
             ]);
         }
     }
@@ -115,16 +182,58 @@ class AccountingRuleService
     /** @param array<string, mixed> $data @return array<string, mixed> */
     private function normalized(array $data): array
     {
+        $lines = collect($data['lines']);
+        $firstDebit = $lines->firstWhere('line_side', AccountingRuleLine::SIDE_DEBIT);
+        $firstCredit = $lines->firstWhere('line_side', AccountingRuleLine::SIDE_CREDIT);
+
+        $sourceOptions = $this->optionService
+            ->forGroup(AccountingOption::GROUP_ACCOUNTING_SOURCE)
+            ->keyBy('value');
+
+        $selected = $lines
+            ->map(fn (array $line) => $sourceOptions->get($line['account_source']))
+            ->filter();
+
+        $moneyRequired = $selected->contains(fn (AccountingOption $option): bool => (bool) ($option->metadata['requires_money'] ?? false));
+        $partyRequired = $selected->contains(fn (AccountingOption $option): bool => (bool) ($option->metadata['requires_party'] ?? false));
+
         return [
             'code' => trim((string) $data['code']),
             'name' => trim((string) $data['name']),
             'category' => $data['category'],
-            'debit_source' => $data['debit_source'],
-            'credit_source' => $data['credit_source'],
-            'party_required' => (bool) $data['party_required'],
-            'party_type' => (bool) $data['party_required'] ? $data['party_type'] : 'Any',
-            'money_required' => (bool) $data['money_required'],
+            'debit_source' => $firstDebit['account_source'],
+            'credit_source' => $firstCredit['account_source'],
+            'party_required' => $partyRequired,
+            'party_type' => $partyRequired ? $data['party_type'] : 'Any',
+            'money_required' => $moneyRequired,
+            'generates_invoice' => (bool) ($data['generates_invoice'] ?? false),
+            'invoice_title' => filled($data['invoice_title'] ?? null) ? trim((string) $data['invoice_title']) : null,
             'is_active' => (bool) $data['is_active'],
+        ];
+    }
+
+    /** @param array<int, array{line_side: string, account_source: string, amount_basis: string}> $lines */
+    private function syncLines(AccountingRule $rule, array $lines): void
+    {
+        $rule->lines()->delete();
+
+        foreach (array_values($lines) as $index => $line) {
+            $rule->lines()->create([
+                'line_side' => $line['line_side'],
+                'account_source' => $line['account_source'],
+                'amount_basis' => $line['amount_basis'],
+                'sort_order' => $index + 1,
+            ]);
+        }
+    }
+
+    /** @return array<string, string> */
+    public function amountBasisLabels(): array
+    {
+        return [
+            AccountingRuleLine::BASIS_TOTAL => 'Total Amount',
+            AccountingRuleLine::BASIS_PAID => 'Paid Amount',
+            AccountingRuleLine::BASIS_DUE => 'Due Amount',
         ];
     }
 }

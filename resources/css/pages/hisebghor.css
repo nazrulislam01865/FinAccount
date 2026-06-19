@@ -1608,3 +1608,163 @@ button.is-executing, input.is-executing { pointer-events: none; }
         display: none !important;
     }
 }
+
+/* Sales invoice print page */
+.hg-invoice-paper {
+    max-width: 980px;
+    margin: 0 auto 20px;
+    padding: 34px;
+    border: 1px solid var(--hg-border);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: var(--hg-shadow);
+}
+.hg-invoice-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 28px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--hg-border);
+}
+.hg-invoice-company {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+.hg-invoice-company img,
+.hg-invoice-logo-fallback {
+    width: 74px;
+    height: 74px;
+    flex: 0 0 74px;
+    border-radius: 16px;
+    object-fit: contain;
+    border: 1px solid var(--hg-border);
+    background: #f8fafc;
+}
+.hg-invoice-logo-fallback {
+    display: grid;
+    place-items: center;
+    color: var(--hg-primary);
+    font-weight: 900;
+    font-size: 22px;
+}
+.hg-invoice-company h2,
+.hg-invoice-meta h1 {
+    margin: 0 0 10px;
+    line-height: 1.15;
+}
+.hg-invoice-company p,
+.hg-invoice-box p {
+    margin: 4px 0;
+    color: var(--hg-muted);
+    font-size: 13px;
+    line-height: 1.45;
+}
+.hg-invoice-meta {
+    display: grid;
+    gap: 8px;
+    text-align: right;
+}
+.hg-invoice-meta div {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--hg-border);
+}
+.hg-invoice-meta span {
+    color: var(--hg-muted);
+    font-size: 12px;
+}
+.hg-invoice-status {
+    text-transform: uppercase;
+}
+.hg-invoice-status.paid { color: var(--hg-success); }
+.hg-invoice-status.partial { color: var(--hg-warning); }
+.hg-invoice-status.unpaid { color: var(--hg-danger); }
+.hg-invoice-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 22px 0;
+}
+.hg-invoice-box {
+    min-height: 120px;
+    padding: 16px;
+    border: 1px solid var(--hg-border);
+    border-radius: 14px;
+    background: #f8fafc;
+}
+.hg-invoice-box h3 {
+    margin: 0 0 10px;
+    color: var(--hg-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+.hg-invoice-table-wrap { border-radius: 14px; }
+.hg-invoice-table td { vertical-align: top; }
+.hg-invoice-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 18px;
+    margin-top: 18px;
+}
+.hg-invoice-summary table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.hg-invoice-summary td {
+    padding: 9px 0;
+    border-bottom: 1px solid var(--hg-border);
+}
+.hg-invoice-summary td:last-child {
+    text-align: right;
+    font-weight: 800;
+}
+.hg-invoice-summary .total td {
+    color: var(--hg-text);
+    font-size: 18px;
+    font-weight: 900;
+}
+.hg-invoice-summary .due td:last-child { color: var(--hg-danger); }
+.hg-invoice-note {
+    margin-top: 24px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    color: #475467;
+    background: #f8fafc;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.hg-role-table-wrap { max-height: none; }
+.hg-role-matrix-page form { margin: 0; }
+.hg-role-matrix-page .hg-system-card:last-child { margin-bottom: 0; }
+@media (max-width: 760px) {
+    .hg-invoice-paper { padding: 20px; }
+    .hg-invoice-head,
+    .hg-invoice-two-col,
+    .hg-invoice-summary { grid-template-columns: 1fr; }
+    .hg-invoice-meta { text-align: left; }
+}
+@media print {
+    .no-print,
+    .hg-side,
+    .hg-topbar,
+    .hg-footer,
+    .hg-safe-delete-modal,
+    .hg-toast { display: none !important; }
+    .hg-app { display: block !important; min-height: auto !important; }
+    .hg-main { display: block !important; min-height: auto !important; }
+    .hg-content { padding: 0 !important; }
+    .hg-invoice-paper {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .hg-table-wrap { overflow: visible !important; }
+}

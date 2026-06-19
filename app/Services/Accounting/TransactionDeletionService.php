@@ -23,6 +23,7 @@ class TransactionDeletionService
             $journalEntry = $lockedTransaction->journalEntry()->first();
             $journalEntryId = $journalEntry?->id;
 
+            $lockedTransaction->salesInvoice()->delete();
             $lockedTransaction->attachments()->get()->each->delete();
 
             if ($journalEntry) {

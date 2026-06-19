@@ -16,6 +16,18 @@
         </div>
     </div>
 
+
+
+    @if(session('invoice_download_url'))
+        <div class="hg-notice hg-notice-success">
+            Invoice download should start automatically.
+            @if(session('invoice_show_url'))
+                <a href="{{ session('invoice_show_url') }}">Open invoice</a>
+            @endif
+        </div>
+        <iframe src="{{ session('invoice_download_url') }}" style="display:none" title="Invoice download"></iframe>
+    @endif
+
     <form method="GET" action="{{ route('transactions.index') }}" class="hg-toolbar" id="transaction-filter-form">
         <input
             class="hg-search"
@@ -82,10 +94,34 @@
                                     <span class="hg-muted">-</span>
                                 @endif
                             </td>
-                            <td class="right">{{ \App\Support\CompanyContext::money((float) $transaction->amount) }}</td>
-                            <td><span class="hg-badge {{ $transaction->status === 'posted' ? 'on' : 'incomplete' }}">{{ ucfirst($transaction->status) }}</span></td>
+                            <td class="right">
+                                {{ \App\Support\CompanyContext::money((float) $transaction->amount) }}
+                                @if(($transaction->settlement_type ?? 'normal') === 'partial')
+                                    <br>
+                                    <small class="hg-muted">
+                                        Paid: {{ \App\Support\CompanyContext::money((float) $transaction->paid_amount) }}<br>
+                                        Initial due: {{ \App\Support\CompanyContext::money((float) $transaction->due_amount) }}
+                                        @if($transaction->due_date)<br>Due date: {{ $transaction->due_date->format('Y-m-d') }}@endif
+                                    </small>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="hg-badge {{ $transaction->status === 'posted' ? 'on' : 'incomplete' }}">{{ ucfirst($transaction->status) }}</span>
+                                @if($transaction->salesInvoice)
+                                    <br><small class="hg-muted">Invoice: {{ ucfirst($transaction->salesInvoice->status) }}</small>
+                                @endif
+                            </td>
                             <td>
                                 <div class="hg-actions">
+                                    @if($transaction->salesInvoice)
+                                        <a class="hg-btn hg-btn-small hg-btn-soft" href="{{ route('sales-invoices.show', $transaction->salesInvoice) }}">Invoice</a>
+                                        <a class="hg-btn hg-btn-small" href="{{ route('sales-invoices.download', $transaction->salesInvoice) }}">Download</a>
+                                    @elseif($canManageTransactions && $transaction->category === 'Sales' && ($transaction->transactionHead?->accountingRule?->generates_invoice ?? false))
+                                        <form method="POST" action="{{ route('transactions.invoice.generate', $transaction) }}">
+                                            @csrf
+                                            <button class="hg-btn hg-btn-small hg-btn-soft" type="submit">Generate Invoice</button>
+                                        </form>
+                                    @endif
                                     @if($canManageTransactions)
                                         <a class="hg-btn hg-btn-small" data-draft-edit-key="transactions.edit.{{ $transaction->id }}" href="{{ route('transactions.edit', $transaction) }}">Edit</a>
                                     @endif
@@ -117,7 +153,12 @@
                             <td>{{ filled($fields['party_id'] ?? null) ? 'Party ID #'.$fields['party_id'] : '-' }}</td>
                             <td>{{ $fields['reference'] ?? '-' }}</td>
                             <td><span class="hg-muted">Attach after final save</span></td>
-                            <td class="right">{{ \App\Support\CompanyContext::money((float) ($fields['amount'] ?? 0)) }}</td>
+                            <td class="right">
+                                {{ \App\Support\CompanyContext::money((float) ($fields['amount'] ?? 0)) }}
+                                @if(($fields['settlement_type'] ?? 'normal') === 'partial')
+                                    <br><small class="hg-muted">Partial draft</small>
+                                @endif
+                            </td>
                             <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
                             <td>
                                 <div class="hg-actions">

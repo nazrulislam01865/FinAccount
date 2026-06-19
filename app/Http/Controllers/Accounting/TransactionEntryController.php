@@ -7,12 +7,14 @@ use App\Http\Requests\Accounting\StoreTransactionRequest;
 use App\Models\AccountingOption;
 use App\Models\MoneyAccount;
 use App\Models\Party;
+use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\DecimalAmount;
 use App\Services\Accounting\JournalBuilder;
 use App\Services\Accounting\TransactionEntryOptionService;
 use App\Services\Accounting\TransactionPostingService;
+use App\Services\Accounting\TransactionSettlementService;
 use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Company\CompanyAccountingPeriodService;
 use Illuminate\Contracts\View\View;
@@ -28,6 +30,7 @@ class TransactionEntryController extends Controller
     public function __construct(
         private readonly JournalBuilder $journalBuilder,
         private readonly TransactionPostingService $transactionPostingService,
+        private readonly TransactionSettlementService $settlementService,
         private readonly TransactionAttachmentService $transactionAttachmentService,
         private readonly DecimalAmount $decimalAmount,
         private readonly AccountingOptionService $optionService,
@@ -97,10 +100,11 @@ class TransactionEntryController extends Controller
                     ->where('is_active', true)),
             ],
             'amount' => ['nullable', 'numeric', 'min:0'],
+            'paid_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $head = TransactionHead::query()
-            ->with(['accountingRule', 'postingAccount'])
+            ->with(['accountingRule.lines', 'postingAccount'])
             ->where('company_id', $companyId)
             ->where('category', $validated['category'])
             ->where('is_active', true)
@@ -135,10 +139,9 @@ class TransactionEntryController extends Controller
                 ->find($validated['party_id'])
             : null;
 
-        $amount = $this->decimalAmount->normalize(
-            $validated['amount'] ?? 0,
-            \App\Support\CompanyContext::decimalPlaces(),
-        );
+        $scale = \App\Support\CompanyContext::decimalPlaces();
+        $amount = $this->decimalAmount->normalize($validated['amount'] ?? 0, $scale);
+        $settlement = ['settlement_type' => Transaction::SETTLEMENT_NORMAL, 'paid_amount' => null, 'due_amount' => null, 'due_date' => null];
         $lines = [];
         $previewError = null;
 
@@ -146,20 +149,35 @@ class TransactionEntryController extends Controller
 
         try {
             $rule = $head->accountingRule;
+            $requiresSplitAmounts = $this->settlementService->requiresSplitAmounts($rule);
+            $requiresMoney = $this->settlementService->requiresMoney($rule);
+            $requiresParty = $this->settlementService->requiresParty($rule);
+            $settlement = $this->settlementService->prepare($amount, $validated, $scale, $requiresSplitAmounts);
 
-            if ($rule->money_required && ! $moneyAccount) {
-                throw ValidationException::withMessages(['money_account_id' => 'A money account is required for this accounting rule.']);
+            if ($requiresMoney && ! $moneyAccount) {
+                throw ValidationException::withMessages([
+                    'money_account_id' => 'A money account is required because the selected accounting rule has a Selected Money posting line.',
+                ]);
             }
 
-            if ($rule->party_required && ! $party) {
-                throw ValidationException::withMessages(['party_id' => 'A party is required for this accounting rule.']);
+            if ($requiresParty && ! $party) {
+                throw ValidationException::withMessages([
+                    'party_id' => 'A party is required because the selected accounting rule has a party receivable/payable posting line.',
+                ]);
             }
 
-            if ($rule->party_required && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
+            if ($requiresParty && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
                 throw ValidationException::withMessages(['party_id' => 'This transaction requires a '.($partyTypeLabels[$rule->party_type] ?? $rule->party_type).' party.']);
             }
 
-            $lines = $this->journalBuilder->build($head, $moneyAccount, $party, $amount);
+            $lines = $this->journalBuilder->buildFromRule(
+                $head,
+                $moneyAccount,
+                $party,
+                $amount,
+                $settlement['paid_amount'],
+                $settlement['due_amount'],
+            );
         } catch (ValidationException $exception) {
             $previewError = collect($exception->errors())->flatten()->first();
         }
@@ -169,16 +187,20 @@ class TransactionEntryController extends Controller
             'rule' => $head->accountingRule,
             'lines' => $lines,
             'amount' => $amount,
+            'settlement' => $settlement,
             'previewError' => $previewError,
             'sourceLabels' => $this->optionService->labels(AccountingOption::GROUP_ACCOUNTING_SOURCE),
             'partyTypeLabels' => $partyTypeLabels,
         ])->render();
 
+        $rule = $head->accountingRule;
+
         return response()->json([
             'html' => $html,
-            'moneyRequired' => $head->accountingRule->money_required,
-            'partyRequired' => $head->accountingRule->party_required,
-            'partyType' => $head->accountingRule->party_type,
+            'moneyRequired' => $this->settlementService->requiresMoney($rule),
+            'partyRequired' => $this->settlementService->requiresParty($rule),
+            'splitRequired' => $this->settlementService->requiresSplitAmounts($rule),
+            'partyType' => $rule->party_type,
         ]);
     }
 
@@ -191,9 +213,23 @@ class TransactionEntryController extends Controller
             $request->user(),
         );
 
+        $transaction->loadMissing('salesInvoice');
+
         $message = 'Transaction '.$transaction->voucher_no.' posted successfully.';
+        if ($transaction->salesInvoice) {
+            $message .= ' Sales invoice '.$transaction->salesInvoice->invoice_no.' generated and download started.';
+        }
+
         if ($request->user()->canAccounting('transactions.view')) {
-            return redirect()->route('transactions.index')->with('success', $message);
+            $redirect = redirect()->route('transactions.index')->with('success', $message);
+
+            if ($transaction->salesInvoice) {
+                $redirect
+                    ->with('invoice_download_url', route('sales-invoices.download', $transaction->salesInvoice))
+                    ->with('invoice_show_url', route('sales-invoices.show', $transaction->salesInvoice));
+            }
+
+            return $redirect;
         }
 
         return redirect()

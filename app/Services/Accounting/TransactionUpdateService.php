@@ -18,6 +18,8 @@ class TransactionUpdateService
     public function __construct(
         private readonly JournalBuilder $journalBuilder,
         private readonly DecimalAmount $decimalAmount,
+        private readonly TransactionSettlementService $settlementService,
+        private readonly SalesInvoiceService $salesInvoiceService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
     ) {}
 
@@ -57,7 +59,7 @@ class TransactionUpdateService
                 ->findOrFail($transaction->id);
 
             $head = TransactionHead::query()
-                ->with(['accountingRule', 'postingAccount'])
+                ->with(['accountingRule.lines', 'postingAccount'])
                 ->where('company_id', $user->company_id)
                 ->where('category', $data['category'])
                 ->where('is_active', true)
@@ -100,38 +102,53 @@ class TransactionUpdateService
                     ->findOrFail($data['party_id'])
                 : null;
 
-            if ($rule->money_required && ! $moneyAccount) {
+            $requiresSplitAmounts = $this->settlementService->requiresSplitAmounts($rule);
+            $requiresMoney = $this->settlementService->requiresMoney($rule);
+            $requiresParty = $this->settlementService->requiresParty($rule);
+
+            $scale = (int) ($company->currency?->decimal_places ?? 2);
+            $amount = $this->decimalAmount->normalize($data['amount'], $scale);
+            $settlement = $this->settlementService->prepare($amount, $data, $scale, $requiresSplitAmounts);
+
+            if ($requiresMoney && ! $moneyAccount) {
                 throw ValidationException::withMessages([
-                    'money_account_id' => 'A money account is required for this accounting rule.',
+                    'money_account_id' => 'A money account is required because the selected accounting rule has a Selected Money posting line.',
                 ]);
             }
 
-            if ($rule->party_required && ! $party) {
+            if ($requiresParty && ! $party) {
                 throw ValidationException::withMessages([
-                    'party_id' => 'A party is required for this accounting rule.',
+                    'party_id' => 'A party is required because the selected accounting rule has a party receivable/payable posting line.',
                 ]);
             }
 
-            if ($rule->party_required && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
+            if ($requiresParty && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
                 throw ValidationException::withMessages([
                     'party_id' => 'This transaction requires a '.$rule->party_type.' party.',
                 ]);
             }
 
-            $amount = $this->decimalAmount->normalize(
-                $data['amount'],
-                (int) ($company->currency?->decimal_places ?? 2),
+            $lines = $this->journalBuilder->buildFromRule(
+                $head,
+                $moneyAccount,
+                $party,
+                $amount,
+                $settlement['paid_amount'],
+                $settlement['due_amount'],
             );
-            $lines = $this->journalBuilder->build($head, $moneyAccount, $party, $amount);
             $narration = filled($data['description'] ?? null) ? $data['description'] : $head->name;
 
             $lockedTransaction->update([
                 'category' => $data['category'],
                 'transaction_head_id' => $head->id,
-                'money_account_id' => $rule->money_required ? $moneyAccount?->id : null,
-                'party_id' => $party?->id,
+                'money_account_id' => $requiresMoney ? $moneyAccount?->id : null,
+                'party_id' => $requiresParty ? $party?->id : null,
                 'transaction_date' => $data['transaction_date'],
                 'amount' => $amount,
+                'settlement_type' => $settlement['settlement_type'],
+                'paid_amount' => $settlement['paid_amount'],
+                'due_amount' => $settlement['due_amount'],
+                'due_date' => $settlement['due_date'],
                 'reference' => $data['reference'] ?? null,
                 'description' => $data['description'] ?? null,
                 'status' => 'posted',
@@ -166,11 +183,14 @@ class TransactionUpdateService
                 ]);
             }
 
+            $this->salesInvoiceService->syncForTransaction($lockedTransaction, $company);
+
             return $lockedTransaction->fresh([
                 'transactionHead',
                 'moneyAccount',
                 'party',
                 'journalEntry.lines.chartOfAccount',
+                'salesInvoice',
             ]);
         }, attempts: 5);
     }

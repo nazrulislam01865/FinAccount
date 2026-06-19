@@ -148,6 +148,43 @@
                     @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
+                <div class="hg-field hidden" id="paid-amount-field">
+                    <label for="paid_amount">Paid Amount ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
+                    <input
+                        id="paid_amount"
+                        name="paid_amount"
+                        type="number"
+                        min="{{ \App\Support\CompanyContext::amountStep() }}"
+                        step="{{ \App\Support\CompanyContext::amountStep() }}"
+                        value="{{ old('paid_amount', $isEditing ? $transaction->paid_amount : '') }}"
+                    >
+                    <small class="hg-field-help">Shown automatically when the selected Transaction Head uses an accounting rule line with Paid/Due amount basis.</small>
+                    @error('paid_amount')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field hidden" id="due-amount-field">
+                    <label for="due_amount_preview">Due Amount (auto)</label>
+                    <input
+                        id="due_amount_preview"
+                        type="number"
+                        step="{{ \App\Support\CompanyContext::amountStep() }}"
+                        value="{{ old('due_amount', $isEditing ? $transaction->due_amount : '') }}"
+                        readonly
+                    >
+                    <small class="hg-field-help">Calculated as total amount minus paid amount. It is posted according to the selected accounting rule.</small>
+                </div>
+
+                <div class="hg-field hidden" id="due-date-field">
+                    <label for="due_date">Due Date</label>
+                    <input
+                        id="due_date"
+                        name="due_date"
+                        type="date"
+                        value="{{ old('due_date', $isEditing ? $transaction->due_date?->format('Y-m-d') : '') }}"
+                    >
+                    @error('due_date')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
                 <div class="hg-field">
                     <label for="reference">Reference</label>
                     <input

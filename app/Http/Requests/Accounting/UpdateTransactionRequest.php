@@ -48,6 +48,8 @@ class UpdateTransactionRequest extends FormRequest
                     ->where('is_active', true)),
             ],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
+            'paid_amount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
+            'due_date' => ['nullable', 'date'],
             'reference' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
             'transaction_attachments' => ['nullable', 'array', 'max:5'],

@@ -14,7 +14,7 @@ class AccountingRule extends Model
 
     protected $fillable = [
         'company_id', 'code', 'name', 'category', 'debit_source', 'credit_source',
-        'party_required', 'party_type', 'money_required', 'is_active',
+        'party_required', 'party_type', 'money_required', 'generates_invoice', 'invoice_title', 'is_active',
     ];
 
     protected function casts(): array
@@ -22,6 +22,7 @@ class AccountingRule extends Model
         return [
             'party_required' => 'boolean',
             'money_required' => 'boolean',
+            'generates_invoice' => 'boolean',
             'is_active' => 'boolean',
         ];
     }
@@ -29,5 +30,10 @@ class AccountingRule extends Model
     public function transactionHeads(): HasMany
     {
         return $this->hasMany(TransactionHead::class);
+    }
+
+    public function lines(): HasMany
+    {
+        return $this->hasMany(AccountingRuleLine::class)->orderBy('sort_order');
     }
 }

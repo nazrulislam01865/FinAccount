@@ -9,9 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Transaction extends Model
 {
+    public const SETTLEMENT_NORMAL = 'normal';
+    public const SETTLEMENT_PARTIAL = 'partial';
+
     protected $fillable = [
         'uuid', 'company_id', 'transaction_head_id', 'money_account_id', 'party_id',
         'created_by', 'voucher_no', 'category', 'transaction_date', 'amount',
+        'settlement_type', 'paid_amount', 'due_amount', 'due_date',
         'reference', 'description', 'request_token', 'status', 'posted_at',
     ];
 
@@ -20,6 +24,9 @@ class Transaction extends Model
         return [
             'transaction_date' => 'date',
             'amount' => 'decimal:2',
+            'paid_amount' => 'decimal:2',
+            'due_amount' => 'decimal:2',
+            'due_date' => 'date',
             'posted_at' => 'datetime',
         ];
     }
@@ -47,6 +54,12 @@ class Transaction extends Model
     public function journalEntry(): HasOne
     {
         return $this->hasOne(JournalEntry::class);
+    }
+
+
+    public function salesInvoice(): HasOne
+    {
+        return $this->hasOne(SalesInvoice::class);
     }
 
     public function attachments(): HasMany

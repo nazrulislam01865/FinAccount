@@ -18,6 +18,7 @@ use App\Http\Controllers\Accounting\MoneyAccountController;
 use App\Http\Controllers\Accounting\NotificationController;
 use App\Http\Controllers\Accounting\ProfileController;
 use App\Http\Controllers\Accounting\PartyController;
+use App\Http\Controllers\Accounting\SalesInvoiceController;
 use App\Http\Controllers\Accounting\Reports\FinancialReportController;
 use App\Http\Controllers\Accounting\System\BrandSettingsController;
 use App\Http\Controllers\Accounting\System\RoleMatrixController;
@@ -115,6 +116,13 @@ Route::middleware(['auth', 'verified', 'session.timeout', 'account.active', 'com
         ->middleware(['accounting.permission:transactions.view', 'accounting.permission:transactions.manage'])->name('transactions.update');
     Route::get('/transactions/{transaction}/attachments/{attachment}', [TransactionAttachmentController::class, 'show'])
         ->middleware('accounting.permission:transactions.view')->name('transactions.attachments.show');
+
+    Route::get('/sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'show'])
+        ->middleware('accounting.permission:transactions.view')->name('sales-invoices.show');
+    Route::get('/sales-invoices/{salesInvoice}/download', [SalesInvoiceController::class, 'download'])
+        ->middleware('accounting.permission:transactions.view')->name('sales-invoices.download');
+    Route::post('/transactions/{transaction}/invoice', [SalesInvoiceController::class, 'generate'])
+        ->middleware(['accounting.permission:transactions.view', 'accounting.permission:transactions.manage'])->name('transactions.invoice.generate');
     Route::delete('/transactions/{transaction}/attachments/{attachment}', [TransactionAttachmentController::class, 'destroy'])
         ->middleware(['accounting.permission:transactions.view', 'accounting.permission:transactions.manage'])->name('transactions.attachments.destroy');
 
