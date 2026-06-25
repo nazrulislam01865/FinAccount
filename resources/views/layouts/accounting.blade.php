@@ -118,6 +118,11 @@
     };
 </script>
 <script src="{{ asset('js/hisebghor-session-timeout.js') }}?v={{ $sessionAssetVersion }}"></script>
+@php
+    $setupModalAsset = public_path('js/hisebghor-setup-modals.js');
+    $setupModalAssetVersion = is_file($setupModalAsset) ? filemtime($setupModalAsset) : time();
+@endphp
+<script src="{{ asset('js/hisebghor-setup-modals.js') }}?v={{ $setupModalAssetVersion }}"></script>
 @stack('scripts')
 </body>
 </html>
