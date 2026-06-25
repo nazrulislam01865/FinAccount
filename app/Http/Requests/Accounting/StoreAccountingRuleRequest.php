@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +25,7 @@ class StoreAccountingRuleRequest extends FormRequest
             'code' => ['required', 'string', 'max:50', Rule::unique('accounting_rules')->where('company_id', $companyId)],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
-            'settlement_type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
+            'settlement_type' => ['required', Rule::in(TransactionTypes::settlementCodes())],
             'is_active' => ['required', 'boolean'],
         ];
     }

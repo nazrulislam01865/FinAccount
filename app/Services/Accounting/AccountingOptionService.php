@@ -3,6 +3,7 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingOption;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Collection;
 
 class AccountingOptionService
@@ -16,6 +17,35 @@ class AccountingOptionService
             ->orderBy('sort_order')
             ->orderBy('label')
             ->get();
+    }
+
+    /**
+     * Payment types are system-defined accounting behaviours. Return the
+     * canonical list so a stale or partially seeded cloud database cannot
+     * hide valid choices from setup forms.
+     *
+     * @return Collection<int, AccountingOption>
+     */
+    public function systemSettlementTypes(): Collection
+    {
+        return collect(TransactionTypes::settlementDefinitions())
+            ->map(function (array $definition, string $value): AccountingOption {
+                return new AccountingOption([
+                    'option_group' => AccountingOption::GROUP_SETTLEMENT_TYPE,
+                    'value' => $value,
+                    'label' => $definition['label'],
+                    'is_active' => true,
+                ]);
+            })
+            ->values();
+    }
+
+    /** @return array<string, string> */
+    public function systemSettlementLabels(): array
+    {
+        return collect(TransactionTypes::settlementDefinitions())
+            ->mapWithKeys(fn (array $definition, string $value): array => [$value => $definition['label']])
+            ->all();
     }
 
     /** @return array<int, string> */
