@@ -84,12 +84,12 @@ class TransactionHeadService
         }
 
         $transactionType = (string) $data['category'];
-        $allowedForType = TransactionTypes::allowedSettlements($transactionType);
+        $supportedSettlements = TransactionTypes::settlementCodes();
         $selectedSettlements = array_values((array) $data['allowed_settlements']);
 
-        if (array_diff($selectedSettlements, $allowedForType) !== []) {
+        if (array_diff($selectedSettlements, $supportedSettlements) !== []) {
             throw ValidationException::withMessages([
-                'allowed_settlements' => 'One or more selected payment types are not valid for this transaction type.',
+                'allowed_settlements' => 'One or more selected payment types are not supported by the system.',
             ]);
         }
 

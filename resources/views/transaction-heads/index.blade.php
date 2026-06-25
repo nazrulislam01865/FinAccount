@@ -4,7 +4,7 @@
     $addOnlyMode = (bool) ($addOnlyMode ?? false);
     $reopenModal = old('setup_modal') === 'transaction-head' || $addOnlyMode;
     $defaultCategory = $transactionCategories->first()?->value ?? '';
-    $defaultSettlements = $transactionTypeDefinitions[$defaultCategory]['allowed_settlements'] ?? [];
+    $defaultSettlements = $transactionTypeDefinitions[$defaultCategory]['default_settlements'] ?? [\App\Support\TransactionTypes::CASH];
     $defaultPartyType = $transactionTypeDefinitions[$defaultCategory]['party_type'] ?? 'Any';
     $canManage = auth()->user()?->canAccounting('transaction_heads.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);

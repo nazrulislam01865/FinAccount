@@ -20,6 +20,9 @@ final class TransactionTypes
     public const CREDIT = 'CREDIT';
     public const PARTIAL = 'PARTIAL';
 
+    /** @var array<int, string> */
+    public const ALL_SETTLEMENTS = [self::CASH, self::CREDIT, self::PARTIAL];
+
     /** @return array<string, array<string, mixed>> */
     public static function definitions(): array
     {
@@ -31,7 +34,8 @@ final class TransactionTypes
                 'money_label' => 'Receive In',
                 'party_label' => 'Customer',
                 'party_type' => 'Customer',
-                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Income'],
             ],
             self::PURCHASE => [
@@ -41,7 +45,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Supplier',
                 'party_type' => 'Supplier',
-                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Asset', 'Expense'],
             ],
             self::CUSTOMER_COLLECTION => [
@@ -51,7 +56,8 @@ final class TransactionTypes
                 'money_label' => 'Receive In',
                 'party_label' => 'Customer',
                 'party_type' => 'Customer',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Asset'],
             ],
             self::SUPPLIER_PAYMENT => [
@@ -61,7 +67,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Supplier',
                 'party_type' => 'Supplier',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Liability'],
             ],
             self::EXPENSE => [
@@ -71,7 +78,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Payable To',
                 'party_type' => 'Any',
-                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Expense'],
             ],
             self::OWNER_INVESTMENT => [
@@ -81,7 +89,8 @@ final class TransactionTypes
                 'money_label' => 'Receive In',
                 'party_label' => 'Owner',
                 'party_type' => 'Owner',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Equity'],
             ],
             self::OWNER_WITHDRAWAL => [
@@ -91,7 +100,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Owner',
                 'party_type' => 'Owner',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Equity'],
             ],
             self::LOAN_RECEIVED => [
@@ -101,7 +111,8 @@ final class TransactionTypes
                 'money_label' => 'Receive In',
                 'party_label' => 'Lender',
                 'party_type' => 'Lender',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Liability'],
             ],
             self::LOAN_REPAYMENT => [
@@ -111,7 +122,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Lender',
                 'party_type' => 'Lender',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Liability'],
             ],
             self::LOAN_INTEREST_PAYMENT => [
@@ -121,7 +133,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Lender',
                 'party_type' => 'Lender',
-                'allowed_settlements' => [self::CASH],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Expense'],
             ],
             self::ASSET_PURCHASE => [
@@ -131,7 +144,8 @@ final class TransactionTypes
                 'money_label' => 'Pay From',
                 'party_label' => 'Supplier',
                 'party_type' => 'Supplier',
-                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'allowed_settlements' => self::ALL_SETTLEMENTS,
+                'default_settlements' => [self::CASH],
                 'posting_types' => ['Asset'],
             ],
         ];
@@ -165,7 +179,19 @@ final class TransactionTypes
     /** @return array<int, string> */
     public static function allowedSettlements(string $type): array
     {
-        return self::definition($type)['allowed_settlements'] ?? [self::CASH];
+        return self::definition($type)['allowed_settlements'] ?? self::ALL_SETTLEMENTS;
+    }
+
+    /** @return array<int, string> */
+    public static function defaultSettlements(string $type): array
+    {
+        return self::definition($type)['default_settlements'] ?? [self::CASH];
+    }
+
+    /** @return array<int, string> */
+    public static function settlementCodes(): array
+    {
+        return array_keys(self::settlementDefinitions());
     }
 
     public static function partyType(string $type): string

@@ -50,6 +50,16 @@ class AccountingTemplateParityTest extends TestCase
         );
     }
 
+    public function test_every_transaction_type_supports_all_payment_types(): void
+    {
+        $allPaymentTypes = array_keys(TransactionTypes::settlementDefinitions());
+
+        foreach (TransactionTypes::definitions() as $definition) {
+            $this->assertSame($allPaymentTypes, $definition['allowed_settlements']);
+            $this->assertSame([TransactionTypes::CASH], $definition['default_settlements']);
+        }
+    }
+
     public function test_each_transaction_type_has_only_the_required_automatic_rule_templates(): void
     {
         $companyId = (int) $this->user->company_id;
@@ -95,6 +105,35 @@ class AccountingTemplateParityTest extends TestCase
             $saleHead->allowed_settlements,
         );
         $this->assertSame('Customer', $saleHead->party_type);
+    }
+
+    public function test_transaction_head_can_save_all_payment_types_for_a_previously_cash_only_type(): void
+    {
+        $account = \App\Models\ChartOfAccount::query()
+            ->where('company_id', $this->user->company_id)
+            ->where('type', 'Asset')
+            ->firstOrFail();
+
+        $this->actingAs($this->user)
+            ->post(route('transaction-heads.store'), [
+                'code' => 'TH-COL-ALL',
+                'name' => 'Collection With Selectable Payment Types',
+                'category' => TransactionTypes::CUSTOMER_COLLECTION,
+                'posting_account_id' => $account->id,
+                'allowed_settlements' => TransactionTypes::ALL_SETTLEMENTS,
+                'party_type' => 'Customer',
+                'is_active' => '1',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('transaction_heads', [
+            'company_id' => $this->user->company_id,
+            'code' => 'TH-COL-ALL',
+            'category' => TransactionTypes::CUSTOMER_COLLECTION,
+        ]);
+
+        $head = TransactionHead::query()->where('code', 'TH-COL-ALL')->firstOrFail();
+        $this->assertSame(TransactionTypes::ALL_SETTLEMENTS, $head->allowed_settlements);
     }
 
     public function test_partial_sale_demo_transaction_is_balanced_without_a_selected_rule(): void

@@ -7,18 +7,15 @@ const syncTransactionHeadForm = (form) => {
     const selected = typeSelect?.selectedOptions[0];
     if (!selected) return;
 
-    const allowedSettlements = parseJson(selected.dataset.allowedSettlements);
     form.querySelectorAll('[data-settlement-wrapper]').forEach((wrapper) => {
         const input = wrapper.querySelector('input');
-        const allowed = allowedSettlements.includes(wrapper.dataset.settlementWrapper);
-        wrapper.hidden = !allowed;
-        input.disabled = !allowed;
-        if (!allowed) input.checked = false;
+        wrapper.hidden = false;
+        input.disabled = false;
     });
 
-    const checkedAllowed = Array.from(form.querySelectorAll('input[name="allowed_settlements[]"]:checked:not(:disabled)'));
-    if (checkedAllowed.length === 0) {
-        const first = form.querySelector('input[name="allowed_settlements[]"]:not(:disabled)');
+    const checkedSettlements = Array.from(form.querySelectorAll('input[name="allowed_settlements[]"]:checked'));
+    if (checkedSettlements.length === 0) {
+        const first = form.querySelector('input[name="allowed_settlements[]"]');
         if (first) first.checked = true;
     }
 

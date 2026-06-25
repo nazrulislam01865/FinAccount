@@ -89,9 +89,9 @@ class AccountingRuleService
         $type = (string) $data['category'];
         $settlement = (string) $data['settlement_type'];
 
-        if (! in_array($settlement, TransactionTypes::allowedSettlements($type), true)) {
+        if (! in_array($settlement, TransactionTypes::settlementCodes(), true)) {
             throw ValidationException::withMessages([
-                'settlement_type' => 'This payment type is not valid for the selected transaction type.',
+                'settlement_type' => 'This payment type is not supported by the system.',
             ]);
         }
 
@@ -154,73 +154,182 @@ class AccountingRuleService
         $receivable = AccountingRule::SOURCE_PARTY_RECEIVABLE;
         $payable = AccountingRule::SOURCE_PARTY_PAYABLE;
 
-        if ($type === TransactionTypes::SALE) {
+        $incoming = static function (string $partyType, bool $partyRequiredForCash = false) use (
+            $settlement,
+            $debit,
+            $credit,
+            $total,
+            $paid,
+            $due,
+            $money,
+            $head,
+            $receivable,
+        ): array {
             return match ($settlement) {
-                TransactionTypes::CASH => ['party_required' => false, 'party_type' => 'Any', 'money_required' => true, 'lines' => [
-                    ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $total],
-                    ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
-                ]],
-                TransactionTypes::CREDIT => ['party_required' => true, 'party_type' => 'Customer', 'money_required' => false, 'lines' => [
-                    ['line_side' => $debit, 'account_source' => $receivable, 'amount_basis' => $total],
-                    ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
-                ]],
-                default => ['party_required' => true, 'party_type' => 'Customer', 'money_required' => true, 'lines' => [
-                    ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $paid],
-                    ['line_side' => $debit, 'account_source' => $receivable, 'amount_basis' => $due],
-                    ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
-                ]],
+                TransactionTypes::CASH => [
+                    'party_required' => $partyRequiredForCash,
+                    'party_type' => $partyRequiredForCash ? $partyType : 'Any',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
+                    ],
+                ],
+                TransactionTypes::CREDIT => [
+                    'party_required' => true,
+                    'party_type' => $partyType,
+                    'money_required' => false,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $receivable, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
+                    ],
+                ],
+                TransactionTypes::PARTIAL => [
+                    'party_required' => true,
+                    'party_type' => $partyType,
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $paid],
+                        ['line_side' => $debit, 'account_source' => $receivable, 'amount_basis' => $due],
+                        ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
+                    ],
+                ],
+                default => throw ValidationException::withMessages([
+                    'settlement_type' => 'No standard accounting template is available for this payment type.',
+                ]),
+            };
+        };
+
+        $outgoing = static function (string $partyType, bool $partyRequiredForCash = false) use (
+            $settlement,
+            $debit,
+            $credit,
+            $total,
+            $paid,
+            $due,
+            $money,
+            $head,
+            $payable,
+        ): array {
+            return match ($settlement) {
+                TransactionTypes::CASH => [
+                    'party_required' => $partyRequiredForCash,
+                    'party_type' => $partyRequiredForCash ? $partyType : 'Any',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
+                    ],
+                ],
+                TransactionTypes::CREDIT => [
+                    'party_required' => true,
+                    'party_type' => $partyType,
+                    'money_required' => false,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $payable, 'amount_basis' => $total],
+                    ],
+                ],
+                TransactionTypes::PARTIAL => [
+                    'party_required' => true,
+                    'party_type' => $partyType,
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $paid],
+                        ['line_side' => $credit, 'account_source' => $payable, 'amount_basis' => $due],
+                    ],
+                ],
+                default => throw ValidationException::withMessages([
+                    'settlement_type' => 'No standard accounting template is available for this payment type.',
+                ]),
+            };
+        };
+
+        if ($type === TransactionTypes::SALE) {
+            return $incoming('Customer');
+        }
+
+        if (in_array($type, [TransactionTypes::PURCHASE, TransactionTypes::ASSET_PURCHASE], true)) {
+            return $outgoing('Supplier');
+        }
+
+        if ($type === TransactionTypes::EXPENSE) {
+            return $outgoing('Any');
+        }
+
+        if ($type === TransactionTypes::CUSTOMER_COLLECTION) {
+            return match ($settlement) {
+                TransactionTypes::CASH => [
+                    'party_required' => true,
+                    'party_type' => 'Customer',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $receivable, 'amount_basis' => $total],
+                    ],
+                ],
+                TransactionTypes::CREDIT => [
+                    'party_required' => true,
+                    'party_type' => 'Customer',
+                    'money_required' => false,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $receivable, 'amount_basis' => $total],
+                    ],
+                ],
+                default => [
+                    'party_required' => true,
+                    'party_type' => 'Customer',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $paid],
+                        ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $due],
+                        ['line_side' => $credit, 'account_source' => $receivable, 'amount_basis' => $total],
+                    ],
+                ],
             };
         }
 
-        if (in_array($type, [TransactionTypes::PURCHASE, TransactionTypes::EXPENSE, TransactionTypes::ASSET_PURCHASE], true)) {
-            $partyType = $type === TransactionTypes::EXPENSE ? 'Any' : 'Supplier';
-
+        if ($type === TransactionTypes::SUPPLIER_PAYMENT) {
             return match ($settlement) {
-                TransactionTypes::CASH => ['party_required' => false, 'party_type' => 'Any', 'money_required' => true, 'lines' => [
-                    ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
-                    ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
-                ]],
-                TransactionTypes::CREDIT => ['party_required' => true, 'party_type' => $partyType, 'money_required' => false, 'lines' => [
-                    ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
-                    ['line_side' => $credit, 'account_source' => $payable, 'amount_basis' => $total],
-                ]],
-                default => ['party_required' => true, 'party_type' => $partyType, 'money_required' => true, 'lines' => [
-                    ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
-                    ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $paid],
-                    ['line_side' => $credit, 'account_source' => $payable, 'amount_basis' => $due],
-                ]],
+                TransactionTypes::CASH => [
+                    'party_required' => true,
+                    'party_type' => 'Supplier',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $payable, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
+                    ],
+                ],
+                TransactionTypes::CREDIT => [
+                    'party_required' => true,
+                    'party_type' => 'Supplier',
+                    'money_required' => false,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $payable, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $total],
+                    ],
+                ],
+                default => [
+                    'party_required' => true,
+                    'party_type' => 'Supplier',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $payable, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $paid],
+                        ['line_side' => $credit, 'account_source' => $head, 'amount_basis' => $due],
+                    ],
+                ],
             };
         }
 
         return match ($type) {
-            TransactionTypes::CUSTOMER_COLLECTION => ['party_required' => true, 'party_type' => 'Customer', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $receivable, 'amount_basis' => $total],
-            ]],
-            TransactionTypes::SUPPLIER_PAYMENT => ['party_required' => true, 'party_type' => 'Supplier', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $payable, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
-            ]],
-            TransactionTypes::OWNER_INVESTMENT => ['party_required' => true, 'party_type' => 'Owner', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $payable, 'amount_basis' => $total],
-            ]],
-            TransactionTypes::OWNER_WITHDRAWAL => ['party_required' => true, 'party_type' => 'Owner', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
-            ]],
-            TransactionTypes::LOAN_RECEIVED => ['party_required' => true, 'party_type' => 'Lender', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $money, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $payable, 'amount_basis' => $total],
-            ]],
-            TransactionTypes::LOAN_REPAYMENT => ['party_required' => true, 'party_type' => 'Lender', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $payable, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
-            ]],
-            TransactionTypes::LOAN_INTEREST_PAYMENT => ['party_required' => true, 'party_type' => 'Lender', 'money_required' => true, 'lines' => [
-                ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
-                ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
-            ]],
+            TransactionTypes::OWNER_INVESTMENT => $incoming('Owner', true),
+            TransactionTypes::OWNER_WITHDRAWAL => $outgoing('Owner', true),
+            TransactionTypes::LOAN_RECEIVED => $incoming('Lender', true),
+            TransactionTypes::LOAN_REPAYMENT,
+            TransactionTypes::LOAN_INTEREST_PAYMENT => $outgoing('Lender', true),
             default => throw ValidationException::withMessages([
                 'category' => 'No standard accounting template is available for this transaction type.',
             ]),
