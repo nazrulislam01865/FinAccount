@@ -11,8 +11,9 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
             if (!field) return;
 
             if (field instanceof RadioNodeList) {
+                const selectedValues = Array.isArray(value) ? value.map(String) : [String(value)];
                 [...field].forEach((item) => {
-                    item.checked = String(item.value) === String(value);
+                    item.checked = selectedValues.includes(String(item.value));
                 });
                 return;
             }

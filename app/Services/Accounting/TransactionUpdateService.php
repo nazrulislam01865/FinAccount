@@ -5,11 +5,11 @@ namespace App\Services\Accounting;
 use App\Models\AccountingRule;
 use App\Models\Company;
 use App\Models\MoneyAccount;
-use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Models\User;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,13 +19,13 @@ class TransactionUpdateService
         private readonly JournalBuilder $journalBuilder,
         private readonly DecimalAmount $decimalAmount,
         private readonly TransactionSettlementService $settlementService,
+        private readonly RuleMatcher $ruleMatcher,
         private readonly SalesInvoiceService $salesInvoiceService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
+        private readonly TransactionPartyResolver $partyResolver,
     ) {}
 
-    /**
-     * @param array<string, mixed> $data
-     */
+    /** @param array<string, mixed> $data */
     public function update(Transaction $transaction, array $data, User $user): Transaction
     {
         if ($transaction->company_id !== $user->company_id) {
@@ -38,7 +38,7 @@ class TransactionUpdateService
             && $transaction->category !== $data['category']
         ) {
             throw ValidationException::withMessages([
-                'category' => 'The transaction category cannot be changed while editing a complete posted transaction.',
+                'category' => 'The transaction type cannot be changed while editing a complete posted transaction.',
             ]);
         }
 
@@ -48,39 +48,27 @@ class TransactionUpdateService
                 ->lockForUpdate()
                 ->findOrFail($user->company_id);
 
-            $this->accountingPeriodService->assertPostingAllowed(
-                $company,
-                (string) $data['transaction_date'],
-            );
+            $this->accountingPeriodService->assertPostingAllowed($company, (string) $data['transaction_date']);
 
             $lockedTransaction = Transaction::query()
                 ->where('company_id', $user->company_id)
                 ->lockForUpdate()
                 ->findOrFail($transaction->id);
 
+            $transactionType = (string) $data['category'];
+
             $head = TransactionHead::query()
-                ->with(['accountingRule.lines', 'postingAccount'])
+                ->with('postingAccount')
                 ->where('company_id', $user->company_id)
-                ->where('category', $data['category'])
+                ->where('category', $transactionType)
                 ->where('is_active', true)
-                ->whereNotNull('accounting_rule_id')
                 ->whereNotNull('posting_account_id')
-                ->whereHas('accountingRule', fn ($query) => $query
-                    ->where('company_id', $user->company_id)
-                    ->where('category', $data['category'])
-                    ->where('is_active', true))
                 ->whereHas('postingAccount', fn ($query) => $query
                     ->where('company_id', $user->company_id)
                     ->where('is_active', true))
                 ->findOrFail($data['transaction_head_id']);
 
-            $rule = $head->accountingRule;
-
-            if (! $rule->is_active || $rule->category !== $data['category']) {
-                throw ValidationException::withMessages([
-                    'transaction_head_id' => 'The selected transaction head is not valid for this category.',
-                ]);
-            }
+            $this->validateHeadNature($head, $transactionType);
 
             $moneyAccount = filled($data['money_account_id'] ?? null)
                 ? MoneyAccount::query()
@@ -94,37 +82,32 @@ class TransactionUpdateService
                     ->findOrFail($data['money_account_id'])
                 : null;
 
-            $party = filled($data['party_id'] ?? null)
-                ? Party::query()
-                    ->with(['receivableAccount', 'payableAccount'])
-                    ->where('company_id', $user->company_id)
-                    ->where('is_active', true)
-                    ->findOrFail($data['party_id'])
-                : null;
-
-            $requiresSplitAmounts = $this->settlementService->requiresSplitAmounts($rule);
-            $requiresMoney = $this->settlementService->requiresMoney($rule);
-            $requiresParty = $this->settlementService->requiresParty($rule);
-
             $scale = (int) ($company->currency?->decimal_places ?? 2);
             $amount = $this->decimalAmount->normalize($data['amount'], $scale);
-            $settlement = $this->settlementService->prepare($amount, $data, $scale, $requiresSplitAmounts);
+            $settlement = $this->settlementService->prepare($amount, $data, $scale);
+            $settlementType = $settlement['settlement_type'];
+
+            if (! $head->allowsSettlement($settlementType)) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => 'The amount entered creates a payment type that is not allowed for this transaction head.',
+                ]);
+            }
+
+            $rule = $this->ruleMatcher->match((int) $user->company_id, $transactionType, $settlementType);
+            $requiresMoney = $this->settlementService->requiresMoney($rule);
+            $requiresParty = $this->settlementService->requiresParty($rule);
+            $party = $requiresParty
+                ? $this->partyResolver->resolveRequired(
+                    (int) $user->company_id,
+                    $head,
+                    $rule,
+                    $data['party_id'] ?? null,
+                )
+                : null;
 
             if ($requiresMoney && ! $moneyAccount) {
                 throw ValidationException::withMessages([
-                    'money_account_id' => 'A money account is required because the selected accounting rule has a Selected Money posting line.',
-                ]);
-            }
-
-            if ($requiresParty && ! $party) {
-                throw ValidationException::withMessages([
-                    'party_id' => 'A party is required because the selected accounting rule has a party receivable/payable posting line.',
-                ]);
-            }
-
-            if ($requiresParty && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
-                throw ValidationException::withMessages([
-                    'party_id' => 'This transaction requires a '.$rule->party_type.' party.',
+                    'money_account_id' => TransactionTypes::moneyLabel($transactionType).' is required for this payment type.',
                 ]);
             }
 
@@ -135,11 +118,12 @@ class TransactionUpdateService
                 $amount,
                 $settlement['paid_amount'],
                 $settlement['due_amount'],
+                $rule,
             );
             $narration = filled($data['description'] ?? null) ? $data['description'] : $head->name;
 
             $lockedTransaction->update([
-                'category' => $data['category'],
+                'category' => $transactionType,
                 'transaction_head_id' => $head->id,
                 'money_account_id' => $requiresMoney ? $moneyAccount?->id : null,
                 'party_id' => $requiresParty ? $party?->id : null,
@@ -186,12 +170,20 @@ class TransactionUpdateService
             $this->salesInvoiceService->syncForTransaction($lockedTransaction, $company);
 
             return $lockedTransaction->fresh([
-                'transactionHead',
-                'moneyAccount',
-                'party',
-                'journalEntry.lines.chartOfAccount',
-                'salesInvoice',
+                'transactionHead', 'moneyAccount', 'party',
+                'journalEntry.lines.chartOfAccount', 'salesInvoice',
             ]);
         }, attempts: 5);
+    }
+
+    private function validateHeadNature(TransactionHead $head, string $transactionType): void
+    {
+        $allowedTypes = TransactionTypes::postingTypes($transactionType);
+
+        if ($allowedTypes !== [] && ! in_array($head->postingAccount?->type, $allowedTypes, true)) {
+            throw ValidationException::withMessages([
+                'transaction_head_id' => 'The selected head is linked to an unsuitable account type for this transaction.',
+            ]);
+        }
     }
 }

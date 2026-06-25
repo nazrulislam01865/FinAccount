@@ -11,6 +11,7 @@ use App\Models\TransactionHead;
 use App\Models\User;
 use App\Services\Company\CompanyMasterDeletionService;
 use App\Support\CompanyContext;
+use App\Support\TransactionTypes;
 use Database\Seeders\HisebGhorDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -91,7 +92,7 @@ class CompanySetupModuleTest extends TestCase
     {
         $head = TransactionHead::query()
             ->where('company_id', $this->company->id)
-            ->where('code', 'TH-S-001')
+            ->where('code', 'TH-SALE')
             ->firstOrFail();
         $moneyAccountId = \App\Models\MoneyAccount::query()
             ->where('company_id', $this->company->id)
@@ -99,7 +100,8 @@ class CompanySetupModuleTest extends TestCase
             ->value('id');
 
         $response = $this->actingAs($this->user)->post(route('transactions.store'), [
-            'category' => 'Sales',
+            'category' => TransactionTypes::SALE,
+            'settlement_type' => TransactionTypes::CASH,
             'transaction_date' => '1999-12-31',
             'transaction_head_id' => $head->id,
             'money_account_id' => $moneyAccountId,

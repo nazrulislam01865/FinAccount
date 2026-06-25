@@ -1,77 +1,53 @@
 @php
     $transaction = $transaction ?? null;
     $isEditing = $transaction !== null;
-    $formAction = $isEditing
-        ? route('transactions.update', $transaction)
-        : route('transactions.store');
+    $formAction = $isEditing ? route('transactions.update', $transaction) : route('transactions.store');
     $categoryRepairRequired = $categoryRepairRequired ?? false;
-    $transactionDateContext = $transactionDateContext ?? [
-        'min' => null,
-        'max' => null,
-        'default' => now()->toDateString(),
-        'label' => null,
-    ];
+    $transactionDateContext = $transactionDateContext ?? ['min' => null, 'max' => null, 'default' => now()->toDateString(), 'label' => null];
+    $selectedHeadId = old('transaction_head_id', $isEditing ? $transaction->transaction_head_id : '');
+    $selectedSettlement = old('settlement_type', $isEditing ? ($transaction->settlement_type ?: \App\Support\TransactionTypes::CASH) : \App\Support\TransactionTypes::CASH);
+    $selectedAmount = old('amount', $isEditing ? $transaction->amount : '');
+    $selectedPaidAmount = old('paid_amount', $isEditing ? $transaction->paid_amount : '');
+    $transactionTypeLabel = $transactionTypeDefinition['label'] ?? ($categoryOption?->label ?? $category);
+    $pageTransactionLabel = $category === \App\Support\TransactionTypes::SALE ? 'Sales' : $transactionTypeLabel;
+    $moneyLabel = $transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account';
+    $partyLabel = $transactionTypeDefinition['party_label'] ?? 'Party';
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
     <div class="hg-page-header">
         <div>
-            <h1>Record {{ $categoryOption?->label ?? $category }} Transaction</h1>
+            <h1>{{ $isEditing ? 'Edit '.$pageTransactionLabel.' Transaction' : 'Record '.$pageTransactionLabel.' Transaction' }}</h1>
+            <p class="hg-muted">Enter the transaction details. Payment status and the journal are calculated automatically.</p>
         </div>
     </div>
 
     @if (! $isEditing || $categoryRepairRequired)
-        <div class="hg-tabs">
+        <div class="hg-tabs hg-transaction-type-tabs">
             @foreach ($transactionCategories as $categoryTab)
-                <a
-                    href="{{ $isEditing
-                        ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value])
-                        : route('transactions.create', ['category' => $categoryTab->value]) }}"
-                    class="{{ $category === $categoryTab->value ? 'active' : '' }}"
-                >{{ $categoryTab->label }}</a>
+                @php($definition = \App\Support\TransactionTypes::definition($categoryTab->value))
+                <a href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['category' => $categoryTab->value]) }}" class="{{ $category === $categoryTab->value ? 'active' : '' }}">
+                    {{ $definition['label'] ?? $categoryTab->label }}
+                </a>
             @endforeach
         </div>
     @endif
 
     @if ($isEditing && $transaction->status === 'incomplete')
-        <div class="hg-notice" style="margin-bottom:14px">
-            <strong>This transaction is incomplete.</strong>
-            A related setup record was deleted. Select valid active dependencies and update the transaction to rebuild its journal and return it to Posted status.
-        </div>
+        <div class="hg-notice" style="margin-bottom:14px"><strong>This transaction is incomplete.</strong> Select valid active setup records and update it to rebuild the journal.</div>
     @endif
 
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
-            <form
-                method="POST"
-                action="{{ $formAction }}"
-                enctype="multipart/form-data"
-                class="hg-form-grid"
-                data-transaction-form
-                data-draft-form
-                data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}"
-                data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}"
-            >
+            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid" data-transaction-form data-default-allowed-settlements='@json($transactionTypeDefinition['allowed_settlements'] ?? [\App\Support\TransactionTypes::CASH])' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null) ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
                 @csrf
-                @if ($isEditing)
-                    @method('PUT')
-                @else
-                    <input type="hidden" name="request_token" value="{{ $requestToken }}">
-                @endif
-
+                @if ($isEditing) @method('PUT') @else <input type="hidden" name="request_token" value="{{ $requestToken }}"> @endif
                 <input type="hidden" name="category" value="{{ $category }}">
+                <input type="hidden" id="settlement_type" name="settlement_type" value="{{ $selectedSettlement }}">
 
                 <div class="hg-field">
                     <label for="transaction_date">Date <span class="hg-required">*</span></label>
-                    <input
-                        id="transaction_date"
-                        name="transaction_date"
-                        type="date"
-                        value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : $transactionDateContext['default']) }}"
-                        @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif
-                        @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif
-                        required
-                    >
+                    <input id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : $transactionDateContext['default']) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
                     @if($transactionDateContext['label'])<small class="hg-field-help">Open period: {{ $transactionDateContext['label'] }}</small>@endif
                     @error('transaction_date')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
@@ -79,120 +55,66 @@
                 <div class="hg-field">
                     <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
                     <select id="transaction_head_id" name="transaction_head_id" required>
-                        <option value="">
-                            {{ $transactionHeads->isEmpty()
-                                ? 'No active '.($categoryOption?->label ?? $category).' transaction head available'
-                                : 'Select transaction head' }}
-                        </option>
+                        <option value="">{{ $transactionHeads->isEmpty() ? 'No active transaction head available' : 'Select transaction head' }}</option>
                         @foreach ($transactionHeads as $head)
-                            <option
-                                value="{{ $head->id }}"
-                                @selected((string) old('transaction_head_id', $isEditing ? $transaction->transaction_head_id : '') === (string) $head->id)
-                            >
-                                {{ $head->name }}
-                            </option>
+                            <option value="{{ $head->id }}" data-allowed-settlements="{{ json_encode($head->allowedSettlementCodes()) }}" data-party-type="{{ $head->party_type ?: ($transactionTypeDefinition['party_type'] ?? 'Any') }}" @selected((string) $selectedHeadId === (string) $head->id)>{{ $head->name }}</option>
                         @endforeach
                     </select>
                     @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
-                <div class="hg-field" id="money-field">
-                    <label for="money_account_id">
-                        <span id="money-label">{{ $categoryOption?->metadata['money_label'] ?? 'Money Account' }}</span>
-                        <span class="hg-required">*</span>
-                    </label>
+                <div class="hg-field">
+                    <label for="amount">Amount ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
+                    <input id="amount" name="amount" type="number" min="{{ \App\Support\CompanyContext::amountStep() }}" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedAmount }}" required>
+                    @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field" id="paid-amount-field">
+                    <label for="paid_amount"><span id="paid-amount-label">Paid/Received Now</span> ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
+                    <input id="paid_amount" name="paid_amount" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedPaidAmount }}">
+                    <small class="hg-field-help" id="paid-amount-help">Enter 0 when the full amount will remain due.</small>
+                    @error('paid_amount')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    @error('settlement_type')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field hidden" id="money-field">
+                    <label for="money_account_id"><span id="money-label">{{ $moneyLabel }}</span> <span class="hg-required">*</span></label>
                     <select id="money_account_id" name="money_account_id">
-                        <option value="">
-                            {{ $moneyAccounts->isEmpty() ? 'No active money account available' : 'Select money account' }}
-                        </option>
+                        <option value="">{{ $moneyAccounts->isEmpty() ? 'No active money account available' : 'Select account' }}</option>
                         @foreach ($moneyAccounts as $moneyAccount)
-                            <option
-                                value="{{ $moneyAccount->id }}"
-                                @selected((string) old('money_account_id', $isEditing ? $transaction->money_account_id : '') === (string) $moneyAccount->id)
-                            >
-                                {{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}
-                            </option>
+                            <option value="{{ $moneyAccount->id }}" @selected((string) old('money_account_id', $isEditing ? $transaction->money_account_id : '') === (string) $moneyAccount->id)>{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
                         @endforeach
                     </select>
                     @error('money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
-                <div class="hg-field" id="party-field">
-                    <label for="party_id">Party <span class="hg-required">*</span></label>
+
+                <div class="hg-field hidden" id="due-amount-field">
+                    <label for="due_amount_preview">Remaining Due (auto)</label>
+                    <input id="due_amount_preview" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('due_amount', $isEditing ? $transaction->due_amount : '') }}" readonly>
+                </div>
+
+                <div class="hg-field hidden" id="party-field">
+                    <label for="party_id"><span id="party-label">{{ $partyLabel }}</span> <span class="hg-required">*</span></label>
                     <select id="party_id" name="party_id">
-                        <option value="">Select party</option>
+                        <option value="">Select {{ strtolower($partyLabel) }}</option>
                         @foreach ($parties as $party)
-                            <option
-                                value="{{ $party->id }}"
-                                data-party-type="{{ $party->type }}"
-                                @selected((string) old('party_id', $isEditing ? $transaction->party_id : '') === (string) $party->id)
-                            >
-                                {{ $party->code }} — {{ $party->name }} ({{ $partyTypeLabels[$party->type] ?? $party->type }})
-                            </option>
+                            <option value="{{ $party->id }}" data-party-type="{{ $party->type }}" @selected((string) old('party_id', $isEditing ? $transaction->party_id : '') === (string) $party->id)>{{ $party->code }} — {{ $party->name }} ({{ $partyTypeLabels[$party->type] ?? $party->type }})</option>
                         @endforeach
                     </select>
                     @error('party_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
-                <div class="hg-field">
-                    <label for="amount">Amount ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
-                    <input
-                        id="amount"
-                        name="amount"
-                        type="number"
-                        min="{{ \App\Support\CompanyContext::amountStep() }}"
-                        step="{{ \App\Support\CompanyContext::amountStep() }}"
-                        value="{{ old('amount', $isEditing ? $transaction->amount : '') }}"
-                        required
-                    >
-                    @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
-                </div>
-
-                <div class="hg-field hidden" id="paid-amount-field">
-                    <label for="paid_amount">Paid Amount ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
-                    <input
-                        id="paid_amount"
-                        name="paid_amount"
-                        type="number"
-                        min="{{ \App\Support\CompanyContext::amountStep() }}"
-                        step="{{ \App\Support\CompanyContext::amountStep() }}"
-                        value="{{ old('paid_amount', $isEditing ? $transaction->paid_amount : '') }}"
-                    >
-                    <small class="hg-field-help">Shown automatically when the selected Transaction Head uses an accounting rule line with Paid/Due amount basis.</small>
-                    @error('paid_amount')<small class="hg-field-error">{{ $message }}</small>@enderror
-                </div>
-
-                <div class="hg-field hidden" id="due-amount-field">
-                    <label for="due_amount_preview">Due Amount (auto)</label>
-                    <input
-                        id="due_amount_preview"
-                        type="number"
-                        step="{{ \App\Support\CompanyContext::amountStep() }}"
-                        value="{{ old('due_amount', $isEditing ? $transaction->due_amount : '') }}"
-                        readonly
-                    >
-                    <small class="hg-field-help">Calculated as total amount minus paid amount. It is posted according to the selected accounting rule.</small>
-                </div>
-
-                <div class="hg-field hidden" id="due-date-field">
-                    <label for="due_date">Due Date</label>
-                    <input
-                        id="due_date"
-                        name="due_date"
-                        type="date"
-                        value="{{ old('due_date', $isEditing ? $transaction->due_date?->format('Y-m-d') : '') }}"
-                    >
-                    @error('due_date')<small class="hg-field-error">{{ $message }}</small>@enderror
+                <div class="hg-field hidden" id="auto-party-notice" aria-live="polite">
+                    <div class="hg-notice" style="margin:0">
+                        <strong id="auto-party-label">Party selected automatically</strong>
+                        <div class="hg-muted" id="auto-party-name"></div>
+                    </div>
                 </div>
 
                 <div class="hg-field">
                     <label for="reference">Reference</label>
-                    <input
-                        id="reference"
-                        name="reference"
-                        value="{{ old('reference', $isEditing ? $transaction->reference : '') }}"
-                        placeholder="Invoice, bill, receipt or loan ref"
-                    >
+                    <input id="reference" name="reference" value="{{ old('reference', $isEditing ? $transaction->reference : '') }}" placeholder="Invoice, bill or receipt number">
                     @error('reference')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
@@ -283,6 +205,7 @@
                     @endif
                 </div>
 
+
                 <div class="hg-field full">
                     <x-accounting.form-actions :submit-label="$isEditing ? 'Update Transaction' : 'Post Transaction'">
                         <button type="button" class="hg-btn" data-draft-clear data-draft-clear-url="{{ route('transactions.create', ['category' => $category]) }}">Clear</button>
@@ -292,14 +215,10 @@
         </section>
 
         <section class="hg-card">
-            <h2 class="hg-card-title">Automatic Journal Preview</h2>
-            <div id="journal-preview" data-preview-url="{{ route('transactions.preview') }}">
-                @include('transactions.partials.preview-empty')
-            </div>
+            <h2 class="hg-card-title">Transaction Summary</h2>
+            <div id="journal-preview" data-preview-url="{{ route('transactions.preview') }}">@include('transactions.partials.preview-empty')</div>
         </section>
     </div>
 
-    <template id="journal-preview-empty-template">
-        @include('transactions.partials.preview-empty')
-    </template>
+    <template id="journal-preview-empty-template">@include('transactions.partials.preview-empty')</template>
 </x-layouts::accounting>

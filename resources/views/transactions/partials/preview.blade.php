@@ -1,53 +1,32 @@
 @php
-    $effectiveLines = app(\App\Services\Accounting\TransactionSettlementService::class)->effectiveLines($rule);
-    $amountBasisLabels = [
-        \App\Models\AccountingRuleLine::BASIS_TOTAL => 'Total Amount',
-        \App\Models\AccountingRuleLine::BASIS_PAID => 'Paid Amount',
-        \App\Models\AccountingRuleLine::BASIS_DUE => 'Due Amount',
-    ];
+    $settlementType = $settlement['settlement_type'] ?? \App\Support\TransactionTypes::CASH;
+    $total = (float) $amount;
+    $paid = (float) ($settlement['paid_amount'] ?? 0);
+    $due = (float) ($settlement['due_amount'] ?? 0);
 @endphp
 
 <div class="hg-notice">
-    <b>Rule:</b> {{ $rule->name }}<br>
-    <b>Rule-based posting lines:</b>
-    @foreach($effectiveLines as $ruleLine)
-        @php
-            $side = $ruleLine instanceof \App\Models\AccountingRuleLine ? $ruleLine->line_side : ($ruleLine['line_side'] ?? '');
-            $source = $ruleLine instanceof \App\Models\AccountingRuleLine ? $ruleLine->account_source : ($ruleLine['account_source'] ?? '');
-            $basis = $ruleLine instanceof \App\Models\AccountingRuleLine ? $ruleLine->amount_basis : ($ruleLine['amount_basis'] ?? '');
-        @endphp
-        <br>{{ ucfirst($side) }}: {{ $sourceLabels[$source] ?? $source }} — {{ $amountBasisLabels[$basis] ?? $basis }}
-    @endforeach
-    <br>
-    Required party: {{ $rule->party_required ? ($partyTypeLabels[$rule->party_type] ?? $rule->party_type) : 'No' }} |
-    Money account: {{ $rule->money_required ? 'Yes' : 'No' }}<br>
-    Head posting COA: {{ $head->postingAccount->name }}
-    @if(($settlement['settlement_type'] ?? 'normal') === 'partial')
-        <br>
-        <b>Rule-based split:</b>
-        Total {{ \App\Support\CompanyContext::money((float) $amount) }} |
-        Paid {{ \App\Support\CompanyContext::money((float) ($settlement['paid_amount'] ?? 0)) }} |
-        Due {{ \App\Support\CompanyContext::money((float) ($settlement['due_amount'] ?? 0)) }}
+    <strong>{{ $transactionTypeLabel }} — {{ $head->name }}</strong><br>
+    Payment: {{ $settlementLabels[$settlementType] ?? $settlementType }}<br>
+    Total: {{ \App\Support\CompanyContext::money($total) }}
+    @if($settlementType === \App\Support\TransactionTypes::PARTIAL)
+        | Paid/received now: {{ \App\Support\CompanyContext::money($paid) }}
+        | Remaining due: {{ \App\Support\CompanyContext::money($due) }}
+    @elseif($settlementType === \App\Support\TransactionTypes::CREDIT)
+        | Remaining due: {{ \App\Support\CompanyContext::money($due) }}
     @endif
 </div>
 
-<div class="hg-preview-space"></div>
-
-<div class="hg-journal">
-    @if ($previewError)
-        <div class="hg-muted">{{ $previewError }}</div>
-    @elseif (empty($lines))
-        <div class="hg-muted">Select the required fields.</div>
-    @else
-        <div class="hg-table-wrap">
+@if ($previewError)
+    <div class="hg-notice" style="margin-top:12px">{{ $previewError }}</div>
+@elseif (empty($lines))
+    <div class="hg-muted" style="margin-top:12px">Complete the required fields to see the final summary.</div>
+@else
+    <details style="margin-top:14px">
+        <summary><strong>Accounting details</strong></summary>
+        <div class="hg-table-wrap" style="margin-top:10px">
             <table class="hg-table">
-                <thead>
-                <tr>
-                    <th>Account</th>
-                    <th class="right">Debit</th>
-                    <th class="right">Credit</th>
-                </tr>
-                </thead>
+                <thead><tr><th>Account</th><th class="right">Debit</th><th class="right">Credit</th></tr></thead>
                 <tbody>
                 @foreach ($lines as $line)
                     <tr>
@@ -59,7 +38,5 @@
                 </tbody>
             </table>
         </div>
-    @endif
-</div>
-
-<div class="hg-preview-space"></div>
+    </details>
+@endif

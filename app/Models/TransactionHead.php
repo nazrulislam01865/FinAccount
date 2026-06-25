@@ -10,12 +10,15 @@ class TransactionHead extends Model
 {
     protected $fillable = [
         'company_id', 'accounting_rule_id', 'posting_account_id',
-        'code', 'name', 'category', 'is_active',
+        'code', 'name', 'category', 'allowed_settlements', 'party_type', 'is_active',
     ];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'allowed_settlements' => 'array',
+            'is_active' => 'boolean',
+        ];
     }
 
     public function accountingRule(): BelongsTo
@@ -26,6 +29,17 @@ class TransactionHead extends Model
     public function postingAccount(): BelongsTo
     {
         return $this->belongsTo(ChartOfAccount::class, 'posting_account_id');
+    }
+
+    /** @return array<int, string> */
+    public function allowedSettlementCodes(): array
+    {
+        return $this->allowed_settlements ?: \App\Support\TransactionTypes::allowedSettlements((string) $this->category);
+    }
+
+    public function allowsSettlement(string $settlementType): bool
+    {
+        return in_array($settlementType, $this->allowedSettlementCodes(), true);
     }
 
     public function transactions(): HasMany

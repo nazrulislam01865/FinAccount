@@ -10,6 +10,7 @@ use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Services\Accounting\SafeDelete\SafeDeleteService;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,19 @@ class MasterDataService
 {
     public function __construct(private readonly SafeDeleteService $safeDeleteService) {}
 
-    public const CORE_TRANSACTION_CATEGORIES = ['Sales', 'Payment', 'Liability'];
+    public const CORE_TRANSACTION_CATEGORIES = [
+        TransactionTypes::SALE,
+        TransactionTypes::PURCHASE,
+        TransactionTypes::CUSTOMER_COLLECTION,
+        TransactionTypes::SUPPLIER_PAYMENT,
+        TransactionTypes::EXPENSE,
+        TransactionTypes::OWNER_INVESTMENT,
+        TransactionTypes::OWNER_WITHDRAWAL,
+        TransactionTypes::LOAN_RECEIVED,
+        TransactionTypes::LOAN_REPAYMENT,
+        TransactionTypes::LOAN_INTEREST_PAYMENT,
+        TransactionTypes::ASSET_PURCHASE,
+    ];
 
     /** @return array<string, array<string, mixed>> */
     public function configurations(): array
@@ -48,13 +61,13 @@ class MasterDataService
             ],
             'transaction-categories' => [
                 'group' => AccountingOption::GROUP_TRANSACTION_CATEGORY,
-                'title' => 'Transaction Categories',
+                'title' => 'Transaction Types',
                 'description' => '',
                 'menu_group' => 'Transaction Setup',
-                'creatable' => true,
+                'creatable' => false,
                 'editable' => true,
-                'deletable' => true,
-                'protected' => false,
+                'deletable' => false,
+                'protected' => true,
                 'core_values' => self::CORE_TRANSACTION_CATEGORIES,
             ],
         ];
@@ -195,7 +208,7 @@ class MasterDataService
 
         if ($this->isCoreTransactionCategory($option)) {
             throw ValidationException::withMessages([
-                'master_data' => 'Sales, Payment, and Liability are core system categories and cannot be deleted.',
+                'master_data' => 'System transaction types cannot be deleted.',
             ]);
         }
     }
@@ -293,13 +306,13 @@ class MasterDataService
 
         if ($isCore && $isChangingValue) {
             throw ValidationException::withMessages([
-                'value' => 'The internal values Sales, Payment, and Liability are locked because template reports depend on them.',
+                'value' => 'The internal code of a system transaction type cannot be changed.',
             ]);
         }
 
         if ($isCore && $isDeactivating) {
             throw ValidationException::withMessages([
-                'is_active' => 'Core template categories cannot be deactivated.',
+                'is_active' => 'System transaction types cannot be deactivated.',
             ]);
         }
 
@@ -311,7 +324,7 @@ class MasterDataService
 
         if ($isDeactivating && $this->activeCount($option->option_group) <= 1) {
             throw ValidationException::withMessages([
-                'is_active' => 'At least one active transaction category must remain.',
+                'is_active' => 'At least one active transaction type must remain.',
             ]);
         }
 
@@ -359,7 +372,7 @@ class MasterDataService
 
         if ($used) {
             throw ValidationException::withMessages([
-                'voucher_prefix' => 'This voucher prefix is already assigned to another transaction category.',
+                'voucher_prefix' => 'This voucher prefix is already assigned to another transaction type.',
             ]);
         }
     }

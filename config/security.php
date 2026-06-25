@@ -42,6 +42,7 @@ return [
     */
     'rate_limits' => [
         'landing_inquiry_per_minute' => env('RATE_LIMIT_LANDING_INQUIRY_PER_MINUTE', 5),
+        'landing_captcha_per_minute' => env('RATE_LIMIT_LANDING_CAPTCHA_PER_MINUTE', 20),
 
         /*
          * Login throttles are failure-based and controlled from .env.

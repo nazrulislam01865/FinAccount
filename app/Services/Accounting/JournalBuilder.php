@@ -25,8 +25,9 @@ class JournalBuilder
         ?MoneyAccount $moneyAccount,
         ?Party $party,
         string $amount,
+        ?AccountingRule $rule = null,
     ): array {
-        $rule = $head->accountingRule;
+        $rule ??= $head->accountingRule;
 
         $debitAccount = $this->accountResolver->resolve(
             $rule->debit_source,
@@ -82,12 +83,13 @@ class JournalBuilder
         string $totalAmount,
         ?string $paidAmount = null,
         ?string $dueAmount = null,
+        ?AccountingRule $rule = null,
     ): array {
-        $rule = $head->accountingRule;
+        $rule ??= $head->accountingRule;
         $ruleLines = $this->settlementService->effectiveLines($rule);
 
         if ($ruleLines->isEmpty()) {
-            return $this->build($head, $moneyAccount, $party, $totalAmount);
+            return $this->build($head, $moneyAccount, $party, $totalAmount, $rule);
         }
 
         $lines = [];
@@ -143,7 +145,7 @@ class JournalBuilder
         string $paidAmount,
         string $dueAmount,
     ): array {
-        return $this->buildFromRule($head, $moneyAccount, $party, $totalAmount, $paidAmount, $dueAmount);
+        return $this->buildFromRule($head, $moneyAccount, $party, $totalAmount, $paidAmount, $dueAmount, $head->accountingRule);
     }
 
     /** @param array<int, array{debit: string, credit: string}> $lines */

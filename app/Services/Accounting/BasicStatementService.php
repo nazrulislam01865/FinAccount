@@ -5,6 +5,7 @@ namespace App\Services\Accounting;
 use App\Models\ChartOfAccount;
 use App\Models\JournalLine;
 use App\Models\MoneyAccount;
+use App\Support\TransactionTypes;
 
 class BasicStatementService
 {
@@ -49,7 +50,7 @@ class BasicStatementService
             ->where('transactions.company_id', $companyId)
             ->where('journal_entries.status', 'posted')
             ->where('transactions.status', 'posted')
-            ->where('transactions.category', 'Sales')
+            ->whereIn('transactions.category', [TransactionTypes::SALE, TransactionTypes::CUSTOMER_COLLECTION])
             ->whereNotNull('journal_lines.money_account_id')
             ->sum('journal_lines.debit');
 
@@ -61,7 +62,15 @@ class BasicStatementService
             ->where('transactions.company_id', $companyId)
             ->where('journal_entries.status', 'posted')
             ->where('transactions.status', 'posted')
-            ->whereIn('transactions.category', ['Payment', 'Liability'])
+            ->whereIn('transactions.category', [
+                TransactionTypes::PURCHASE,
+                TransactionTypes::SUPPLIER_PAYMENT,
+                TransactionTypes::EXPENSE,
+                TransactionTypes::OWNER_WITHDRAWAL,
+                TransactionTypes::LOAN_REPAYMENT,
+                TransactionTypes::LOAN_INTEREST_PAYMENT,
+                TransactionTypes::ASSET_PURCHASE,
+            ])
             ->whereNotNull('journal_lines.money_account_id')
             ->sum('journal_lines.credit');
 

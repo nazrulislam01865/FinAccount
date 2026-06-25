@@ -56,9 +56,10 @@
                 ['section' => 'nav', 'title' => 'Navigation', 'desc' => 'Landing menu links'],
                 ['section' => 'hero', 'title' => 'Hero Section', 'desc' => 'Main banner and CTA buttons'],
                 ['section' => 'features', 'title' => 'Feature Screens', 'desc' => 'Public feature preview cards'],
+                ['section' => 'audience', 'title' => 'Business Suitability', 'desc' => 'Business types shown before pricing'],
                 ['section' => 'pricing', 'title' => 'Pricing', 'desc' => 'Packages and pricing notes'],
                 ['section' => 'faq', 'title' => 'FAQ', 'desc' => 'Common questions'],
-                ['section' => 'contact', 'title' => 'Contact', 'desc' => 'Contact/demo area labels'],
+                ['section' => 'contact', 'title' => 'Demo & CAPTCHA', 'desc' => 'Demo form, contacts, security popup'],
                 ['section' => 'footer', 'title' => 'Footer', 'desc' => 'Footer copy'],
             ] as $item)
                 <a class="landing-admin-quick-card" href="{{ route('landing-admin.edit', ['section' => $item['section']]) }}">
@@ -77,7 +78,7 @@
     <div class="landing-admin-panel-head">
         <div>
             <h3>Latest Landing Inquiries</h3>
-            <p>Recent inquiries are kept here for tracking. Demo CTA buttons now send visitors to the system login page.</p>
+            <p>Recent inquiries are kept here for tracking. Visitors must complete the server-verified CAPTCHA before a demo request is stored.</p>
         </div>
         <a href="{{ route('landing-admin.edit', ['section' => 'contact']) }}" class="button btn-outline">Manage Contact</a>
     </div>

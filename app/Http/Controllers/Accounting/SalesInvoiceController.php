@@ -64,7 +64,7 @@ class SalesInvoiceController extends Controller
         $invoice = $this->salesInvoiceService->syncForTransaction($transaction, $company);
 
         if (! $invoice) {
-            return back()->with('error', 'Invoice was not generated. Enable Generate Sales Invoice on the selected sales accounting rule first.');
+            return back()->with('error', 'Invoice was not generated because this is not a posted sale transaction.');
         }
 
         return back()

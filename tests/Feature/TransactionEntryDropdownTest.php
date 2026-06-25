@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\MoneyAccount;
 use App\Models\TransactionHead;
 use App\Models\User;
+use App\Support\TransactionTypes;
 use Database\Seeders\AccountingOptionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -16,47 +16,36 @@ class TransactionEntryDropdownTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_transaction_heads_are_loaded_from_the_table_and_filtered_by_category(): void
+    public function test_transaction_heads_are_filtered_by_transaction_type_and_account_nature(): void
     {
         [$user, $accounts] = $this->companyUserWithAccounts();
 
-        $salesRule = $this->rule($user->company_id, 'RS', 'Sales Rule', 'Sales');
-        $paymentRule = $this->rule($user->company_id, 'RP', 'Payment Rule', 'Payment');
-        $liabilityRule = $this->rule($user->company_id, 'RL', 'Liability Rule', 'Liability');
-
-        $this->head($user->company_id, $salesRule->id, $accounts['income']->id, 'HS', 'Database Sales Head', 'Sales');
-        $this->head($user->company_id, $paymentRule->id, $accounts['expense']->id, 'HP', 'Database Payment Head', 'Payment');
-        $this->head($user->company_id, $liabilityRule->id, $accounts['liability']->id, 'HL', 'Database Liability Head', 'Liability');
-        $this->head($user->company_id, $salesRule->id, $accounts['income']->id, 'HI', 'Inactive Sales Head', 'Sales', false);
-        $this->head($user->company_id, $paymentRule->id, $accounts['income']->id, 'HM', 'Mismatched Sales Head', 'Sales');
+        $this->head($user->company_id, $accounts['income']->id, 'HS', 'Database Sale Head', TransactionTypes::SALE);
+        $this->head($user->company_id, $accounts['expense']->id, 'HE', 'Database Expense Head', TransactionTypes::EXPENSE);
+        $this->head($user->company_id, $accounts['expense']->id, 'HP', 'Database Purchase Head', TransactionTypes::PURCHASE);
+        $this->head($user->company_id, $accounts['income']->id, 'HI', 'Inactive Sale Head', TransactionTypes::SALE, false);
+        $this->head($user->company_id, $accounts['expense']->id, 'HM', 'Wrong Sale Account', TransactionTypes::SALE);
 
         $this->actingAs($user)
-            ->get(route('transactions.create', ['category' => 'Sales']))
+            ->get(route('transactions.create', ['category' => TransactionTypes::SALE]))
             ->assertOk()
-            ->assertSee('Database Sales Head')
-            ->assertDontSee('Database Payment Head')
-            ->assertDontSee('Database Liability Head')
-            ->assertDontSee('Inactive Sales Head')
-            ->assertDontSee('Mismatched Sales Head');
+            ->assertSee('Database Sale Head')
+            ->assertDontSee('Database Expense Head')
+            ->assertDontSee('Inactive Sale Head')
+            ->assertDontSee('Wrong Sale Account')
+            ->assertSee('How was payment handled?');
 
         $this->actingAs($user)
-            ->get(route('transactions.create', ['category' => 'Payment']))
+            ->get(route('transactions.create', ['category' => TransactionTypes::EXPENSE]))
             ->assertOk()
-            ->assertSee('Database Payment Head')
-            ->assertDontSee('Database Sales Head')
-            ->assertDontSee('Database Liability Head');
-
-        $this->actingAs($user)
-            ->get(route('transactions.create', ['category' => 'Liability']))
-            ->assertOk()
-            ->assertSee('Database Liability Head')
-            ->assertDontSee('Database Sales Head')
-            ->assertDontSee('Database Payment Head');
+            ->assertSee('Database Expense Head')
+            ->assertDontSee('Database Sale Head');
     }
 
-    public function test_money_dropdown_is_loaded_from_active_money_accounts_with_active_coa(): void
+    public function test_money_dropdown_only_uses_active_money_accounts_with_active_coa(): void
     {
         [$user, $accounts] = $this->companyUserWithAccounts();
+        $this->head($user->company_id, $accounts['income']->id, 'HS', 'Database Sale Head', TransactionTypes::SALE);
 
         MoneyAccount::query()->create([
             'company_id' => $user->company_id,
@@ -66,7 +55,6 @@ class TransactionEntryDropdownTest extends TestCase
             'opening_balance' => 0,
             'is_active' => true,
         ]);
-
         MoneyAccount::query()->create([
             'company_id' => $user->company_id,
             'chart_of_account_id' => $accounts['inactive_asset']->id,
@@ -77,91 +65,46 @@ class TransactionEntryDropdownTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get(route('transactions.create', ['category' => 'Sales']))
+            ->get(route('transactions.create', ['category' => TransactionTypes::SALE]))
             ->assertOk()
             ->assertSee('Database Cash Account')
-            ->assertDontSee('Inactive COA Money Account')
-            ->assertDontSee('The user selects transaction category')
-            ->assertDontSee('No debit/credit selection in transaction entry.')
-            ->assertDontSee('Data saved securely in MySQL');
+            ->assertDontSee('Inactive COA Money Account');
     }
 
-    /** @return array{0: User, 1: array<string, ChartOfAccount>} */
     private function companyUserWithAccounts(): array
     {
         $this->seed(AccountingOptionSeeder::class);
-
         $company = Company::query()->create([
-            'code' => 'TEST-'.uniqid(),
-            'name' => 'Test Company',
-            'currency_code' => 'BDT',
-            'timezone' => 'Asia/Dhaka',
-            'status' => 'active',
+            'code' => 'TEST-'.uniqid(), 'name' => 'Test Company', 'currency_code' => 'BDT', 'timezone' => 'Asia/Dhaka', 'status' => 'active',
         ]);
-
         $user = User::factory()->create(['company_id' => $company->id]);
 
-        $accounts = [
+        return [$user, [
             'cash' => $this->account($company->id, '1001', 'Cash', 'Asset', 'Debit'),
             'income' => $this->account($company->id, '4001', 'Sales Income', 'Income', 'Credit'),
             'expense' => $this->account($company->id, '5001', 'Expense', 'Expense', 'Debit'),
-            'liability' => $this->account($company->id, '2001', 'Liability', 'Liability', 'Credit'),
             'inactive_asset' => $this->account($company->id, '1099', 'Inactive Asset', 'Asset', 'Debit', false),
-        ];
-
-        return [$user, $accounts];
+        ]];
     }
 
-    private function account(
-        int $companyId,
-        string $code,
-        string $name,
-        string $type,
-        string $normalBalance,
-        bool $active = true,
-    ): ChartOfAccount {
-        return ChartOfAccount::query()->create([
-            'company_id' => $companyId,
-            'code' => $code,
-            'name' => $name,
-            'type' => $type,
-            'normal_balance' => $normalBalance,
-            'is_active' => $active,
-        ]);
-    }
-
-    private function rule(int $companyId, string $code, string $name, string $category): AccountingRule
+    private function account(int $companyId, string $code, string $name, string $type, string $normalBalance, bool $active = true): ChartOfAccount
     {
-        return AccountingRule::query()->create([
-            'company_id' => $companyId,
-            'code' => $code,
-            'name' => $name,
-            'category' => $category,
-            'debit_source' => 'selected_money',
-            'credit_source' => 'head_account',
-            'party_required' => false,
-            'party_type' => 'Any',
-            'money_required' => true,
-            'is_active' => true,
+        return ChartOfAccount::query()->create(compact('code', 'name') + [
+            'company_id' => $companyId, 'type' => $type, 'normal_balance' => $normalBalance, 'is_active' => $active,
         ]);
     }
 
-    private function head(
-        int $companyId,
-        int $ruleId,
-        int $postingAccountId,
-        string $code,
-        string $name,
-        string $category,
-        bool $active = true,
-    ): TransactionHead {
+    private function head(int $companyId, int $postingAccountId, string $code, string $name, string $category, bool $active = true): TransactionHead
+    {
         return TransactionHead::query()->create([
             'company_id' => $companyId,
-            'accounting_rule_id' => $ruleId,
+            'accounting_rule_id' => null,
             'posting_account_id' => $postingAccountId,
             'code' => $code,
             'name' => $name,
             'category' => $category,
+            'allowed_settlements' => TransactionTypes::allowedSettlements($category),
+            'party_type' => TransactionTypes::partyType($category),
             'is_active' => $active,
         ]);
     }

@@ -34,11 +34,11 @@
         ['label' => 'Hero Section', 'section' => 'hero', 'icon' => 'H'],
         ['label' => 'Why Section', 'section' => 'why', 'icon' => 'W'],
         ['label' => 'Feature Screens', 'section' => 'features', 'icon' => 'F'],
-        ['label' => 'Audience', 'section' => 'audience', 'icon' => 'A'],
+        ['label' => 'Business Suitability', 'section' => 'audience', 'icon' => 'A'],
         ['label' => 'Pricing', 'section' => 'pricing', 'icon' => 'P'],
         ['label' => 'Testimonials', 'section' => 'testimonials', 'icon' => 'T'],
         ['label' => 'FAQ', 'section' => 'faq', 'icon' => 'Q'],
-        ['label' => 'Contact', 'section' => 'contact', 'icon' => 'C'],
+        ['label' => 'Demo & CAPTCHA', 'section' => 'contact', 'icon' => 'C'],
         ['label' => 'Footer', 'section' => 'footer', 'icon' => 'Ft'],
     ];
     $activeSection = request('section', 'basic');

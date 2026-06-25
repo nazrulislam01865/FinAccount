@@ -19,10 +19,10 @@
             </div>
             @if(auth()->user()?->canAccounting('transactions.manage'))
             <div class="hg-dashboard-actions">
-                <a class="hg-dashboard-btn blue" href="{{ route('transactions.create', ['category' => 'Sales']) }}">+ New Sale</a>
-                <a class="hg-dashboard-btn green" href="{{ route('transactions.create', ['category' => 'Sales']) }}">+ Receive Money</a>
-                <a class="hg-dashboard-btn red" href="{{ route('transactions.create', ['category' => 'Payment']) }}">+ Make Payment</a>
-                <a class="hg-dashboard-btn light" href="{{ route('transactions.create', ['category' => 'Sales']) }}">Generate Invoice</a>
+                <a class="hg-dashboard-btn blue" href="{{ route('transactions.create', ['category' => \App\Support\TransactionTypes::SALE]) }}">+ New Sale</a>
+                <a class="hg-dashboard-btn green" href="{{ route('transactions.create', ['category' => \App\Support\TransactionTypes::CUSTOMER_COLLECTION]) }}">+ Receive Money</a>
+                <a class="hg-dashboard-btn red" href="{{ route('transactions.create', ['category' => \App\Support\TransactionTypes::SUPPLIER_PAYMENT]) }}">+ Make Payment</a>
+                <a class="hg-dashboard-btn light" href="{{ route('transactions.create', ['category' => \App\Support\TransactionTypes::SALE]) }}">Generate Invoice</a>
             </div>
             @endif
         </div>
@@ -295,7 +295,7 @@
                 <div class="hg-dashboard-section-head">
                     <h2>Invoice Status</h2>
                     @if(auth()->user()?->canAccounting('transactions.manage'))
-                    <a href="{{ route('transactions.create', ['category' => 'Sales']) }}">Generate invoice</a>
+                    <a href="{{ route('transactions.create', ['category' => \App\Support\TransactionTypes::SALE]) }}">Generate invoice</a>
                     @endif
                 </div>
                 <div class="hg-dashboard-table-wrap">

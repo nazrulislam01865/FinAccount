@@ -18,8 +18,9 @@
     .repeat-list{display:grid;gap:14px}.repeat-card{border:1px solid #e5e7eb;border-radius:18px;background:#fbfcfd;padding:16px;transition:box-shadow .2s ease,border-color .2s ease,background .2s ease}.repeat-card-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.repeat-card-title{font-weight:900;color:#101828}.new-repeat-card-highlight{border-color:#00a86b!important;background:#f0fdf4!important;box-shadow:0 0 0 4px rgba(0,168,107,.12),0 14px 30px rgba(16,24,40,.08)}
     .landing-validation-summary{display:none;padding:14px 18px;margin-bottom:18px;border:1px solid #fecaca;background:#fef2f2;color:#b42318;border-radius:18px;font-weight:750}.landing-validation-summary.show{display:block}.landing-validation-summary ul{margin:8px 0 0;padding-left:20px}.landing-validation-invalid{border-color:#dc2626!important;background:#fff7f7!important;box-shadow:0 0 0 3px rgba(220,38,38,.10)!important}.landing-validation-error{display:block;margin-top:6px;color:#b42318;font-size:12px;font-weight:800}.required-auto{color:#dc2626;font-weight:900;margin-left:3px}.repeat-list.landing-validation-invalid-list{border:1px dashed #dc2626;border-radius:18px;padding:10px;background:#fff7f7}
     .button-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.btn-small{padding:9px 12px!important;border-radius:999px!important;font-size:13px!important}.danger-link{border:1px solid #fecaca!important;background:#fff!important;color:#b42318!important}.muted-divider{height:1px;background:#eef2f7;margin:18px 0}.right-stack{display:grid;gap:18px;position:sticky;top:90px}.form-actions.sticky-actions{position:sticky;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border:1px solid #e5e7eb;border-radius:18px;padding:14px;z-index:3}.code-help{background:#f8fafc;border:1px dashed #d8dee9;border-radius:14px;padding:12px;color:#475467;font-size:12px;line-height:1.55}
-    .image-admin-field{border:1px dashed #cbd5e1;border-radius:18px;background:#f8fafc;padding:14px}.image-admin-preview{margin-top:12px;max-width:100%;max-height:210px;border-radius:16px;border:1px solid #e5e7eb;background:#fff;object-fit:cover;display:block}.image-name-display{margin-top:8px;background:#f9fafb!important;color:#475467!important}.image-admin-field input[type=file]{padding:10px;background:#fff}.image-admin-field .hint{display:block;margin-top:7px}.brand-logo-admin-preview{max-height:120px;object-fit:contain;background:#fff;padding:12px}.brand-logo-upload-only{background:#f8fafc}
-    @media(max-width:1250px){.landing-admin-grid{grid-template-columns:1fr}.right-stack{position:static}.landing-editor-layout{grid-template-columns:1fr}}
+    .image-admin-field{border:1px dashed #cbd5e1;border-radius:18px;background:#f8fafc;padding:14px}.image-admin-preview{margin-top:12px;max-width:100%;max-height:210px;border-radius:16px;border:1px solid #e5e7eb;background:#fff;object-fit:contain;display:block}.screen-image-admin-preview{width:100%;max-height:none;aspect-ratio:16/9;background:#252c40}.image-name-display{margin-top:8px;background:#f9fafb!important;color:#475467!important}.image-admin-field input[type=file]{padding:10px;background:#fff}.image-admin-field .hint{display:block;margin-top:7px}.brand-logo-admin-preview{max-height:120px;object-fit:contain;background:#fff;padding:12px}.brand-logo-upload-only{background:#f8fafc}
+    .package-admin-card{padding:18px}.package-fee-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.package-fee-admin-card{border:1px solid #dfe5ec;background:#fff;border-radius:16px;padding:14px}.package-fee-admin-card>strong{display:block;margin-bottom:12px;color:#087a52;font-size:14px}.package-fee-admin-card .landing-grid{grid-template-columns:1fr;gap:10px}.package-fee-admin-card .landing-grid .full{grid-column:auto}
+    @media(max-width:1250px){.landing-admin-grid{grid-template-columns:1fr}.right-stack{position:static}.landing-editor-layout{grid-template-columns:1fr}.package-fee-admin-grid{grid-template-columns:1fr}}
     @media(max-width:900px){.landing-editor-layout{grid-template-columns:1fr}.landing-section-menu{position:static}.landing-section-list{grid-template-columns:repeat(2,minmax(0,1fr))}.landing-grid,.landing-grid.three{grid-template-columns:1fr}}
     @media(max-width:640px){.landing-section-list{grid-template-columns:1fr}}
 </style>
@@ -187,7 +188,7 @@
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'nav' ? 'is-active' : '' }}" id="nav" data-section-panel="nav">
                 <div class="landing-card-head">
-                    <div><h3>Landing Navigation</h3><p>Add or edit public landing-page menu items. System Login and Landing Admin access buttons remain available in the public header so visitors can continue to the correct area.</p></div>
+                    <div><h3>Landing Navigation</h3><p>Add or edit the public landing-page menu items and the main call-to-action button. Login access is intentionally not displayed in the public header.</p></div>
                     <button type="button" class="button btn-outline btn-small" data-add="nav_links">Add Menu</button>
                 </div>
                 <div class="landing-card-body">
@@ -293,7 +294,7 @@
             </section>
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'features' ? 'is-active' : '' }}" id="features" data-section-panel="features">
-                <div class="landing-card-head"><div><h3>Screenshots & Feature Screens</h3><p>Upload only the white browser/screen preview image. The dark card background, title, and description are controlled separately below.</p></div><label class="section-toggle"><input type="hidden" name="features[enabled]" value="0"><input type="checkbox" name="features[enabled]" value="1" @checked($value('features.enabled', true))> Enabled</label></div>
+                <div class="landing-card-head"><div><h3>Screenshots & Feature Screens</h3><p>Upload an image in any dimension for every feature card. Each image is automatically fitted inside the fixed 16:9 landing-page frame without stretching.</p></div><label class="section-toggle"><input type="hidden" name="features[enabled]" value="0"><input type="checkbox" name="features[enabled]" value="1" @checked($value('features.enabled', true))> Enabled</label></div>
                 <div class="landing-card-body">
                     <div class="landing-grid"><div><label>Mini Bangla</label><input name="features[mini][bn]" value="{{ $trans('features.mini', 'bn') }}"></div><div><label>Mini English</label><input name="features[mini][en]" value="{{ $trans('features.mini', 'en') }}"></div><div><label>Title Bangla</label><textarea name="features[title][bn]">{{ $trans('features.title', 'bn') }}</textarea></div><div><label>Title English</label><textarea name="features[title][en]">{{ $trans('features.title', 'en') }}</textarea></div><div><label>Subtitle Bangla</label><textarea name="features[subtitle][bn]">{{ $trans('features.subtitle', 'bn') }}</textarea></div><div><label>Subtitle English</label><textarea name="features[subtitle][en]">{{ $trans('features.subtitle', 'en') }}</textarea></div></div>
                     <div class="muted-divider"></div>
@@ -308,14 +309,14 @@
                                 <div class="repeat-card-head"><div class="repeat-card-title">Screen Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
                                 <div class="landing-grid">
                                     <div class="full image-admin-field">
-                                        <label>White Preview Image <small>PNG, JPG, WEBP or GIF; max 4 MB</small></label>
-                                        <input type="file" name="screens[{{ $index }}][image]" accept="image/*" data-optional="true" data-file-input>
+                                        <label>Feature Image <small>PNG, JPG, WEBP or GIF; any image ratio; max 4 MB</small></label>
+                                        <input type="file" name="screens[{{ $index }}][image]" accept="image/*" data-optional="true" data-file-input data-screen-image>
                                         <input type="hidden" name="screens[{{ $index }}][image_path]" value="{{ $screenImagePath }}">
                                         <input type="hidden" name="screens[{{ $index }}][image_name]" value="{{ $screenImageName }}">
                                         <input type="text" class="image-name-display" value="{{ $screenImageName }}" placeholder="No white preview image uploaded for this card" readonly data-file-name-display data-current-name="{{ $screenImageName }}" data-optional="true">
-                                        <span class="hint">This image becomes the white top preview area only. Do not upload the full dark feature card with title/description.</span>
+                                        <span class="hint">Upload any portrait, square, or landscape image. It will automatically fit inside a fixed 16:9 frame on the landing page without distortion.</span>
                                         @if($screenImagePath !== '')
-                                            <img src="{{ $imageUrl($screenImagePath) }}" alt="{{ $screenImageName ?: 'Feature screen image' }}" class="image-admin-preview">
+                                            <img src="{{ $imageUrl($screenImagePath) }}" alt="{{ $screenImageName ?: 'Feature screen image' }}" class="image-admin-preview screen-image-admin-preview">
                                         @endif
                                     </div>
                                     <div><label>Title Bangla</label><input name="screens[{{ $index }}][title][bn]" value="{{ data_get($screen, 'title.bn') }}"></div>
@@ -330,41 +331,137 @@
             </section>
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'audience' ? 'is-active' : '' }}" id="audience" data-section-panel="audience">
-                <div class="landing-card-head"><div><h3>Audience Section</h3><p>Who the system is for and the audience detail cards.</p></div><label class="section-toggle"><input type="hidden" name="audience[enabled]" value="0"><input type="checkbox" name="audience[enabled]" value="1" @checked($value('audience.enabled', true))> Enabled</label></div>
+                <div class="landing-card-head"><div><h3>Business Suitability Section</h3><p>Manage the business-type section displayed immediately before pricing.</p></div><label class="section-toggle"><input type="hidden" name="audience[enabled]" value="0"><input type="checkbox" name="audience[enabled]" value="1" @checked($value('audience.enabled', true))> Enabled</label></div>
                 <div class="landing-card-body">
                     <div class="landing-grid"><div><label>Icon</label><input name="audience[icon]" value="{{ $value('audience.icon', '🏪') }}"></div><div></div><div><label>Title Bangla</label><input name="audience[title][bn]" value="{{ $trans('audience.title', 'bn') }}"></div><div><label>Title English</label><input name="audience[title][en]" value="{{ $trans('audience.title', 'en') }}"></div><div><label>Body Bangla</label><textarea name="audience[body][bn]">{{ $trans('audience.body', 'bn') }}</textarea></div><div><label>Body English</label><textarea name="audience[body][en]">{{ $trans('audience.body', 'en') }}</textarea></div></div>
                     <div class="muted-divider"></div>
-                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Audience Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="audiences">Add Audience</button></div>
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Business Type Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="audiences">Add Business Type</button></div>
                     <div class="repeat-list" data-repeater="audiences">
                         @foreach(array_values($audiences) as $index => $audience)
-                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Audience Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="audiences[{{ $index }}][title][bn]" value="{{ data_get($audience, 'title.bn') }}"></div><div><label>Title English</label><input name="audiences[{{ $index }}][title][en]" value="{{ data_get($audience, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="audiences[{{ $index }}][body][bn]">{{ data_get($audience, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="audiences[{{ $index }}][body][en]">{{ data_get($audience, 'body.en') }}</textarea></div></div></div>
+                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Business Type Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="audiences[{{ $index }}][title][bn]" value="{{ data_get($audience, 'title.bn') }}"></div><div><label>Title English</label><input name="audiences[{{ $index }}][title][en]" value="{{ data_get($audience, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="audiences[{{ $index }}][body][bn]">{{ data_get($audience, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="audiences[{{ $index }}][body][en]">{{ data_get($audience, 'body.en') }}</textarea></div></div></div>
                         @endforeach
                     </div>
                 </div>
             </section>
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'pricing' ? 'is-active' : '' }}" id="pricing" data-section-panel="pricing">
-                <div class="landing-card-head"><div><h3>Pricing & Packages</h3><p>Admins can add packages and package features without editing JSON.</p></div><label class="section-toggle"><input type="hidden" name="pricing[enabled]" value="0"><input type="checkbox" name="pricing[enabled]" value="1" @checked($value('pricing.enabled', true))> Enabled</label></div>
+                <div class="landing-card-head">
+                    <div>
+                        <h3>Implementation Packages & Pricing</h3>
+                        <p>Manage the three fee rows, package features, recommended state, and important-note cards shown on the landing page.</p>
+                    </div>
+                    <label class="section-toggle"><input type="hidden" name="pricing[enabled]" value="0"><input type="checkbox" name="pricing[enabled]" value="1" @checked($value('pricing.enabled', true))> Enabled</label>
+                </div>
                 <div class="landing-card-body">
-                    <div class="landing-grid"><div><label>Mini Bangla</label><input name="pricing[mini][bn]" value="{{ $trans('pricing.mini', 'bn') }}"></div><div><label>Mini English</label><input name="pricing[mini][en]" value="{{ $trans('pricing.mini', 'en') }}"></div><div><label>Title Bangla</label><textarea name="pricing[title][bn]">{{ $trans('pricing.title', 'bn') }}</textarea></div><div><label>Title English</label><textarea name="pricing[title][en]">{{ $trans('pricing.title', 'en') }}</textarea></div><div><label>Subtitle Bangla</label><textarea name="pricing[subtitle][bn]">{{ $trans('pricing.subtitle', 'bn') }}</textarea></div><div><label>Subtitle English</label><textarea name="pricing[subtitle][en]">{{ $trans('pricing.subtitle', 'en') }}</textarea></div></div>
+                    <div class="landing-grid">
+                        <div><label>Mini Bangla</label><input name="pricing[mini][bn]" value="{{ $trans('pricing.mini', 'bn') }}"></div>
+                        <div><label>Mini English</label><input name="pricing[mini][en]" value="{{ $trans('pricing.mini', 'en') }}"></div>
+                        <div><label>Title Bangla</label><textarea name="pricing[title][bn]">{{ $trans('pricing.title', 'bn') }}</textarea></div>
+                        <div><label>Title English</label><textarea name="pricing[title][en]">{{ $trans('pricing.title', 'en') }}</textarea></div>
+                        <div><label>Subtitle Bangla</label><textarea name="pricing[subtitle][bn]">{{ $trans('pricing.subtitle', 'bn') }}</textarea></div>
+                        <div><label>Subtitle English</label><textarea name="pricing[subtitle][en]">{{ $trans('pricing.subtitle', 'en') }}</textarea></div>
+                        <div><label>Important Notes Heading Bangla</label><input name="pricing[notes_title][bn]" value="{{ $trans('pricing.notes_title', 'bn', 'Important Notes') }}"></div>
+                        <div><label>Important Notes Heading English</label><input name="pricing[notes_title][en]" value="{{ $trans('pricing.notes_title', 'en', 'Important Notes') }}"></div>
+                    </div>
+
                     <div class="muted-divider"></div>
-                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Package Cards</h3><p>For features, write one feature per line in Bangla and English.</p></div><button type="button" class="button btn-outline btn-small" data-add="packages">Add Package</button></div>
+
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent">
+                        <div>
+                            <h3>Package Cards</h3>
+                            <p>Set installation, monthly maintenance, server hosting, and one feature per line in both languages.</p>
+                        </div>
+                        <button type="button" class="button btn-outline btn-small" data-add="packages">Add Package</button>
+                    </div>
+
                     <div class="repeat-list" data-repeater="packages">
                         @foreach(array_values($packages) as $index => $package)
                             @php
                                 $pkgFeaturesBn = data_get($package, 'features_bn', $lines(data_get($package, 'features', []), 'bn'));
-                            @endphp
-                            @php
                                 $pkgFeaturesEn = data_get($package, 'features_en', $lines(data_get($package, 'features', []), 'en'));
                             @endphp
-                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Package Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name Bangla</label><input name="packages[{{ $index }}][name][bn]" value="{{ data_get($package, 'name.bn') }}"></div><div><label>Name English</label><input name="packages[{{ $index }}][name][en]" value="{{ data_get($package, 'name.en') }}"></div><div><label>Price</label><input name="packages[{{ $index }}][price]" value="{{ data_get($package, 'price') }}"></div><div><label>Popular?</label><select name="packages[{{ $index }}][popular]"><option value="0" @selected(!data_get($package, 'popular'))>No</option><option value="1" @selected(data_get($package, 'popular'))>Yes</option></select></div><div><label>Popular Tag Bangla</label><input name="packages[{{ $index }}][tag][bn]" value="{{ data_get($package, 'tag.bn') }}"></div><div><label>Popular Tag English</label><input name="packages[{{ $index }}][tag][en]" value="{{ data_get($package, 'tag.en') }}"></div><div><label>Suffix Bangla</label><input name="packages[{{ $index }}][suffix][bn]" value="{{ data_get($package, 'suffix.bn') }}"></div><div><label>Suffix English</label><input name="packages[{{ $index }}][suffix][en]" value="{{ data_get($package, 'suffix.en') }}"></div><div><label>Body Bangla</label><textarea name="packages[{{ $index }}][body][bn]">{{ data_get($package, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="packages[{{ $index }}][body][en]">{{ data_get($package, 'body.en') }}</textarea></div><div><label>Features Bangla</label><textarea name="packages[{{ $index }}][features_bn]" class="tall">{{ $pkgFeaturesBn }}</textarea></div><div><label>Features English</label><textarea name="packages[{{ $index }}][features_en]" class="tall">{{ $pkgFeaturesEn }}</textarea></div><div><label>Button Bangla</label><input name="packages[{{ $index }}][button][label][bn]" value="{{ data_get($package, 'button.label.bn') }}"></div><div><label>Button English</label><input name="packages[{{ $index }}][button][label][en]" value="{{ data_get($package, 'button.label.en') }}"></div><div><label>Button Link</label><input name="packages[{{ $index }}][button][href]" value="{{ data_get($package, 'button.href', '#contact') }}"></div><div><label>Button Style</label><select name="packages[{{ $index }}][button][style]"><option value="primary" @selected(data_get($package, 'button.style') === 'primary')>Primary</option><option value="outline" @selected(data_get($package, 'button.style') === 'outline')>Outline</option><option value="dark" @selected(data_get($package, 'button.style') === 'dark')>Dark</option></select></div></div></div>
+                            <div class="repeat-card package-admin-card" data-repeat-item>
+                                <div class="repeat-card-head">
+                                    <div class="repeat-card-title">Implementation Package</div>
+                                    <button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button>
+                                </div>
+
+                                <div class="landing-grid three">
+                                    <div>
+                                        <label>Package Icon</label>
+                                        <select name="packages[{{ $index }}][icon]">
+                                            <option value="cloud" @selected(data_get($package, 'icon', 'cloud') === 'cloud')>Cloud</option>
+                                            <option value="building" @selected(data_get($package, 'icon') === 'building')>Standard / Building</option>
+                                            <option value="server" @selected(data_get($package, 'icon') === 'server')>Server</option>
+                                        </select>
+                                    </div>
+                                    <div><label>Name Bangla</label><input name="packages[{{ $index }}][name][bn]" value="{{ data_get($package, 'name.bn') }}"></div>
+                                    <div><label>Name English</label><input name="packages[{{ $index }}][name][en]" value="{{ data_get($package, 'name.en') }}"></div>
+                                    <div>
+                                        <label>Recommended Package?</label>
+                                        <select name="packages[{{ $index }}][popular]">
+                                            <option value="0" @selected(!data_get($package, 'popular'))>No</option>
+                                            <option value="1" @selected(data_get($package, 'popular'))>Yes</option>
+                                        </select>
+                                    </div>
+                                    <div><label>Top Ribbon Bangla</label><input name="packages[{{ $index }}][popular_label][bn]" value="{{ data_get($package, 'popular_label.bn', '★ Recommended') }}"></div>
+                                    <div><label>Top Ribbon English</label><input name="packages[{{ $index }}][popular_label][en]" value="{{ data_get($package, 'popular_label.en', '★ Recommended') }}"></div>
+                                    <div><label>Small Tag Bangla</label><input name="packages[{{ $index }}][tag][bn]" value="{{ data_get($package, 'tag.bn') }}"></div>
+                                    <div><label>Small Tag English</label><input name="packages[{{ $index }}][tag][en]" value="{{ data_get($package, 'tag.en') }}"></div>
+                                    <div></div>
+                                    <div><label>Business Description Bangla</label><textarea name="packages[{{ $index }}][body][bn]">{{ data_get($package, 'body.bn') }}</textarea></div>
+                                    <div><label>Business Description English</label><textarea name="packages[{{ $index }}][body][en]">{{ data_get($package, 'body.en') }}</textarea></div>
+                                    <div></div>
+                                </div>
+
+                                <div class="package-fee-admin-grid">
+                                    @foreach(['installation' => 'Installation Fee', 'maintenance' => 'Maintenance Fee', 'hosting' => 'Server Hosting'] as $feeKey => $feeTitle)
+                                        <div class="package-fee-admin-card">
+                                            <strong>{{ $feeTitle }}</strong>
+                                            <div class="landing-grid">
+                                                <div><label>Label Bangla</label><input name="packages[{{ $index }}][fees][{{ $feeKey }}][label][bn]" value="{{ data_get($package, 'fees.'.$feeKey.'.label.bn', $feeTitle) }}"></div>
+                                                <div><label>Label English</label><input name="packages[{{ $index }}][fees][{{ $feeKey }}][label][en]" value="{{ data_get($package, 'fees.'.$feeKey.'.label.en', $feeTitle) }}"></div>
+                                                <div class="full"><label>Amount / Value</label><input name="packages[{{ $index }}][fees][{{ $feeKey }}][amount]" value="{{ data_get($package, 'fees.'.$feeKey.'.amount') }}" placeholder="Example: ৳35,000 – ৳50,000 or Actual cost"></div>
+                                                <div><label>Note Bangla</label><input name="packages[{{ $index }}][fees][{{ $feeKey }}][note][bn]" value="{{ data_get($package, 'fees.'.$feeKey.'.note.bn') }}" placeholder="One-time or /month"></div>
+                                                <div><label>Note English</label><input name="packages[{{ $index }}][fees][{{ $feeKey }}][note][en]" value="{{ data_get($package, 'fees.'.$feeKey.'.note.en') }}" placeholder="One-time or /month"></div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+
+                                <div class="landing-grid" style="margin-top:14px">
+                                    <div><label>Features Bangla <small>One feature per line</small></label><textarea name="packages[{{ $index }}][features_bn]" class="tall">{{ $pkgFeaturesBn }}</textarea></div>
+                                    <div><label>Features English <small>One feature per line</small></label><textarea name="packages[{{ $index }}][features_en]" class="tall">{{ $pkgFeaturesEn }}</textarea></div>
+                                </div>
+                            </div>
                         @endforeach
                     </div>
+
                     <div class="muted-divider"></div>
-                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent"><div><h3>Pricing Note Cards</h3></div><button type="button" class="button btn-outline btn-small" data-add="pricing_notes">Add Note</button></div>
+
+                    <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent">
+                        <div><h3>Important Note Cards</h3><p>These cards appear below the package comparison.</p></div>
+                        <button type="button" class="button btn-outline btn-small" data-add="pricing_notes">Add Note</button>
+                    </div>
                     <div class="repeat-list" data-repeater="pricing_notes">
                         @foreach(array_values($pricingNotes) as $index => $note)
-                            <div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Pricing Note</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="pricing_notes[{{ $index }}][title][bn]" value="{{ data_get($note, 'title.bn') }}"></div><div><label>Title English</label><input name="pricing_notes[{{ $index }}][title][en]" value="{{ data_get($note, 'title.en') }}"></div><div><label>Body Bangla</label><textarea name="pricing_notes[{{ $index }}][body][bn]">{{ data_get($note, 'body.bn') }}</textarea></div><div><label>Body English</label><textarea name="pricing_notes[{{ $index }}][body][en]">{{ data_get($note, 'body.en') }}</textarea></div><div><label>Button Bangla</label><input name="pricing_notes[{{ $index }}][button][label][bn]" value="{{ data_get($note, 'button.label.bn') }}"></div><div><label>Button English</label><input name="pricing_notes[{{ $index }}][button][label][en]" value="{{ data_get($note, 'button.label.en') }}"></div><div class="full"><label>Button Link</label><input name="pricing_notes[{{ $index }}][button][href]" value="{{ data_get($note, 'button.href', '#contact') }}"></div></div></div>
+                            <div class="repeat-card" data-repeat-item>
+                                <div class="repeat-card-head"><div class="repeat-card-title">Important Note</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
+                                <div class="landing-grid three">
+                                    <div>
+                                        <label>Icon</label>
+                                        <select name="pricing_notes[{{ $index }}][icon]">
+                                            <option value="tag" @selected(data_get($note, 'icon', 'tag') === 'tag')>Pricing Tag</option>
+                                            <option value="server" @selected(data_get($note, 'icon') === 'server')>Server</option>
+                                            <option value="wrench" @selected(data_get($note, 'icon') === 'wrench')>Maintenance</option>
+                                        </select>
+                                    </div>
+                                    <div><label>Title Bangla</label><input name="pricing_notes[{{ $index }}][title][bn]" value="{{ data_get($note, 'title.bn') }}"></div>
+                                    <div><label>Title English</label><input name="pricing_notes[{{ $index }}][title][en]" value="{{ data_get($note, 'title.en') }}"></div>
+                                    <div><label>Body Bangla</label><textarea name="pricing_notes[{{ $index }}][body][bn]">{{ data_get($note, 'body.bn') }}</textarea></div>
+                                    <div><label>Body English</label><textarea name="pricing_notes[{{ $index }}][body][en]">{{ data_get($note, 'body.en') }}</textarea></div>
+                                </div>
+                            </div>
                         @endforeach
                     </div>
                 </div>
@@ -399,7 +496,7 @@
             </section>
 
             <section class="landing-card landing-section-panel {{ $activeSection === 'contact' ? 'is-active' : '' }}" id="contact" data-section-panel="contact">
-                <div class="landing-card-head"><div><h3>Contact & Demo Form</h3><p>Manage public contact details and form labels.</p></div><label class="section-toggle"><input type="hidden" name="contact[enabled]" value="0"><input type="checkbox" name="contact[enabled]" value="1" @checked($value('contact.enabled', true))> Enabled</label></div>
+                <div class="landing-card-head"><div><h3>Demo Request & CAPTCHA</h3><p>Manage the public demo form, contact details, and security-verification popup.</p></div><label class="section-toggle"><input type="hidden" name="contact[enabled]" value="0"><input type="checkbox" name="contact[enabled]" value="1" @checked($value('contact.enabled', true))> Enabled</label></div>
                 <div class="landing-card-body landing-grid">
                     <div><label>Title Bangla</label><input name="contact[title][bn]" value="{{ $trans('contact.title', 'bn') }}"></div><div><label>Title English</label><input name="contact[title][en]" value="{{ $trans('contact.title', 'en') }}"></div>
                     <div><label>Body Bangla</label><textarea name="contact[body][bn]">{{ $trans('contact.body', 'bn') }}</textarea></div><div><label>Body English</label><textarea name="contact[body][en]">{{ $trans('contact.body', 'en') }}</textarea></div>
@@ -414,6 +511,22 @@
                     <div><label>Message Placeholder Bangla</label><textarea name="contact[form][message][bn]">{{ $trans('contact.form.message', 'bn') }}</textarea></div><div><label>Message Placeholder English</label><textarea name="contact[form][message][en]">{{ $trans('contact.form.message', 'en') }}</textarea></div>
                     <div><label>Submit Button Bangla</label><input name="contact[form][button][bn]" value="{{ $trans('contact.form.button', 'bn') }}"></div><div><label>Submit Button English</label><input name="contact[form][button][en]" value="{{ $trans('contact.form.button', 'en') }}"></div>
                     <div><label>Success Message Bangla</label><input name="contact[form][success][bn]" value="{{ $trans('contact.form.success', 'bn') }}"></div><div><label>Success Message English</label><input name="contact[form][success][en]" value="{{ $trans('contact.form.success', 'en') }}"></div>
+                    <div><label>Error Message Bangla</label><input name="contact[form][error][bn]" value="{{ $trans('contact.form.error', 'bn') }}"></div><div><label>Error Message English</label><input name="contact[form][error][en]" value="{{ $trans('contact.form.error', 'en') }}"></div>
+                    <div class="full"><div class="muted-divider"></div></div>
+                    <div class="full">
+                        <div class="landing-card-head" style="padding:0 0 14px;border:0;background:transparent">
+                            <div><h3>CAPTCHA Popup</h3><p>The popup opens only after the visitor submits a valid demo form. The request is stored only after the answer is verified on the server.</p></div>
+                            <label class="section-toggle"><input type="hidden" name="contact[captcha][enabled]" value="0"><input type="checkbox" name="contact[captcha][enabled]" value="1" @checked($value('contact.captcha.enabled', true))> Enabled</label>
+                        </div>
+                    </div>
+                    <div><label>Popup Title Bangla</label><input name="contact[captcha][title][bn]" value="{{ $trans('contact.captcha.title', 'bn') }}"></div><div><label>Popup Title English</label><input name="contact[captcha][title][en]" value="{{ $trans('contact.captcha.title', 'en') }}"></div>
+                    <div><label>Instruction Bangla</label><textarea name="contact[captcha][instruction][bn]">{{ $trans('contact.captcha.instruction', 'bn') }}</textarea></div><div><label>Instruction English</label><textarea name="contact[captcha][instruction][en]">{{ $trans('contact.captcha.instruction', 'en') }}</textarea></div>
+                    <div><label>Answer Placeholder Bangla</label><input name="contact[captcha][placeholder][bn]" value="{{ $trans('contact.captcha.placeholder', 'bn') }}"></div><div><label>Answer Placeholder English</label><input name="contact[captcha][placeholder][en]" value="{{ $trans('contact.captcha.placeholder', 'en') }}"></div>
+                    <div><label>Verify Button Bangla</label><input name="contact[captcha][verify_button][bn]" value="{{ $trans('contact.captcha.verify_button', 'bn') }}"></div><div><label>Verify Button English</label><input name="contact[captcha][verify_button][en]" value="{{ $trans('contact.captcha.verify_button', 'en') }}"></div>
+                    <div><label>Refresh Button Bangla</label><input name="contact[captcha][refresh_button][bn]" value="{{ $trans('contact.captcha.refresh_button', 'bn') }}"></div><div><label>Refresh Button English</label><input name="contact[captcha][refresh_button][en]" value="{{ $trans('contact.captcha.refresh_button', 'en') }}"></div>
+                    <div><label>Cancel Button Bangla</label><input name="contact[captcha][cancel_button][bn]" value="{{ $trans('contact.captcha.cancel_button', 'bn') }}"></div><div><label>Cancel Button English</label><input name="contact[captcha][cancel_button][en]" value="{{ $trans('contact.captcha.cancel_button', 'en') }}"></div>
+                    <div><label>Loading Message Bangla</label><textarea name="contact[captcha][loading_message][bn]">{{ $trans('contact.captcha.loading_message', 'bn') }}</textarea></div><div><label>Loading Message English</label><textarea name="contact[captcha][loading_message][en]">{{ $trans('contact.captcha.loading_message', 'en') }}</textarea></div>
+                    <div><label>Invalid/Expired Message Bangla</label><textarea name="contact[captcha][invalid_message][bn]">{{ $trans('contact.captcha.invalid_message', 'bn') }}</textarea></div><div><label>Invalid/Expired Message English</label><textarea name="contact[captcha][invalid_message][en]">{{ $trans('contact.captcha.invalid_message', 'en') }}</textarea></div>
                 </div>
             </section>
 
@@ -493,10 +606,75 @@
 <template data-template="hero_buttons"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Hero Button</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid three"><div><label>Bangla Label</label><input name="hero[buttons][__INDEX__][label][bn]"></div><div><label>English Label</label><input name="hero[buttons][__INDEX__][label][en]"></div><div><label>Style</label><select name="hero[buttons][__INDEX__][style]"><option value="primary">Primary</option><option value="outline">Outline</option><option value="dark">Dark</option></select></div><div class="full"><label>Link</label><input name="hero[buttons][__INDEX__][href]" value="#contact"></div></div></div></template>
 <template data-template="trust_items"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Trust Item</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Bangla</label><input name="trust_items[__INDEX__][bn]"></div><div><label>English</label><input name="trust_items[__INDEX__][en]"></div></div></div></template>
 <template data-template="why_cards"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Feature Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Icon</label><input name="why_cards[__INDEX__][icon]" value="✓"></div><div></div><div><label>Title Bangla</label><input name="why_cards[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="why_cards[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="why_cards[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="why_cards[__INDEX__][body][en]"></textarea></div></div></div></template>
-<template data-template="screens"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Screen Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div class="full image-admin-field"><label>White Preview Image <small>PNG, JPG, WEBP or GIF; max 4 MB</small></label><input type="file" name="screens[__INDEX__][image]" accept="image/*" data-optional="true" data-file-input><input type="hidden" name="screens[__INDEX__][image_path]" value=""><input type="hidden" name="screens[__INDEX__][image_name]" value=""><input type="text" class="image-name-display" value="" placeholder="No image uploaded for this card" readonly data-file-name-display data-current-name="" data-optional="true"><span class="hint">Upload the white browser/screen preview only. The dark outer card, title, and description are rendered separately.</span></div><div><label>Title Bangla</label><input name="screens[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="screens[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="screens[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="screens[__INDEX__][body][en]"></textarea></div></div></div></template>
-<template data-template="audiences"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Audience Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="audiences[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="audiences[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="audiences[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="audiences[__INDEX__][body][en]"></textarea></div></div></div></template>
-<template data-template="packages"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Package Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name Bangla</label><input name="packages[__INDEX__][name][bn]"></div><div><label>Name English</label><input name="packages[__INDEX__][name][en]"></div><div><label>Price</label><input name="packages[__INDEX__][price]"></div><div><label>Popular?</label><select name="packages[__INDEX__][popular]"><option value="0">No</option><option value="1">Yes</option></select></div><div><label>Popular Tag Bangla</label><input name="packages[__INDEX__][tag][bn]"></div><div><label>Popular Tag English</label><input name="packages[__INDEX__][tag][en]"></div><div><label>Suffix Bangla</label><input name="packages[__INDEX__][suffix][bn]"></div><div><label>Suffix English</label><input name="packages[__INDEX__][suffix][en]"></div><div><label>Body Bangla</label><textarea name="packages[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="packages[__INDEX__][body][en]"></textarea></div><div><label>Features Bangla</label><textarea name="packages[__INDEX__][features_bn]" class="tall"></textarea></div><div><label>Features English</label><textarea name="packages[__INDEX__][features_en]" class="tall"></textarea></div><div><label>Button Bangla</label><input name="packages[__INDEX__][button][label][bn]"></div><div><label>Button English</label><input name="packages[__INDEX__][button][label][en]"></div><div><label>Button Link</label><input name="packages[__INDEX__][button][href]" value="#contact"></div><div><label>Button Style</label><select name="packages[__INDEX__][button][style]"><option value="primary">Primary</option><option value="outline" selected>Outline</option><option value="dark">Dark</option></select></div></div></div></template>
-<template data-template="pricing_notes"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Pricing Note</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="pricing_notes[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="pricing_notes[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="pricing_notes[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="pricing_notes[__INDEX__][body][en]"></textarea></div><div><label>Button Bangla</label><input name="pricing_notes[__INDEX__][button][label][bn]"></div><div><label>Button English</label><input name="pricing_notes[__INDEX__][button][label][en]"></div><div class="full"><label>Button Link</label><input name="pricing_notes[__INDEX__][button][href]" value="#contact"></div></div></div></template>
+<template data-template="screens"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Screen Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div class="full image-admin-field"><label>Feature Image <small>PNG, JPG, WEBP or GIF; any image ratio; max 4 MB</small></label><input type="file" name="screens[__INDEX__][image]" accept="image/*" data-optional="true" data-file-input data-screen-image><input type="hidden" name="screens[__INDEX__][image_path]" value=""><input type="hidden" name="screens[__INDEX__][image_name]" value=""><input type="text" class="image-name-display" value="" placeholder="No image uploaded for this card" readonly data-file-name-display data-current-name="" data-optional="true"><span class="hint">Upload any portrait, square, or landscape image. It will automatically fit inside a fixed 16:9 frame on the landing page without distortion.</span></div><div><label>Title Bangla</label><input name="screens[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="screens[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="screens[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="screens[__INDEX__][body][en]"></textarea></div></div></div></template>
+<template data-template="audiences"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Business Type Card</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Title Bangla</label><input name="audiences[__INDEX__][title][bn]"></div><div><label>Title English</label><input name="audiences[__INDEX__][title][en]"></div><div><label>Body Bangla</label><textarea name="audiences[__INDEX__][body][bn]"></textarea></div><div><label>Body English</label><textarea name="audiences[__INDEX__][body][en]"></textarea></div></div></div></template>
+<template data-template="packages">
+    <div class="repeat-card package-admin-card" data-repeat-item>
+        <div class="repeat-card-head"><div class="repeat-card-title">Implementation Package</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
+        <div class="landing-grid three">
+            <div><label>Package Icon</label><select name="packages[__INDEX__][icon]"><option value="cloud">Cloud</option><option value="building">Standard / Building</option><option value="server">Server</option></select></div>
+            <div><label>Name Bangla</label><input name="packages[__INDEX__][name][bn]"></div>
+            <div><label>Name English</label><input name="packages[__INDEX__][name][en]"></div>
+            <div><label>Recommended Package?</label><select name="packages[__INDEX__][popular]"><option value="0">No</option><option value="1">Yes</option></select></div>
+            <div><label>Top Ribbon Bangla</label><input name="packages[__INDEX__][popular_label][bn]" value="★ Recommended"></div>
+            <div><label>Top Ribbon English</label><input name="packages[__INDEX__][popular_label][en]" value="★ Recommended"></div>
+            <div><label>Small Tag Bangla</label><input name="packages[__INDEX__][tag][bn]" value="Setup"></div>
+            <div><label>Small Tag English</label><input name="packages[__INDEX__][tag][en]" value="Setup"></div>
+            <div></div>
+            <div><label>Business Description Bangla</label><textarea name="packages[__INDEX__][body][bn]"></textarea></div>
+            <div><label>Business Description English</label><textarea name="packages[__INDEX__][body][en]"></textarea></div>
+            <div></div>
+        </div>
+        <div class="package-fee-admin-grid">
+            <div class="package-fee-admin-card">
+                <strong>Installation Fee</strong>
+                <div class="landing-grid">
+                    <div><label>Label Bangla</label><input name="packages[__INDEX__][fees][installation][label][bn]" value="Installation Fee"></div>
+                    <div><label>Label English</label><input name="packages[__INDEX__][fees][installation][label][en]" value="Installation Fee"></div>
+                    <div class="full"><label>Amount / Value</label><input name="packages[__INDEX__][fees][installation][amount]" placeholder="Example: ৳35,000 – ৳50,000"></div>
+                    <div><label>Note Bangla</label><input name="packages[__INDEX__][fees][installation][note][bn]" value="One-time"></div>
+                    <div><label>Note English</label><input name="packages[__INDEX__][fees][installation][note][en]" value="One-time"></div>
+                </div>
+            </div>
+            <div class="package-fee-admin-card">
+                <strong>Maintenance Fee</strong>
+                <div class="landing-grid">
+                    <div><label>Label Bangla</label><input name="packages[__INDEX__][fees][maintenance][label][bn]" value="Maintenance Fee"></div>
+                    <div><label>Label English</label><input name="packages[__INDEX__][fees][maintenance][label][en]" value="Maintenance Fee"></div>
+                    <div class="full"><label>Amount / Value</label><input name="packages[__INDEX__][fees][maintenance][amount]" placeholder="Example: ৳5,000"></div>
+                    <div><label>Note Bangla</label><input name="packages[__INDEX__][fees][maintenance][note][bn]" value="/month"></div>
+                    <div><label>Note English</label><input name="packages[__INDEX__][fees][maintenance][note][en]" value="/month"></div>
+                </div>
+            </div>
+            <div class="package-fee-admin-card">
+                <strong>Server Hosting</strong>
+                <div class="landing-grid">
+                    <div><label>Label Bangla</label><input name="packages[__INDEX__][fees][hosting][label][bn]" value="Server Hosting"></div>
+                    <div><label>Label English</label><input name="packages[__INDEX__][fees][hosting][label][en]" value="Server Hosting"></div>
+                    <div class="full"><label>Amount / Value</label><input name="packages[__INDEX__][fees][hosting][amount]" value="Actual cost"></div>
+                    <div><label>Note Bangla</label><input name="packages[__INDEX__][fees][hosting][note][bn]" value="/month"></div>
+                    <div><label>Note English</label><input name="packages[__INDEX__][fees][hosting][note][en]" value="/month"></div>
+                </div>
+            </div>
+        </div>
+        <div class="landing-grid" style="margin-top:14px">
+            <div><label>Features Bangla <small>One feature per line</small></label><textarea name="packages[__INDEX__][features_bn]" class="tall"></textarea></div>
+            <div><label>Features English <small>One feature per line</small></label><textarea name="packages[__INDEX__][features_en]" class="tall"></textarea></div>
+        </div>
+    </div>
+</template>
+<template data-template="pricing_notes">
+    <div class="repeat-card" data-repeat-item>
+        <div class="repeat-card-head"><div class="repeat-card-title">Important Note</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div>
+        <div class="landing-grid three">
+            <div><label>Icon</label><select name="pricing_notes[__INDEX__][icon]"><option value="tag">Pricing Tag</option><option value="server">Server</option><option value="wrench">Maintenance</option></select></div>
+            <div><label>Title Bangla</label><input name="pricing_notes[__INDEX__][title][bn]"></div>
+            <div><label>Title English</label><input name="pricing_notes[__INDEX__][title][en]"></div>
+            <div><label>Body Bangla</label><textarea name="pricing_notes[__INDEX__][body][bn]"></textarea></div>
+            <div><label>Body English</label><textarea name="pricing_notes[__INDEX__][body][en]"></textarea></div>
+        </div>
+    </div>
+</template>
 <template data-template="testimonials"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">Testimonial</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Name</label><input name="testimonials[__INDEX__][name]"></div><div><label>Avatar Text</label><input name="testimonials[__INDEX__][avatar]"></div><div><label>Role Bangla</label><input name="testimonials[__INDEX__][role][bn]"></div><div><label>Role English</label><input name="testimonials[__INDEX__][role][en]"></div><div><label>Quote Bangla</label><textarea name="testimonials[__INDEX__][quote][bn]"></textarea></div><div><label>Quote English</label><textarea name="testimonials[__INDEX__][quote][en]"></textarea></div></div></div></template>
 <template data-template="faqs"><div class="repeat-card" data-repeat-item><div class="repeat-card-head"><div class="repeat-card-title">FAQ</div><button type="button" class="button btn-ghost btn-small danger-link" data-remove-card>Remove</button></div><div class="landing-grid"><div><label>Question Bangla</label><input name="faqs[__INDEX__][question][bn]"></div><div><label>Question English</label><input name="faqs[__INDEX__][question][en]"></div><div><label>Answer Bangla</label><textarea name="faqs[__INDEX__][answer][bn]"></textarea></div><div><label>Answer English</label><textarea name="faqs[__INDEX__][answer][en]"></textarea></div><div class="full"><label class="section-toggle"><input type="hidden" name="faqs[__INDEX__][open]" value="0"><input type="checkbox" name="faqs[__INDEX__][open]" value="1"> Open by default</label></div></div></div></template>
 @endsection
@@ -683,6 +861,70 @@
         control.insertAdjacentElement('afterend', error);
     }
 
+    function clearControlError(control) {
+        control.classList.remove('landing-validation-invalid');
+        const error = control.parentElement
+            ? control.parentElement.querySelector('.landing-validation-error[data-for="' + cssEscapeValue(control.name) + '"]')
+            : null;
+
+        if (error) {
+            error.remove();
+        }
+    }
+
+    function updateScreenImagePreview(input, imageUrl) {
+        const wrapper = input.closest('.image-admin-field');
+        if (!wrapper) {
+            return;
+        }
+
+        let preview = wrapper.querySelector('.screen-image-admin-preview');
+        if (!preview) {
+            preview = document.createElement('img');
+            preview.className = 'image-admin-preview screen-image-admin-preview';
+            preview.alt = 'Selected feature screen image';
+            wrapper.appendChild(preview);
+        }
+
+        preview.src = imageUrl;
+    }
+
+    function validateScreenImageInput(input) {
+        if (!input.matches('[data-screen-image]')) {
+            return;
+        }
+
+        const file = input.files && input.files[0] ? input.files[0] : null;
+        clearControlError(input);
+
+        if (!file) {
+            input.dataset.imageValid = 'true';
+            return;
+        }
+
+        input.dataset.imageValid = 'pending';
+
+        if (input.dataset.previewUrl) {
+            URL.revokeObjectURL(input.dataset.previewUrl);
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        input.dataset.previewUrl = objectUrl;
+
+        const image = new Image();
+        image.onload = function () {
+            input.dataset.imageValid = 'true';
+            input.dataset.imageDimensions = image.naturalWidth + '×' + image.naturalHeight;
+            updateScreenImagePreview(input, objectUrl);
+            clearControlError(input);
+        };
+        image.onerror = function () {
+            input.dataset.imageValid = 'false';
+            showControlError(input, 'The selected feature screen image could not be read. Please choose another PNG, JPG, WEBP or GIF image.');
+        };
+        image.src = objectUrl;
+    }
+
     function showSummary(errors) {
         const summary = document.getElementById('landingClientValidationSummary');
         if (!summary) {
@@ -752,6 +994,24 @@
             }
         });
 
+        form.querySelectorAll('[data-screen-image]').forEach(function (input) {
+            const hasSelectedFile = input.files && input.files.length > 0;
+            if (!hasSelectedFile || input.dataset.imageValid === 'true') {
+                return;
+            }
+
+            const message = input.dataset.imageValid === 'pending'
+                ? 'Please wait while the selected feature screen image is checked.'
+                : 'The selected feature screen image could not be read. Please choose another PNG, JPG, WEBP or GIF image.';
+
+            showControlError(input, message);
+            errors.push({
+                control: input,
+                section: 'features',
+                message: message
+            });
+        });
+
         showSummary(errors);
 
         if (errors.length > 0) {
@@ -805,6 +1065,8 @@
             if (display) {
                 display.value = input.files && input.files.length ? input.files[0].name : (display.dataset.currentName || '');
             }
+
+            validateScreenImageInput(input);
         });
 
         form.addEventListener('submit', function (event) {

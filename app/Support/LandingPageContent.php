@@ -9,7 +9,7 @@ use Throwable;
 
 class LandingPageContent
 {
-    public const CACHE_KEY = 'landing_page.homepage';
+    public const CACHE_KEY = 'landing_page.homepage.v3';
     public const SETTING_KEY = 'homepage';
 
     public static function defaults(): array
@@ -73,9 +73,51 @@ class LandingPageContent
     {
         $merged = array_replace_recursive($defaults, $content);
 
-        foreach (['nav_links', 'trust_items', 'why_cards', 'screens', 'audiences', 'packages', 'pricing_notes', 'testimonials', 'faqs'] as $listKey) {
+        foreach (['nav_links', 'trust_items', 'why_cards', 'screens', 'audiences', 'testimonials', 'faqs'] as $listKey) {
             if (Arr::has($content, $listKey) && is_array($content[$listKey])) {
                 $merged[$listKey] = $content[$listKey];
+            }
+        }
+
+        foreach (['packages', 'pricing_notes'] as $schemaListKey) {
+            if (! Arr::has($content, $schemaListKey) || ! is_array($content[$schemaListKey])) {
+                continue;
+            }
+
+            $defaultRows = is_array($defaults[$schemaListKey] ?? null) ? $defaults[$schemaListKey] : [];
+            $submittedRows = array_values($content[$schemaListKey]);
+            $legacySchema = false;
+
+            foreach ($submittedRows as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                if ($schemaListKey === 'packages' && ! isset($row['fees'])) {
+                    $legacySchema = true;
+                    break;
+                }
+
+                if ($schemaListKey === 'pricing_notes' && (! isset($row['icon']) || isset($row['button']))) {
+                    $legacySchema = true;
+                    break;
+                }
+            }
+
+            if ($legacySchema) {
+                $merged[$schemaListKey] = $defaultRows;
+                continue;
+            }
+
+            $merged[$schemaListKey] = [];
+
+            foreach ($submittedRows as $index => $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                $defaultRow = is_array($defaultRows[$index] ?? null) ? $defaultRows[$index] : [];
+                $merged[$schemaListKey][] = array_replace_recursive($defaultRow, $row);
             }
         }
 

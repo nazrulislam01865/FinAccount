@@ -38,7 +38,7 @@
         @else
             <div class="hg-actions">
                 <button type="button" class="hg-btn hg-btn-primary" disabled>+ Add Voucher Numbering</button>
-                <a class="hg-btn" href="{{ route('master.index', 'transaction-categories') }}">Add Transaction Category First</a>
+                <a class="hg-btn" href="{{ route('master.index', 'transaction-categories') }}">Add Transaction Type First</a>
             </div>
         @endif
     </div>
@@ -162,7 +162,7 @@
             <input type="hidden" name="record_id" value="{{ old('record_id') }}">
 
             <div class="hg-field full">
-                <label for="sequence-category">Transaction Category <span class="hg-required">*</span></label>
+                <label for="sequence-category">Transaction Type <span class="hg-required">*</span></label>
                 <select id="sequence-category" name="category" required>
                     <option value="">Select transaction category</option>
                     @foreach ($transactionCategories as $categoryOption)

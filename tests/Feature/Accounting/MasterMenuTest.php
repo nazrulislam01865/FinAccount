@@ -5,6 +5,7 @@ namespace Tests\Feature\Accounting;
 use App\Models\AccountingOption;
 use App\Models\DocumentSequence;
 use App\Models\User;
+use App\Support\TransactionTypes;
 use Database\Seeders\HisebGhorDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -44,7 +45,7 @@ class MasterMenuTest extends TestCase
                 'Chart of Accounts',
                 'Accounting Rules',
                 'Transaction Heads',
-                'Transaction Categories',
+                'Transaction Types',
                 'Voucher Numbering',
                 'Party Types',
                 'Parties',
@@ -123,7 +124,7 @@ class MasterMenuTest extends TestCase
     {
         $sales = AccountingOption::query()
             ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
-            ->where('value', 'Sales')
+            ->where('value', TransactionTypes::SALE)
             ->firstOrFail();
 
         $this->actingAs($this->user)
@@ -137,7 +138,7 @@ class MasterMenuTest extends TestCase
 
         $sales->refresh();
 
-        $this->assertSame('Sales', $sales->value);
+        $this->assertSame(TransactionTypes::SALE, $sales->value);
         $this->assertSame('Sales & Revenue', $sales->label);
         $this->assertSame('Receive Through', $sales->metadata['money_label']);
         $this->assertSame(15, $sales->sort_order);
@@ -147,14 +148,14 @@ class MasterMenuTest extends TestCase
     {
         $sequence = DocumentSequence::query()
             ->where('company_id', $this->user->company_id)
-            ->where('category', 'Sales')
+            ->where('category', TransactionTypes::SALE)
             ->firstOrFail();
 
         $newNextNumber = $sequence->next_number + 5;
 
         $this->actingAs($this->user)
             ->put(route('master.voucher-sequences.update', $sequence), [
-                'category' => 'Sales',
+                'category' => TransactionTypes::SALE,
                 'prefix' => 'REV',
                 'next_number' => $newNextNumber,
                 'padding' => 5,

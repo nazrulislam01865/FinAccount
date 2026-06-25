@@ -13,7 +13,7 @@
             <p>Invoice generated from sales transaction {{ $transaction?->voucher_no }}. The invoice is a customer document; ledger balances still come from the posted journal lines.</p>
         </div>
         <div class="hg-actions">
-            <a class="hg-btn" href="{{ route('transactions.index', ['category' => 'Sales']) }}">Back to Transactions</a>
+            <a class="hg-btn" href="{{ route('transactions.index', ['category' => \App\Support\TransactionTypes::SALE]) }}">Back to Transactions</a>
             <a class="hg-btn hg-btn-soft" href="{{ route('sales-invoices.download', $invoice) }}">Download Invoice</a>
             <button class="hg-btn hg-btn-primary" type="button" onclick="window.print()">Print / Save PDF</button>
         </div>

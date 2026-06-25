@@ -14,6 +14,7 @@ use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Accounting\TransactionUpdateService;
 use App\Services\Accounting\SafeDelete\SafeDeleteService;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Support\TransactionTypes;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,7 @@ class TransactionRegisterController extends Controller
             'category' => $this->validatedCategoryFilter($request),
             'transactionCategories' => $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY),
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
+            'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
         ]);
     }
 
@@ -54,7 +56,7 @@ class TransactionRegisterController extends Controller
     {
         $this->ensureCompany($request, $transaction);
 
-        $transaction->load(['transactionHead.accountingRule', 'moneyAccount', 'party', 'attachments.uploader']);
+        $transaction->load(['transactionHead.postingAccount', 'moneyAccount', 'party', 'attachments.uploader']);
         $company = $request->user()->company;
         abort_unless($company, 404);
         $companyId = $company->id;
@@ -63,7 +65,7 @@ class TransactionRegisterController extends Controller
         $storedCategoryOption = $transactionCategories->firstWhere('value', $transaction->category);
         $requestedCategoryOption = $transactionCategories->firstWhere('value', $request->string('category')->toString());
         $categoryOption = $storedCategoryOption ?? $requestedCategoryOption ?? $transactionCategories->first();
-        abort_if($categoryOption === null, 422, 'Add an active Transaction Category before repairing this transaction.');
+        abort_if($categoryOption === null, 422, 'Add an active Transaction Type before repairing this transaction.');
         $category = $categoryOption->value;
         $categoryRepairRequired = $storedCategoryOption === null;
 
@@ -78,6 +80,7 @@ class TransactionRegisterController extends Controller
             'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
             'parties' => $this->entryOptionService->parties($companyId),
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
+            'transactionTypeDefinition' => TransactionTypes::definition($category),
             'transactionDateContext' => $this->accountingPeriodService->transactionDateContext(
                 $company,
                 $transaction->transaction_date?->toDateString(),
@@ -180,7 +183,7 @@ class TransactionRegisterController extends Controller
                     $transaction->reference,
                     $transaction->description,
                     $transaction->amount,
-                    $transaction->settlement_type ?? 'normal',
+                    $transaction->settlement_type ?? TransactionTypes::CASH,
                     $transaction->paid_amount,
                     $transaction->due_amount,
                     $transaction->due_date?->format('Y-m-d'),
@@ -202,7 +205,7 @@ class TransactionRegisterController extends Controller
         $category = $this->validatedCategoryFilter($request);
 
         return Transaction::query()
-            ->with(['transactionHead.accountingRule', 'moneyAccount', 'party', 'attachments', 'salesInvoice'])
+            ->with(['transactionHead.postingAccount', 'moneyAccount', 'party', 'attachments', 'salesInvoice'])
             ->where('company_id', $companyId)
             ->when($category !== '', fn (Builder $query) => $query->where('category', $category))
             ->when($search !== '', function (Builder $query) use ($search): void {

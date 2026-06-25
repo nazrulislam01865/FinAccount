@@ -1,0 +1,196 @@
+<?php
+
+namespace App\Support;
+
+final class TransactionTypes
+{
+    public const SALE = 'SALE';
+    public const PURCHASE = 'PURCHASE';
+    public const CUSTOMER_COLLECTION = 'CUSTOMER_COLLECTION';
+    public const SUPPLIER_PAYMENT = 'SUPPLIER_PAYMENT';
+    public const EXPENSE = 'EXPENSE';
+    public const OWNER_INVESTMENT = 'OWNER_INVESTMENT';
+    public const OWNER_WITHDRAWAL = 'OWNER_WITHDRAWAL';
+    public const LOAN_RECEIVED = 'LOAN_RECEIVED';
+    public const LOAN_REPAYMENT = 'LOAN_REPAYMENT';
+    public const LOAN_INTEREST_PAYMENT = 'LOAN_INTEREST_PAYMENT';
+    public const ASSET_PURCHASE = 'ASSET_PURCHASE';
+
+    public const CASH = 'CASH';
+    public const CREDIT = 'CREDIT';
+    public const PARTIAL = 'PARTIAL';
+
+    /** @return array<string, array<string, mixed>> */
+    public static function definitions(): array
+    {
+        return [
+            self::SALE => [
+                'label' => 'Sale',
+                'action_label' => 'I sold something',
+                'voucher_prefix' => 'SAL',
+                'money_label' => 'Receive In',
+                'party_label' => 'Customer',
+                'party_type' => 'Customer',
+                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'posting_types' => ['Income'],
+            ],
+            self::PURCHASE => [
+                'label' => 'Purchase',
+                'action_label' => 'I bought goods or materials',
+                'voucher_prefix' => 'PUR',
+                'money_label' => 'Pay From',
+                'party_label' => 'Supplier',
+                'party_type' => 'Supplier',
+                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'posting_types' => ['Asset', 'Expense'],
+            ],
+            self::CUSTOMER_COLLECTION => [
+                'label' => 'Customer Collection',
+                'action_label' => 'I received a customer due',
+                'voucher_prefix' => 'COL',
+                'money_label' => 'Receive In',
+                'party_label' => 'Customer',
+                'party_type' => 'Customer',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Asset'],
+            ],
+            self::SUPPLIER_PAYMENT => [
+                'label' => 'Supplier Payment',
+                'action_label' => 'I paid a supplier due',
+                'voucher_prefix' => 'SPY',
+                'money_label' => 'Pay From',
+                'party_label' => 'Supplier',
+                'party_type' => 'Supplier',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Liability'],
+            ],
+            self::EXPENSE => [
+                'label' => 'Expense',
+                'action_label' => 'I recorded a business expense',
+                'voucher_prefix' => 'EXP',
+                'money_label' => 'Pay From',
+                'party_label' => 'Payable To',
+                'party_type' => 'Any',
+                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'posting_types' => ['Expense'],
+            ],
+            self::OWNER_INVESTMENT => [
+                'label' => 'Owner Investment',
+                'action_label' => 'Owner added money',
+                'voucher_prefix' => 'OIN',
+                'money_label' => 'Receive In',
+                'party_label' => 'Owner',
+                'party_type' => 'Owner',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Equity'],
+            ],
+            self::OWNER_WITHDRAWAL => [
+                'label' => 'Owner Withdrawal',
+                'action_label' => 'Owner took money',
+                'voucher_prefix' => 'OWD',
+                'money_label' => 'Pay From',
+                'party_label' => 'Owner',
+                'party_type' => 'Owner',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Equity'],
+            ],
+            self::LOAN_RECEIVED => [
+                'label' => 'Loan Received',
+                'action_label' => 'I received a loan',
+                'voucher_prefix' => 'LRV',
+                'money_label' => 'Receive In',
+                'party_label' => 'Lender',
+                'party_type' => 'Lender',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Liability'],
+            ],
+            self::LOAN_REPAYMENT => [
+                'label' => 'Loan Repayment',
+                'action_label' => 'I repaid loan principal',
+                'voucher_prefix' => 'LRP',
+                'money_label' => 'Pay From',
+                'party_label' => 'Lender',
+                'party_type' => 'Lender',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Liability'],
+            ],
+            self::LOAN_INTEREST_PAYMENT => [
+                'label' => 'Loan Interest Payment',
+                'action_label' => 'I paid loan interest',
+                'voucher_prefix' => 'LIP',
+                'money_label' => 'Pay From',
+                'party_label' => 'Lender',
+                'party_type' => 'Lender',
+                'allowed_settlements' => [self::CASH],
+                'posting_types' => ['Expense'],
+            ],
+            self::ASSET_PURCHASE => [
+                'label' => 'Asset Purchase',
+                'action_label' => 'I bought a business asset',
+                'voucher_prefix' => 'AST',
+                'money_label' => 'Pay From',
+                'party_label' => 'Supplier',
+                'party_type' => 'Supplier',
+                'allowed_settlements' => [self::CASH, self::CREDIT, self::PARTIAL],
+                'posting_types' => ['Asset'],
+            ],
+        ];
+    }
+
+    /** @return array<string, array{label:string,description:string}> */
+    public static function settlementDefinitions(): array
+    {
+        return [
+            self::CASH => [
+                'label' => 'Paid/received in full',
+                'description' => 'The full amount is paid or received now.',
+            ],
+            self::CREDIT => [
+                'label' => 'Fully due',
+                'description' => 'No money moves now; the full amount remains due.',
+            ],
+            self::PARTIAL => [
+                'label' => 'Part paid, remaining due',
+                'description' => 'Some money moves now and the remaining amount becomes due.',
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function definition(string $type): array
+    {
+        return self::definitions()[$type] ?? [];
+    }
+
+    /** @return array<int, string> */
+    public static function allowedSettlements(string $type): array
+    {
+        return self::definition($type)['allowed_settlements'] ?? [self::CASH];
+    }
+
+    public static function partyType(string $type): string
+    {
+        return (string) (self::definition($type)['party_type'] ?? 'Any');
+    }
+
+    public static function partyLabel(string $type): string
+    {
+        return (string) (self::definition($type)['party_label'] ?? 'Party');
+    }
+
+    public static function moneyLabel(string $type): string
+    {
+        return (string) (self::definition($type)['money_label'] ?? 'Cash / Bank / Mobile Account');
+    }
+
+    /** @return array<int, string> */
+    public static function postingTypes(string $type): array
+    {
+        return self::definition($type)['posting_types'] ?? [];
+    }
+
+    public static function isSale(string $type): bool
+    {
+        return $type === self::SALE;
+    }
+}

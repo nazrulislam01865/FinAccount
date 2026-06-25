@@ -4,7 +4,7 @@ namespace App\Services\Accounting;
 
 use App\Models\AccountingRule;
 use App\Models\AccountingRuleLine;
-use App\Models\Transaction;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -13,44 +13,115 @@ class TransactionSettlementService
     public function __construct(private readonly DecimalAmount $decimalAmount) {}
 
     /**
+     * Determine payment handling from the total and the amount paid/received now.
+     *
+     * When paid_amount is present it is always the source of truth:
+     * 0 = CREDIT, less than total = PARTIAL, equal to total = CASH.
+     * The legacy settlement_type value is only used for internal/older callers that
+     * do not send paid_amount at all.
+     *
      * @param array<string, mixed> $data
-     * @return array{settlement_type: string, paid_amount: ?string, due_amount: ?string, due_date: ?string}
      */
-    public function prepare(string $totalAmount, array $data, int $scale = 2, bool $requiresSplitAmounts = false): array
+    public function inferSettlementType(string $totalAmount, array $data, int $scale = 2): string
     {
-        if (! $requiresSplitAmounts) {
+        $totalMinor = $this->minorUnits($totalAmount, $scale);
+
+        if ($totalMinor <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => 'Amount must be greater than zero.',
+            ]);
+        }
+
+        $hasPaidAmount = array_key_exists('paid_amount', $data)
+            && $data['paid_amount'] !== null
+            && $data['paid_amount'] !== '';
+
+        if (! $hasPaidAmount) {
+            $legacyType = strtoupper(trim((string) ($data['settlement_type'] ?? '')));
+
+            if (in_array($legacyType, [
+                TransactionTypes::CASH,
+                TransactionTypes::CREDIT,
+                TransactionTypes::PARTIAL,
+            ], true)) {
+                return $legacyType;
+            }
+
+            return TransactionTypes::CASH;
+        }
+
+        $paidAmount = $this->decimalAmount->normalize($data['paid_amount'], $scale);
+        $paidMinor = $this->minorUnits($paidAmount, $scale);
+
+        if ($paidMinor < 0) {
+            throw ValidationException::withMessages([
+                'paid_amount' => 'The amount paid or received now cannot be negative.',
+            ]);
+        }
+
+        if ($paidMinor > $totalMinor) {
+            throw ValidationException::withMessages([
+                'paid_amount' => 'The amount paid or received now cannot be greater than the total amount.',
+            ]);
+        }
+
+        if ($paidMinor === 0) {
+            return TransactionTypes::CREDIT;
+        }
+
+        if ($paidMinor < $totalMinor) {
+            return TransactionTypes::PARTIAL;
+        }
+
+        return TransactionTypes::CASH;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{settlement_type: string, paid_amount: string, due_amount: string, due_date: ?string}
+     */
+    public function prepare(string $totalAmount, array $data, int $scale = 2, ?string $legacySettlementType = null): array
+    {
+        if (
+            ! array_key_exists('paid_amount', $data)
+            && $legacySettlementType !== null
+            && ! array_key_exists('settlement_type', $data)
+        ) {
+            $data['settlement_type'] = $legacySettlementType;
+        }
+
+        $settlementType = $this->inferSettlementType($totalAmount, $data, $scale);
+        $totalMinor = $this->minorUnits($totalAmount, $scale);
+
+        if ($settlementType === TransactionTypes::CASH) {
             return [
-                'settlement_type' => Transaction::SETTLEMENT_NORMAL,
-                'paid_amount' => null,
-                'due_amount' => null,
+                'settlement_type' => TransactionTypes::CASH,
+                'paid_amount' => $this->formatMinor($totalMinor, $scale),
+                'due_amount' => $this->formatMinor(0, $scale),
                 'due_date' => null,
             ];
         }
 
+        if ($settlementType === TransactionTypes::CREDIT) {
+            return [
+                'settlement_type' => TransactionTypes::CREDIT,
+                'paid_amount' => $this->formatMinor(0, $scale),
+                'due_amount' => $this->formatMinor($totalMinor, $scale),
+                'due_date' => filled($data['due_date'] ?? null) ? (string) $data['due_date'] : null,
+            ];
+        }
+
         $paidAmount = $this->decimalAmount->normalize($data['paid_amount'] ?? 0, $scale);
-        $totalMinor = $this->minorUnits($totalAmount, $scale);
         $paidMinor = $this->minorUnits($paidAmount, $scale);
 
-        if ($totalMinor <= 0) {
+        if ($paidMinor <= 0 || $paidMinor >= $totalMinor) {
             throw ValidationException::withMessages([
-                'amount' => 'Total amount must be greater than zero for this rule-based partial transaction.',
-            ]);
-        }
-
-        if ($paidMinor <= 0) {
-            throw ValidationException::withMessages([
-                'paid_amount' => 'Paid amount is required because the selected accounting rule has a paid amount posting line.',
-            ]);
-        }
-
-        if ($paidMinor >= $totalMinor) {
-            throw ValidationException::withMessages([
-                'paid_amount' => 'Paid amount must be less than total amount because the selected accounting rule also posts a due amount.',
+                'paid_amount' => 'For a partial transaction, enter an amount greater than zero and less than the total amount.',
             ]);
         }
 
         return [
-            'settlement_type' => Transaction::SETTLEMENT_PARTIAL,
+            'settlement_type' => TransactionTypes::PARTIAL,
             'paid_amount' => $this->formatMinor($paidMinor, $scale),
             'due_amount' => $this->formatMinor($totalMinor - $paidMinor, $scale),
             'due_date' => filled($data['due_date'] ?? null) ? (string) $data['due_date'] : null,
@@ -84,21 +155,24 @@ class TransactionSettlementService
 
     public function requiresSplitAmounts(AccountingRule $rule): bool
     {
-        return $this->effectiveLines($rule)->contains(fn ($line): bool => in_array(
-            $this->lineValue($line, 'amount_basis'),
-            [AccountingRuleLine::BASIS_PAID, AccountingRuleLine::BASIS_DUE],
-            true,
-        ));
+        return $rule->settlement_type === TransactionTypes::PARTIAL
+            || $this->effectiveLines($rule)->contains(fn ($line): bool => in_array(
+                $this->lineValue($line, 'amount_basis'),
+                [AccountingRuleLine::BASIS_PAID, AccountingRuleLine::BASIS_DUE],
+                true,
+            ));
     }
 
     public function requiresMoney(AccountingRule $rule): bool
     {
-        return $this->effectiveLines($rule)->contains(fn ($line): bool => $this->lineValue($line, 'account_source') === AccountingRule::SOURCE_SELECTED_MONEY);
+        return $rule->money_required || $this->effectiveLines($rule)->contains(
+            fn ($line): bool => $this->lineValue($line, 'account_source') === AccountingRule::SOURCE_SELECTED_MONEY,
+        );
     }
 
     public function requiresParty(AccountingRule $rule): bool
     {
-        return $this->effectiveLines($rule)->contains(fn ($line): bool => in_array(
+        return $rule->party_required || $this->effectiveLines($rule)->contains(fn ($line): bool => in_array(
             $this->lineValue($line, 'account_source'),
             [AccountingRule::SOURCE_PARTY_RECEIVABLE, AccountingRule::SOURCE_PARTY_PAYABLE],
             true,

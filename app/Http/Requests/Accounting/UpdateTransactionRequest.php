@@ -24,6 +24,7 @@ class UpdateTransactionRequest extends FormRequest
 
         return [
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
+            'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
             'transaction_head_id' => [
                 'required', 'integer',
@@ -31,7 +32,6 @@ class UpdateTransactionRequest extends FormRequest
                     ->where('company_id', $companyId)
                     ->where('category', $category)
                     ->where('is_active', true)
-                    ->whereNotNull('accounting_rule_id')
                     ->whereNotNull('posting_account_id')),
             ],
             'money_account_id' => [
@@ -48,8 +48,7 @@ class UpdateTransactionRequest extends FormRequest
                     ->where('is_active', true)),
             ],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
-            'paid_amount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
-            'due_date' => ['nullable', 'date'],
+            'paid_amount' => ['nullable', 'numeric', 'min:0', 'lte:amount', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'reference' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
             'transaction_attachments' => ['nullable', 'array', 'max:5'],
@@ -60,6 +59,10 @@ class UpdateTransactionRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
+            'category' => strtoupper(trim((string) $this->input('category'))),
+            'settlement_type' => filled($this->input('settlement_type'))
+                ? strtoupper(trim((string) $this->input('settlement_type')))
+                : null,
             'reference' => filled($this->input('reference')) ? trim((string) $this->input('reference')) : null,
             'description' => filled($this->input('description')) ? trim((string) $this->input('description')) : null,
         ]);

@@ -6,17 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Accounting\StoreTransactionRequest;
 use App\Models\AccountingOption;
 use App\Models\MoneyAccount;
-use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\DecimalAmount;
 use App\Services\Accounting\JournalBuilder;
+use App\Services\Accounting\RuleMatcher;
+use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Accounting\TransactionEntryOptionService;
 use App\Services\Accounting\TransactionPostingService;
+use App\Services\Accounting\TransactionPartyResolver;
 use App\Services\Accounting\TransactionSettlementService;
-use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Support\TransactionTypes;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -31,17 +33,19 @@ class TransactionEntryController extends Controller
         private readonly JournalBuilder $journalBuilder,
         private readonly TransactionPostingService $transactionPostingService,
         private readonly TransactionSettlementService $settlementService,
+        private readonly RuleMatcher $ruleMatcher,
         private readonly TransactionAttachmentService $transactionAttachmentService,
         private readonly DecimalAmount $decimalAmount,
         private readonly AccountingOptionService $optionService,
         private readonly TransactionEntryOptionService $entryOptionService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
+        private readonly TransactionPartyResolver $partyResolver,
     ) {}
 
     public function create(Request $request): View
     {
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
-        $requestedCategory = $request->string('category')->toString();
+        $requestedCategory = strtoupper($request->string('category')->toString());
         $category = $transactionCategories->contains('value', $requestedCategory)
             ? $requestedCategory
             : ($transactionCategories->first()?->value ?? '');
@@ -60,12 +64,14 @@ class TransactionEntryController extends Controller
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
             'requestToken' => old('request_token', (string) Str::uuid()),
             'transactionDateContext' => $this->accountingPeriodService->transactionDateContext($company),
+            'transactionTypeDefinition' => TransactionTypes::definition($category),
         ]);
     }
 
     public function preview(Request $request): JsonResponse
     {
-        $companyId = $request->user()->company_id;
+        $companyId = (int) $request->user()->company_id;
+        $category = strtoupper((string) $request->input('category'));
 
         $validated = $request->validate([
             'category' => [
@@ -74,27 +80,29 @@ class TransactionEntryController extends Controller
                     ->where('option_group', AccountingOption::GROUP_TRANSACTION_CATEGORY)
                     ->where('is_active', true)),
             ],
+            'settlement_type' => [
+                'nullable',
+                Rule::exists('accounting_options', 'value')->where(fn ($query) => $query
+                    ->where('option_group', AccountingOption::GROUP_SETTLEMENT_TYPE)
+                    ->where('is_active', true)),
+            ],
             'transaction_head_id' => [
-                'required',
-                'integer',
+                'required', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
-                    ->where('category', (string) $request->input('category'))
+                    ->where('category', $category)
                     ->where('is_active', true)
-                    ->whereNotNull('accounting_rule_id')
                     ->whereNotNull('posting_account_id')),
             ],
             'money_account_id' => [
-                'nullable',
-                'integer',
+                'nullable', 'integer',
                 Rule::exists('money_accounts', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->where('is_active', true)
                     ->whereNotNull('chart_of_account_id')),
             ],
             'party_id' => [
-                'nullable',
-                'integer',
+                'nullable', 'integer',
                 Rule::exists('parties', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->where('is_active', true)),
@@ -104,16 +112,11 @@ class TransactionEntryController extends Controller
         ]);
 
         $head = TransactionHead::query()
-            ->with(['accountingRule.lines', 'postingAccount'])
+            ->with('postingAccount')
             ->where('company_id', $companyId)
-            ->where('category', $validated['category'])
+            ->where('category', $category)
             ->where('is_active', true)
-            ->whereNotNull('accounting_rule_id')
             ->whereNotNull('posting_account_id')
-            ->whereHas('accountingRule', fn ($query) => $query
-                ->where('company_id', $companyId)
-                ->where('category', $validated['category'])
-                ->where('is_active', true))
             ->whereHas('postingAccount', fn ($query) => $query
                 ->where('company_id', $companyId)
                 ->where('is_active', true))
@@ -124,50 +127,56 @@ class TransactionEntryController extends Controller
                 ->with('chartOfAccount')
                 ->where('company_id', $companyId)
                 ->where('is_active', true)
-                ->whereNotNull('chart_of_account_id')
                 ->whereHas('chartOfAccount', fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->where('is_active', true))
                 ->find($validated['money_account_id'])
             : null;
 
-        $party = filled($validated['party_id'] ?? null)
-            ? Party::query()
-                ->with(['receivableAccount', 'payableAccount'])
-                ->where('company_id', $companyId)
-                ->where('is_active', true)
-                ->find($validated['party_id'])
-            : null;
+        $party = null;
 
         $scale = \App\Support\CompanyContext::decimalPlaces();
         $amount = $this->decimalAmount->normalize($validated['amount'] ?? 0, $scale);
-        $settlement = ['settlement_type' => Transaction::SETTLEMENT_NORMAL, 'paid_amount' => null, 'due_amount' => null, 'due_date' => null];
+        $settlement = [
+            'settlement_type' => TransactionTypes::CASH,
+            'paid_amount' => '0.00',
+            'due_amount' => '0.00',
+            'due_date' => null,
+        ];
         $lines = [];
         $previewError = null;
-
-        $partyTypeLabels = $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE);
+        $rule = null;
+        $requiresMoney = false;
+        $requiresParty = false;
+        $expectedPartyType = $head->party_type ?: TransactionTypes::partyType($category);
 
         try {
-            $rule = $head->accountingRule;
-            $requiresSplitAmounts = $this->settlementService->requiresSplitAmounts($rule);
+            $settlement = $this->settlementService->prepare($amount, $validated, $scale);
+            $settlementType = $settlement['settlement_type'];
+
+            if (! $head->allowsSettlement($settlementType)) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => 'The amount entered creates a payment type that is not allowed for this transaction head.',
+                ]);
+            }
+
+            $rule = $this->ruleMatcher->match($companyId, $category, $settlementType);
             $requiresMoney = $this->settlementService->requiresMoney($rule);
             $requiresParty = $this->settlementService->requiresParty($rule);
-            $settlement = $this->settlementService->prepare($amount, $validated, $scale, $requiresSplitAmounts);
+            $expectedPartyType = $this->partyResolver->expectedPartyType($head, $rule);
+            $party = $requiresParty
+                ? $this->partyResolver->resolveRequired(
+                    $companyId,
+                    $head,
+                    $rule,
+                    $validated['party_id'] ?? null,
+                )
+                : null;
 
             if ($requiresMoney && ! $moneyAccount) {
                 throw ValidationException::withMessages([
-                    'money_account_id' => 'A money account is required because the selected accounting rule has a Selected Money posting line.',
+                    'money_account_id' => TransactionTypes::moneyLabel($category).' is required.',
                 ]);
-            }
-
-            if ($requiresParty && ! $party) {
-                throw ValidationException::withMessages([
-                    'party_id' => 'A party is required because the selected accounting rule has a party receivable/payable posting line.',
-                ]);
-            }
-
-            if ($requiresParty && $rule->party_type !== 'Any' && $party?->type !== $rule->party_type) {
-                throw ValidationException::withMessages(['party_id' => 'This transaction requires a '.($partyTypeLabels[$rule->party_type] ?? $rule->party_type).' party.']);
             }
 
             $lines = $this->journalBuilder->buildFromRule(
@@ -177,30 +186,39 @@ class TransactionEntryController extends Controller
                 $amount,
                 $settlement['paid_amount'],
                 $settlement['due_amount'],
+                $rule,
             );
         } catch (ValidationException $exception) {
             $previewError = collect($exception->errors())->flatten()->first();
         }
 
+        $settlementType = $settlement['settlement_type'];
         $html = view('transactions.partials.preview', [
             'head' => $head,
-            'rule' => $head->accountingRule,
+            'rule' => $rule,
             'lines' => $lines,
             'amount' => $amount,
             'settlement' => $settlement,
             'previewError' => $previewError,
             'sourceLabels' => $this->optionService->labels(AccountingOption::GROUP_ACCOUNTING_SOURCE),
-            'partyTypeLabels' => $partyTypeLabels,
+            'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE),
+            'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'transactionTypeLabel' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY)[$category] ?? $category,
         ])->render();
-
-        $rule = $head->accountingRule;
 
         return response()->json([
             'html' => $html,
-            'moneyRequired' => $this->settlementService->requiresMoney($rule),
-            'partyRequired' => $this->settlementService->requiresParty($rule),
-            'splitRequired' => $this->settlementService->requiresSplitAmounts($rule),
-            'partyType' => $rule->party_type,
+            'settlementType' => $settlementType,
+            'moneyRequired' => $requiresMoney,
+            'partyRequired' => $requiresParty,
+            'splitRequired' => $settlementType === TransactionTypes::PARTIAL,
+            'dueRequired' => in_array($settlementType, [TransactionTypes::CREDIT, TransactionTypes::PARTIAL], true),
+            'partyType' => $expectedPartyType,
+            'autoSelectedPartyId' => $requiresParty && $party ? $party->id : null,
+            'autoSelectedPartyLabel' => $requiresParty && $party ? $party->code.' — '.$party->name : null,
+            'allowedSettlements' => $head->allowedSettlementCodes(),
+            'moneyLabel' => TransactionTypes::moneyLabel($category),
+            'partyLabel' => TransactionTypes::partyLabel($category),
         ]);
     }
 
@@ -235,7 +253,6 @@ class TransactionEntryController extends Controller
         return redirect()
             ->route('transactions.create', ['category' => $transaction->category])
             ->with('success', $message)
-            ->with('warning', 'The transaction was saved, but your role is not allowed to view the register. You have been returned to Transaction Entry.');
+            ->with('warning', 'The transaction was saved, but your role is not allowed to view the register.');
     }
-
 }

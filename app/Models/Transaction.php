@@ -9,8 +9,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Transaction extends Model
 {
-    public const SETTLEMENT_NORMAL = 'normal';
-    public const SETTLEMENT_PARTIAL = 'partial';
+    public const SETTLEMENT_CASH = 'CASH';
+    public const SETTLEMENT_CREDIT = 'CREDIT';
+    public const SETTLEMENT_PARTIAL = 'PARTIAL';
+
+    // Compatibility alias for older callers. New transactions use CASH/CREDIT/PARTIAL.
+    public const SETTLEMENT_NORMAL = self::SETTLEMENT_CASH;
 
     protected $fillable = [
         'uuid', 'company_id', 'transaction_head_id', 'money_account_id', 'party_id',

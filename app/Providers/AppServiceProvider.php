@@ -58,6 +58,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('security.rate_limits.landing_inquiry_per_minute', 5))
                 ->by($request->ip() ?: 'unknown');
         });
+
+        RateLimiter::for('landing-captcha', function (Request $request): Limit {
+            return Limit::perMinute((int) config('security.rate_limits.landing_captcha_per_minute', 20))
+                ->by($request->ip() ?: 'unknown');
+        });
     }
 
     /**

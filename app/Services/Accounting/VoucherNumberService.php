@@ -36,7 +36,7 @@ class VoucherNumberService
 
             if (! preg_match('/^[A-Z0-9]{2,10}$/', $prefix)) {
                 throw ValidationException::withMessages([
-                    'category' => 'Voucher numbering cannot be created automatically because this category has no valid voucher prefix. Edit the Transaction Category first.',
+                    'category' => 'Voucher numbering cannot be created automatically because this transaction type has no valid voucher prefix. Edit the Transaction Type first.',
                 ]);
             }
 

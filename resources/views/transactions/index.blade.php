@@ -76,6 +76,7 @@
                                 <span class="hg-badge {{ strtolower($transaction->category ?? '') }}">
                                     {{ $transaction->category ? ($categoryLabels[$transaction->category] ?? $transaction->category) : 'Relationship removed' }}
                                 </span>
+                                <br><small class="hg-muted">{{ $settlementLabels[$transaction->settlement_type] ?? $transaction->settlement_type }}</small>
                             </td>
                             <td>{{ $transaction->transactionHead?->name ?? '-' }}</td>
                             <td>{{ $transaction->moneyAccount?->name ?? '-' }}</td>
@@ -96,7 +97,7 @@
                             </td>
                             <td class="right">
                                 {{ \App\Support\CompanyContext::money((float) $transaction->amount) }}
-                                @if(($transaction->settlement_type ?? 'normal') === 'partial')
+                                @if(($transaction->settlement_type ?? \App\Support\TransactionTypes::CASH) === \App\Support\TransactionTypes::PARTIAL)
                                     <br>
                                     <small class="hg-muted">
                                         Paid: {{ \App\Support\CompanyContext::money((float) $transaction->paid_amount) }}<br>
@@ -116,7 +117,7 @@
                                     @if($transaction->salesInvoice)
                                         <a class="hg-btn hg-btn-small hg-btn-soft" href="{{ route('sales-invoices.show', $transaction->salesInvoice) }}">Invoice</a>
                                         <a class="hg-btn hg-btn-small" href="{{ route('sales-invoices.download', $transaction->salesInvoice) }}">Download</a>
-                                    @elseif($canManageTransactions && $transaction->category === 'Sales' && ($transaction->transactionHead?->accountingRule?->generates_invoice ?? false))
+                                    @elseif($canManageTransactions && $transaction->category === \App\Support\TransactionTypes::SALE)
                                         <form method="POST" action="{{ route('transactions.invoice.generate', $transaction) }}">
                                             @csrf
                                             <button class="hg-btn hg-btn-small hg-btn-soft" type="submit">Generate Invoice</button>
@@ -155,7 +156,7 @@
                             <td><span class="hg-muted">Attach after final save</span></td>
                             <td class="right">
                                 {{ \App\Support\CompanyContext::money((float) ($fields['amount'] ?? 0)) }}
-                                @if(($fields['settlement_type'] ?? 'normal') === 'partial')
+                                @if(($fields['settlement_type'] ?? \App\Support\TransactionTypes::CASH) === \App\Support\TransactionTypes::PARTIAL)
                                     <br><small class="hg-muted">Partial draft</small>
                                 @endif
                             </td>

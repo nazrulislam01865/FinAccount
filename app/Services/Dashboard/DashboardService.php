@@ -13,6 +13,7 @@ use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\ChartOfAccountBalanceService;
 use App\Services\Accounting\PartyService;
 use App\Support\CompanyContext;
+use App\Support\TransactionTypes;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -387,7 +388,7 @@ class DashboardService
         return (float) Transaction::query()
             ->where('company_id', $companyId)
             ->where('status', 'posted')
-            ->where('category', 'Sales')
+            ->where('category', TransactionTypes::SALE)
             ->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()])
             ->sum('amount');
     }
@@ -479,19 +480,16 @@ class DashboardService
                 ->select(['id', 'journal_entry_id', 'money_account_id', 'debit', 'credit'])])
             ->where('company_id', $companyId)
             ->where('status', 'posted')
-            ->where('category', 'Sales')
+            ->where('category', TransactionTypes::SALE)
             ->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()])
             ->get();
 
         foreach ($sales as $sale) {
-            $journalEntry = $sale->getRelation('journalEntry');
-            /** @var Collection<int, JournalLine> $storedLines */
-            $storedLines = $journalEntry instanceof JournalEntry
-                ? $journalEntry->getRelation('lines')
-                : collect();
-            $wasReceivedIntoMoney = $storedLines
-                ->contains(fn (JournalLine $line): bool => $line->money_account_id !== null && (float) $line->debit > 0);
-            $key = $wasReceivedIntoMoney ? 'paid' : 'unpaid';
+            $key = match ($sale->settlement_type) {
+                TransactionTypes::CREDIT => 'unpaid',
+                TransactionTypes::PARTIAL => 'partly_paid',
+                default => 'paid',
+            };
             $summary[$key]['count']++;
             $summary[$key]['amount'] += (float) $sale->amount;
         }

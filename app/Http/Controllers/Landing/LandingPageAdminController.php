@@ -125,7 +125,7 @@ class LandingPageAdminController extends Controller
             'screens' => $this->screens($request, $current),
             'audience' => $this->audienceSection($request, $current),
             'audiences' => $this->cards($request->input('audiences', []), ['title', 'body']),
-            'pricing' => $this->sectionText($request, 'pricing', $current, true),
+            'pricing' => $this->pricingSection($request, $current),
             'packages' => $this->packages($request->input('packages', [])),
             'pricing_notes' => $this->pricingNotes($request->input('pricing_notes', [])),
             'testimonials_section' => $this->sectionText($request, 'testimonials_section', $current, false),
@@ -292,31 +292,42 @@ class LandingPageAdminController extends Controller
             'pricing.title.en' => $requiredLongText,
             'pricing.subtitle.bn' => $requiredLongText,
             'pricing.subtitle.en' => $requiredLongText,
+            'pricing.notes_title.bn' => $requiredShortText,
+            'pricing.notes_title.en' => $requiredShortText,
             'packages' => ['required', 'array', 'min:1'],
+            'packages.*.icon' => ['required', Rule::in(['cloud', 'building', 'server'])],
             'packages.*.name.bn' => $requiredShortText,
             'packages.*.name.en' => $requiredShortText,
-            'packages.*.price' => $requiredShortText,
             'packages.*.popular' => ['required', 'boolean'],
+            'packages.*.popular_label.bn' => $requiredShortText,
+            'packages.*.popular_label.en' => $requiredShortText,
             'packages.*.tag.bn' => $requiredShortText,
             'packages.*.tag.en' => $requiredShortText,
-            'packages.*.suffix.bn' => $requiredShortText,
-            'packages.*.suffix.en' => $requiredShortText,
             'packages.*.body.bn' => $requiredLongText,
             'packages.*.body.en' => $requiredLongText,
-            'packages.*.features_bn' => ['required', 'string', 'max:4000'],
-            'packages.*.features_en' => ['required', 'string', 'max:4000'],
-            'packages.*.button.label.bn' => $requiredShortText,
-            'packages.*.button.label.en' => $requiredShortText,
-            'packages.*.button.href' => ['required', 'string', 'max:220'],
-            'packages.*.button.style' => ['required', Rule::in(['primary', 'outline', 'dark'])],
+            'packages.*.fees.installation.label.bn' => $requiredShortText,
+            'packages.*.fees.installation.label.en' => $requiredShortText,
+            'packages.*.fees.installation.amount' => $requiredShortText,
+            'packages.*.fees.installation.note.bn' => $requiredShortText,
+            'packages.*.fees.installation.note.en' => $requiredShortText,
+            'packages.*.fees.maintenance.label.bn' => $requiredShortText,
+            'packages.*.fees.maintenance.label.en' => $requiredShortText,
+            'packages.*.fees.maintenance.amount' => $requiredShortText,
+            'packages.*.fees.maintenance.note.bn' => $requiredShortText,
+            'packages.*.fees.maintenance.note.en' => $requiredShortText,
+            'packages.*.fees.hosting.label.bn' => $requiredShortText,
+            'packages.*.fees.hosting.label.en' => $requiredShortText,
+            'packages.*.fees.hosting.amount' => $requiredShortText,
+            'packages.*.fees.hosting.note.bn' => $requiredShortText,
+            'packages.*.fees.hosting.note.en' => $requiredShortText,
+            'packages.*.features_bn' => ['required', 'string', 'max:8000'],
+            'packages.*.features_en' => ['required', 'string', 'max:8000'],
             'pricing_notes' => ['required', 'array', 'min:1'],
+            'pricing_notes.*.icon' => ['required', Rule::in(['tag', 'server', 'wrench'])],
             'pricing_notes.*.title.bn' => $requiredShortText,
             'pricing_notes.*.title.en' => $requiredShortText,
             'pricing_notes.*.body.bn' => $requiredLongText,
             'pricing_notes.*.body.en' => $requiredLongText,
-            'pricing_notes.*.button.label.bn' => $requiredShortText,
-            'pricing_notes.*.button.label.en' => $requiredShortText,
-            'pricing_notes.*.button.href' => ['required', 'string', 'max:220'],
 
             'testimonials_section.enabled' => ['required', 'boolean'],
             'testimonials_section.mini.bn' => $requiredShortText,
@@ -368,6 +379,25 @@ class LandingPageAdminController extends Controller
             'contact.form.button.en' => $requiredShortText,
             'contact.form.success.bn' => $requiredLongText,
             'contact.form.success.en' => $requiredLongText,
+            'contact.form.error.bn' => $requiredLongText,
+            'contact.form.error.en' => $requiredLongText,
+            'contact.captcha.enabled' => ['required', 'boolean'],
+            'contact.captcha.title.bn' => $requiredShortText,
+            'contact.captcha.title.en' => $requiredShortText,
+            'contact.captcha.instruction.bn' => $requiredLongText,
+            'contact.captcha.instruction.en' => $requiredLongText,
+            'contact.captcha.placeholder.bn' => $requiredShortText,
+            'contact.captcha.placeholder.en' => $requiredShortText,
+            'contact.captcha.verify_button.bn' => $requiredShortText,
+            'contact.captcha.verify_button.en' => $requiredShortText,
+            'contact.captcha.refresh_button.bn' => $requiredShortText,
+            'contact.captcha.refresh_button.en' => $requiredShortText,
+            'contact.captcha.cancel_button.bn' => $requiredShortText,
+            'contact.captcha.cancel_button.en' => $requiredShortText,
+            'contact.captcha.loading_message.bn' => $requiredLongText,
+            'contact.captcha.loading_message.en' => $requiredLongText,
+            'contact.captcha.invalid_message.bn' => $requiredLongText,
+            'contact.captcha.invalid_message.en' => $requiredLongText,
 
             'footer.text.bn' => $requiredLongText,
             'footer.text.en' => $requiredLongText,
@@ -489,6 +519,17 @@ class LandingPageAdminController extends Controller
         return $section;
     }
 
+    private function pricingSection(Request $request, array $current): array
+    {
+        return [
+            'enabled' => $request->boolean('pricing.enabled'),
+            'mini' => $this->translation($request->input('pricing.mini'), data_get($current, 'pricing.mini')),
+            'title' => $this->translation($request->input('pricing.title'), data_get($current, 'pricing.title')),
+            'subtitle' => $this->translation($request->input('pricing.subtitle'), data_get($current, 'pricing.subtitle')),
+            'notes_title' => $this->translation($request->input('pricing.notes_title'), data_get($current, 'pricing.notes_title')),
+        ];
+    }
+
     private function audienceSection(Request $request, array $current): array
     {
         return [
@@ -517,6 +558,18 @@ class LandingPageAdminController extends Controller
                 'message' => $this->translation($request->input('contact.form.message'), data_get($current, 'contact.form.message')),
                 'button' => $this->translation($request->input('contact.form.button'), data_get($current, 'contact.form.button')),
                 'success' => $this->translation($request->input('contact.form.success'), data_get($current, 'contact.form.success')),
+                'error' => $this->translation($request->input('contact.form.error'), data_get($current, 'contact.form.error')),
+            ],
+            'captcha' => [
+                'enabled' => $request->boolean('contact.captcha.enabled'),
+                'title' => $this->translation($request->input('contact.captcha.title'), data_get($current, 'contact.captcha.title')),
+                'instruction' => $this->translation($request->input('contact.captcha.instruction'), data_get($current, 'contact.captcha.instruction')),
+                'placeholder' => $this->translation($request->input('contact.captcha.placeholder'), data_get($current, 'contact.captcha.placeholder')),
+                'verify_button' => $this->translation($request->input('contact.captcha.verify_button'), data_get($current, 'contact.captcha.verify_button')),
+                'refresh_button' => $this->translation($request->input('contact.captcha.refresh_button'), data_get($current, 'contact.captcha.refresh_button')),
+                'cancel_button' => $this->translation($request->input('contact.captcha.cancel_button'), data_get($current, 'contact.captcha.cancel_button')),
+                'loading_message' => $this->translation($request->input('contact.captcha.loading_message'), data_get($current, 'contact.captcha.loading_message')),
+                'invalid_message' => $this->translation($request->input('contact.captcha.invalid_message'), data_get($current, 'contact.captcha.invalid_message')),
             ],
         ];
     }
@@ -679,21 +732,21 @@ class LandingPageAdminController extends Controller
 
         foreach ($rows as $row) {
             $package = [
+                'icon' => $this->allowedPricingIcon($row['icon'] ?? 'cloud', ['cloud', 'building', 'server'], 'cloud'),
                 'name' => $this->translation($row['name'] ?? []),
-                'popular' => !empty($row['popular']),
+                'popular' => ! empty($row['popular']),
+                'popular_label' => $this->translation($row['popular_label'] ?? []),
                 'tag' => $this->translation($row['tag'] ?? []),
                 'body' => $this->translation($row['body'] ?? []),
-                'price' => $this->text($row['price'] ?? ''),
-                'suffix' => $this->translation($row['suffix'] ?? []),
-                'features' => $this->pairedLines($row['features_bn'] ?? '', $row['features_en'] ?? ''),
-                'button' => [
-                    'style' => $this->allowedStyle($row['button']['style'] ?? 'outline'),
-                    'label' => $this->translation($row['button']['label'] ?? []),
-                    'href' => $this->text($row['button']['href'] ?? '#contact'),
+                'fees' => [
+                    'installation' => $this->packageFee($row, 'installation'),
+                    'maintenance' => $this->packageFee($row, 'maintenance'),
+                    'hosting' => $this->packageFee($row, 'hosting'),
                 ],
+                'features' => $this->pairedLines($row['features_bn'] ?? '', $row['features_en'] ?? ''),
             ];
 
-            if ($this->blankTranslation($package['name']) && $package['price'] === '' && $this->blankTranslation($package['body'])) {
+            if ($this->blankTranslation($package['name']) && $this->blankTranslation($package['body'])) {
                 continue;
             }
 
@@ -703,18 +756,24 @@ class LandingPageAdminController extends Controller
         return $packages;
     }
 
+    private function packageFee(array $row, string $key): array
+    {
+        return [
+            'label' => $this->translation(data_get($row, 'fees.'.$key.'.label', [])),
+            'amount' => $this->text(data_get($row, 'fees.'.$key.'.amount', '')),
+            'note' => $this->translation(data_get($row, 'fees.'.$key.'.note', [])),
+        ];
+    }
+
     private function pricingNotes(array $rows): array
     {
         $notes = [];
 
         foreach ($rows as $row) {
             $note = [
+                'icon' => $this->allowedPricingIcon($row['icon'] ?? 'tag', ['tag', 'server', 'wrench'], 'tag'),
                 'title' => $this->translation($row['title'] ?? []),
                 'body' => $this->translation($row['body'] ?? []),
-                'button' => [
-                    'label' => $this->translation($row['button']['label'] ?? []),
-                    'href' => $this->text($row['button']['href'] ?? '#contact'),
-                ],
             ];
 
             if ($this->blankTranslation($note['title']) && $this->blankTranslation($note['body'])) {
@@ -725,6 +784,13 @@ class LandingPageAdminController extends Controller
         }
 
         return $notes;
+    }
+
+    private function allowedPricingIcon(mixed $value, array $allowed, string $fallback): string
+    {
+        $icon = strtolower($this->text($value));
+
+        return in_array($icon, $allowed, true) ? $icon : $fallback;
     }
 
     private function testimonials(array $rows): array

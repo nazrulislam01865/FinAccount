@@ -2,10 +2,10 @@
 
 namespace App\Services\Accounting;
 
-use App\Models\AccountingRule;
 use App\Models\Company;
 use App\Models\SalesInvoice;
 use App\Models\Transaction;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Str;
 
 class SalesInvoiceService
@@ -13,21 +13,19 @@ class SalesInvoiceService
     public function syncForTransaction(Transaction $transaction, Company $company): ?SalesInvoice
     {
         $transaction->loadMissing([
-            'transactionHead.accountingRule.lines',
+            'transactionHead',
             'moneyAccount',
             'party',
             'salesInvoice',
         ]);
 
-        $rule = $transaction->transactionHead?->accountingRule;
-
-        if (! $this->shouldGenerate($transaction, $rule)) {
+        if (! $this->shouldGenerate($transaction)) {
             $transaction->salesInvoice?->delete();
 
             return null;
         }
 
-        [$paidAmount, $dueAmount] = $this->paidAndDueAmounts($transaction, $rule);
+        [$paidAmount, $dueAmount] = $this->paidAndDueAmounts($transaction);
         $totalAmount = $this->money($transaction->amount);
         $status = $this->status($paidAmount, $dueAmount);
         $invoiceNo = $this->invoiceNo($transaction);
@@ -37,7 +35,7 @@ class SalesInvoiceService
             'transaction_id' => $transaction->id,
             'party_id' => $transaction->party_id,
             'invoice_no' => $invoiceNo,
-            'title' => filled($rule?->invoice_title) ? (string) $rule->invoice_title : 'Sales Invoice',
+            'title' => 'Sales Invoice',
             'invoice_date' => $transaction->transaction_date,
             'due_date' => $transaction->due_date,
             'subtotal' => $totalAmount,
@@ -65,45 +63,26 @@ class SalesInvoiceService
         ]);
     }
 
-    public function shouldGenerate(Transaction $transaction, ?AccountingRule $rule): bool
+    public function shouldGenerate(Transaction $transaction): bool
     {
-        return $transaction->category === 'Sales'
-            && $transaction->status === 'posted'
-            && (bool) ($rule?->generates_invoice ?? false);
+        return $transaction->category === TransactionTypes::SALE
+            && $transaction->status === 'posted';
     }
 
     /** @return array{0:string,1:string} */
-    private function paidAndDueAmounts(Transaction $transaction, ?AccountingRule $rule): array
+    private function paidAndDueAmounts(Transaction $transaction): array
     {
         $total = $this->money($transaction->amount);
+        $settlement = strtoupper((string) ($transaction->settlement_type ?: TransactionTypes::CASH));
 
-        if (($transaction->settlement_type ?? Transaction::SETTLEMENT_NORMAL) === Transaction::SETTLEMENT_PARTIAL) {
-            return [
+        return match ($settlement) {
+            TransactionTypes::CREDIT => ['0.00', $total],
+            TransactionTypes::PARTIAL => [
                 $this->money($transaction->paid_amount ?? 0),
                 $this->money($transaction->due_amount ?? 0),
-            ];
-        }
-
-        $usesMoney = $rule?->lines?->contains('account_source', AccountingRule::SOURCE_SELECTED_MONEY) ?? false;
-        $usesCustomerReceivable = $rule?->lines?->contains('account_source', AccountingRule::SOURCE_PARTY_RECEIVABLE) ?? false;
-
-        if ($usesMoney && ! $usesCustomerReceivable) {
-            return [$total, '0.00'];
-        }
-
-        if ($usesCustomerReceivable && ! $usesMoney) {
-            return ['0.00', $total];
-        }
-
-        if ($transaction->money_account_id && ! $transaction->party_id) {
-            return [$total, '0.00'];
-        }
-
-        if ($transaction->party_id && ! $transaction->money_account_id) {
-            return ['0.00', $total];
-        }
-
-        return [$total, '0.00'];
+            ],
+            default => [$total, '0.00'],
+        };
     }
 
     private function status(string $paidAmount, string $dueAmount): string

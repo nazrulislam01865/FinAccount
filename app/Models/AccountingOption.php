@@ -16,6 +16,7 @@ class AccountingOption extends Model
     public const GROUP_PARTY_TYPE = 'party_type';
     public const GROUP_RULE_PARTY_TYPE = 'rule_party_type';
     public const GROUP_TRANSACTION_CATEGORY = 'transaction_category';
+    public const GROUP_SETTLEMENT_TYPE = 'settlement_type';
     public const GROUP_ACCOUNTING_SOURCE = 'accounting_source';
 
     protected $fillable = [

@@ -83,7 +83,7 @@ class AccountingActivityDescriptor
             $labels = [
                 'party-types' => 'Party Type',
                 'money-account-types' => 'Money Account Type',
-                'transaction-categories' => 'Transaction Category',
+                'transaction-categories' => 'Transaction Type',
             ];
 
             return isset($labels[$section])

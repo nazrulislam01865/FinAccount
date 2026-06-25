@@ -5,6 +5,7 @@ namespace App\Services\Accounting;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\TransactionHead;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Collection;
 
 class TransactionEntryOptionService
@@ -12,20 +13,18 @@ class TransactionEntryOptionService
     /** @return Collection<int, TransactionHead> */
     public function transactionHeads(int $companyId, string $category): Collection
     {
+        $postingTypes = TransactionTypes::postingTypes($category);
+
         return TransactionHead::query()
-            ->with(['accountingRule', 'postingAccount'])
+            ->with('postingAccount')
             ->where('company_id', $companyId)
             ->where('category', $category)
             ->where('is_active', true)
-            ->whereNotNull('accounting_rule_id')
             ->whereNotNull('posting_account_id')
-            ->whereHas('accountingRule', fn ($query) => $query
-                ->where('company_id', $companyId)
-                ->where('category', $category)
-                ->where('is_active', true))
             ->whereHas('postingAccount', fn ($query) => $query
                 ->where('company_id', $companyId)
-                ->where('is_active', true))
+                ->where('is_active', true)
+                ->when($postingTypes !== [], fn ($query) => $query->whereIn('type', $postingTypes)))
             ->orderBy('name')
             ->get();
     }

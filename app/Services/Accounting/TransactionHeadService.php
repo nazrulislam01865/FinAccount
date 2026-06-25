@@ -3,9 +3,9 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingOption;
-use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
 use App\Models\TransactionHead;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,19 +14,14 @@ class TransactionHeadService
 {
     public function __construct(private readonly AccountingOptionService $optionService) {}
 
-    /**
-     * @return array{transactionHeads: Collection<int, TransactionHead>, accountingRules: Collection<int, AccountingRule>, postingAccounts: Collection<int, ChartOfAccount>, transactionCategories: Collection<int, AccountingOption>}
-     */
+    /** @return array<string, mixed> */
     public function pageData(int $companyId): array
     {
         return [
             'transactionHeads' => TransactionHead::query()
-                ->with(['accountingRule', 'postingAccount'])
+                ->with('postingAccount')
                 ->where('company_id', $companyId)
-                ->orderBy('code')
-                ->get(),
-            'accountingRules' => AccountingRule::query()
-                ->where('company_id', $companyId)
+                ->orderBy('category')
                 ->orderBy('code')
                 ->get(),
             'postingAccounts' => ChartOfAccount::query()
@@ -35,6 +30,11 @@ class TransactionHeadService
                 ->get(),
             'transactionCategories' => $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY),
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
+            'settlementTypes' => $this->optionService->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'transactionTypeDefinitions' => TransactionTypes::definitions(),
+            'partyTypes' => $this->optionService->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE),
+            'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE),
         ];
     }
 
@@ -52,7 +52,7 @@ class TransactionHeadService
     /** @param array<string, mixed> $data */
     public function update(TransactionHead $head, array $data): TransactionHead
     {
-        $this->validateSetup($data, $head->company_id);
+        $this->validateSetup($data, (int) $head->company_id);
         DB::transaction(fn () => $head->update($this->normalized($data)), attempts: 5);
 
         return $head->refresh();
@@ -72,17 +72,6 @@ class TransactionHeadService
     /** @param array<string, mixed> $data */
     private function validateSetup(array $data, int $companyId): void
     {
-        $rule = AccountingRule::query()
-            ->whereKey($data['accounting_rule_id'])
-            ->where('company_id', $companyId)
-            ->first();
-
-        if (! $rule || $rule->category !== $data['category']) {
-            throw ValidationException::withMessages([
-                'accounting_rule_id' => 'The accounting rule category must match the transaction head category.',
-            ]);
-        }
-
         $account = ChartOfAccount::query()
             ->whereKey($data['posting_account_id'])
             ->where('company_id', $companyId)
@@ -90,13 +79,37 @@ class TransactionHeadService
 
         if (! $account) {
             throw ValidationException::withMessages([
-                'posting_account_id' => 'The posting COA does not belong to this company.',
+                'posting_account_id' => 'The linked account does not belong to this company.',
             ]);
         }
 
-        if ((bool) $data['is_active'] && (! $rule->is_active || ! $account->is_active)) {
+        $transactionType = (string) $data['category'];
+        $allowedForType = TransactionTypes::allowedSettlements($transactionType);
+        $selectedSettlements = array_values((array) $data['allowed_settlements']);
+
+        if (array_diff($selectedSettlements, $allowedForType) !== []) {
             throw ValidationException::withMessages([
-                'is_active' => 'An active transaction head must use an active accounting rule and active posting COA.',
+                'allowed_settlements' => 'One or more selected payment types are not valid for this transaction type.',
+            ]);
+        }
+
+        $allowedPostingTypes = TransactionTypes::postingTypes($transactionType);
+        if ($allowedPostingTypes !== [] && ! in_array($account->type, $allowedPostingTypes, true)) {
+            throw ValidationException::withMessages([
+                'posting_account_id' => 'Select a '.implode(' or ', $allowedPostingTypes).' account for this transaction type.',
+            ]);
+        }
+
+        $expectedPartyType = TransactionTypes::partyType($transactionType);
+        if ($expectedPartyType !== 'Any' && $data['party_type'] !== $expectedPartyType) {
+            throw ValidationException::withMessages([
+                'party_type' => 'This transaction type uses '.$expectedPartyType.' parties.',
+            ]);
+        }
+
+        if ((bool) $data['is_active'] && ! $account->is_active) {
+            throw ValidationException::withMessages([
+                'is_active' => 'An active transaction head must use an active linked account.',
             ]);
         }
     }
@@ -108,8 +121,10 @@ class TransactionHeadService
             'code' => trim((string) $data['code']),
             'name' => trim((string) $data['name']),
             'category' => $data['category'],
-            'accounting_rule_id' => (int) $data['accounting_rule_id'],
+            'accounting_rule_id' => null,
             'posting_account_id' => (int) $data['posting_account_id'],
+            'allowed_settlements' => array_values($data['allowed_settlements']),
+            'party_type' => $data['party_type'],
             'is_active' => (bool) $data['is_active'],
         ];
     }

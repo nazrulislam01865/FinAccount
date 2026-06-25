@@ -15,7 +15,9 @@ window.HisebGhorMobileCaptureDevice = mobileCaptureDevice;
 const page = document.querySelector('[data-transaction-entry]');
 
 if (page) {
+    const form = page.querySelector('[data-transaction-form]');
     const head = document.getElementById('transaction_head_id');
+    const settlement = document.getElementById('settlement_type');
     const money = document.getElementById('money_account_id');
     const party = document.getElementById('party_id');
     const amount = document.getElementById('amount');
@@ -23,122 +25,240 @@ if (page) {
     const dueAmountPreview = document.getElementById('due_amount_preview');
     const moneyField = document.getElementById('money-field');
     const partyField = document.getElementById('party-field');
+    const autoPartyNotice = document.getElementById('auto-party-notice');
+    const autoPartyLabel = document.getElementById('auto-party-label');
+    const autoPartyName = document.getElementById('auto-party-name');
     const paidAmountField = document.getElementById('paid-amount-field');
     const dueAmountField = document.getElementById('due-amount-field');
-    const dueDateField = document.getElementById('due-date-field');
-    const dueDate = document.getElementById('due_date');
+    const moneyLabel = document.getElementById('money-label');
+    const partyLabel = document.getElementById('party-label');
+    const paidAmountLabel = document.getElementById('paid-amount-label');
+    const paidAmountHelp = document.getElementById('paid-amount-help');
     const preview = document.getElementById('journal-preview');
     const emptyPreviewTemplate = document.getElementById('journal-preview-empty-template');
-    const form = document.querySelector('[data-transaction-form]');
-    const previewUrl = preview.dataset.previewUrl;
+    const previewUrl = preview?.dataset.previewUrl;
     let previewTimer;
-    let ruleRequiresSplit = false;
+    let autoSyncPaidAmount = form?.dataset.autoSyncPaid === '1';
+
+    const parseJson = (value, fallback = []) => {
+        try { return JSON.parse(value || '[]'); } catch (_) { return fallback; }
+    };
 
     const amountScale = () => {
         const step = amount?.getAttribute('step') || '0.01';
         return step.includes('.') ? step.split('.')[1].length : 0;
     };
 
-    const updateSplitFields = () => {
-        const split = ruleRequiresSplit === true;
+    const numericValue = (input) => {
+        const value = Number.parseFloat(input?.value || '');
+        return Number.isFinite(value) ? value : 0;
+    };
 
-        [paidAmountField, dueAmountField, dueDateField].forEach((field) => {
-            if (field) field.classList.toggle('hidden', !split);
-        });
+    const selectedAllowedSettlements = () => {
+        const fromHead = parseJson(head?.selectedOptions[0]?.dataset.allowedSettlements, []);
+        return fromHead.length > 0
+            ? fromHead
+            : parseJson(form?.dataset.defaultAllowedSettlements, ['CASH']);
+    };
 
-        if (paidAmount) {
-            paidAmount.required = split;
-            paidAmount.disabled = !split;
-        }
+    const usesReceivedWording = () => (moneyLabel?.textContent || '').toLowerCase().includes('receive');
 
-        if (dueDate) {
-            dueDate.disabled = !split;
-        }
-
-        if (!split) {
-            if (paidAmount) paidAmount.value = '';
-            if (dueAmountPreview) dueAmountPreview.value = '';
-            return;
-        }
-
-        const total = Number.parseFloat(amount?.value || '0');
-        const paid = Number.parseFloat(paidAmount?.value || '0');
-        const due = Math.max(total - paid, 0);
-        const scale = amountScale();
-
-        if (dueAmountPreview) {
-            dueAmountPreview.value = Number.isFinite(due) ? due.toFixed(scale) : (0).toFixed(scale);
+    const updatePaidAmountCopy = () => {
+        const received = usesReceivedWording();
+        if (paidAmountLabel) paidAmountLabel.textContent = received ? 'Received Now' : 'Paid Now';
+        if (paidAmountHelp) {
+            paidAmountHelp.textContent = received
+                ? 'Enter 0 when the full amount will remain due.'
+                : 'Enter 0 when the full amount will remain unpaid.';
         }
     };
 
-    const filterPartyOptions = (partyType) => {
-        [...party.options].forEach((option) => {
-            if (!option.value) return;
+    const inferSettlement = () => {
+        const allowed = selectedAllowedSettlements();
+        const total = numericValue(amount);
 
-            const allowed = partyType === 'Any' || option.dataset.partyType === partyType;
-            option.hidden = !allowed;
-            option.disabled = !allowed;
-        });
-
-        const selected = party.options[party.selectedIndex];
-
-        if (selected && selected.disabled) {
-            party.value = '';
-            return true;
+        if (allowed.length === 1 && allowed[0] === 'CASH') {
+            if (paidAmount) paidAmount.value = total > 0 ? total.toFixed(amountScale()) : '';
+            if (settlement) settlement.value = 'CASH';
+            return 'CASH';
         }
 
-        return false;
+        if (allowed.length === 1 && allowed[0] === 'CREDIT') {
+            if (paidAmount) paidAmount.value = '0';
+            if (settlement) settlement.value = 'CREDIT';
+            return 'CREDIT';
+        }
+
+        if (total <= 0) {
+            if (settlement) settlement.value = 'CASH';
+            return 'CASH';
+        }
+
+        if (autoSyncPaidAmount && paidAmount) {
+            paidAmount.value = total.toFixed(amountScale());
+        }
+
+        const paid = numericValue(paidAmount);
+        let type = 'CASH';
+        if (paid <= 0) type = 'CREDIT';
+        else if (total > 0 && paid < total) type = 'PARTIAL';
+
+        if (settlement) settlement.value = type;
+        return type;
+    };
+
+    const syncAmountFields = () => {
+        const allowed = selectedAllowedSettlements();
+        const type = inferSettlement();
+        const total = numericValue(amount);
+        const paid = numericValue(paidAmount);
+        const due = Math.max(total - Math.min(paid, total), 0);
+        const canChoosePaidNow = allowed.length !== 1 || allowed[0] === 'PARTIAL';
+        const hasDue = type === 'CREDIT' || type === 'PARTIAL';
+
+        paidAmountField?.classList.toggle('hidden', !canChoosePaidNow);
+        if (paidAmount) {
+            paidAmount.required = canChoosePaidNow;
+            paidAmount.readOnly = !canChoosePaidNow;
+            paidAmount.max = amount?.value || '';
+        }
+
+        dueAmountField?.classList.toggle('hidden', !hasDue || total <= 0);
+        if (dueAmountPreview) {
+            dueAmountPreview.value = total > 0 ? due.toFixed(amountScale()) : '';
+        }
+
+        return type;
+    };
+
+    const matchingPartyOptions = (partyType) => {
+        const matches = [];
+
+        Array.from(party?.options || []).forEach((option) => {
+            if (!option.value) return;
+            const visible = !partyType || partyType === 'Any' || option.dataset.partyType === partyType;
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (visible) matches.push(option);
+        });
+
+        if (party?.selectedOptions[0]?.disabled) party.value = '';
+
+        return matches;
+    };
+
+    const syncPartyRequirement = (needsParty, partyType) => {
+        if (!party) return false;
+
+        const matches = matchingPartyOptions(partyType);
+        let changed = false;
+
+        if (!needsParty) {
+            partyField?.classList.add('hidden');
+            autoPartyNotice?.classList.add('hidden');
+            party.required = false;
+            return false;
+        }
+
+        if (matches.length === 1) {
+            if (party.value !== matches[0].value) {
+                party.value = matches[0].value;
+                changed = true;
+            }
+
+            party.required = false;
+            partyField?.classList.add('hidden');
+            autoPartyNotice?.classList.remove('hidden');
+            if (autoPartyLabel) autoPartyLabel.textContent = `${partyLabel?.textContent || 'Party'} selected automatically`;
+            if (autoPartyName) autoPartyName.textContent = matches[0].textContent.trim();
+            return changed;
+        }
+
+        party.required = true;
+        partyField?.classList.remove('hidden');
+        autoPartyNotice?.classList.add('hidden');
+
+        const emptyOption = party.options[0];
+        if (emptyOption) {
+            emptyOption.textContent = matches.length === 0
+                ? `No active ${partyType && partyType !== 'Any' ? partyType : 'party'} available`
+                : `Select ${String(partyLabel?.textContent || 'party').toLowerCase()}`;
+        }
+
+        return changed;
+    };
+
+    const setPreliminaryRequirements = (type) => {
+        const hasSelectedHead = Boolean(head?.value);
+        const allowed = selectedAllowedSettlements();
+        const totalEntered = numericValue(amount) > 0;
+
+        // Show Receive In / Pay From as soon as a selected head can use a
+        // paid amount. Once an amount is entered, the inferred settlement
+        // decides whether the money account is actually required.
+        const needsMoney = hasSelectedHead && (
+            totalEntered
+                ? type === 'CASH' || type === 'PARTIAL'
+                : allowed.includes('CASH') || allowed.includes('PARTIAL')
+        );
+        const needsParty = hasSelectedHead && (type === 'CREDIT' || type === 'PARTIAL');
+        const expectedPartyType = head?.selectedOptions[0]?.dataset.partyType || 'Any';
+
+        moneyField?.classList.toggle('hidden', !needsMoney);
+        if (money) money.required = needsMoney;
+        syncPartyRequirement(needsParty, expectedPartyType);
     };
 
     const refreshPreview = async () => {
-        updateSplitFields();
+        const type = syncAmountFields();
+        setPreliminaryRequirements(type);
+        updatePaidAmountCopy();
 
-        if (!head.value) {
-            ruleRequiresSplit = false;
-            updateSplitFields();
-            preview.innerHTML = emptyPreviewTemplate.innerHTML;
-            moneyField.classList.add('hidden');
-            partyField.classList.add('hidden');
-            money.required = false;
-            party.required = false;
+        if (!head?.value || !settlement?.value) {
+            if (preview && emptyPreviewTemplate) preview.innerHTML = emptyPreviewTemplate.innerHTML;
             return;
         }
 
-        const category = form.querySelector('[name="category"]')?.value || '';
         const params = new URLSearchParams({
-            category,
+            category: form?.querySelector('[name="category"]')?.value || '',
+            settlement_type: settlement.value,
             transaction_head_id: head.value,
-            money_account_id: money.value,
-            party_id: party.value,
-            amount: amount.value || '0',
-            paid_amount: paidAmount?.value || '0',
+            money_account_id: money?.value || '',
+            party_id: party?.value || '',
+            amount: amount?.value || '0',
+            paid_amount: paidAmount?.value || '',
         });
 
         try {
-            const response = await fetch(`${previewUrl}?${params.toString()}`, {
-                headers: { Accept: 'application/json' },
-            });
-
-            if (!response.ok) {
-                throw new Error('Preview request failed.');
-            }
-
+            const response = await fetch(`${previewUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
             const data = await response.json();
-            ruleRequiresSplit = data.splitRequired === true;
-            updateSplitFields();
+            if (!response.ok) throw new Error(data.message || 'Preview request failed.');
+
             preview.innerHTML = data.html;
-            moneyField.classList.toggle('hidden', !data.moneyRequired);
-            partyField.classList.toggle('hidden', !data.partyRequired);
-            money.required = data.moneyRequired;
-            party.required = data.partyRequired;
+            if (settlement && data.settlementType) settlement.value = data.settlementType;
 
-            const partySelectionCleared = filterPartyOptions(data.partyType);
+            const totalEntered = numericValue(amount) > 0;
+            const allowed = selectedAllowedSettlements();
+            const showMoneyBeforeAmount = Boolean(head?.value)
+                && !totalEntered
+                && (allowed.includes('CASH') || allowed.includes('PARTIAL'));
+            const moneyRequired = Boolean(data.moneyRequired || showMoneyBeforeAmount);
 
-            if (partySelectionCleared) {
-                await refreshPreview();
+            moneyField?.classList.toggle('hidden', !moneyRequired);
+            if (money) money.required = moneyRequired;
+            if (moneyLabel && data.moneyLabel) moneyLabel.textContent = data.moneyLabel;
+            if (partyLabel && data.partyLabel) partyLabel.textContent = data.partyLabel;
+            updatePaidAmountCopy();
+
+            if (data.autoSelectedPartyId && party && !party.value) {
+                party.value = String(data.autoSelectedPartyId);
             }
-        } catch (error) {
-            preview.innerHTML = '<div class="hg-notice">The journal preview could not be loaded. You may retry by changing a field.</div>';
+
+            if (syncPartyRequirement(Boolean(data.partyRequired), data.partyType)) {
+                window.setTimeout(refreshPreview, 0);
+            }
+        } catch (_) {
+            preview.innerHTML = '<div class="hg-notice">The summary could not be loaded. Check the selected setup and try again.</div>';
         }
     };
 
@@ -147,19 +267,23 @@ if (page) {
         previewTimer = setTimeout(refreshPreview, 180);
     };
 
-    [head, money, party].forEach((element) => element?.addEventListener('change', refreshPreview));
-
+    head?.addEventListener('change', () => {
+        const allowed = selectedAllowedSettlements();
+        if (allowed.length === 1) autoSyncPaidAmount = true;
+        refreshPreview();
+    });
+    money?.addEventListener('change', refreshPreview);
+    party?.addEventListener('change', refreshPreview);
     amount?.addEventListener('input', () => {
-        updateSplitFields();
+        syncAmountFields();
         schedulePreview();
     });
-
     paidAmount?.addEventListener('input', () => {
-        updateSplitFields();
+        autoSyncPaidAmount = false;
+        syncAmountFields();
         schedulePreview();
     });
 
-    updateSplitFields();
     refreshPreview();
 }
 

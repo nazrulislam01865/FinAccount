@@ -41,6 +41,9 @@ Route::get('/brand/favicon', [BrandAssetController::class, 'favicon'])->name('br
 Route::get('/', [LandingPageController::class, 'show'])->name('landing.show');
 Route::get('/home', [LandingPageController::class, 'show'])->name('home');
 Route::get('/landing', [LandingPageController::class, 'show'])->name('landing.public');
+Route::post('/landing-page/captcha', [LandingPageController::class, 'captchaChallenge'])
+    ->middleware('throttle:landing-captcha')
+    ->name('landing.captcha.challenge');
 Route::post('/landing-page/inquiry', [LandingPageController::class, 'storeInquiry'])
     ->middleware('throttle:landing-inquiry')
     ->name('landing.inquiries.store');
