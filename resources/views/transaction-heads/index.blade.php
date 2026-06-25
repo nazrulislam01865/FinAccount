@@ -107,7 +107,8 @@
 
                 <div class="hg-field">
                     <label for="head-code">Code <span class="hg-required">*</span></label>
-                    <input id="head-code" name="code" value="{{ old('code', $editingHead?->code) }}" required maxlength="50">
+                    <input id="head-code" name="code" value="{{ old('code', $editingHead?->code) }}" maxlength="50" readonly>
+                    <small class="hg-muted">Generated automatically from the Head Name.</small>
                     @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
                 <div class="hg-field">

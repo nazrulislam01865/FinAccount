@@ -4,7 +4,6 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
-use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,15 +22,12 @@ class UpdateTransactionHeadRequest extends FormRequest
         $transactionHead = $this->route('transaction_head');
 
         return [
-            'code' => [
-                'required', 'string', 'max:50',
-                Rule::unique('transaction_heads')->where('company_id', $companyId)->ignore($transactionHead),
-            ],
+            'code' => ['nullable', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
             'posting_account_id' => ['required', 'integer', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
             'allowed_settlements' => ['required', 'array', 'min:1'],
-            'allowed_settlements.*' => ['required', 'distinct', Rule::in(TransactionTypes::settlementCodes())],
+            'allowed_settlements.*' => ['required', 'distinct', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'party_type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_RULE_PARTY_TYPE)],
             'is_active' => ['required', 'boolean'],
         ];

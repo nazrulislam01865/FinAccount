@@ -12,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class PartyService
 {
-    public function __construct(private readonly AccountingOptionService $optionService) {}
+    public function __construct(
+        private readonly AccountingOptionService $optionService,
+        private readonly AutomaticCodeService $automaticCodeService,
+    ) {}
     /**
      * @return array{parties: Collection<int, Party>, receivableAccounts: Collection<int, ChartOfAccount>, payableAccounts: Collection<int, ChartOfAccount>, balances: array<int, float>}
      */
@@ -36,13 +39,18 @@ class PartyService
             ->orderBy('code')
             ->get();
 
+        $partyTypes = $this->optionService->forGroup(AccountingOption::GROUP_PARTY_TYPE);
+
         return [
             'parties' => $parties,
             'receivableAccounts' => $receivableAccounts,
             'payableAccounts' => $payableAccounts,
             'balances' => $this->balancesFor($parties, $companyId),
-            'partyTypes' => $this->optionService->forGroup(AccountingOption::GROUP_PARTY_TYPE),
+            'partyTypes' => $partyTypes,
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
+            'nextPartyCodes' => $partyTypes->mapWithKeys(fn (AccountingOption $option): array => [
+                $option->value => $this->automaticCodeService->nextPartyCode($companyId, $option->value),
+            ])->all(),
         ];
     }
 
@@ -79,17 +87,32 @@ class PartyService
     {
         $this->validateAccountTypes($data, $companyId);
 
-        return DB::transaction(fn (): Party => Party::query()->create([
-            'company_id' => $companyId,
-            ...$this->normalized($data),
-        ]), attempts: 5);
+        return DB::transaction(function () use ($data, $companyId): Party {
+            $this->automaticCodeService->lockCompany($companyId);
+            $data['code'] = $this->automaticCodeService->nextPartyCode($companyId, (string) $data['type']);
+
+            return Party::query()->create([
+                'company_id' => $companyId,
+                ...$this->normalized($data),
+            ]);
+        }, attempts: 5);
     }
 
     /** @param array<string, mixed> $data */
     public function update(Party $party, array $data): Party
     {
         $this->validateAccountTypes($data, $party->company_id);
-        DB::transaction(fn () => $party->update($this->normalized($data)), attempts: 5);
+        DB::transaction(function () use ($party, $data): void {
+            $this->automaticCodeService->lockCompany((int) $party->company_id);
+            $data['code'] = (string) $data['type'] === (string) $party->type
+                ? $party->code
+                : $this->automaticCodeService->nextPartyCode(
+                    (int) $party->company_id,
+                    (string) $data['type'],
+                    (int) $party->id,
+                );
+            $party->update($this->normalized($data));
+        }, attempts: 5);
 
         return $party->refresh();
     }

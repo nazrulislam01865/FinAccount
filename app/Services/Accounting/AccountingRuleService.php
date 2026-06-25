@@ -12,18 +12,37 @@ use Illuminate\Validation\ValidationException;
 
 class AccountingRuleService
 {
-    public function __construct(private readonly AccountingOptionService $optionService) {}
+    public function __construct(
+        private readonly AccountingOptionService $optionService,
+        private readonly AutomaticCodeService $automaticCodeService,
+    ) {}
 
     /** @return array<string, mixed> */
     public function pageData(int $companyId): array
     {
+        $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
+
+        $settlementTypes = collect(TransactionTypes::settlementDefinitions())
+            ->map(fn (array $definition, string $value): object => (object) [
+                'value' => $value,
+                'label' => $definition['label'],
+            ])
+            ->values();
+        $settlementLabels = $settlementTypes->pluck('label', 'value')->all();
+
         return [
             'rules' => $this->allForCompany($companyId),
-            'transactionCategories' => $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY),
+            'transactionCategories' => $transactionCategories,
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
-            'settlementTypes' => $this->optionService->systemSettlementTypes(),
-            'settlementLabels' => $this->optionService->systemSettlementLabels(),
-            'transactionTypeDefinitions' => TransactionTypes::definitions(),
+            'settlementTypes' => $settlementTypes,
+            'settlementLabels' => $settlementLabels,
+            'transactionTypeDefinitions' => $transactionCategories->mapWithKeys(fn (AccountingOption $option): array => [
+                $option->value => TransactionTypes::configuredDefinition(
+                    $option->value,
+                    is_array($option->metadata) ? $option->metadata : [],
+                    $option->label,
+                ),
+            ])->all(),
             'sourceLabels' => $this->optionService->labels(AccountingOption::GROUP_ACCOUNTING_SOURCE),
             'amountBasisLabels' => $this->amountBasisLabels(),
         ];
@@ -47,6 +66,8 @@ class AccountingRuleService
         $this->validateConfiguration($data, $companyId);
 
         return DB::transaction(function () use ($data, $companyId): AccountingRule {
+            $this->automaticCodeService->lockCompany($companyId);
+            $data['code'] = $this->automaticCodeService->accountingRuleCode($companyId, (string) $data['name']);
             $normalized = $this->normalized($data);
             $rule = AccountingRule::query()->create([
                 'company_id' => $companyId,
@@ -64,6 +85,14 @@ class AccountingRuleService
         $this->validateConfiguration($data, (int) $rule->company_id, $rule);
 
         DB::transaction(function () use ($rule, $data): void {
+            $this->automaticCodeService->lockCompany((int) $rule->company_id);
+            $data['code'] = (string) $data['name'] === (string) $rule->name
+                ? $rule->code
+                : $this->automaticCodeService->accountingRuleCode(
+                    (int) $rule->company_id,
+                    (string) $data['name'],
+                    (int) $rule->id,
+                );
             $normalized = $this->normalized($data);
             $rule->update($normalized['rule']);
             $this->syncLines($rule, $normalized['lines']);
@@ -324,16 +353,38 @@ class AccountingRuleService
             };
         }
 
-        return match ($type) {
-            TransactionTypes::OWNER_INVESTMENT => $incoming('Owner', true),
-            TransactionTypes::OWNER_WITHDRAWAL => $outgoing('Owner', true),
-            TransactionTypes::LOAN_RECEIVED => $incoming('Lender', true),
-            TransactionTypes::LOAN_REPAYMENT,
-            TransactionTypes::LOAN_INTEREST_PAYMENT => $outgoing('Lender', true),
-            default => throw ValidationException::withMessages([
-                'category' => 'No standard accounting template is available for this transaction type.',
-            ]),
-        };
+        if ($type === TransactionTypes::OWNER_INVESTMENT) {
+            return $incoming('Owner', true);
+        }
+
+        if ($type === TransactionTypes::OWNER_WITHDRAWAL) {
+            return $outgoing('Owner', true);
+        }
+
+        if ($type === TransactionTypes::LOAN_RECEIVED) {
+            return $incoming('Lender', true);
+        }
+
+        if (in_array($type, [TransactionTypes::LOAN_REPAYMENT, TransactionTypes::LOAN_INTEREST_PAYMENT], true)) {
+            return $outgoing('Lender', true);
+        }
+
+        $transactionType = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $type)
+            ->first();
+
+        if (! $transactionType) {
+            throw ValidationException::withMessages([
+                'category' => 'The selected transaction type is not available.',
+            ]);
+        }
+
+        $metadata = is_array($transactionType->metadata) ? $transactionType->metadata : [];
+
+        return TransactionTypes::flow($type, $metadata) === 'incoming'
+            ? $incoming((string) ($metadata['party_type'] ?? 'Any'))
+            : $outgoing((string) ($metadata['party_type'] ?? 'Any'));
     }
 
     /** @param array<int, array{line_side:string,account_source:string,amount_basis:string}> $lines */

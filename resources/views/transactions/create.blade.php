@@ -39,7 +39,7 @@
 
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
-            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid" data-transaction-form data-default-allowed-settlements='@json($transactionTypeDefinition['allowed_settlements'] ?? [\App\Support\TransactionTypes::CASH])' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null) ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
+            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid" data-transaction-form data-default-allowed-settlements='@json($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS)' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null) ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
                 @csrf
                 @if ($isEditing) @method('PUT') @else <input type="hidden" name="request_token" value="{{ $requestToken }}"> @endif
                 <input type="hidden" name="category" value="{{ $category }}">

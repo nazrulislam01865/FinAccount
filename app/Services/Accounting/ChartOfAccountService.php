@@ -12,6 +12,7 @@ class ChartOfAccountService
     public function __construct(
         private readonly ChartOfAccountBalanceService $balanceService,
         private readonly AccountingOptionService $optionService,
+        private readonly AutomaticCodeService $automaticCodeService,
     ) {}
 
     /** @return array<string, mixed> */
@@ -38,16 +39,25 @@ class ChartOfAccountService
                 : null,
             'accountTypes' => $this->optionService->forGroup(AccountingOption::GROUP_ACCOUNT_TYPE),
             'normalBalances' => $this->optionService->forGroup(AccountingOption::GROUP_NORMAL_BALANCE),
+            'nextCodes' => collect($this->optionService->forGroup(AccountingOption::GROUP_ACCOUNT_TYPE))
+                ->mapWithKeys(fn (AccountingOption $option): array => [
+                    $option->value => $this->automaticCodeService->nextChartOfAccountCode($companyId, $option->value),
+                ])->all(),
         ];
     }
 
     /** @param array<string, mixed> $data */
     public function create(array $data, int $companyId): ChartOfAccount
     {
-        return DB::transaction(fn (): ChartOfAccount => ChartOfAccount::query()->create([
-            'company_id' => $companyId,
-            ...$data,
-        ]), attempts: 5);
+        return DB::transaction(function () use ($data, $companyId): ChartOfAccount {
+            $this->automaticCodeService->lockCompany($companyId);
+            $data['code'] = $this->automaticCodeService->nextChartOfAccountCode($companyId, (string) $data['type']);
+
+            return ChartOfAccount::query()->create([
+                'company_id' => $companyId,
+                ...$data,
+            ]);
+        }, attempts: 5);
     }
 
     /** @param array<string, mixed> $data */
@@ -55,7 +65,21 @@ class ChartOfAccountService
     {
         $this->validateMappedAccountType($account, (string) $data['type']);
 
-        DB::transaction(fn () => $account->update($data), attempts: 5);
+        DB::transaction(function () use ($account, $data): void {
+            $this->automaticCodeService->lockCompany((int) $account->company_id);
+
+            if ((string) $data['type'] !== (string) $account->type) {
+                $data['code'] = $this->automaticCodeService->nextChartOfAccountCode(
+                    (int) $account->company_id,
+                    (string) $data['type'],
+                    (int) $account->id,
+                );
+            } else {
+                $data['code'] = $account->code;
+            }
+
+            $account->update($data);
+        }, attempts: 5);
 
         return $account->refresh();
     }

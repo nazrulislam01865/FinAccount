@@ -2,7 +2,8 @@
     $modalRecordId = (int) old('record_id', 0);
     $editingOption = $modalRecordId > 0 ? $options->firstWhere('id', $modalRecordId) : null;
     $addOnlyMode = (bool) ($addOnlyMode ?? false);
-    $reopenModal = old('setup_modal') === 'master-'.$configuration['section'] || $addOnlyMode;
+    $reopenModal = (old('setup_modal') === 'master-'.$configuration['section'])
+        || ($addOnlyMode && $configuration['creatable']);
     $isTransactionCategory = $configuration['group'] === \App\Models\AccountingOption::GROUP_TRANSACTION_CATEGORY;
     $coreCategoryValues = $configuration['core_values'] ?? [];
     $singularTitle = str($configuration['title'])->singular();
@@ -14,6 +15,11 @@
     $canManage = auth()->user()?->canAccounting($permissionPrefix.'.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
     $draftRows = \App\Support\VisibleFormDrafts::forBase('master-data-'.$configuration['section']);
+    if (! $configuration['creatable']) {
+        $draftRows = $draftRows->filter(fn ($draft) => \App\Support\VisibleFormDrafts::isEdit($draft));
+    }
+    $valueTitle = $isTransactionCategory ? 'Internal Value' : 'Initial Value';
+    $initialFallback = $configuration['section'] === 'party-types' ? 'P' : 'M';
 @endphp
 
 <x-layouts::accounting :title="$configuration['title']">
@@ -39,6 +45,7 @@
                     'label' => '',
                     'money_label' => 'Money Account',
                     'voucher_prefix' => '',
+                    'flow' => 'outgoing',
                     'sort_order' => (($options->max('sort_order') ?? 0) + 10),
                     'is_active' => '1',
                 ]) }}"
@@ -58,10 +65,11 @@
             <table class="hg-table">
                 <thead>
                 <tr>
-                    <th>Internal Value</th>
+                    <th>{{ $valueTitle }}</th>
                     <th>Display Label</th>
                     @if ($isTransactionCategory)
                         <th>Voucher Prefix</th>
+                        <th>Direction</th>
                         <th>Money Field Label</th>
                     @endif
                     <th>Sort Order</th>
@@ -75,6 +83,9 @@
                     @php
                         $optionUsage = $usage[$option->id] ?? ['count' => 0, 'summary' => 'Not used'];
                         $isCoreCategory = $isTransactionCategory && in_array($option->value, $coreCategoryValues, true);
+                        $transactionFlow = $isTransactionCategory
+                            ? \App\Support\TransactionTypes::flow($option->value, is_array($option->metadata) ? $option->metadata : [])
+                            : null;
                     @endphp
                     <tr>
                         <td>
@@ -86,6 +97,7 @@
                         <td>{{ $option->label }}</td>
                         @if ($isTransactionCategory)
                             <td><strong>{{ $option->metadata['voucher_prefix'] ?? '—' }}</strong></td>
+                            <td>{{ $transactionFlow === 'incoming' ? 'Money In' : 'Money Out' }}</td>
                             <td>{{ $option->metadata['money_label'] ?? 'Money Account' }}</td>
                         @endif
                         <td>{{ $option->sort_order }}</td>
@@ -119,6 +131,7 @@
                                         'label' => $option->label,
                                         'money_label' => $option->metadata['money_label'] ?? 'Money Account',
                                         'voucher_prefix' => $option->metadata['voucher_prefix'] ?? '',
+                                        'flow' => $transactionFlow,
                                         'sort_order' => $option->sort_order,
                                         'is_active' => $option->is_active ? '1' : '0',
                                     ]) }}"
@@ -152,12 +165,13 @@
                         <td>{{ $fields['label'] ?? 'Draft '.$singularTitle }}</td>
                         @if ($isTransactionCategory)
                             <td><strong>{{ $fields['voucher_prefix'] ?? '—' }}</strong></td>
+                            <td>{{ ($fields['flow'] ?? 'outgoing') === 'incoming' ? 'Money In' : 'Money Out' }}</td>
                             <td>{{ $fields['money_label'] ?? 'Money Account' }}</td>
                         @endif
                         <td>{{ $fields['sort_order'] ?? '—' }}</td>
                         <td><span class="hg-muted">Drafts are not used anywhere.</span></td>
                         <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
-                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="master-data-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id'=>'','value'=>'','label'=>'','money_label'=>'Money Account','voucher_prefix'=>'','sort_order'=>(($options->max('sort_order') ?? 0) + 10),'is_active'=>'1'])) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
+                        <td><div class="hg-actions">@if($canManage) @if($isEditDraft)<button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>@else<button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="master-data-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id'=>'','value'=>'','label'=>'','money_label'=>'Money Account','voucher_prefix'=>'','flow'=>'outgoing','sort_order'=>(($options->max('sort_order') ?? 0) + 10),'is_active'=>'1'])) }}">Continue</button>@endif @endif<form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form></div></td>
                     </tr>
                 @endforeach
                 </tbody>
@@ -181,6 +195,9 @@
                 : ($configuration['creatable'] ? route('master.store', $configuration['section']) : '#') }}"
             class="hg-form-grid"
             data-setup-form
+            data-master-data-form
+            data-auto-initial="{{ $isTransactionCategory ? '0' : '1' }}"
+            data-initial-fallback="{{ $initialFallback }}"
             data-draft-form
             data-draft-defer
             data-draft-key-base="master-data-{{ $configuration['section'] }}"
@@ -193,21 +210,6 @@
             <input type="hidden" name="record_id" value="{{ old('record_id') }}">
 
             <div class="hg-field">
-                <label for="master-value">Internal Value <span class="hg-required">*</span></label>
-                <input
-                    id="master-value"
-                    name="value"
-                    value="{{ old('value', $editingOption?->value) }}"
-                    maxlength="{{ $isTransactionCategory ? 30 : 60 }}"
-                    @if (! empty($configuration['value_placeholder']))
-                        placeholder="{{ $configuration['value_placeholder'] }}"
-                    @endif
-                    required
-                >
-                @error('value')<small class="hg-field-error">{{ $message }}</small>@enderror
-            </div>
-
-            <div class="hg-field">
                 <label for="master-label">Display Label <span class="hg-required">*</span></label>
                 <input
                     id="master-label"
@@ -215,8 +217,29 @@
                     value="{{ old('label', $editingOption?->label) }}"
                     maxlength="120"
                     required
+                    data-master-label
                 >
                 @error('label')<small class="hg-field-error">{{ $message }}</small>@enderror
+            </div>
+
+            <div class="hg-field">
+                <label for="master-value">{{ $valueTitle }} <span class="hg-required">*</span></label>
+                <input
+                    id="master-value"
+                    name="value"
+                    value="{{ old('value', $editingOption?->value) }}"
+                    maxlength="{{ $isTransactionCategory ? 30 : 60 }}"
+                    @if (! empty($configuration['value_placeholder']) && $isTransactionCategory)
+                        placeholder="{{ $configuration['value_placeholder'] }}"
+                    @endif
+                    required
+                    data-master-value
+                    @readonly(! $isTransactionCategory)
+                >
+                @if (! $isTransactionCategory)
+                    <small class="hg-muted">Generated automatically from the Display Label.</small>
+                @endif
+                @error('value')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
 
             @if ($isTransactionCategory)
@@ -231,6 +254,16 @@
                         required
                     >
                     @error('voucher_prefix')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field">
+                    <label for="master-flow">Transaction Direction <span class="hg-required">*</span></label>
+                    <select id="master-flow" name="flow" required>
+                        <option value="incoming" @selected(old('flow', $editingOption ? \App\Support\TransactionTypes::flow($editingOption->value, is_array($editingOption->metadata) ? $editingOption->metadata : []) : 'outgoing') === 'incoming')>Money In / Receive</option>
+                        <option value="outgoing" @selected(old('flow', $editingOption ? \App\Support\TransactionTypes::flow($editingOption->value, is_array($editingOption->metadata) ? $editingOption->metadata : []) : 'outgoing') === 'outgoing')>Money Out / Pay</option>
+                    </select>
+                    <small class="hg-muted">Used to generate the correct automatic accounting rule for this transaction type.</small>
+                    @error('flow')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
                 <div class="hg-field">

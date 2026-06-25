@@ -29,7 +29,7 @@ if (modal) {
         modal.classList.add('show');
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('hg-modal-open');
-        window.setTimeout(() => code.focus(), 0);
+        window.setTimeout(() => name.focus(), 0);
     };
 
     const closeModal = () => {
@@ -44,9 +44,11 @@ if (modal) {
         form.action = modal.dataset.storeUrl;
         method.disabled = true;
         accountId.value = '';
-        code.value = '';
+        originalType = '';
+        originalCode = '';
         name.value = '';
         type.value = modal.dataset.defaultType || '';
+        code.value = type.selectedOptions[0]?.dataset.nextCode || modal.dataset.defaultCode || '';
         normal.value = modal.dataset.defaultNormal || '';
         active.checked = true;
         showModal();
@@ -60,6 +62,8 @@ if (modal) {
         method.disabled = false;
         method.value = 'PUT';
         accountId.value = button.dataset.accountId;
+        originalType = button.dataset.type;
+        originalCode = button.dataset.code;
         code.value = button.dataset.code;
         name.value = button.dataset.name;
         type.value = button.dataset.type;
@@ -68,6 +72,19 @@ if (modal) {
         showModal();
         setDraftContext('edit', button.dataset.accountId);
     };
+
+    let originalType = type.value;
+    let originalCode = code.value;
+
+    type.addEventListener('change', () => {
+        if (accountId.value && type.value === originalType) {
+            code.value = originalCode;
+            return;
+        }
+
+        code.value = type.selectedOptions[0]?.dataset.nextCode || '';
+        code.dispatchEvent(new Event('input', { bubbles: true }));
+    });
 
     document.querySelectorAll('[data-coa-open]').forEach((button) => {
         button.addEventListener('click', () => {

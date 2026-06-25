@@ -17,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class MasterDataService
 {
-    public function __construct(private readonly SafeDeleteService $safeDeleteService) {}
+    public function __construct(
+        private readonly SafeDeleteService $safeDeleteService,
+        private readonly AutomaticCodeService $automaticCodeService,
+    ) {}
 
     public const CORE_TRANSACTION_CATEGORIES = [
         TransactionTypes::SALE,
@@ -64,9 +67,9 @@ class MasterDataService
                 'title' => 'Transaction Types',
                 'description' => '',
                 'menu_group' => 'Transaction Setup',
-                'creatable' => false,
+                'creatable' => true,
                 'editable' => true,
-                'deletable' => false,
+                'deletable' => true,
                 'protected' => true,
                 'core_values' => self::CORE_TRANSACTION_CATEGORIES,
             ],
@@ -123,9 +126,18 @@ class MasterDataService
             return $this->createTransactionCategory($data);
         }
 
-        $this->validateReservedValue($configuration['group'], (string) $data['value']);
-
         return DB::transaction(function () use ($configuration, $data): AccountingOption {
+            AccountingOption::query()
+                ->forGroup($configuration['group'])
+                ->lockForUpdate()
+                ->get(['id']);
+
+            $data['value'] = $this->automaticCodeService->initialValue(
+                (string) $data['label'],
+                (string) $configuration['group'],
+            );
+            $this->validateReservedValue($configuration['group'], (string) $data['value']);
+
             $option = AccountingOption::query()->create([
                 'option_group' => $configuration['group'],
                 'value' => trim((string) $data['value']),
@@ -159,7 +171,12 @@ class MasterDataService
             return $this->updateTransactionCategory($option, $data);
         }
 
-        $newValue = trim((string) $data['value']);
+        $newValue = in_array($configuration['group'], [
+            AccountingOption::GROUP_PARTY_TYPE,
+            AccountingOption::GROUP_MONEY_ACCOUNT_KIND,
+        ], true)
+            ? $option->value
+            : trim((string) $data['value']);
         $this->validateReservedValue($configuration['group'], $newValue);
         $usage = $this->usageFor($option);
         $isChangingValue = $newValue !== $option->value;
@@ -278,6 +295,9 @@ class MasterDataService
             'metadata' => [
                 'voucher_prefix' => $prefix,
                 'money_label' => trim((string) $data['money_label']),
+                'flow' => (string) $data['flow'],
+                'allowed_settlements' => TransactionTypes::ALL_SETTLEMENTS,
+                'default_settlements' => [TransactionTypes::CASH],
             ],
             'is_active' => (bool) $data['is_active'],
         ]), attempts: 5);
@@ -295,12 +315,24 @@ class MasterDataService
         $currentMetadata = is_array($option->metadata) ? $option->metadata : [];
         $oldPrefix = strtoupper(trim((string) ($currentMetadata['voucher_prefix'] ?? '')));
         $isChangingPrefix = $newPrefix !== $oldPrefix;
+        $currentFlow = TransactionTypes::flow($option->value, $currentMetadata);
+        $newFlow = $isCore
+            ? TransactionTypes::flow($option->value)
+            : (string) $data['flow'];
+        $isChangingFlow = $newFlow !== $currentFlow;
+        $data['flow'] = $newFlow;
 
         $this->assertVoucherPrefixAvailable($newPrefix, $option->id);
 
         if ($isChangingPrefix && DocumentSequence::query()->where('category', $option->value)->exists()) {
             throw ValidationException::withMessages([
                 'voucher_prefix' => 'The voucher prefix cannot be changed after Voucher Numbering exists for this category.',
+            ]);
+        }
+
+        if ($isChangingFlow && AccountingRule::query()->where('category', $option->value)->exists()) {
+            throw ValidationException::withMessages([
+                'flow' => 'The transaction direction cannot be changed after accounting rule templates exist for this transaction type.',
             ]);
         }
 
@@ -339,6 +371,9 @@ class MasterDataService
             $metadata = is_array($option->metadata) ? $option->metadata : [];
             $metadata['voucher_prefix'] = $newPrefix;
             $metadata['money_label'] = trim((string) $data['money_label']);
+            $metadata['flow'] = (string) $data['flow'];
+            $metadata['allowed_settlements'] = TransactionTypes::ALL_SETTLEMENTS;
+            $metadata['default_settlements'] = [TransactionTypes::CASH];
 
             $option->update([
                 'value' => $newValue,

@@ -23,10 +23,7 @@ class UpdatePartyRequest extends FormRequest
         $party = $this->route('party');
 
         return [
-            'code' => [
-                'required', 'string', 'max:50',
-                Rule::unique('parties')->where('company_id', $companyId)->ignore($party),
-            ],
+            'code' => ['nullable', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_PARTY_TYPE)],
             'opening_balance' => ['nullable', 'numeric', 'decimal:0,'.CompanyContext::decimalPlaces()],

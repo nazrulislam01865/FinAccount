@@ -22,7 +22,7 @@ class StoreAccountingRuleRequest extends FormRequest
         $companyId = $this->user()->company_id;
 
         return [
-            'code' => ['required', 'string', 'max:50', Rule::unique('accounting_rules')->where('company_id', $companyId)],
+            'code' => ['nullable', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
             'settlement_type' => ['required', Rule::in(TransactionTypes::settlementCodes())],

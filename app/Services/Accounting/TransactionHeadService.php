@@ -12,11 +12,16 @@ use Illuminate\Validation\ValidationException;
 
 class TransactionHeadService
 {
-    public function __construct(private readonly AccountingOptionService $optionService) {}
+    public function __construct(
+        private readonly AccountingOptionService $optionService,
+        private readonly AutomaticCodeService $automaticCodeService,
+    ) {}
 
     /** @return array<string, mixed> */
     public function pageData(int $companyId): array
     {
+        $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
+
         return [
             'transactionHeads' => TransactionHead::query()
                 ->with('postingAccount')
@@ -28,11 +33,17 @@ class TransactionHeadService
                 ->where('company_id', $companyId)
                 ->orderBy('code')
                 ->get(),
-            'transactionCategories' => $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY),
+            'transactionCategories' => $transactionCategories,
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
-            'settlementTypes' => $this->optionService->systemSettlementTypes(),
-            'settlementLabels' => $this->optionService->systemSettlementLabels(),
-            'transactionTypeDefinitions' => TransactionTypes::definitions(),
+            'settlementTypes' => $this->optionService->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'transactionTypeDefinitions' => $transactionCategories->mapWithKeys(fn (AccountingOption $option): array => [
+                $option->value => TransactionTypes::configuredDefinition(
+                    $option->value,
+                    is_array($option->metadata) ? $option->metadata : [],
+                    $option->label,
+                ),
+            ])->all(),
             'partyTypes' => $this->optionService->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE),
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE),
         ];
@@ -43,17 +54,32 @@ class TransactionHeadService
     {
         $this->validateSetup($data, $companyId);
 
-        return DB::transaction(fn (): TransactionHead => TransactionHead::query()->create([
-            'company_id' => $companyId,
-            ...$this->normalized($data),
-        ]), attempts: 5);
+        return DB::transaction(function () use ($data, $companyId): TransactionHead {
+            $this->automaticCodeService->lockCompany($companyId);
+            $data['code'] = $this->automaticCodeService->transactionHeadCode($companyId, (string) $data['name']);
+
+            return TransactionHead::query()->create([
+                'company_id' => $companyId,
+                ...$this->normalized($data),
+            ]);
+        }, attempts: 5);
     }
 
     /** @param array<string, mixed> $data */
     public function update(TransactionHead $head, array $data): TransactionHead
     {
         $this->validateSetup($data, (int) $head->company_id);
-        DB::transaction(fn () => $head->update($this->normalized($data)), attempts: 5);
+        DB::transaction(function () use ($head, $data): void {
+            $this->automaticCodeService->lockCompany((int) $head->company_id);
+            $data['code'] = (string) $data['name'] === (string) $head->name
+                ? $head->code
+                : $this->automaticCodeService->transactionHeadCode(
+                    (int) $head->company_id,
+                    (string) $data['name'],
+                    (int) $head->id,
+                );
+            $head->update($this->normalized($data));
+        }, attempts: 5);
 
         return $head->refresh();
     }
@@ -93,14 +119,23 @@ class TransactionHeadService
             ]);
         }
 
-        $allowedPostingTypes = TransactionTypes::postingTypes($transactionType);
+        $transactionTypeOption = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $transactionType)
+            ->first();
+        $transactionDefinition = TransactionTypes::configuredDefinition(
+            $transactionType,
+            is_array($transactionTypeOption?->metadata) ? $transactionTypeOption->metadata : [],
+            $transactionTypeOption?->label,
+        );
+        $allowedPostingTypes = array_values((array) ($transactionDefinition['posting_types'] ?? []));
         if ($allowedPostingTypes !== [] && ! in_array($account->type, $allowedPostingTypes, true)) {
             throw ValidationException::withMessages([
                 'posting_account_id' => 'Select a '.implode(' or ', $allowedPostingTypes).' account for this transaction type.',
             ]);
         }
 
-        $expectedPartyType = TransactionTypes::partyType($transactionType);
+        $expectedPartyType = (string) ($transactionDefinition['party_type'] ?? 'Any');
         if ($expectedPartyType !== 'Any' && $data['party_type'] !== $expectedPartyType) {
             throw ValidationException::withMessages([
                 'party_type' => 'This transaction type uses '.$expectedPartyType.' parties.',

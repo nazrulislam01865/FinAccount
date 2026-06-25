@@ -52,6 +52,7 @@ class UpdateMasterDataOptionRequest extends FormRequest
         if ($isTransactionCategory) {
             $rules['money_label'] = ['required', 'string', 'max:120'];
             $rules['voucher_prefix'] = ['required', 'string', 'min:2', 'max:10', 'regex:/^[A-Z0-9]+$/'];
+            $rules['flow'] = ['required', Rule::in(['incoming', 'outgoing'])];
         }
 
         return $rules;
@@ -79,6 +80,15 @@ class UpdateMasterDataOptionRequest extends FormRequest
             $payload['voucher_prefix'] = strtoupper(trim((string) $this->input('voucher_prefix')));
         } elseif ($option?->option_group === AccountingOption::GROUP_TRANSACTION_CATEGORY) {
             $payload['voucher_prefix'] = strtoupper(trim((string) ($option->metadata['voucher_prefix'] ?? '')));
+        }
+
+        if ($this->has('flow')) {
+            $payload['flow'] = strtolower(trim((string) $this->input('flow')));
+        } elseif ($option?->option_group === AccountingOption::GROUP_TRANSACTION_CATEGORY) {
+            $payload['flow'] = \App\Support\TransactionTypes::flow(
+                (string) $option->value,
+                is_array($option->metadata) ? $option->metadata : [],
+            );
         }
 
         $this->merge($payload);

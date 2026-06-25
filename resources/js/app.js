@@ -1,6 +1,8 @@
 import './pages/accounting-navigation';
 import './pages/transaction-entry';
 import './pages/chart-of-accounts';
+import './pages/setup-modals';
+import './pages/auto-code';
 
 import './pages/accounting-rule';
 import './pages/transaction-head';

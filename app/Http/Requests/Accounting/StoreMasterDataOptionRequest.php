@@ -26,15 +26,19 @@ class StoreMasterDataOptionRequest extends FormRequest
         $configuration = app(MasterDataService::class)->configuration((string) $this->route('section'));
         $isTransactionCategory = $configuration['group'] === AccountingOption::GROUP_TRANSACTION_CATEGORY;
 
-        $rules = [
-            'value' => [
+        $valueRules = $isTransactionCategory
+            ? [
                 'required',
                 'string',
-                'max:'.($isTransactionCategory ? 30 : 60),
+                'max:30',
                 'regex:/^[\pL\pN _-]+$/u',
                 Rule::unique('accounting_options', 'value')
                     ->where('option_group', $configuration['group']),
-            ],
+            ]
+            : ['nullable', 'string', 'max:60'];
+
+        $rules = [
+            'value' => $valueRules,
             'label' => [
                 'required',
                 'string',
@@ -49,6 +53,7 @@ class StoreMasterDataOptionRequest extends FormRequest
         if ($isTransactionCategory) {
             $rules['money_label'] = ['required', 'string', 'max:120'];
             $rules['voucher_prefix'] = ['required', 'string', 'min:2', 'max:10', 'regex:/^[A-Z0-9]+$/'];
+            $rules['flow'] = ['required', Rule::in(['incoming', 'outgoing'])];
         }
 
         return $rules;
@@ -57,7 +62,7 @@ class StoreMasterDataOptionRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $payload = [
-            'value' => trim((string) $this->input('value')),
+            'value' => (($value = trim((string) $this->input('value'))) === '' ? null : $value),
             'label' => trim((string) $this->input('label')),
             'is_active' => $this->boolean('is_active'),
         ];
@@ -68,6 +73,10 @@ class StoreMasterDataOptionRequest extends FormRequest
 
         if ($this->has('voucher_prefix')) {
             $payload['voucher_prefix'] = strtoupper(trim((string) $this->input('voucher_prefix')));
+        }
+
+        if ($this->has('flow')) {
+            $payload['flow'] = strtolower(trim((string) $this->input('flow')));
         }
 
         $this->merge($payload);

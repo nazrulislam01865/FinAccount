@@ -5,6 +5,7 @@
     $editingAccount = $modalAccount;
     $defaultAccountType = $accountTypes->first()?->value ?? '';
     $defaultNormalBalance = $normalBalances->first()?->value ?? '';
+    $defaultCode = $nextCodes[$defaultAccountType] ?? '';
     $canManage = auth()->user()?->canAccounting('chart_of_accounts.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
     $draftRows = \App\Support\VisibleFormDrafts::forBase('chart-of-accounts');
@@ -140,6 +141,7 @@
         data-store-url="{{ route('chart-of-accounts.store') }}"
         data-default-type="{{ $defaultAccountType }}"
         data-default-normal="{{ $defaultNormalBalance }}"
+        data-default-code="{{ $defaultCode }}"
         aria-hidden="{{ $reopenModal ? 'false' : 'true' }}"
     >
         <div class="hg-modal-box" role="dialog" aria-modal="true" aria-labelledby="coa-modal-title">
@@ -167,7 +169,8 @@
 
                     <div class="hg-field">
                         <label for="coa-code">Code <span class="hg-required">*</span></label>
-                        <input id="coa-code" name="code" value="{{ old('code', $editingAccount?->code) }}" required>
+                        <input id="coa-code" name="code" value="{{ old('code', $editingAccount?->code ?? $defaultCode) }}" required readonly>
+                        <small class="hg-muted">Generated automatically from the selected account type.</small>
                         @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
@@ -181,7 +184,7 @@
                         <label for="coa-type">Type <span class="hg-required">*</span></label>
                         <select id="coa-type" name="type" required>
                             @foreach ($accountTypes as $typeOption)
-                                <option value="{{ $typeOption->value }}" @selected(old('type', $editingAccount?->type ?? $defaultAccountType) === $typeOption->value)>{{ $typeOption->label }}</option>
+                                <option value="{{ $typeOption->value }}" data-next-code="{{ $nextCodes[$typeOption->value] ?? '' }}" @selected(old('type', $editingAccount?->type ?? $defaultAccountType) === $typeOption->value)>{{ $typeOption->label }}</option>
                             @endforeach
                         </select>
                         @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror

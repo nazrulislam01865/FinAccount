@@ -84,8 +84,10 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
         title.textContent = button.dataset.createTitle || modal.dataset.createTitle;
         if (method) method.disabled = true;
         setModeVisibility('create');
+        form.dataset.setupMode = 'create';
         const values = JSON.parse(button.dataset.defaults || '{}');
         applyValues(values);
+        form.dispatchEvent(new CustomEvent('hisebghor:setup-values-applied', { detail: { mode: 'create', values } }));
         showModal();
         setDraftContext('create', values);
     };
@@ -100,8 +102,10 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
             method.value = 'PUT';
         }
         setModeVisibility('edit');
+        form.dataset.setupMode = 'edit';
         const values = JSON.parse(button.dataset.values || '{}');
         applyValues(values);
+        form.dispatchEvent(new CustomEvent('hisebghor:setup-values-applied', { detail: { mode: 'edit', values } }));
         showModal();
         setDraftContext('edit', values);
     };
@@ -129,6 +133,7 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
     });
 
     if (modal.classList.contains('show')) {
+        form.dataset.setupMode = form.elements.namedItem('record_id')?.value ? 'edit' : 'create';
         document.body.classList.add('hg-modal-open');
     }
 });

@@ -125,7 +125,7 @@
         :store-url="route('parties.store')"
         create-title="Add Party"
     >
-        <form method="POST" action="{{ $editingParty ? route('parties.update', $editingParty) : route('parties.store') }}" class="hg-form-grid" data-setup-form
+        <form method="POST" action="{{ $editingParty ? route('parties.update', $editingParty) : route('parties.store') }}" class="hg-form-grid" data-setup-form data-party-form
             data-draft-form
             data-draft-defer
             data-draft-key-base="parties"
@@ -138,7 +138,8 @@
 
             <div class="hg-field">
                 <label for="party-code">Code <span class="hg-required">*</span></label>
-                <input id="party-code" name="code" value="{{ old('code', $editingParty?->code) }}" required>
+                <input id="party-code" name="code" value="{{ old('code', $editingParty?->code ?? ($nextPartyCodes[$defaultPartyType] ?? '')) }}" required readonly data-party-code>
+                <small class="hg-muted">Generated automatically from the selected Party Type.</small>
                 @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
             <div class="hg-field">
@@ -148,9 +149,9 @@
             </div>
             <div class="hg-field">
                 <label for="party-type">Party Type</label>
-                <select id="party-type" name="type" required>
+                <select id="party-type" name="type" required data-party-type>
                     @foreach ($partyTypes as $typeOption)
-                        <option value="{{ $typeOption->value }}" @selected(old('type', $editingParty?->type ?? $defaultPartyType) === $typeOption->value)>{{ $typeOption->label }}</option>
+                        <option value="{{ $typeOption->value }}" data-next-code="{{ $nextPartyCodes[$typeOption->value] ?? '' }}" @selected(old('type', $editingParty?->type ?? $defaultPartyType) === $typeOption->value)>{{ $typeOption->label }}</option>
                     @endforeach
                 </select>
                 @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror

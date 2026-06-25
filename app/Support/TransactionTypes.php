@@ -176,6 +176,79 @@ final class TransactionTypes
         return self::definitions()[$type] ?? [];
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array{
+     *     label:string,
+     *     action_label:string,
+     *     voucher_prefix:string,
+     *     money_label:string,
+     *     party_label:string,
+     *     party_type:string,
+     *     allowed_settlements:array<int,string>,
+     *     default_settlements:array<int,string>,
+     *     posting_types:array<int,string>,
+     *     flow?:string
+     * }
+     */
+    public static function configuredDefinition(string $type, array $metadata = [], ?string $label = null): array
+    {
+        $definition = self::definition($type);
+        $source = $definition !== [] ? $definition : $metadata;
+        $displayLabel = (string) ($definition['label'] ?? $label ?: $type);
+
+        return [
+            'label' => $displayLabel,
+            'action_label' => (string) ($source['action_label'] ?? $displayLabel),
+            'voucher_prefix' => (string) ($source['voucher_prefix'] ?? ''),
+            'money_label' => (string) ($source['money_label'] ?? 'Cash / Bank / Mobile Account'),
+            'party_label' => (string) ($source['party_label'] ?? 'Party'),
+            'party_type' => (string) ($source['party_type'] ?? 'Any'),
+            'allowed_settlements' => array_values(array_map(
+                static fn ($value): string => (string) $value,
+                (array) ($source['allowed_settlements'] ?? self::ALL_SETTLEMENTS),
+            )),
+            'default_settlements' => array_values(array_map(
+                static fn ($value): string => (string) $value,
+                (array) ($source['default_settlements'] ?? [self::CASH]),
+            )),
+            'posting_types' => array_values(array_map(
+                static fn ($value): string => (string) $value,
+                (array) ($source['posting_types'] ?? []),
+            )),
+            'flow' => self::flow($type, $metadata),
+        ];
+    }
+
+    /** @param array<string, mixed> $metadata */
+    public static function flow(string $type, array $metadata = []): string
+    {
+        if (in_array($type, [
+            self::SALE,
+            self::CUSTOMER_COLLECTION,
+            self::OWNER_INVESTMENT,
+            self::LOAN_RECEIVED,
+        ], true)) {
+            return 'incoming';
+        }
+
+        if (in_array($type, [
+            self::PURCHASE,
+            self::SUPPLIER_PAYMENT,
+            self::EXPENSE,
+            self::OWNER_WITHDRAWAL,
+            self::LOAN_REPAYMENT,
+            self::LOAN_INTEREST_PAYMENT,
+            self::ASSET_PURCHASE,
+        ], true)) {
+            return 'outgoing';
+        }
+
+        return in_array(($metadata['flow'] ?? null), ['incoming', 'outgoing'], true)
+            ? (string) $metadata['flow']
+            : 'outgoing';
+    }
+
     /** @return array<int, string> */
     public static function allowedSettlements(string $type): array
     {

@@ -117,7 +117,8 @@
 
                 <div class="hg-field">
                     <label for="rule-code">Code <span class="hg-required">*</span></label>
-                    <input id="rule-code" name="code" value="{{ old('code', $editingRule?->code) }}" required maxlength="50">
+                    <input id="rule-code" name="code" value="{{ old('code', $editingRule?->code) }}" maxlength="50" readonly>
+                    <small class="hg-muted">Generated automatically from the Name field.</small>
                     @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
                 <div class="hg-field">
@@ -129,7 +130,7 @@
                     <label for="rule-category">Transaction Type <span class="hg-required">*</span></label>
                     <select id="rule-category" name="category" required data-rule-transaction-type>
                         @foreach ($transactionCategories as $categoryOption)
-                            <option value="{{ $categoryOption->value }}" data-allowed-settlements="{{ json_encode($transactionTypeDefinitions[$categoryOption->value]['allowed_settlements'] ?? []) }}" @selected(old('category', $editingRule?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
+                            <option value="{{ $categoryOption->value }}" @selected(old('category', $editingRule?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
                         @endforeach
                     </select>
                     @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror

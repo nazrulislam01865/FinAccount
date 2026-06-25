@@ -24,12 +24,7 @@ class UpdateChartOfAccountRequest extends FormRequest
         $accountId = $account instanceof ChartOfAccount ? $account->id : $account;
 
         return [
-            'code' => [
-                'required', 'string', 'max:50',
-                Rule::unique('chart_of_accounts', 'code')
-                    ->ignore($accountId)
-                    ->where(fn ($query) => $query->where('company_id', $companyId)),
-            ],
+            'code' => ['nullable', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_ACCOUNT_TYPE)],
             'normal_balance' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_NORMAL_BALANCE)],

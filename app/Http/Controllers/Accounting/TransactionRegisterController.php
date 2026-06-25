@@ -80,7 +80,11 @@ class TransactionRegisterController extends Controller
             'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
             'parties' => $this->entryOptionService->parties($companyId),
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
-            'transactionTypeDefinition' => TransactionTypes::definition($category),
+            'transactionTypeDefinition' => TransactionTypes::configuredDefinition(
+                $category,
+                is_array($categoryOption->metadata) ? $categoryOption->metadata : [],
+                $categoryOption->label,
+            ),
             'transactionDateContext' => $this->accountingPeriodService->transactionDateContext(
                 $company,
                 $transaction->transaction_date?->toDateString(),

@@ -52,10 +52,12 @@ class TransactionEntryController extends Controller
         $company = $request->user()->company;
         abort_unless($company, 404);
         $companyId = $company->id;
+        $categoryOption = $transactionCategories->firstWhere('value', $category);
+        $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
 
         return view('transactions.create', [
             'category' => $category,
-            'categoryOption' => $transactionCategories->firstWhere('value', $category),
+            'categoryOption' => $categoryOption,
             'transactionCategories' => $transactionCategories,
             'transactionHeads' => $this->entryOptionService->transactionHeads($companyId, $category),
             'moneyAccounts' => $this->entryOptionService->moneyAccounts($companyId),
@@ -64,7 +66,11 @@ class TransactionEntryController extends Controller
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
             'requestToken' => old('request_token', (string) Str::uuid()),
             'transactionDateContext' => $this->accountingPeriodService->transactionDateContext($company),
-            'transactionTypeDefinition' => TransactionTypes::definition($category),
+            'transactionTypeDefinition' => TransactionTypes::configuredDefinition(
+                $category,
+                $categoryMetadata,
+                $categoryOption?->label,
+            ),
         ]);
     }
 
