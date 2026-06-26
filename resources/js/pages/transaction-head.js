@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-transaction-head-form]').forEach((form) => {
         const typeSelect = form.querySelector('[data-head-transaction-type]');
         typeSelect?.addEventListener('change', () => syncTransactionHeadForm(form));
+        form.addEventListener('hisebghor:setup-values-applied', () => syncTransactionHeadForm(form));
         document.querySelectorAll(`[data-setup-target="${form.closest('[data-setup-modal]')?.id}"]`).forEach((button) => {
             button.addEventListener('click', () => window.setTimeout(() => syncTransactionHeadForm(form), 0));
         });

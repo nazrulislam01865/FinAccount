@@ -23,6 +23,73 @@ final class TransactionTypes
     /** @var array<int, string> */
     public const ALL_SETTLEMENTS = [self::CASH, self::CREDIT, self::PARTIAL];
 
+    /**
+     * Convert legacy/core transaction type labels to their canonical internal code.
+     * Custom transaction types are preserved exactly as configured.
+     */
+    public static function normalize(string $type): string
+    {
+        $type = trim($type);
+        if ($type === '') {
+            return '';
+        }
+
+        $key = strtoupper((string) preg_replace('/[^A-Z0-9]+/i', '_', $type));
+        $key = trim($key, '_');
+
+        return match ($key) {
+            'SALE', 'SALES' => self::SALE,
+            'PURCHASE', 'PURCHASES' => self::PURCHASE,
+            'CUSTOMER_COLLECTION', 'CUSTOMER_COLLECTIONS' => self::CUSTOMER_COLLECTION,
+            'SUPPLIER_PAYMENT', 'SUPPLIER_PAYMENTS' => self::SUPPLIER_PAYMENT,
+            'EXPENSE', 'EXPENSES' => self::EXPENSE,
+            'OWNER_INVESTMENT', 'OWNER_INVESTMENTS' => self::OWNER_INVESTMENT,
+            'OWNER_WITHDRAWAL', 'OWNER_WITHDRAWALS' => self::OWNER_WITHDRAWAL,
+            'LOAN_RECEIVED', 'LOAN_RECEIPT', 'LOAN_RECEIPTS' => self::LOAN_RECEIVED,
+            'LOAN_REPAYMENT', 'LOAN_REPAYMENTS' => self::LOAN_REPAYMENT,
+            'LOAN_INTEREST_PAYMENT', 'LOAN_INTEREST_PAYMENTS' => self::LOAN_INTEREST_PAYMENT,
+            'ASSET_PURCHASE', 'ASSET_PURCHASES' => self::ASSET_PURCHASE,
+            default => $type,
+        };
+    }
+
+    /**
+     * Database values that may represent the same core transaction type in an
+     * older installation. This keeps the application usable before/while the
+     * repair migration normalizes existing rows.
+     *
+     * @return array<int, string>
+     */
+    public static function databaseAliases(string $type): array
+    {
+        $canonical = self::normalize($type);
+        if (! array_key_exists($canonical, self::definitions())) {
+            return array_values(array_unique([$type, trim($type)]));
+        }
+
+        $label = (string) (self::definitions()[$canonical]['label'] ?? $canonical);
+        $spaced = str_replace('_', ' ', $canonical);
+        $aliases = [
+            $canonical,
+            $label,
+            strtoupper($label),
+            strtolower($label),
+            $spaced,
+            strtoupper($spaced),
+            strtolower($spaced),
+        ];
+
+        if ($canonical === self::SALE) {
+            $aliases = [...$aliases, 'Sales', 'SALES', 'sales'];
+        } elseif ($canonical === self::PURCHASE) {
+            $aliases = [...$aliases, 'Purchases', 'PURCHASES', 'purchases'];
+        } elseif ($canonical === self::EXPENSE) {
+            $aliases = [...$aliases, 'Expenses', 'EXPENSES', 'expenses'];
+        }
+
+        return array_values(array_unique(array_filter($aliases, static fn ($value): bool => $value !== '')));
+    }
+
     /** @return array<string, array<string, mixed>> */
     public static function definitions(): array
     {
@@ -173,7 +240,7 @@ final class TransactionTypes
     /** @return array<string, mixed> */
     public static function definition(string $type): array
     {
-        return self::definitions()[$type] ?? [];
+        return self::definitions()[self::normalize($type)] ?? [];
     }
 
     /**
@@ -223,6 +290,8 @@ final class TransactionTypes
     /** @param array<string, mixed> $metadata */
     public static function flow(string $type, array $metadata = []): string
     {
+        $type = self::normalize($type);
+
         if (in_array($type, [
             self::SALE,
             self::CUSTOMER_COLLECTION,
@@ -290,6 +359,6 @@ final class TransactionTypes
 
     public static function isSale(string $type): bool
     {
-        return $type === self::SALE;
+        return self::normalize($type) === self::SALE;
     }
 }

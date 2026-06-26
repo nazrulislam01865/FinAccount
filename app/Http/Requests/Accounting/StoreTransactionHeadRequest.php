@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -37,7 +38,7 @@ class StoreTransactionHeadRequest extends FormRequest
         $this->merge([
             'code' => trim((string) $this->input('code')),
             'name' => trim((string) $this->input('name')),
-            'category' => strtoupper(trim((string) $this->input('category'))),
+            'category' => TransactionTypes::normalize((string) $this->input('category')),
             'allowed_settlements' => array_values(array_unique(array_map(
                 static fn ($value): string => strtoupper(trim((string) $value)),
                 (array) $this->input('allowed_settlements', []),

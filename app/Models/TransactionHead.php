@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\TransactionTypes;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +21,14 @@ class TransactionHead extends Model
             'allowed_settlements' => 'array',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected function category(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value): string => TransactionTypes::normalize((string) $value),
+            set: fn ($value): string => TransactionTypes::normalize((string) $value),
+        );
     }
 
     public function accountingRule(): BelongsTo

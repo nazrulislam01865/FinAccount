@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\MoneyAccount;
@@ -40,6 +41,38 @@ class TransactionEntryDropdownTest extends TestCase
             ->assertOk()
             ->assertSee('Database Expense Head')
             ->assertDontSee('Database Sale Head');
+    }
+
+    public function test_legacy_mixed_case_expense_option_still_opens_expense_entry_and_edit_form(): void
+    {
+        [$user, $accounts] = $this->companyUserWithAccounts();
+
+        AccountingOption::query()
+            ->where('option_group', AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', TransactionTypes::EXPENSE)
+            ->update(['value' => 'Expense']);
+
+        $head = $this->head(
+            $user->company_id,
+            $accounts['expense']->id,
+            'LEGACY-EXP',
+            'Legacy Expense Head',
+            TransactionTypes::EXPENSE,
+        );
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['category' => TransactionTypes::EXPENSE]))
+            ->assertOk()
+            ->assertSee('Record Expense Transaction')
+            ->assertSee('Legacy Expense Head')
+            ->assertSee('class="active"', false);
+
+        $this->actingAs($user)
+            ->get(route('transaction-heads.index'))
+            ->assertOk()
+            ->assertSee('value="EXPENSE"', false)
+            ->assertSee('&quot;category&quot;:&quot;EXPENSE&quot;', false)
+            ->assertSee('transaction-heads/'.$head->id, false);
     }
 
     public function test_money_dropdown_only_uses_active_money_accounts_with_active_coa(): void

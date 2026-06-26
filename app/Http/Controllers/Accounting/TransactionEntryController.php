@@ -45,7 +45,7 @@ class TransactionEntryController extends Controller
     public function create(Request $request): View
     {
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
-        $requestedCategory = strtoupper($request->string('category')->toString());
+        $requestedCategory = TransactionTypes::normalize($request->string('category')->toString());
         $category = $transactionCategories->contains('value', $requestedCategory)
             ? $requestedCategory
             : ($transactionCategories->first()?->value ?? '');
@@ -77,7 +77,7 @@ class TransactionEntryController extends Controller
     public function preview(Request $request): JsonResponse
     {
         $companyId = (int) $request->user()->company_id;
-        $category = strtoupper((string) $request->input('category'));
+        $category = TransactionTypes::normalize((string) $request->input('category'));
 
         $validated = $request->validate([
             'category' => [
@@ -96,7 +96,7 @@ class TransactionEntryController extends Controller
                 'required', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
-                    ->where('category', $category)
+                    ->whereIn('category', TransactionTypes::databaseAliases($category))
                     ->where('is_active', true)
                     ->whereNotNull('posting_account_id')),
             ],
@@ -120,7 +120,7 @@ class TransactionEntryController extends Controller
         $head = TransactionHead::query()
             ->with('postingAccount')
             ->where('company_id', $companyId)
-            ->where('category', $category)
+            ->whereIn('category', TransactionTypes::databaseAliases($category))
             ->where('is_active', true)
             ->whereNotNull('posting_account_id')
             ->whereHas('postingAccount', fn ($query) => $query

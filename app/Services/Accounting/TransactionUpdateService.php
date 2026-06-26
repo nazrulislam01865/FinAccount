@@ -55,12 +55,12 @@ class TransactionUpdateService
                 ->lockForUpdate()
                 ->findOrFail($transaction->id);
 
-            $transactionType = (string) $data['category'];
+            $transactionType = TransactionTypes::normalize((string) $data['category']);
 
             $head = TransactionHead::query()
                 ->with('postingAccount')
                 ->where('company_id', $user->company_id)
-                ->where('category', $transactionType)
+                ->whereIn('category', TransactionTypes::databaseAliases($transactionType))
                 ->where('is_active', true)
                 ->whereNotNull('posting_account_id')
                 ->whereHas('postingAccount', fn ($query) => $query
