@@ -119,8 +119,6 @@ return [
             [
                 'icon' => 'cloud',
                 'name' => ['bn' => 'Basic Cloud', 'en' => 'Basic Cloud'],
-                'popular' => false,
-                'popular_label' => ['bn' => '★ Recommended', 'en' => '★ Recommended'],
                 'tag' => ['bn' => 'Starter', 'en' => 'Starter'],
                 'body' => ['bn' => 'ছোট দোকান, ছোট trading business, ছোট service business', 'en' => 'Small shops, small trading businesses, and small service businesses.'],
                 'fees' => [
@@ -157,8 +155,6 @@ return [
             [
                 'icon' => 'building',
                 'name' => ['bn' => 'Standard Cloud', 'en' => 'Standard Cloud'],
-                'popular' => true,
-                'popular_label' => ['bn' => '★ Recommended', 'en' => '★ Recommended'],
                 'tag' => ['bn' => 'Recommended', 'en' => 'Recommended'],
                 'body' => ['bn' => 'Growing SME, multiple users, regular due/payment tracking প্রয়োজন এমন business', 'en' => 'Growing SMEs that need multiple users and regular due/payment tracking.'],
                 'fees' => [
@@ -199,8 +195,6 @@ return [
             [
                 'icon' => 'server',
                 'name' => ['bn' => 'On-Premise / Private Deployment', 'en' => 'On-Premise / Private Deployment'],
-                'popular' => false,
-                'popular_label' => ['bn' => '★ Recommended', 'en' => '★ Recommended'],
                 'tag' => ['bn' => 'Setup', 'en' => 'Setup'],
                 'body' => ['bn' => 'যেসব business নিজের server, private hosting অথবা internal control চায়', 'en' => 'Businesses that want their own server, private hosting, or internal control.'],
                 'fees' => [

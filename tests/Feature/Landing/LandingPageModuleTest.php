@@ -28,7 +28,9 @@ class LandingPageModuleTest extends TestCase
             ->assertSee('৳70,000 – ৳95,000')
             ->assertSee('Important Notes')
             ->assertSee('আপনার ব্যবসার জন্য HisebGhor কি উপযোগী?')
-            ->assertSee('landingCaptchaModal', false);
+            ->assertSee('landingCaptchaModal', false)
+            ->assertDontSee('recommended-ribbon', false)
+            ->assertDontSee('★ Recommended');
     }
 
     public function test_feature_screen_upload_accepts_any_image_ratio(): void
@@ -102,7 +104,10 @@ class LandingPageModuleTest extends TestCase
             ->assertSee('Installation Fee')
             ->assertSee('Maintenance Fee')
             ->assertSee('Server Hosting')
-            ->assertSee('Important Note Cards');
+            ->assertSee('Important Note Cards')
+            ->assertDontSee('Recommended Package?')
+            ->assertDontSee('Top Ribbon Bangla')
+            ->assertDontSee('Top Ribbon English');
     }
 
     public function test_active_landing_admin_can_logout(): void

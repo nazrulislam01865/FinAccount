@@ -348,7 +348,7 @@
                 <div class="landing-card-head">
                     <div>
                         <h3>Implementation Packages & Pricing</h3>
-                        <p>Manage the three fee rows, package features, recommended state, and important-note cards shown on the landing page.</p>
+                        <p>Manage the three fee rows, package features, and important-note cards shown on the landing page.</p>
                     </div>
                     <label class="section-toggle"><input type="hidden" name="pricing[enabled]" value="0"><input type="checkbox" name="pricing[enabled]" value="1" @checked($value('pricing.enabled', true))> Enabled</label>
                 </div>
@@ -397,15 +397,6 @@
                                     </div>
                                     <div><label>Name Bangla</label><input name="packages[{{ $index }}][name][bn]" value="{{ data_get($package, 'name.bn') }}"></div>
                                     <div><label>Name English</label><input name="packages[{{ $index }}][name][en]" value="{{ data_get($package, 'name.en') }}"></div>
-                                    <div>
-                                        <label>Recommended Package?</label>
-                                        <select name="packages[{{ $index }}][popular]">
-                                            <option value="0" @selected(!data_get($package, 'popular'))>No</option>
-                                            <option value="1" @selected(data_get($package, 'popular'))>Yes</option>
-                                        </select>
-                                    </div>
-                                    <div><label>Top Ribbon Bangla</label><input name="packages[{{ $index }}][popular_label][bn]" value="{{ data_get($package, 'popular_label.bn', '★ Recommended') }}"></div>
-                                    <div><label>Top Ribbon English</label><input name="packages[{{ $index }}][popular_label][en]" value="{{ data_get($package, 'popular_label.en', '★ Recommended') }}"></div>
                                     <div><label>Small Tag Bangla</label><input name="packages[{{ $index }}][tag][bn]" value="{{ data_get($package, 'tag.bn') }}"></div>
                                     <div><label>Small Tag English</label><input name="packages[{{ $index }}][tag][en]" value="{{ data_get($package, 'tag.en') }}"></div>
                                     <div></div>
@@ -615,9 +606,6 @@
             <div><label>Package Icon</label><select name="packages[__INDEX__][icon]"><option value="cloud">Cloud</option><option value="building">Standard / Building</option><option value="server">Server</option></select></div>
             <div><label>Name Bangla</label><input name="packages[__INDEX__][name][bn]"></div>
             <div><label>Name English</label><input name="packages[__INDEX__][name][en]"></div>
-            <div><label>Recommended Package?</label><select name="packages[__INDEX__][popular]"><option value="0">No</option><option value="1">Yes</option></select></div>
-            <div><label>Top Ribbon Bangla</label><input name="packages[__INDEX__][popular_label][bn]" value="★ Recommended"></div>
-            <div><label>Top Ribbon English</label><input name="packages[__INDEX__][popular_label][en]" value="★ Recommended"></div>
             <div><label>Small Tag Bangla</label><input name="packages[__INDEX__][tag][bn]" value="Setup"></div>
             <div><label>Small Tag English</label><input name="packages[__INDEX__][tag][en]" value="Setup"></div>
             <div></div>

@@ -9,7 +9,6 @@
     <div class="packages implementation-packages">
       @foreach(data_get($landing, 'packages', []) as $package)
         @php
-          $isPopular = (bool) data_get($package, 'popular', false);
           $feeRows = [
             ['key' => 'installation', 'icon' => 'wallet'],
             ['key' => 'maintenance', 'icon' => 'settings'],
@@ -17,14 +16,7 @@
           ];
         @endphp
 
-        <article class="package implementation-package {{ $isPopular ? 'popular' : '' }}">
-          @if($isPopular)
-            <div class="recommended-ribbon"
-                 data-bn="{{ $txt(data_get($package, 'popular_label'), 'bn', '★ Recommended') }}"
-                 data-en="{{ $txt(data_get($package, 'popular_label'), 'en', '★ Recommended') }}">
-              {{ $txt(data_get($package, 'popular_label'), $defaultLang, '★ Recommended') }}
-            </div>
-          @endif
+        <article class="package implementation-package">
 
           <div class="package-heading-row">
             <div class="package-heading-main">

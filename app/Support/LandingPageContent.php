@@ -71,6 +71,9 @@ class LandingPageContent
 
     public static function merge(array $defaults, array $content): array
     {
+        $defaults = self::removeDeprecatedPackageRecommendationFields($defaults);
+        $content = self::removeDeprecatedPackageRecommendationFields($content);
+
         $merged = array_replace_recursive($defaults, $content);
 
         foreach (['nav_links', 'trust_items', 'why_cards', 'screens', 'audiences', 'testimonials', 'faqs'] as $listKey) {
@@ -122,5 +125,24 @@ class LandingPageContent
         }
 
         return $merged;
+    }
+
+    private static function removeDeprecatedPackageRecommendationFields(array $content): array
+    {
+        if (! isset($content['packages']) || ! is_array($content['packages'])) {
+            return $content;
+        }
+
+        $content['packages'] = array_map(static function ($package) {
+            if (! is_array($package)) {
+                return $package;
+            }
+
+            unset($package['popular'], $package['popular_label']);
+
+            return $package;
+        }, $content['packages']);
+
+        return $content;
     }
 }

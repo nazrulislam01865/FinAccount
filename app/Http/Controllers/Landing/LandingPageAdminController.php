@@ -298,9 +298,6 @@ class LandingPageAdminController extends Controller
             'packages.*.icon' => ['required', Rule::in(['cloud', 'building', 'server'])],
             'packages.*.name.bn' => $requiredShortText,
             'packages.*.name.en' => $requiredShortText,
-            'packages.*.popular' => ['required', 'boolean'],
-            'packages.*.popular_label.bn' => $requiredShortText,
-            'packages.*.popular_label.en' => $requiredShortText,
             'packages.*.tag.bn' => $requiredShortText,
             'packages.*.tag.en' => $requiredShortText,
             'packages.*.body.bn' => $requiredLongText,
@@ -734,8 +731,6 @@ class LandingPageAdminController extends Controller
             $package = [
                 'icon' => $this->allowedPricingIcon($row['icon'] ?? 'cloud', ['cloud', 'building', 'server'], 'cloud'),
                 'name' => $this->translation($row['name'] ?? []),
-                'popular' => ! empty($row['popular']),
-                'popular_label' => $this->translation($row['popular_label'] ?? []),
                 'tag' => $this->translation($row['tag'] ?? []),
                 'body' => $this->translation($row['body'] ?? []),
                 'fees' => [
