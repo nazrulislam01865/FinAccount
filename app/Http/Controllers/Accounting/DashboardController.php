@@ -45,7 +45,12 @@ class DashboardController extends Controller
             Party::query()->where('company_id', $companyId)->delete();
             MoneyAccount::query()->where('company_id', $companyId)->delete();
             DocumentSequence::query()->where('company_id', $companyId)->delete();
-            ChartOfAccount::query()->where('company_id', $companyId)->delete();
+            foreach ([3, 2, 1] as $level) {
+                ChartOfAccount::query()
+                    ->where('company_id', $companyId)
+                    ->where('level', $level)
+                    ->delete();
+            }
 
             app(HisebGhorDemoSeeder::class)->seedCompany(
                 $user->company,

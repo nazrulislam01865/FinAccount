@@ -29,6 +29,7 @@ class MoneyAccountService
 
         $assetAccounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
+            ->where('level', 3)
             ->where('type', 'Asset')
             ->where('is_active', true)
             ->orderBy('code')
@@ -96,13 +97,14 @@ class MoneyAccountService
         $valid = ChartOfAccount::query()
             ->whereKey($accountId)
             ->where('company_id', $companyId)
+            ->where('level', 3)
             ->where('type', 'Asset')
             ->where('is_active', true)
             ->exists();
 
         if (! $valid) {
             throw ValidationException::withMessages([
-                'chart_of_account_id' => 'Select an active Asset COA from the Chart of Accounts list.',
+                'chart_of_account_id' => 'Select an active Level 3 Asset ledger from the Chart of Accounts list.',
             ]);
         }
     }

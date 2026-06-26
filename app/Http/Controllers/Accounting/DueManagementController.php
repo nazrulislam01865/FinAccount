@@ -63,6 +63,7 @@ class DueManagementController extends Controller
                 'required', 'integer',
                 Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
+                    ->where('level', 3)
                     ->where('is_active', true)),
             ],
             'due_type' => ['required', Rule::in(['Receivable', 'Payable'])],
@@ -94,6 +95,7 @@ class DueManagementController extends Controller
 
         $account = ChartOfAccount::query()
             ->where('company_id', $companyId)
+            ->where('level', 3)
             ->where('is_active', true)
             ->findOrFail($validated['account_id']);
 

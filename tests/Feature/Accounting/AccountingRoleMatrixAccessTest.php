@@ -60,7 +60,6 @@ class AccountingRoleMatrixAccessTest extends TestCase
             ->assertDontSee('Cash in Hand');
 
         $response = $this->actingAs($user)->post(route('chart-of-accounts.store'), [
-            'code' => '5999',
             'name' => 'Manage Only Test Expense',
             'type' => 'Expense',
             'normal_balance' => 'Debit',
@@ -73,7 +72,10 @@ class AccountingRoleMatrixAccessTest extends TestCase
 
         $this->assertDatabaseHas('chart_of_accounts', [
             'company_id' => $this->superAdmin->company_id,
-            'code' => '5999',
+            'code' => '1000',
+            'name' => 'Manage Only Test Expense',
+            'level' => 1,
+            'parent_id' => null,
         ]);
     }
 

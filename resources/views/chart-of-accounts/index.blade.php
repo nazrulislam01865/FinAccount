@@ -1,11 +1,12 @@
 @php
     $addOnlyMode = (bool) ($addOnlyMode ?? false);
     $reopenModal = ($errors->any() && old('coa_modal') === '1') || $addOnlyMode;
-    $editingId = old('account_id');
     $editingAccount = $modalAccount;
-    $defaultAccountType = $accountTypes->first()?->value ?? '';
-    $defaultNormalBalance = $normalBalances->first()?->value ?? '';
-    $defaultCode = $nextCodes[$defaultAccountType] ?? '';
+    $defaultAccountType = old('type', $editingAccount?->type ?? $accountTypes->first()?->value ?? '');
+    $defaultNormalBalance = old('normal_balance', $editingAccount?->normal_balance ?? $normalBalances->first()?->value ?? '');
+    $defaultParentId = old('parent_id', $editingAccount?->parent_id);
+    $defaultLevel = (int) old('level', $editingAccount?->level ?? ($defaultParentId ? 2 : 1));
+    $defaultCode = old('code', $editingAccount?->code ?? ($nextCodes[(string) ($defaultParentId ?: 'root')] ?? $nextCodes['root'] ?? ''));
     $canManage = auth()->user()?->canAccounting('chart_of_accounts.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
     $draftRows = \App\Support\VisibleFormDrafts::forBase('chart-of-accounts');
@@ -15,6 +16,7 @@
     <div class="hg-page-header">
         <div>
             <h1>Chart of Accounts</h1>
+            <p class="hg-muted">Level 1 is the main group, Level 2 is the category, and Level 3 is the posting ledger.</p>
         </div>
         @if($canManage)
         <button
@@ -26,26 +28,50 @@
         @endif
     </div>
 
+    <div class="hg-coa-level-summary" aria-label="Chart of accounts level summary">
+        @foreach ([1 => 'Main Groups', 2 => 'Categories', 3 => 'Posting Ledgers'] as $level => $label)
+            <a
+                href="{{ route('chart-of-accounts.index', array_filter(['search' => $search, 'level' => $level])) }}"
+                class="hg-coa-level-card {{ $levelFilter === $level ? 'active' : '' }}"
+            >
+                <span>Level {{ $level }}</span>
+                <strong>{{ number_format($levelCounts[$level] ?? 0) }}</strong>
+                <small>{{ $label }}</small>
+            </a>
+        @endforeach
+    </div>
+
     <form method="GET" action="{{ route('chart-of-accounts.index') }}" class="hg-toolbar">
         <input
             class="hg-search"
             type="search"
             name="search"
             value="{{ $search }}"
-            placeholder="Search account code or name..."
+            placeholder="Search code, account, parent, type, or level..."
             aria-label="Search chart of accounts"
         >
+        <select class="hg-filter-select" name="level" aria-label="Filter chart of accounts by level" onchange="this.form.submit()">
+            <option value="0">All Levels</option>
+            <option value="1" @selected($levelFilter === 1)>Level 1 — Main Groups</option>
+            <option value="2" @selected($levelFilter === 2)>Level 2 — Categories</option>
+            <option value="3" @selected($levelFilter === 3)>Level 3 — Posting Ledgers</option>
+        </select>
+        @if($search !== '' || $levelFilter !== 0)
+            <a class="hg-btn" href="{{ route('chart-of-accounts.index') }}">Clear</a>
+        @endif
     </form>
 
     @if ($accounts->isEmpty() && $draftRows->isEmpty())
         <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
         <div class="hg-table-wrap">
-            <table class="hg-table">
+            <table class="hg-table hg-coa-table">
                 <thead>
                     <tr>
                         <th>Code</th>
                         <th>Account Name</th>
+                        <th>Level</th>
+                        <th>Parent Account</th>
                         <th>Type</th>
                         <th>Normal</th>
                         <th>Status</th>
@@ -54,9 +80,32 @@
                 </thead>
                 <tbody>
                     @foreach ($accounts as $account)
-                        <tr>
-                            <td><strong>{{ $account->code }}</strong></td>
-                            <td>{{ $account->name }}</td>
+                        <tr class="hg-coa-row hg-coa-row-level-{{ $account->level }}">
+                            <td><strong class="hg-code-chip">{{ $account->code }}</strong></td>
+                            <td>
+                                <div class="hg-coa-account-name hg-coa-indent-{{ $account->parent_id ? $account->level : 1 }}">
+                                    @if((int) $account->level > 1 && $account->parent_id)
+                                        <span class="hg-coa-branch" aria-hidden="true">↳</span>
+                                    @endif
+                                    <div>
+                                        <strong>{{ $account->name }}</strong>
+                                        @if((int) $account->level === 3 && ! $account->parent_id)
+                                            <small class="hg-muted">Legacy ledger — assign a Level 2 parent when convenient</small>
+                                        @elseif($account->children_count > 0)
+                                            <small class="hg-muted">{{ $account->children_count }} direct {{ \Illuminate\Support\Str::plural('child', $account->children_count) }}</small>
+                                        @endif
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="hg-badge hg-level-badge level-{{ $account->level }}">Level {{ $account->level }}</span></td>
+                            <td>
+                                @if($account->parent)
+                                    <span class="hg-code-chip">{{ $account->parent->code }}</span>
+                                    {{ $account->parent->name }}
+                                @else
+                                    <span class="hg-muted">{{ (int) $account->level === 1 ? 'None — top level' : 'Unassigned' }}</span>
+                                @endif
+                            </td>
                             <td><span class="hg-badge {{ strtolower($account->type) }}">{{ $account->type }}</span></td>
                             <td>{{ $account->normal_balance }}</td>
                             <td>
@@ -72,6 +121,9 @@
                                         class="hg-btn hg-btn-small"
                                         data-coa-open="edit"
                                         data-account-id="{{ $account->id }}"
+                                        data-parent-id="{{ $account->parent_id }}"
+                                        data-level="{{ $account->level }}"
+                                        data-children-count="{{ $account->children_count }}"
                                         data-code="{{ $account->code }}"
                                         data-name="{{ $account->name }}"
                                         data-type="{{ $account->type }}"
@@ -83,16 +135,15 @@
                                     @endif
 
                                     @if($canDelete)
-
-                                    <form
-                                        method="POST"
-                                        action="{{ route('chart-of-accounts.destroy', $account) }}"
-                                     data-safe-delete-form>
-                                        @csrf
-                                        @method('DELETE')
-                                        <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
-                                    </form>
-
+                                        @if($account->children_count > 0)
+                                            <span class="hg-muted" title="Move or delete child accounts first">Has children</span>
+                                        @else
+                                            <form method="POST" action="{{ route('chart-of-accounts.destroy', $account) }}" data-safe-delete-form>
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
+                                            </form>
+                                        @endif
                                     @endif
                                 </div>
                             </td>
@@ -103,10 +154,14 @@
                         @php
                             $fields = \App\Support\VisibleFormDrafts::fields($draft);
                             $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
+                            $draftLevel = (int) ($fields['level'] ?? 1);
+                            $draftParent = $parentOptions->firstWhere('id', (int) ($fields['parent_id'] ?? 0));
                         @endphp
                         <tr class="hg-table-draft-row">
                             <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br><small>{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</small></td>
                             <td>{{ $fields['name'] ?? 'Draft Chart of Account' }}</td>
+                            <td><span class="hg-badge draft">Level {{ $draftLevel }}</span></td>
+                            <td>{{ $draftParent ? $draftParent->code.' — '.$draftParent->name : 'None' }}</td>
                             <td><span class="hg-badge {{ strtolower((string) ($fields['type'] ?? '')) }}">{{ $fields['type'] ?? '—' }}</span></td>
                             <td>{{ $fields['normal_balance'] ?? '—' }}</td>
                             <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
@@ -134,14 +189,18 @@
     @endif
 
     @if($canManage)
-
     <div
         class="hg-modal {{ $reopenModal ? 'show' : '' }}"
         id="coa-modal"
         data-store-url="{{ route('chart-of-accounts.store') }}"
         data-default-type="{{ $defaultAccountType }}"
         data-default-normal="{{ $defaultNormalBalance }}"
-        data-default-code="{{ $defaultCode }}"
+        data-root-next-code="{{ $nextCodes['root'] ?? '' }}"
+        data-editing-parent-id="{{ $editingAccount?->parent_id }}"
+        data-editing-level="{{ $editingAccount?->level }}"
+        data-editing-code="{{ $editingAccount?->code }}"
+        data-editing-type="{{ $editingAccount?->type }}"
+        data-editing-children-count="{{ $editingAccount?->children_count ?? 0 }}"
         aria-hidden="{{ $reopenModal ? 'false' : 'true' }}"
     >
         <div class="hg-modal-box" role="dialog" aria-modal="true" aria-labelledby="coa-modal-title">
@@ -167,14 +226,39 @@
                     <input type="hidden" name="coa_modal" value="1">
                     <input id="coa-account-id" type="hidden" name="account_id" value="{{ old('account_id') }}">
 
+                    <div class="hg-field full">
+                        <label for="coa-parent">Parent Account</label>
+                        <select id="coa-parent" name="parent_id">
+                            <option
+                                value=""
+                                data-level="0"
+                                data-type=""
+                                data-next-code="{{ $nextCodes['root'] ?? '' }}"
+                            >None / Main Parent — creates Level 1</option>
+                            @foreach($parentOptions as $parentOption)
+                                <option
+                                    value="{{ $parentOption->id }}"
+                                    data-level="{{ $parentOption->level }}"
+                                    data-type="{{ $parentOption->type }}"
+                                    data-next-code="{{ $nextCodes[(string) $parentOption->id] ?? '' }}"
+                                    @selected((string) $defaultParentId === (string) $parentOption->id)
+                                >{{ $parentOption->level === 2 ? ' ↳ ' : '' }}{{ $parentOption->code }} — {{ $parentOption->name }} (Level {{ $parentOption->level }})</option>
+                            @endforeach
+                        </select>
+                        <small class="hg-field-help" id="coa-parent-help">No parent creates Level 1. Selecting Level 1 creates Level 2; selecting Level 2 creates Level 3.</small>
+                        @error('parent_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+
+                    <input id="coa-level" type="hidden" name="level" value="{{ $defaultLevel }}">
+
                     <div class="hg-field">
                         <label for="coa-code">Code <span class="hg-required">*</span></label>
-                        <input id="coa-code" name="code" value="{{ old('code', $editingAccount?->code ?? $defaultCode) }}" required readonly>
-                        <small class="hg-muted">Generated automatically from the selected account type.</small>
+                        <input id="coa-code" name="code" value="{{ $defaultCode }}" required readonly>
+                        <small class="hg-field-help" id="coa-code-help">Generated from the latest sequence in this hierarchy level.</small>
                         @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
-                    <div class="hg-field">
+                    <div class="hg-field full">
                         <label for="coa-name">Name <span class="hg-required">*</span></label>
                         <input id="coa-name" name="name" value="{{ old('name', $editingAccount?->name) }}" required>
                         @error('name')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -184,9 +268,11 @@
                         <label for="coa-type">Type <span class="hg-required">*</span></label>
                         <select id="coa-type" name="type" required>
                             @foreach ($accountTypes as $typeOption)
-                                <option value="{{ $typeOption->value }}" data-next-code="{{ $nextCodes[$typeOption->value] ?? '' }}" @selected(old('type', $editingAccount?->type ?? $defaultAccountType) === $typeOption->value)>{{ $typeOption->label }}</option>
+                                <option value="{{ $typeOption->value }}" @selected($defaultAccountType === $typeOption->value)>{{ $typeOption->label }}</option>
                             @endforeach
                         </select>
+                        <input id="coa-type-hidden" type="hidden" name="type" value="{{ $defaultAccountType }}" disabled>
+                        <small class="hg-field-help" id="coa-type-help">Level 2 and Level 3 automatically inherit the parent account type.</small>
                         @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
@@ -194,7 +280,7 @@
                         <label for="coa-normal">Normal Balance</label>
                         <select id="coa-normal" name="normal_balance" required>
                             @foreach ($normalBalances as $normalOption)
-                                <option value="{{ $normalOption->value }}" @selected(old('normal_balance', $editingAccount?->normal_balance ?? $defaultNormalBalance) === $normalOption->value)>{{ $normalOption->label }}</option>
+                                <option value="{{ $normalOption->value }}" @selected($defaultNormalBalance === $normalOption->value)>{{ $normalOption->label }}</option>
                             @endforeach
                         </select>
                         @error('normal_balance')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -221,6 +307,5 @@
             </div>
         </div>
     </div>
-
     @endif
 </x-layouts::accounting>

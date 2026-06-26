@@ -54,10 +54,25 @@
 
                 <div class="hg-field">
                     <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
-                    <select id="transaction_head_id" name="transaction_head_id" required>
+                    <select
+                        id="transaction_head_id"
+                        name="transaction_head_id"
+                        required
+                        data-hg-searchable
+                        data-hg-search-placeholder="Search transaction head by name, code or ledger..."
+                        data-hg-search-empty="No matching transaction head found"
+                    >
                         <option value="">{{ $transactionHeads->isEmpty() ? 'No active transaction head available' : 'Select transaction head' }}</option>
                         @foreach ($transactionHeads as $head)
-                            <option value="{{ $head->id }}" data-allowed-settlements="{{ json_encode($head->allowedSettlementCodes()) }}" data-party-type="{{ $head->party_type ?: ($transactionTypeDefinition['party_type'] ?? 'Any') }}" @selected((string) $selectedHeadId === (string) $head->id)>{{ $head->name }}</option>
+                            <option
+                                value="{{ $head->id }}"
+                                data-title="{{ $head->name }}"
+                                data-meta="{{ $head->code }}{{ $head->postingAccount ? ' — '.$head->postingAccount->code.' '.$head->postingAccount->name : '' }}"
+                                data-search-keywords="{{ $head->category }} {{ implode(' ', $head->allowedSettlementCodes()) }}"
+                                data-allowed-settlements="{{ json_encode($head->allowedSettlementCodes()) }}"
+                                data-party-type="{{ $head->party_type ?: ($transactionTypeDefinition['party_type'] ?? 'Any') }}"
+                                @selected((string) $selectedHeadId === (string) $head->id)
+                            >{{ $head->name }}</option>
                         @endforeach
                     </select>
                     @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -79,10 +94,23 @@
 
                 <div class="hg-field hidden" id="money-field">
                     <label for="money_account_id"><span id="money-label">{{ $moneyLabel }}</span> <span class="hg-required">*</span></label>
-                    <select id="money_account_id" name="money_account_id">
+                    <select
+                        id="money_account_id"
+                        name="money_account_id"
+                        data-hg-searchable
+                        data-hg-search-placeholder="Search cash, bank or mobile account..."
+                        data-hg-search-empty="No matching money account found"
+                    >
                         <option value="">{{ $moneyAccounts->isEmpty() ? 'No active money account available' : 'Select account' }}</option>
                         @foreach ($moneyAccounts as $moneyAccount)
-                            <option value="{{ $moneyAccount->id }}" @selected((string) old('money_account_id', $isEditing ? $transaction->money_account_id : '') === (string) $moneyAccount->id)>{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
+                            <option
+                                value="{{ $moneyAccount->id }}"
+                                data-title="{{ $moneyAccount->name }}"
+                                data-meta="{{ $moneyAccount->chartOfAccount?->code }}{{ $moneyAccount->chartOfAccount ? ' — '.$moneyAccount->chartOfAccount->name : '' }}"
+                                data-status="{{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}"
+                                data-search-keywords="{{ $moneyAccount->kind }}"
+                                @selected((string) old('money_account_id', $isEditing ? $transaction->money_account_id : '') === (string) $moneyAccount->id)
+                            >{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
                         @endforeach
                     </select>
                     @error('money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
@@ -96,10 +124,24 @@
 
                 <div class="hg-field hidden" id="party-field">
                     <label for="party_id"><span id="party-label">{{ $partyLabel }}</span> <span class="hg-required">*</span></label>
-                    <select id="party_id" name="party_id">
+                    <select
+                        id="party_id"
+                        name="party_id"
+                        data-hg-searchable
+                        data-hg-search-placeholder="Search party by name, code or type..."
+                        data-hg-search-empty="No matching party found"
+                    >
                         <option value="">Select {{ strtolower($partyLabel) }}</option>
                         @foreach ($parties as $party)
-                            <option value="{{ $party->id }}" data-party-type="{{ $party->type }}" @selected((string) old('party_id', $isEditing ? $transaction->party_id : '') === (string) $party->id)>{{ $party->code }} — {{ $party->name }} ({{ $partyTypeLabels[$party->type] ?? $party->type }})</option>
+                            <option
+                                value="{{ $party->id }}"
+                                data-title="{{ $party->name }}"
+                                data-meta="{{ $party->code }}"
+                                data-status="{{ $partyTypeLabels[$party->type] ?? $party->type }}"
+                                data-search-keywords="{{ $party->type }} {{ $partyTypeLabels[$party->type] ?? $party->type }}"
+                                data-party-type="{{ $party->type }}"
+                                @selected((string) old('party_id', $isEditing ? $transaction->party_id : '') === (string) $party->id)
+                            >{{ $party->code }} — {{ $party->name }} ({{ $partyTypeLabels[$party->type] ?? $party->type }})</option>
                         @endforeach
                     </select>
                     @error('party_id')<small class="hg-field-error">{{ $message }}</small>@enderror

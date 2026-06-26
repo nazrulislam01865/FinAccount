@@ -14,54 +14,114 @@ use Illuminate\Validation\ValidationException;
 
 class AutomaticCodeService
 {
-    /** @var array<string, int> */
-    private const COA_BASES = [
-        'asset' => 1000,
-        'liability' => 2000,
-        'income' => 3000,
-        'expense' => 4000,
-        'equity' => 5000,
-    ];
+    private const LEVEL_ONE_START = 1000;
+
+    private const LEVEL_ONE_STEP = 1000;
+
+    private const LEVEL_TWO_STEP = 100;
+
+    private const LEVEL_THREE_STEP = 10;
 
     public function lockCompany(int $companyId): void
     {
         DB::table('companies')->where('id', $companyId)->lockForUpdate()->value('id');
     }
 
-    public function nextChartOfAccountCode(int $companyId, string $type, ?int $ignoreId = null): string
-    {
-        $base = self::COA_BASES[strtolower(trim($type))] ?? null;
+    public function nextChartOfAccountCode(
+        int $companyId,
+        ?int $parentId = null,
+        ?int $ignoreId = null,
+    ): string {
+        if ($parentId === null) {
+            return $this->nextRootChartOfAccountCode($companyId, $ignoreId);
+        }
 
-        if ($base === null) {
+        $parent = ChartOfAccount::query()
+            ->whereKey($parentId)
+            ->where('company_id', $companyId)
+            ->first();
+
+        if (! $parent) {
             throw ValidationException::withMessages([
-                'type' => 'No automatic account-code series is configured for this account type.',
+                'parent_id' => 'The selected parent account does not belong to this company.',
             ]);
         }
 
-        $maximum = $base + 999;
+        if ((int) $parent->level >= 3) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'A Level 3 ledger cannot have child accounts.',
+            ]);
+        }
+
+        if (preg_match('/^\d+$/', (string) $parent->code) !== 1) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'The selected parent must have a numeric hierarchy code.',
+            ]);
+        }
+
+        $parentCode = (int) $parent->code;
+        $step = (int) $parent->level === 1
+            ? self::LEVEL_TWO_STEP
+            : self::LEVEL_THREE_STEP;
+        $maximum = $parentCode + ($step * 9);
+
         $lastNumber = ChartOfAccount::query()
             ->where('company_id', $companyId)
-            ->where('type', $type)
+            ->where('parent_id', $parent->id)
             ->when($ignoreId !== null, fn (Builder $query) => $query->whereKeyNot($ignoreId))
             ->pluck('code')
             ->map(static fn ($code): ?int => preg_match('/^\d+$/', (string) $code) === 1 ? (int) $code : null)
-            ->filter(static fn (?int $number): bool => $number !== null && $number >= $base && $number <= $maximum)
+            ->filter(static fn (?int $number): bool => $number !== null
+                && $number > $parentCode
+                && $number <= $maximum
+                && (($number - $parentCode) % $step) === 0)
             ->max();
 
-        $candidate = max($base, ((int) ($lastNumber ?? ($base - 1))) + 1);
+        $candidate = $lastNumber === null
+            ? $parentCode + $step
+            : (int) $lastNumber + $step;
 
         while ($candidate <= $maximum && ChartOfAccount::query()
             ->where('company_id', $companyId)
             ->where('code', (string) $candidate)
             ->when($ignoreId !== null, fn (Builder $query) => $query->whereKeyNot($ignoreId))
             ->exists()) {
-            $candidate++;
+            $candidate += $step;
         }
 
         if ($candidate > $maximum) {
             throw ValidationException::withMessages([
-                'code' => ucfirst(strtolower($type)).' account-code series is full.',
+                'code' => 'This parent already has the maximum number of accounts for the current numbering level.',
             ]);
+        }
+
+        return (string) $candidate;
+    }
+
+    private function nextRootChartOfAccountCode(int $companyId, ?int $ignoreId = null): string
+    {
+        $lastNumber = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('level', 1)
+            ->whereNull('parent_id')
+            ->when($ignoreId !== null, fn (Builder $query) => $query->whereKeyNot($ignoreId))
+            ->pluck('code')
+            ->map(static fn ($code): ?int => preg_match('/^\d+$/', (string) $code) === 1 ? (int) $code : null)
+            ->filter(static fn (?int $number): bool => $number !== null
+                && $number >= self::LEVEL_ONE_START
+                && ($number % self::LEVEL_ONE_STEP) === 0)
+            ->max();
+
+        $candidate = $lastNumber === null
+            ? self::LEVEL_ONE_START
+            : (int) $lastNumber + self::LEVEL_ONE_STEP;
+
+        while (ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('code', (string) $candidate)
+            ->when($ignoreId !== null, fn (Builder $query) => $query->whereKeyNot($ignoreId))
+            ->exists()) {
+            $candidate += self::LEVEL_ONE_STEP;
         }
 
         return (string) $candidate;

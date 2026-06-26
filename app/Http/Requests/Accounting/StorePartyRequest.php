@@ -26,8 +26,8 @@ class StorePartyRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_PARTY_TYPE)],
             'opening_balance' => ['nullable', 'numeric', 'decimal:0,'.CompanyContext::decimalPlaces()],
-            'receivable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
-            'payable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
+            'receivable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('level', 3))],
+            'payable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('level', 3))],
             'is_active' => ['required', 'boolean'],
         ];
     }

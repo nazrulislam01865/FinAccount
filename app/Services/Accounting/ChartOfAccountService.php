@@ -4,6 +4,7 @@ namespace App\Services\Accounting;
 
 use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -16,33 +17,77 @@ class ChartOfAccountService
     ) {}
 
     /** @return array<string, mixed> */
-    public function pageData(int $companyId, string $search = '', int $modalAccountId = 0): array
-    {
-        $accounts = ChartOfAccount::query()
+    public function pageData(
+        int $companyId,
+        string $search = '',
+        int $modalAccountId = 0,
+        int $levelFilter = 0,
+    ): array {
+        $allAccounts = ChartOfAccount::query()
+            ->with('parent:id,code,name,level,type')
+            ->withCount('children')
             ->where('company_id', $companyId)
-            ->when($search !== '', function ($query) use ($search): void {
-                $query->where(function ($query) use ($search): void {
-                    $query->where('code', 'like', "%{$search}%")
-                        ->orWhere('name', 'like', "%{$search}%")
-                        ->orWhere('type', 'like', "%{$search}%");
-                });
-            })
+            ->orderBy('level')
             ->orderBy('code')
             ->get();
 
+        $accounts = $search === '' && $levelFilter === 0
+            ? $this->hierarchicalAccounts($allAccounts)
+            : $allAccounts
+                ->filter(function (ChartOfAccount $account) use ($search, $levelFilter): bool {
+                    if ($levelFilter > 0 && (int) $account->level !== $levelFilter) {
+                        return false;
+                    }
+
+                    if ($search === '') {
+                        return true;
+                    }
+
+                    $haystack = strtolower(implode(' ', [
+                        $account->code,
+                        $account->name,
+                        $account->type,
+                        $account->parent?->code,
+                        $account->parent?->name,
+                        'level '.$account->level,
+                    ]));
+
+                    return str_contains($haystack, strtolower($search));
+                })
+                ->sortBy(fn (ChartOfAccount $account): string => sprintf('%d-%020s', $account->level, $account->code))
+                ->values();
+
+        $parentOptions = $allAccounts
+            ->filter(fn (ChartOfAccount $account): bool => (int) $account->level < 3 && $account->is_active)
+            ->sortBy(fn (ChartOfAccount $account): string => sprintf('%d-%020s', $account->level, $account->code))
+            ->values();
+
+        $nextCodes = ['root' => $this->previewNextCode($companyId)];
+        foreach ($parentOptions as $parent) {
+            $nextCodes[(string) $parent->id] = $this->previewNextCode($companyId, (int) $parent->id);
+        }
+
         return [
             'accounts' => $accounts,
-            'balances' => $this->balanceService->balancesFor($accounts, $companyId),
+            'balances' => $this->balanceService->balancesFor($allAccounts, $companyId),
             'search' => $search,
+            'levelFilter' => $levelFilter,
+            'levelCounts' => [
+                1 => $allAccounts->where('level', 1)->count(),
+                2 => $allAccounts->where('level', 2)->count(),
+                3 => $allAccounts->where('level', 3)->count(),
+            ],
             'modalAccount' => $modalAccountId > 0
-                ? ChartOfAccount::query()->where('company_id', $companyId)->find($modalAccountId)
+                ? ChartOfAccount::query()
+                    ->with('parent:id,code,name,level,type')
+                    ->withCount('children')
+                    ->where('company_id', $companyId)
+                    ->find($modalAccountId)
                 : null,
+            'parentOptions' => $parentOptions,
             'accountTypes' => $this->optionService->forGroup(AccountingOption::GROUP_ACCOUNT_TYPE),
             'normalBalances' => $this->optionService->forGroup(AccountingOption::GROUP_NORMAL_BALANCE),
-            'nextCodes' => collect($this->optionService->forGroup(AccountingOption::GROUP_ACCOUNT_TYPE))
-                ->mapWithKeys(fn (AccountingOption $option): array => [
-                    $option->value => $this->automaticCodeService->nextChartOfAccountCode($companyId, $option->value),
-                ])->all(),
+            'nextCodes' => $nextCodes,
         ];
     }
 
@@ -51,11 +96,19 @@ class ChartOfAccountService
     {
         return DB::transaction(function () use ($data, $companyId): ChartOfAccount {
             $this->automaticCodeService->lockCompany($companyId);
-            $data['code'] = $this->automaticCodeService->nextChartOfAccountCode($companyId, (string) $data['type']);
+            $parent = $this->resolveParent($companyId, $data['parent_id'] ?? null);
+            $level = $parent ? ((int) $parent->level + 1) : 1;
+            $type = $parent?->type ?? (string) $data['type'];
 
             return ChartOfAccount::query()->create([
                 'company_id' => $companyId,
-                ...$data,
+                'parent_id' => $parent?->id,
+                'level' => $level,
+                'code' => $this->automaticCodeService->nextChartOfAccountCode($companyId, $parent?->id),
+                'name' => trim((string) $data['name']),
+                'type' => $type,
+                'normal_balance' => (string) $data['normal_balance'],
+                'is_active' => (bool) $data['is_active'],
             ]);
         }, attempts: 5);
     }
@@ -63,22 +116,59 @@ class ChartOfAccountService
     /** @param array<string, mixed> $data */
     public function update(ChartOfAccount $account, array $data): ChartOfAccount
     {
-        $this->validateMappedAccountType($account, (string) $data['type']);
-
         DB::transaction(function () use ($account, $data): void {
             $this->automaticCodeService->lockCompany((int) $account->company_id);
+            $locked = ChartOfAccount::query()
+                ->withCount('children')
+                ->lockForUpdate()
+                ->findOrFail($account->id);
 
-            if ((string) $data['type'] !== (string) $account->type) {
-                $data['code'] = $this->automaticCodeService->nextChartOfAccountCode(
-                    (int) $account->company_id,
-                    (string) $data['type'],
-                    (int) $account->id,
-                );
-            } else {
-                $data['code'] = $account->code;
+            $parent = $this->resolveParent(
+                (int) $locked->company_id,
+                $data['parent_id'] ?? null,
+                (int) $locked->id,
+            );
+            $newParentId = $parent?->id;
+            $parentChanged = (int) ($locked->parent_id ?? 0) !== (int) ($newParentId ?? 0);
+            $legacyUnassignedLedger = (int) $locked->level === 3
+                && $locked->parent_id === null
+                && $newParentId === null;
+            $newLevel = $legacyUnassignedLedger
+                ? 3
+                : ($parent ? ((int) $parent->level + 1) : 1);
+            $newType = $parent?->type ?? (string) $data['type'];
+            $typeChanged = (string) $locked->type !== $newType;
+
+            if ((int) $locked->children_count > 0 && ($parentChanged || $typeChanged)) {
+                throw ValidationException::withMessages([
+                    'parent_id' => 'Move or delete this account’s child accounts before changing its parent or account type.',
+                ]);
             }
 
-            $account->update($data);
+            if ((int) $locked->children_count > 0 && ! (bool) $data['is_active']) {
+                throw ValidationException::withMessages([
+                    'is_active' => 'A parent account cannot be made inactive while it still has child accounts.',
+                ]);
+            }
+
+            $this->validateMappedAccountType($locked, $newType);
+            $this->validateMappedAccountLevel($locked, $newLevel);
+
+            $locked->update([
+                'parent_id' => $newParentId,
+                'level' => $newLevel,
+                'code' => $parentChanged
+                    ? $this->automaticCodeService->nextChartOfAccountCode(
+                        (int) $locked->company_id,
+                        $newParentId,
+                        (int) $locked->id,
+                    )
+                    : $locked->code,
+                'name' => trim((string) $data['name']),
+                'type' => $newType,
+                'normal_balance' => (string) $data['normal_balance'],
+                'is_active' => (bool) $data['is_active'],
+            ]);
         }, attempts: 5);
 
         return $account->refresh();
@@ -86,6 +176,12 @@ class ChartOfAccountService
 
     public function delete(ChartOfAccount $account): void
     {
+        if ($account->children()->exists()) {
+            throw ValidationException::withMessages([
+                'account' => 'Move or delete the child accounts before deleting this parent account.',
+            ]);
+        }
+
         $uses = collect([
             'money account' => $account->moneyAccounts()->exists(),
             'party' => $account->receivableParties()->exists() || $account->payableParties()->exists(),
@@ -100,6 +196,138 @@ class ChartOfAccountService
         }
 
         DB::transaction(fn () => $account->delete(), attempts: 5);
+    }
+
+    private function resolveParent(
+        int $companyId,
+        mixed $parentId,
+        ?int $accountId = null,
+    ): ?ChartOfAccount {
+        if ($parentId === null || $parentId === '' || (int) $parentId === 0) {
+            return null;
+        }
+
+        $parent = ChartOfAccount::query()
+            ->whereKey((int) $parentId)
+            ->where('company_id', $companyId)
+            ->first();
+
+        if (! $parent) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'Select a valid parent account from this company.',
+            ]);
+        }
+
+        if ($accountId !== null && (int) $parent->id === $accountId) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'An account cannot be its own parent.',
+            ]);
+        }
+
+        if ((int) $parent->level >= 3) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'Select a Level 1 or Level 2 parent. Level 3 is the final posting level.',
+            ]);
+        }
+
+        if (! $parent->is_active) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'Select an active parent account.',
+            ]);
+        }
+
+        if ($accountId !== null && $this->parentChainContains($parent, $accountId)) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'A child account cannot be selected as its parent.',
+            ]);
+        }
+
+        return $parent;
+    }
+
+    private function parentChainContains(ChartOfAccount $parent, int $accountId): bool
+    {
+        $current = $parent;
+
+        while ($current->parent_id !== null) {
+            if ((int) $current->parent_id === $accountId) {
+                return true;
+            }
+
+            $current = ChartOfAccount::query()->find($current->parent_id);
+            if (! $current) {
+                break;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param Collection<int, ChartOfAccount> $accounts
+     * @return Collection<int, ChartOfAccount>
+     */
+    private function hierarchicalAccounts(Collection $accounts): Collection
+    {
+        $childrenByParent = $accounts
+            ->whereNotNull('parent_id')
+            ->groupBy(fn (ChartOfAccount $account): int => (int) $account->parent_id);
+        $result = collect();
+        $seen = [];
+
+        $append = function (ChartOfAccount $account) use (&$append, &$result, &$seen, $childrenByParent): void {
+            if (isset($seen[$account->id])) {
+                return;
+            }
+
+            $seen[$account->id] = true;
+            $result->push($account);
+
+            foreach ($childrenByParent->get((int) $account->id, collect())->sortBy('code') as $child) {
+                $append($child);
+            }
+        };
+
+        foreach ($accounts->where('level', 1)->whereNull('parent_id')->sortBy('code') as $root) {
+            $append($root);
+        }
+
+        // Legacy flat rows and any damaged/orphaned rows remain visible instead
+        // of disappearing from the COA page.
+        foreach ($accounts->sortBy(fn (ChartOfAccount $account): string => sprintf('%d-%020s', $account->level, $account->code)) as $account) {
+            $append($account);
+        }
+
+        return $result->values();
+    }
+
+    private function previewNextCode(int $companyId, ?int $parentId = null): string
+    {
+        try {
+            return $this->automaticCodeService->nextChartOfAccountCode($companyId, $parentId);
+        } catch (ValidationException) {
+            return '';
+        }
+    }
+
+
+    private function validateMappedAccountLevel(ChartOfAccount $account, int $newLevel): void
+    {
+        if ($newLevel === 3) {
+            return;
+        }
+
+        if (
+            $account->moneyAccounts()->exists()
+            || $account->receivableParties()->exists()
+            || $account->payableParties()->exists()
+            || $account->transactionHeads()->exists()
+            || $account->journalLines()->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'This account is already used for posting and must remain a Level 3 ledger.',
+            ]);
+        }
     }
 
     private function validateMappedAccountType(ChartOfAccount $account, string $newType): void

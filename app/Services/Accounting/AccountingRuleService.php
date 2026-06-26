@@ -22,20 +22,12 @@ class AccountingRuleService
     {
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
 
-        $settlementTypes = collect(TransactionTypes::settlementDefinitions())
-            ->map(fn (array $definition, string $value): object => (object) [
-                'value' => $value,
-                'label' => $definition['label'],
-            ])
-            ->values();
-        $settlementLabels = $settlementTypes->pluck('label', 'value')->all();
-
         return [
             'rules' => $this->allForCompany($companyId),
             'transactionCategories' => $transactionCategories,
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
-            'settlementTypes' => $settlementTypes,
-            'settlementLabels' => $settlementLabels,
+            'settlementTypes' => $this->optionService->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
             'transactionTypeDefinitions' => $transactionCategories->mapWithKeys(fn (AccountingOption $option): array => [
                 $option->value => TransactionTypes::configuredDefinition(
                     $option->value,

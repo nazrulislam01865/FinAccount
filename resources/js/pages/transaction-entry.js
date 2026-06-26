@@ -40,6 +40,10 @@ if (page) {
     let previewTimer;
     let autoSyncPaidAmount = form?.dataset.autoSyncPaid === '1';
 
+    const refreshSearchable = (select) => {
+        window.HisebGhorSearchableSelect?.refresh(select);
+    };
+
     const parseJson = (value, fallback = []) => {
         try { return JSON.parse(value || '[]'); } catch (_) { return fallback; }
     };
@@ -143,6 +147,7 @@ if (page) {
         });
 
         if (party?.selectedOptions[0]?.disabled) party.value = '';
+        refreshSearchable(party);
 
         return matches;
     };
@@ -157,6 +162,7 @@ if (page) {
             partyField?.classList.add('hidden');
             autoPartyNotice?.classList.add('hidden');
             party.required = false;
+            refreshSearchable(party);
             return false;
         }
 
@@ -171,6 +177,7 @@ if (page) {
             autoPartyNotice?.classList.remove('hidden');
             if (autoPartyLabel) autoPartyLabel.textContent = `${partyLabel?.textContent || 'Party'} selected automatically`;
             if (autoPartyName) autoPartyName.textContent = matches[0].textContent.trim();
+            refreshSearchable(party);
             return changed;
         }
 
@@ -185,6 +192,7 @@ if (page) {
                 : `Select ${String(partyLabel?.textContent || 'party').toLowerCase()}`;
         }
 
+        refreshSearchable(party);
         return changed;
     };
 
@@ -206,6 +214,7 @@ if (page) {
 
         moneyField?.classList.toggle('hidden', !needsMoney);
         if (money) money.required = needsMoney;
+        refreshSearchable(money);
         syncPartyRequirement(needsParty, expectedPartyType);
     };
 
@@ -248,10 +257,13 @@ if (page) {
             if (money) money.required = moneyRequired;
             if (moneyLabel && data.moneyLabel) moneyLabel.textContent = data.moneyLabel;
             if (partyLabel && data.partyLabel) partyLabel.textContent = data.partyLabel;
+            refreshSearchable(money);
+            refreshSearchable(party);
             updatePaidAmountCopy();
 
             if (data.autoSelectedPartyId && party && !party.value) {
                 party.value = String(data.autoSelectedPartyId);
+                refreshSearchable(party);
             }
 
             if (syncPartyRequirement(Boolean(data.partyRequired), data.partyType)) {

@@ -28,6 +28,7 @@ class StoreMoneyAccountRequest extends FormRequest
                 'required', 'integer',
                 Rule::exists('chart_of_accounts', 'id')
                     ->where('company_id', $companyId)
+                    ->where('level', 3)
                     ->where('type', 'Asset')
                     ->where('is_active', true),
                 Rule::unique('money_accounts')->where('company_id', $companyId),

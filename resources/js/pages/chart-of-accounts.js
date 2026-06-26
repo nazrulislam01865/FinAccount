@@ -5,11 +5,22 @@ if (modal) {
     const title = document.getElementById('coa-modal-title');
     const method = document.getElementById('coa-method');
     const accountId = document.getElementById('coa-account-id');
+    const parent = document.getElementById('coa-parent');
+    const level = document.getElementById('coa-level');
     const code = document.getElementById('coa-code');
+    const codeHelp = document.getElementById('coa-code-help');
     const name = document.getElementById('coa-name');
     const type = document.getElementById('coa-type');
+    const typeHidden = document.getElementById('coa-type-hidden');
+    const typeHelp = document.getElementById('coa-type-help');
     const normal = document.getElementById('coa-normal');
     const active = document.getElementById('coa-active');
+
+    let originalParentId = modal.dataset.editingParentId || '';
+    let originalLevel = Number(modal.dataset.editingLevel || level.value || 1);
+    let originalCode = modal.dataset.editingCode || code.value;
+    let originalType = modal.dataset.editingType || type.value;
+    let hierarchyLocked = Number(modal.dataset.editingChildrenCount || 0) > 0;
 
     const clearFieldErrors = () => {
         form.querySelectorAll('.hg-field-error').forEach((error) => error.remove());
@@ -38,52 +49,125 @@ if (modal) {
         document.body.classList.remove('hg-modal-open');
     };
 
+    const unlockParentOptions = () => {
+        [...parent.options].forEach((option) => { option.disabled = false; });
+    };
+
+    const syncHierarchy = ({ preserveOriginal = false } = {}) => {
+        const selected = parent.selectedOptions[0];
+        const parentId = parent.value;
+        const parentLevel = Number(selected?.dataset.level || 0);
+        const isLegacyUnassignedLedger = Boolean(accountId.value)
+            && !originalParentId
+            && !parentId
+            && originalLevel === 3;
+        const calculatedLevel = isLegacyUnassignedLedger
+            ? 3
+            : (parentId ? parentLevel + 1 : 1);
+        const inheritedType = selected?.dataset.type || '';
+
+        level.value = String(calculatedLevel);
+
+        if (parentId) {
+            if (inheritedType) type.value = inheritedType;
+            type.disabled = true;
+            typeHidden.disabled = false;
+            typeHidden.value = type.value;
+            typeHelp.textContent = `Inherited from the selected Level ${parentLevel} parent.`;
+        } else {
+            type.disabled = false;
+            typeHidden.disabled = true;
+            typeHidden.value = type.value;
+            typeHelp.textContent = isLegacyUnassignedLedger
+                ? 'Existing flat posting ledger. Its type remains editable until it is assigned to a Level 2 parent.'
+                : 'Level 1 account type can be selected. Child levels inherit their parent type.';
+        }
+
+        const shouldKeepOriginal = preserveOriginal
+            || (accountId.value && String(parentId) === String(originalParentId));
+        code.value = shouldKeepOriginal
+            ? originalCode
+            : (selected?.dataset.nextCode || '');
+        codeHelp.textContent = isLegacyUnassignedLedger
+            ? 'Existing flat ledger preserved as Level 3. Select a Level 2 parent to place it in the hierarchy.'
+            : (code.value
+            ? `Generated automatically for Level ${calculatedLevel}.`
+            : 'No code is available under this parent. Create another parent group or reorganise its children.');
+
+        level.dispatchEvent(new Event('input', { bubbles: true }));
+        code.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
     const openCreate = () => {
         clearFieldErrors();
+        unlockParentOptions();
         title.textContent = 'Add COA Account';
         form.action = modal.dataset.storeUrl;
         method.disabled = true;
         accountId.value = '';
-        originalType = '';
-        originalCode = '';
+        originalParentId = '';
+        originalLevel = 1;
+        originalCode = modal.dataset.rootNextCode || '';
+        originalType = modal.dataset.defaultType || type.value;
+        hierarchyLocked = false;
         name.value = '';
+        parent.value = '';
         type.value = modal.dataset.defaultType || '';
-        code.value = type.selectedOptions[0]?.dataset.nextCode || modal.dataset.defaultCode || '';
         normal.value = modal.dataset.defaultNormal || '';
         active.checked = true;
+        syncHierarchy();
         showModal();
         setDraftContext('create');
     };
 
     const openEdit = (button) => {
         clearFieldErrors();
+        unlockParentOptions();
         title.textContent = 'Edit COA Account';
         form.action = button.dataset.updateUrl;
         method.disabled = false;
         method.value = 'PUT';
         accountId.value = button.dataset.accountId;
-        originalType = button.dataset.type;
+        originalParentId = button.dataset.parentId || '';
+        originalLevel = Number(button.dataset.level || 1);
         originalCode = button.dataset.code;
-        code.value = button.dataset.code;
+        originalType = button.dataset.type;
+        hierarchyLocked = Number(button.dataset.childrenCount || 0) > 0;
+        parent.value = originalParentId;
+        code.value = originalCode;
         name.value = button.dataset.name;
         type.value = button.dataset.type;
         normal.value = button.dataset.normal;
         active.checked = button.dataset.active === '1';
+
+        const selfOption = [...parent.options].find((option) => option.value === button.dataset.accountId);
+        if (selfOption) selfOption.disabled = true;
+
+        syncHierarchy({ preserveOriginal: true });
         showModal();
         setDraftContext('edit', button.dataset.accountId);
     };
 
-    let originalType = type.value;
-    let originalCode = code.value;
+    parent.addEventListener('change', () => {
+        if (hierarchyLocked && String(parent.value) !== String(originalParentId)) {
+            parent.value = originalParentId;
+            window.alert('This account has child accounts. Move or delete its children before changing the parent.');
+        }
+        syncHierarchy();
+    });
 
     type.addEventListener('change', () => {
-        if (accountId.value && type.value === originalType) {
-            code.value = originalCode;
-            return;
+        if (parent.value) {
+            type.value = parent.selectedOptions[0]?.dataset.type || type.value;
+        } else if (hierarchyLocked && accountId.value && type.value !== originalType) {
+            type.value = originalType;
+            window.alert('This account has child accounts. Move or delete its children before changing the account type.');
         }
+        typeHidden.value = type.value;
+    });
 
-        code.value = type.selectedOptions[0]?.dataset.nextCode || '';
-        code.dispatchEvent(new Event('input', { bubbles: true }));
+    form.addEventListener('submit', () => {
+        syncHierarchy({ preserveOriginal: Boolean(accountId.value && parent.value === originalParentId) });
     });
 
     document.querySelectorAll('[data-coa-open]').forEach((button) => {
@@ -101,18 +185,15 @@ if (modal) {
     });
 
     modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            closeModal();
-        }
+        if (event.target === modal) closeModal();
     });
 
     document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && modal.classList.contains('show')) {
-            closeModal();
-        }
+        if (event.key === 'Escape' && modal.classList.contains('show')) closeModal();
     });
 
     if (modal.classList.contains('show')) {
         document.body.classList.add('hg-modal-open');
+        syncHierarchy({ preserveOriginal: Boolean(accountId.value && parent.value === originalParentId) });
     }
 }

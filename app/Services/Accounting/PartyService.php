@@ -29,12 +29,14 @@ class PartyService
 
         $receivableAccounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
+            ->where('level', 3)
             ->where('type', 'Asset')
             ->orderBy('code')
             ->get();
 
         $payableAccounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
+            ->where('level', 3)
             ->whereIn('type', ['Liability', 'Equity'])
             ->orderBy('code')
             ->get();
@@ -135,12 +137,13 @@ class PartyService
             $valid = ChartOfAccount::query()
                 ->whereKey($data['receivable_account_id'])
                 ->where('company_id', $companyId)
+                ->where('level', 3)
                 ->where('type', 'Asset')
                 ->exists();
 
             if (! $valid) {
                 throw ValidationException::withMessages([
-                    'receivable_account_id' => 'Receivable COA must be an Asset account.',
+                    'receivable_account_id' => 'Receivable COA must be a Level 3 Asset ledger.',
                 ]);
             }
         }
@@ -149,12 +152,13 @@ class PartyService
             $valid = ChartOfAccount::query()
                 ->whereKey($data['payable_account_id'])
                 ->where('company_id', $companyId)
+                ->where('level', 3)
                 ->whereIn('type', ['Liability', 'Equity'])
                 ->exists();
 
             if (! $valid) {
                 throw ValidationException::withMessages([
-                    'payable_account_id' => 'Payable or capital COA must be a Liability or Equity account.',
+                    'payable_account_id' => 'Payable or capital COA must be a Level 3 Liability or Equity ledger.',
                 ]);
             }
         }

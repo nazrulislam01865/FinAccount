@@ -130,7 +130,7 @@
                     <label for="rule-category">Transaction Type <span class="hg-required">*</span></label>
                     <select id="rule-category" name="category" required data-rule-transaction-type>
                         @foreach ($transactionCategories as $categoryOption)
-                            <option value="{{ $categoryOption->value }}" @selected(old('category', $editingRule?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
+                            <option value="{{ $categoryOption->value }}" data-allowed-settlements="{{ json_encode($transactionTypeDefinitions[$categoryOption->value]['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS) }}" @selected(old('category', $editingRule?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
                         @endforeach
                     </select>
                     @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror

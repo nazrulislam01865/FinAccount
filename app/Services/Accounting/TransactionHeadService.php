@@ -31,6 +31,7 @@ class TransactionHeadService
                 ->get(),
             'postingAccounts' => ChartOfAccount::query()
                 ->where('company_id', $companyId)
+                ->where('level', 3)
                 ->orderBy('code')
                 ->get(),
             'transactionCategories' => $transactionCategories,
@@ -101,11 +102,12 @@ class TransactionHeadService
         $account = ChartOfAccount::query()
             ->whereKey($data['posting_account_id'])
             ->where('company_id', $companyId)
+            ->where('level', 3)
             ->first();
 
         if (! $account) {
             throw ValidationException::withMessages([
-                'posting_account_id' => 'The linked account does not belong to this company.',
+                'posting_account_id' => 'Select a Level 3 posting ledger that belongs to this company.',
             ]);
         }
 

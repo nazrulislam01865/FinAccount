@@ -25,7 +25,7 @@ class UpdateTransactionHeadRequest extends FormRequest
             'code' => ['nullable', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
-            'posting_account_id' => ['required', 'integer', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
+            'posting_account_id' => ['required', 'integer', Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('level', 3))],
             'allowed_settlements' => ['required', 'array', 'min:1'],
             'allowed_settlements.*' => ['required', 'distinct', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'party_type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_RULE_PARTY_TYPE)],
