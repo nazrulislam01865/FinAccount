@@ -46,13 +46,14 @@ class TransactionEntryController extends Controller
     {
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
         $requestedCategory = TransactionTypes::normalize($request->string('category')->toString());
-        $category = $transactionCategories->contains('value', $requestedCategory)
-            ? $requestedCategory
-            : ($transactionCategories->first()?->value ?? '');
+        $categoryOption = $transactionCategories->first(
+            fn (AccountingOption $option): bool =>
+                TransactionTypes::normalize((string) $option->value) === $requestedCategory
+        ) ?? $transactionCategories->first();
+        $category = TransactionTypes::normalize((string) ($categoryOption?->value ?? ''));
         $company = $request->user()->company;
         abort_unless($company, 404);
         $companyId = $company->id;
-        $categoryOption = $transactionCategories->firstWhere('value', $category);
         $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
 
         return view('transactions.create', [
@@ -82,9 +83,14 @@ class TransactionEntryController extends Controller
         $validated = $request->validate([
             'category' => [
                 'required',
-                Rule::exists('accounting_options', 'value')->where(fn ($query) => $query
-                    ->where('option_group', AccountingOption::GROUP_TRANSACTION_CATEGORY)
-                    ->where('is_active', true)),
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! $this->optionService->isActiveValue(
+                        AccountingOption::GROUP_TRANSACTION_CATEGORY,
+                        (string) $value,
+                    )) {
+                        $fail('The selected transaction type is invalid.');
+                    }
+                },
             ],
             'settlement_type' => [
                 'nullable',

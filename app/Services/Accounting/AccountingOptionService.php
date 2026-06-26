@@ -58,14 +58,22 @@ class AccountingOptionService
 
     public function isActiveValue(string $group, string $value): bool
     {
-        $values = $group === AccountingOption::GROUP_TRANSACTION_CATEGORY
-            ? TransactionTypes::databaseAliases($value)
-            : [$value];
+        if ($group !== AccountingOption::GROUP_TRANSACTION_CATEGORY) {
+            return AccountingOption::query()
+                ->forGroup($group)
+                ->active()
+                ->where('value', $value)
+                ->exists();
+        }
+
+        $canonicalValue = TransactionTypes::normalize($value);
 
         return AccountingOption::query()
             ->forGroup($group)
             ->active()
-            ->whereIn('value', $values)
-            ->exists();
+            ->get(['value'])
+            ->contains(fn (AccountingOption $option): bool =>
+                TransactionTypes::normalize((string) $option->value) === $canonicalValue
+            );
     }
 }
