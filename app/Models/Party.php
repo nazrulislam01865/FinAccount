@@ -10,12 +10,12 @@ class Party extends Model
 {
     protected $fillable = [
         'company_id', 'code', 'name', 'type', 'receivable_account_id',
-        'payable_account_id', 'opening_balance', 'is_active',
+        'payable_account_id', 'is_active',
     ];
 
     protected function casts(): array
     {
-        return ['opening_balance' => 'decimal:2', 'is_active' => 'boolean'];
+        return ['is_active' => 'boolean'];
     }
 
     public function receivableAccount(): BelongsTo

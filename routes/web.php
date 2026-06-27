@@ -16,6 +16,7 @@ use App\Http\Controllers\Accounting\JournalEntryController;
 use App\Http\Controllers\Accounting\MasterDataController;
 use App\Http\Controllers\Accounting\MoneyAccountController;
 use App\Http\Controllers\Accounting\NotificationController;
+use App\Http\Controllers\Accounting\OpeningBalanceController;
 use App\Http\Controllers\Accounting\ProfileController;
 use App\Http\Controllers\Accounting\PartyController;
 use App\Http\Controllers\Accounting\SalesInvoiceController;
@@ -167,8 +168,19 @@ Route::middleware(['auth', 'verified', 'session.timeout', 'account.active', 'com
         ->middleware('accounting.permission:chart_of_accounts.manage')->name('chart-of-accounts.store');
     Route::put('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'update'])
         ->middleware('accounting.permission:chart_of_accounts.manage')->name('chart-of-accounts.update');
+    Route::delete('/chart-of-accounts/bulk-delete', [ChartOfAccountController::class, 'bulkDestroy'])
+        ->middleware(['accounting.permission:chart_of_accounts.manage', 'accounting.permission:records.delete'])->name('chart-of-accounts.bulk-destroy');
     Route::delete('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'destroy'])
         ->middleware(['accounting.permission:chart_of_accounts.manage', 'accounting.permission:records.delete'])->name('chart-of-accounts.destroy');
+
+    Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])
+        ->middleware('accounting.permission:opening_balances.view')->name('opening-balances.index');
+    Route::post('/opening-balances', [OpeningBalanceController::class, 'store'])
+        ->middleware('accounting.permission:opening_balances.manage')->name('opening-balances.store');
+    Route::put('/opening-balances/{opening_balance}', [OpeningBalanceController::class, 'update'])
+        ->middleware('accounting.permission:opening_balances.manage')->name('opening-balances.update');
+    Route::delete('/opening-balances/{opening_balance}', [OpeningBalanceController::class, 'destroy'])
+        ->middleware(['accounting.permission:opening_balances.manage', 'accounting.permission:records.delete'])->name('opening-balances.destroy');
 
     Route::get('/money-accounts', [MoneyAccountController::class, 'index'])
         ->middleware('accounting.permission:money_accounts.view')->name('money-accounts.index');

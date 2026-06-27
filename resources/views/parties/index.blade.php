@@ -20,7 +20,7 @@
             class="hg-btn hg-btn-primary"
             data-setup-open="create"
             data-setup-target="party-modal"
-            data-defaults="{{ json_encode(['record_id' => '', 'type' => $defaultPartyType, 'opening_balance' => '0', 'is_active' => '1']) }}"
+            data-defaults="{{ json_encode(['record_id' => '', 'type' => $defaultPartyType, 'is_active' => '1']) }}"
         >+ Add Party</button>
         @endif
     </div>
@@ -66,7 +66,6 @@
                                         'code' => $party->code,
                                         'name' => $party->name,
                                         'type' => $party->type,
-                                        'opening_balance' => $party->opening_balance,
                                         'receivable_account_id' => $party->receivable_account_id,
                                         'payable_account_id' => $party->payable_account_id,
                                         'is_active' => $party->is_active ? '1' : '0',
@@ -95,7 +94,7 @@
                         <td><span class="hg-badge">{{ $partyTypeLabels[$fields['type'] ?? ''] ?? ($fields['type'] ?? '—') }}</span></td>
                         <td>{{ filled($fields['receivable_account_id'] ?? null) ? 'COA ID #'.$fields['receivable_account_id'] : '-' }}</td>
                         <td>{{ filled($fields['payable_account_id'] ?? null) ? 'COA ID #'.$fields['payable_account_id'] : '-' }}</td>
-                        <td class="right">{{ \App\Support\CompanyContext::money((float) ($fields['opening_balance'] ?? 0)) }}</td>
+                        <td class="right">—</td>
                         <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
                         <td>
                             <div class="hg-actions">
@@ -103,7 +102,7 @@
                                     @if($isEditDraft)
                                         <button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>
                                     @else
-                                        <button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="party-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id' => '', 'type' => $defaultPartyType, 'opening_balance' => '0', 'is_active' => '1'])) }}">Continue</button>
+                                        <button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="party-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id' => '', 'type' => $defaultPartyType, 'is_active' => '1'])) }}">Continue</button>
                                     @endif
                                 @endif
                                 <form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form>
@@ -155,11 +154,6 @@
                     @endforeach
                 </select>
                 @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror
-            </div>
-            <div class="hg-field">
-                <label for="party-opening">Opening Balance</label>
-                <input id="party-opening" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" name="opening_balance" value="{{ old('opening_balance', $editingParty?->opening_balance ?? 0) }}">
-                @error('opening_balance')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
             <div class="hg-field">
                 <label for="party-receivable">Receivable COA</label>

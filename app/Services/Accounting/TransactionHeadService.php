@@ -111,7 +111,7 @@ class TransactionHeadService
             ]);
         }
 
-        $transactionType = TransactionTypes::normalize((string) $data['category']);
+        $transactionType = (string) $data['category'];
         $supportedSettlements = TransactionTypes::settlementCodes();
         $selectedSettlements = array_values((array) $data['allowed_settlements']);
 
@@ -123,7 +123,7 @@ class TransactionHeadService
 
         $transactionTypeOption = AccountingOption::query()
             ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
-            ->whereIn('value', TransactionTypes::databaseAliases($transactionType))
+            ->where('value', $transactionType)
             ->first();
         $transactionDefinition = TransactionTypes::configuredDefinition(
             $transactionType,
@@ -157,7 +157,7 @@ class TransactionHeadService
         return [
             'code' => trim((string) $data['code']),
             'name' => trim((string) $data['name']),
-            'category' => TransactionTypes::normalize((string) $data['category']),
+            'category' => $data['category'],
             'accounting_rule_id' => null,
             'posting_account_id' => (int) $data['posting_account_id'],
             'allowed_settlements' => array_values($data['allowed_settlements']),

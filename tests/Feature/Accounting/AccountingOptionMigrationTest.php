@@ -18,8 +18,7 @@ class AccountingOptionMigrationTest extends TestCase
             AccountingOption::GROUP_MONEY_ACCOUNT_KIND => 3,
             AccountingOption::GROUP_PARTY_TYPE => 5,
             AccountingOption::GROUP_RULE_PARTY_TYPE => 6,
-            AccountingOption::GROUP_TRANSACTION_CATEGORY => 11,
-            AccountingOption::GROUP_SETTLEMENT_TYPE => 3,
+            AccountingOption::GROUP_TRANSACTION_CATEGORY => 3,
             AccountingOption::GROUP_ACCOUNTING_SOURCE => 4,
         ];
 
@@ -30,6 +29,6 @@ class AccountingOptionMigrationTest extends TestCase
                 ->count());
         }
 
-        $this->assertSame(41, AccountingOption::query()->count());
+        $this->assertSame(28, AccountingOption::query()->count());
     }
 }

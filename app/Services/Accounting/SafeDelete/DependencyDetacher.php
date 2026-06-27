@@ -9,6 +9,7 @@ use App\Models\DocumentSequence;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\MoneyAccount;
+use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
@@ -87,12 +88,14 @@ class DependencyDetacher
                 'posting_account_id' => null,
                 'is_active' => false,
             ]);
+            OpeningBalance::query()->where('chart_of_account_id', $locked->id)->delete();
 
             $this->assertNoReference(MoneyAccount::query()->where('chart_of_account_id', $locked->id), 'money account COA');
             $this->assertNoReference(Party::query()->where('receivable_account_id', $locked->id), 'party receivable COA');
             $this->assertNoReference(Party::query()->where('payable_account_id', $locked->id), 'party payable COA');
             $this->assertNoReference(TransactionHead::query()->where('posting_account_id', $locked->id), 'transaction head posting COA');
             $this->assertNoReference(JournalLine::query()->where('chart_of_account_id', $locked->id), 'journal line COA');
+            $this->assertNoReference(OpeningBalance::query()->where('chart_of_account_id', $locked->id), 'opening balance COA');
             $this->assertInactive(MoneyAccount::class, $moneyIds, 'money accounts');
             $this->assertInactive(Party::class, $partyIds, 'parties');
             $this->assertInactive(TransactionHead::class, $headIds, 'transaction heads');
@@ -111,8 +114,10 @@ class DependencyDetacher
             $this->markTransactionsIncomplete($transactionIds);
             Transaction::query()->where('money_account_id', $locked->id)->update(['money_account_id' => null]);
             JournalLine::query()->where('money_account_id', $locked->id)->update(['money_account_id' => null]);
+            OpeningBalance::query()->where('money_account_id', $locked->id)->update(['money_account_id' => null]);
             $this->assertNoReference(Transaction::query()->where('money_account_id', $locked->id), 'transaction money account');
             $this->assertNoReference(JournalLine::query()->where('money_account_id', $locked->id), 'journal line money account');
+            $this->assertNoReference(OpeningBalance::query()->where('money_account_id', $locked->id), 'opening balance money account');
             $this->assertTransactionsIncomplete($transactionIds);
             $locked->delete();
             $this->assertDeleted(MoneyAccount::class, $locked->id);
@@ -127,8 +132,10 @@ class DependencyDetacher
             $this->markTransactionsIncomplete($transactionIds);
             Transaction::query()->where('party_id', $locked->id)->update(['party_id' => null]);
             JournalLine::query()->where('party_id', $locked->id)->update(['party_id' => null]);
+            OpeningBalance::query()->where('party_id', $locked->id)->update(['party_id' => null]);
             $this->assertNoReference(Transaction::query()->where('party_id', $locked->id), 'transaction party');
             $this->assertNoReference(JournalLine::query()->where('party_id', $locked->id), 'journal line party');
+            $this->assertNoReference(OpeningBalance::query()->where('party_id', $locked->id), 'opening balance party');
             $this->assertTransactionsIncomplete($transactionIds);
             $locked->delete();
             $this->assertDeleted(Party::class, $locked->id);

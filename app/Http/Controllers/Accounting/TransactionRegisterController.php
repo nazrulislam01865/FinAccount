@@ -62,10 +62,8 @@ class TransactionRegisterController extends Controller
         $companyId = $company->id;
 
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
-        $storedCategory = TransactionTypes::normalize((string) $transaction->category);
-        $requestedCategory = TransactionTypes::normalize($request->string('category')->toString());
-        $storedCategoryOption = $transactionCategories->firstWhere('value', $storedCategory);
-        $requestedCategoryOption = $transactionCategories->firstWhere('value', $requestedCategory);
+        $storedCategoryOption = $transactionCategories->firstWhere('value', $transaction->category);
+        $requestedCategoryOption = $transactionCategories->firstWhere('value', $request->string('category')->toString());
         $categoryOption = $storedCategoryOption ?? $requestedCategoryOption ?? $transactionCategories->first();
         abort_if($categoryOption === null, 422, 'Add an active Transaction Type before repairing this transaction.');
         $category = $categoryOption->value;
@@ -213,7 +211,7 @@ class TransactionRegisterController extends Controller
         return Transaction::query()
             ->with(['transactionHead.postingAccount', 'moneyAccount', 'party', 'attachments', 'salesInvoice'])
             ->where('company_id', $companyId)
-            ->when($category !== '', fn (Builder $query) => $query->whereIn('category', TransactionTypes::databaseAliases($category)))
+            ->when($category !== '', fn (Builder $query) => $query->where('category', $category))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('voucher_no', 'like', "%{$search}%")
@@ -229,7 +227,7 @@ class TransactionRegisterController extends Controller
 
     private function validatedCategoryFilter(Request $request): string
     {
-        $category = TransactionTypes::normalize($request->string('category')->toString());
+        $category = $request->string('category')->toString();
 
         return $this->optionService->isActiveValue(
             AccountingOption::GROUP_TRANSACTION_CATEGORY,

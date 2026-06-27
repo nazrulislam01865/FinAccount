@@ -18,7 +18,7 @@ class TransactionEntryOptionService
         return TransactionHead::query()
             ->with('postingAccount')
             ->where('company_id', $companyId)
-            ->whereIn('category', TransactionTypes::databaseAliases($category))
+            ->where('category', $category)
             ->where('is_active', true)
             ->whereNotNull('posting_account_id')
             ->whereHas('postingAccount', fn ($query) => $query

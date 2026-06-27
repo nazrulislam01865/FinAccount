@@ -3,7 +3,6 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingRule;
-use App\Support\TransactionTypes;
 use Illuminate\Validation\ValidationException;
 
 class RuleMatcher
@@ -13,7 +12,7 @@ class RuleMatcher
         $rule = AccountingRule::query()
             ->with('lines')
             ->where('company_id', $companyId)
-            ->whereIn('category', TransactionTypes::databaseAliases($transactionType))
+            ->where('category', $transactionType)
             ->where('settlement_type', $settlementType)
             ->where('is_active', true)
             ->orderBy('id')

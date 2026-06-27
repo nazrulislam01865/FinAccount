@@ -54,12 +54,12 @@ class TransactionPostingService
                 return $existing;
             }
 
-            $transactionType = TransactionTypes::normalize((string) $data['category']);
+            $transactionType = (string) $data['category'];
 
             $head = TransactionHead::query()
                 ->with('postingAccount')
                 ->where('company_id', $user->company_id)
-                ->whereIn('category', TransactionTypes::databaseAliases($transactionType))
+                ->where('category', $transactionType)
                 ->where('is_active', true)
                 ->whereNotNull('posting_account_id')
                 ->whereHas('postingAccount', fn ($query) => $query

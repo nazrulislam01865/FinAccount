@@ -4,8 +4,7 @@ namespace App\Services\Accounting;
 
 use App\Models\ChartOfAccount;
 use App\Models\JournalLine;
-use App\Models\MoneyAccount;
-use App\Models\Party;
+use App\Models\OpeningBalance;
 use Illuminate\Support\Collection;
 
 class ChartOfAccountBalanceService
@@ -23,33 +22,18 @@ class ChartOfAccountBalanceService
             ->groupBy('chart_of_account_id')
             ->pluck('movement', 'chart_of_account_id');
 
-        $moneyOpening = MoneyAccount::query()
-            ->selectRaw('chart_of_account_id, SUM(opening_balance) AS opening')
+        $openingBalances = OpeningBalance::query()
+            ->selectRaw('chart_of_account_id, COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS opening')
             ->where('company_id', $companyId)
+            ->where('status', OpeningBalance::STATUS_POSTED)
             ->groupBy('chart_of_account_id')
             ->pluck('opening', 'chart_of_account_id');
-
-        $receivableOpening = Party::query()
-            ->selectRaw('receivable_account_id, SUM(opening_balance) AS opening')
-            ->where('company_id', $companyId)
-            ->whereNotNull('receivable_account_id')
-            ->groupBy('receivable_account_id')
-            ->pluck('opening', 'receivable_account_id');
-
-        $payableOpening = Party::query()
-            ->selectRaw('payable_account_id, SUM(opening_balance) AS opening')
-            ->where('company_id', $companyId)
-            ->whereNotNull('payable_account_id')
-            ->groupBy('payable_account_id')
-            ->pluck('opening', 'payable_account_id');
 
         $balances = [];
 
         foreach ($accounts as $account) {
             $natural = (float) ($journalMovement[$account->id] ?? 0)
-                + (float) ($moneyOpening[$account->id] ?? 0)
-                + (float) ($receivableOpening[$account->id] ?? 0)
-                - (float) ($payableOpening[$account->id] ?? 0);
+                + (float) ($openingBalances[$account->id] ?? 0);
 
             $balances[$account->id] = $account->normal_balance === 'Credit'
                 ? -$natural

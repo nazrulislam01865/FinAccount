@@ -1849,13 +1849,13 @@ button.is-executing, input.is-executing { pointer-events: none; }
     position: absolute; left: 25px; top: 50%; transform: translateY(-53%);
     color: #64748b; pointer-events: none; font-size: 18px;
 }
-.hg-field .hg-searchable-search-input {
+.hg-searchable-search-input {
     width: 100% !important; height: 42px !important; min-height: 42px !important;
     padding: 0 12px 0 38px !important; border: 1px solid #d1d5db !important;
     border-radius: 10px !important; color: #1f2937 !important;
     background: #fff !important; box-shadow: none !important; font-size: 15px !important;
 }
-.hg-field .hg-searchable-search-input:focus {
+.hg-searchable-search-input:focus {
     outline: none !important; border-color: var(--hg-primary) !important;
     box-shadow: 0 0 0 3px rgba(21, 94, 239, .1) !important;
 }
@@ -1915,7 +1915,7 @@ button.is-executing, input.is-executing { pointer-events: none; }
     .hg-searchable-panel-head { padding: 8px 14px 10px; }
     .hg-searchable-panel-title { font-size: 16px; }
     .hg-searchable-search-box { padding: 12px; }
-    .hg-field .hg-searchable-search-input {
+    .hg-searchable-search-input {
         height: 46px !important; min-height: 46px !important; font-size: 16px !important;
     }
     .hg-searchable-option-list { max-height: calc(min(78vh, 620px) - 145px); padding: 7px; }
@@ -1928,6 +1928,18 @@ button.is-executing, input.is-executing { pointer-events: none; }
         right: 6px; bottom: max(6px, env(safe-area-inset-bottom)); left: 6px;
     }
     .hg-searchable-status { max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+
+.hg-checkbox-col { width: 42px; min-width: 42px; text-align: center; vertical-align: middle; }
+.hg-checkbox-col input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--hg-primary); cursor: pointer; }
+.hg-bulk-toolbar { align-items: center; gap: 10px; margin-top: -2px; }
+.hg-bulk-toolbar[hidden] { display: none !important; }
+.hg-bulk-toolbar small { flex: 1 1 auto; }
+@media (max-width: 640px) {
+    .hg-bulk-toolbar { align-items: stretch; }
+    .hg-bulk-toolbar .hg-btn { width: 100%; justify-content: center; }
+    .hg-checkbox-col { width: 36px; min-width: 36px; }
 }
 
 /* Three-level Chart of Accounts */
@@ -2025,4 +2037,237 @@ button.is-executing, input.is-executing { pointer-events: none; }
 
     .hg-coa-indent-2 { padding-left: 10px; }
     .hg-coa-indent-3 { padding-left: 20px; }
+}
+
+/* Mobile-friendly searchable dropdown bottom sheet. */
+.hg-searchable-select.is-mobile-open .hg-searchable-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 760px) {
+    body.hg-searchable-open {
+        overflow: hidden;
+        touch-action: auto;
+    }
+
+    .hg-searchable-backdrop.show {
+        display: block;
+        background: rgba(15, 23, 42, .48);
+    }
+
+    .hg-searchable-select.open {
+        z-index: 1400;
+    }
+
+    .hg-searchable-trigger {
+        min-height: 48px;
+        padding: 10px 64px 10px 12px;
+        border-radius: 12px;
+        font-size: 15px;
+    }
+
+    .hg-searchable-trigger-title,
+    .hg-searchable-trigger-meta {
+        white-space: normal;
+        line-height: 1.35;
+    }
+
+    .hg-searchable-panel,
+    .hg-searchable-select.drop-up .hg-searchable-panel {
+        position: fixed;
+        z-index: 1410;
+        top: max(10px, env(safe-area-inset-top));
+        right: 8px;
+        bottom: max(8px, env(safe-area-inset-bottom));
+        left: 8px;
+        width: auto;
+        max-height: calc(var(--hg-searchable-vh, 100vh) - 18px);
+        border-radius: 22px;
+        border-color: rgba(203, 213, 225, .95);
+        background: #fff;
+        box-shadow: 0 28px 70px rgba(15, 23, 42, .34);
+    }
+
+    .hg-searchable-select.open .hg-searchable-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .hg-searchable-mobile-handle {
+        display: block;
+        width: 52px;
+        height: 5px;
+        margin: 10px auto 3px;
+        border-radius: 999px;
+        background: #cbd5e1;
+        flex: 0 0 auto;
+    }
+
+    .hg-searchable-panel-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 10px 14px 12px;
+        background: #fff;
+        flex: 0 0 auto;
+    }
+
+    .hg-searchable-panel-title {
+        font-size: 17px;
+        line-height: 1.3;
+        white-space: normal;
+    }
+
+    .hg-searchable-close {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        font-size: 26px;
+    }
+
+    .hg-searchable-search-box {
+        position: sticky;
+        top: 60px;
+        z-index: 2;
+        padding: 10px 14px 14px;
+        background: #f8fafc;
+        flex: 0 0 auto;
+    }
+
+    .hg-searchable-search-icon {
+        left: 29px;
+    }
+
+    .hg-searchable-search-input {
+        height: 50px !important;
+        min-height: 50px !important;
+        border-radius: 14px !important;
+        font-size: 16px !important;
+    }
+
+    .hg-searchable-option-list {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 120px;
+        padding: 8px 10px max(12px, env(safe-area-inset-bottom));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .hg-searchable-option {
+        min-height: 64px;
+        padding: 14px 13px;
+        border-radius: 14px;
+        gap: 10px;
+    }
+
+    .hg-searchable-option + .hg-searchable-option {
+        margin-top: 4px;
+    }
+
+    .hg-searchable-option-title {
+        font-size: 15px;
+        line-height: 1.4;
+    }
+
+    .hg-searchable-option-meta {
+        font-size: 13px;
+    }
+
+    .hg-searchable-status,
+    .hg-searchable-selected-mark {
+        padding: 6px 9px;
+        font-size: 12px;
+    }
+
+    .hg-searchable-empty {
+        flex: 0 0 auto;
+        padding: 24px 14px max(24px, env(safe-area-inset-bottom));
+    }
+}
+
+@media (max-width: 390px) {
+    .hg-searchable-panel,
+    .hg-searchable-select.drop-up .hg-searchable-panel {
+        top: max(6px, env(safe-area-inset-top));
+        right: 5px;
+        bottom: max(5px, env(safe-area-inset-bottom));
+        left: 5px;
+        max-height: calc(var(--hg-searchable-vh, 100vh) - 10px);
+        border-radius: 18px;
+    }
+}
+
+/* Chart of Accounts inheritance helpers. */
+#coa-type:disabled,
+#coa-normal:disabled {
+    color: #475467;
+    background: #f2f4f7;
+    cursor: not-allowed;
+}
+
+#coa-normal-field.is-inherited .hg-field-help {
+    color: var(--hg-primary);
+    font-weight: 700;
+}
+
+/* Searchable dropdown mobile portal fix: keep the sheet above the backdrop and clickable. */
+.hg-searchable-panel.is-open {
+    display: block;
+}
+.hg-searchable-panel.is-ported {
+    position: fixed;
+    z-index: 2140;
+    pointer-events: auto;
+}
+.hg-searchable-backdrop.show {
+    z-index: 2130;
+}
+@media (max-width: 760px) {
+    body.hg-searchable-open {
+        overflow: hidden;
+        touch-action: auto;
+    }
+
+    .hg-searchable-panel.is-ported,
+    .hg-searchable-select.drop-up .hg-searchable-panel.is-ported {
+        display: flex;
+        flex-direction: column;
+        top: max(10px, env(safe-area-inset-top));
+        right: 8px;
+        bottom: max(8px, env(safe-area-inset-bottom));
+        left: 8px;
+        width: auto;
+        max-width: none;
+        max-height: calc(var(--hg-searchable-vh, 100vh) - 18px);
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: 0 28px 70px rgba(15, 23, 42, .34);
+        transform: translateZ(0);
+    }
+
+    .hg-searchable-panel.is-ported .hg-searchable-panel-head,
+    .hg-searchable-panel.is-ported .hg-searchable-search-box,
+    .hg-searchable-panel.is-ported .hg-searchable-option-list,
+    .hg-searchable-panel.is-ported .hg-searchable-option {
+        pointer-events: auto;
+        touch-action: auto;
+    }
+
+    .hg-searchable-panel.is-ported .hg-searchable-option-list {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 160px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .hg-searchable-panel.is-ported .hg-searchable-option {
+        cursor: pointer;
+        user-select: none;
+        -webkit-tap-highlight-color: rgba(21, 94, 239, .12);
+    }
 }

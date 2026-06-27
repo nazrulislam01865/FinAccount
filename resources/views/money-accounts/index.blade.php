@@ -20,7 +20,7 @@
             class="hg-btn hg-btn-primary"
             data-setup-open="create"
             data-setup-target="money-account-modal"
-            data-defaults="{{ json_encode(['record_id' => '', 'kind' => $defaultMoneyKind, 'opening_balance' => '0', 'is_active' => '1']) }}"
+            data-defaults="{{ json_encode(['record_id' => '', 'kind' => $defaultMoneyKind, 'is_active' => '1']) }}"
         >+ Add Money Account</button>
         @endif
     </div>
@@ -34,7 +34,6 @@
                 <tr>
                     <th>Money Account</th>
                     <th>Mapped COA</th>
-                    <th class="right">Opening</th>
                     <th class="right">Current Balance</th>
                     <th>Status</th>
                     <th>Action</th>
@@ -45,7 +44,6 @@
                     <tr>
                         <td><strong>{{ $moneyAccount->name }}</strong><br><span class="hg-muted">{{ $moneyAccount->kind ? ($moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind) : 'Relationship removed' }}</span></td>
                         <td>{{ $moneyAccount->chartOfAccount ? ($moneyAccount->chartOfAccount->code.' — '.$moneyAccount->chartOfAccount->name) : 'Relationship removed' }}</td>
-                        <td class="right">{{ \App\Support\CompanyContext::money((float) $moneyAccount->opening_balance) }}</td>
                         <td class="right">{{ \App\Support\CompanyContext::money($balances[$moneyAccount->id] ?? 0) }}</td>
                         <td><span class="hg-badge {{ $moneyAccount->is_active ? 'on' : 'off' }}">{{ $moneyAccount->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>
@@ -64,7 +62,6 @@
                                         'name' => $moneyAccount->name,
                                         'kind' => $moneyAccount->kind,
                                         'chart_of_account_id' => $moneyAccount->chart_of_account_id,
-                                        'opening_balance' => $moneyAccount->opening_balance,
                                         'is_active' => $moneyAccount->is_active ? '1' : '0',
                                     ]) }}"
                                 >Edit</button>
@@ -89,7 +86,6 @@
                     <tr class="hg-table-draft-row">
                         <td><strong>{{ $fields['name'] ?? 'Draft Money Account' }}</strong><br><span class="hg-muted">{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</span></td>
                         <td>{{ filled($fields['chart_of_account_id'] ?? null) ? 'COA ID #'.$fields['chart_of_account_id'] : 'Not selected' }}</td>
-                        <td class="right">{{ \App\Support\CompanyContext::money((float) ($fields['opening_balance'] ?? 0)) }}</td>
                         <td class="right">—</td>
                         <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
                         <td>
@@ -98,7 +94,7 @@
                                     @if($isEditDraft)
                                         <button type="button" class="hg-btn hg-btn-small" data-draft-open-existing="{{ $draft->draft_key }}">Continue</button>
                                     @else
-                                        <button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="money-account-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id' => '', 'kind' => $defaultMoneyKind, 'opening_balance' => '0', 'is_active' => '1'])) }}">Continue</button>
+                                        <button type="button" class="hg-btn hg-btn-small" data-setup-open="create" data-setup-target="money-account-modal" data-defaults="{{ json_encode(\App\Support\VisibleFormDrafts::values($draft, ['record_id' => '', 'kind' => $defaultMoneyKind, 'is_active' => '1'])) }}">Continue</button>
                                     @endif
                                 @endif
                                 <form method="POST" action="{{ route('accounting.form-drafts.destroy', $draft->draft_key) }}">@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Discard</button></form>
@@ -164,11 +160,6 @@
                     <small class="hg-field-error">No active Asset COA is available. Add or activate an Asset account in Chart of Accounts first.</small>
                 @endif
                 @error('chart_of_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
-            </div>
-            <div class="hg-field">
-                <label for="money-opening">Opening Balance</label>
-                <input id="money-opening" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" name="opening_balance" value="{{ old('opening_balance', $editingAccount?->opening_balance ?? 0) }}">
-                @error('opening_balance')<small class="hg-field-error">{{ $message }}</small>@enderror
             </div>
             <div class="hg-field full">
                 <input type="hidden" name="is_active" value="0">

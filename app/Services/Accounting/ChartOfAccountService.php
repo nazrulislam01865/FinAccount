@@ -57,9 +57,8 @@ class ChartOfAccountService
                 ->sortBy(fn (ChartOfAccount $account): string => sprintf('%d-%020s', $account->level, $account->code))
                 ->values();
 
-        $parentOptions = $allAccounts
+        $parentOptions = $this->hierarchicalAccounts($allAccounts)
             ->filter(fn (ChartOfAccount $account): bool => (int) $account->level < 3 && $account->is_active)
-            ->sortBy(fn (ChartOfAccount $account): string => sprintf('%d-%020s', $account->level, $account->code))
             ->values();
 
         $nextCodes = ['root' => $this->previewNextCode($companyId)];
@@ -99,15 +98,19 @@ class ChartOfAccountService
             $parent = $this->resolveParent($companyId, $data['parent_id'] ?? null);
             $level = $parent ? ((int) $parent->level + 1) : 1;
             $type = $parent?->type ?? (string) $data['type'];
+            $normalBalance = $parent?->normal_balance ?? (string) $data['normal_balance'];
+            $name = trim((string) $data['name']);
+
+            $this->ensureUniqueName((int) $companyId, $name);
 
             return ChartOfAccount::query()->create([
                 'company_id' => $companyId,
                 'parent_id' => $parent?->id,
                 'level' => $level,
                 'code' => $this->automaticCodeService->nextChartOfAccountCode($companyId, $parent?->id),
-                'name' => trim((string) $data['name']),
+                'name' => $name,
                 'type' => $type,
-                'normal_balance' => (string) $data['normal_balance'],
+                'normal_balance' => $normalBalance,
                 'is_active' => (bool) $data['is_active'],
             ]);
         }, attempts: 5);
@@ -137,7 +140,10 @@ class ChartOfAccountService
                 ? 3
                 : ($parent ? ((int) $parent->level + 1) : 1);
             $newType = $parent?->type ?? (string) $data['type'];
+            $newNormalBalance = $parent?->normal_balance ?? (string) $data['normal_balance'];
+            $name = trim((string) $data['name']);
             $typeChanged = (string) $locked->type !== $newType;
+            $normalBalanceChanged = (string) $locked->normal_balance !== $newNormalBalance;
 
             if ((int) $locked->children_count > 0 && ($parentChanged || $typeChanged)) {
                 throw ValidationException::withMessages([
@@ -153,6 +159,7 @@ class ChartOfAccountService
 
             $this->validateMappedAccountType($locked, $newType);
             $this->validateMappedAccountLevel($locked, $newLevel);
+            $this->ensureUniqueName((int) $locked->company_id, $name, (int) $locked->id);
 
             $locked->update([
                 'parent_id' => $newParentId,
@@ -164,11 +171,15 @@ class ChartOfAccountService
                         (int) $locked->id,
                     )
                     : $locked->code,
-                'name' => trim((string) $data['name']),
+                'name' => $name,
                 'type' => $newType,
-                'normal_balance' => (string) $data['normal_balance'],
+                'normal_balance' => $newNormalBalance,
                 'is_active' => (bool) $data['is_active'],
             ]);
+
+            if ($normalBalanceChanged) {
+                $this->cascadeNormalBalance((int) $locked->id, (int) $locked->company_id, $newNormalBalance);
+            }
         }, attempts: 5);
 
         return $account->refresh();
@@ -245,6 +256,22 @@ class ChartOfAccountService
         return $parent;
     }
 
+    private function cascadeNormalBalance(int $parentId, int $companyId, string $normalBalance): void
+    {
+        $children = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('parent_id', $parentId)
+            ->get(['id', 'company_id']);
+
+        foreach ($children as $child) {
+            ChartOfAccount::query()
+                ->whereKey($child->id)
+                ->update(['normal_balance' => $normalBalance]);
+
+            $this->cascadeNormalBalance((int) $child->id, $companyId, $normalBalance);
+        }
+    }
+
     private function parentChainContains(ChartOfAccount $parent, int $accountId): bool
     {
         $current = $parent;
@@ -261,6 +288,23 @@ class ChartOfAccountService
         }
 
         return false;
+    }
+
+    private function ensureUniqueName(int $companyId, string $name, ?int $ignoreId = null): void
+    {
+        $normalisedName = mb_strtolower(trim($name));
+
+        $duplicate = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->whereRaw('LOWER(name) = ?', [$normalisedName])
+            ->exists();
+
+        if ($duplicate) {
+            throw ValidationException::withMessages([
+                'name' => 'This account name already exists in the Chart of Accounts. Use a unique account name.',
+            ]);
+        }
     }
 
     /**

@@ -61,6 +61,30 @@
         @endif
     </form>
 
+    @if($canDelete)
+        <form
+            id="coa-bulk-delete-form"
+            method="POST"
+            action="{{ route('chart-of-accounts.bulk-destroy') }}"
+            data-safe-delete-form
+            data-coa-bulk-form
+        >
+            @csrf
+            @method('DELETE')
+        </form>
+        <div class="hg-toolbar hg-bulk-toolbar" data-coa-bulk-toolbar hidden>
+            <button
+                type="submit"
+                class="hg-btn hg-btn-danger"
+                form="coa-bulk-delete-form"
+                data-coa-bulk-delete
+                disabled
+            >Delete Selected</button>
+            <span class="hg-muted" data-coa-bulk-count>0 selected</span>
+            <small class="hg-muted">Parent accounts can be bulk deleted only when all child accounts are selected too.</small>
+        </div>
+    @endif
+
     @if ($accounts->isEmpty() && $draftRows->isEmpty())
         <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
@@ -68,6 +92,7 @@
             <table class="hg-table hg-coa-table">
                 <thead>
                     <tr>
+                        @if($canDelete)<th class="hg-checkbox-col"><input type="checkbox" data-coa-bulk-master aria-label="Select all chart of accounts"></th>@endif
                         <th>Code</th>
                         <th>Account Name</th>
                         <th>Level</th>
@@ -81,6 +106,18 @@
                 <tbody>
                     @foreach ($accounts as $account)
                         <tr class="hg-coa-row hg-coa-row-level-{{ $account->level }}">
+                            @if($canDelete)
+                                <td class="hg-checkbox-col">
+                                    <input
+                                        type="checkbox"
+                                        name="account_ids[]"
+                                        value="{{ $account->id }}"
+                                        form="coa-bulk-delete-form"
+                                        data-coa-bulk-checkbox
+                                        aria-label="Select {{ $account->code }} — {{ $account->name }}"
+                                    >
+                                </td>
+                            @endif
                             <td><strong class="hg-code-chip">{{ $account->code }}</strong></td>
                             <td>
                                 <div class="hg-coa-account-name hg-coa-indent-{{ $account->parent_id ? $account->level : 1 }}">
@@ -158,6 +195,7 @@
                             $draftParent = $parentOptions->firstWhere('id', (int) ($fields['parent_id'] ?? 0));
                         @endphp
                         <tr class="hg-table-draft-row">
+                            @if($canDelete)<td class="hg-checkbox-col"></td>@endif
                             <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br><small>{{ $isEditDraft ? 'Unsaved edit' : 'Unsaved new record' }}</small></td>
                             <td>{{ $fields['name'] ?? 'Draft Chart of Account' }}</td>
                             <td><span class="hg-badge draft">Level {{ $draftLevel }}</span></td>
@@ -228,7 +266,7 @@
 
                     <div class="hg-field full">
                         <label for="coa-parent">Parent Account</label>
-                        <select id="coa-parent" name="parent_id">
+                        <select id="coa-parent" name="parent_id" data-hg-searchable data-hg-search-placeholder="Search parent account...">
                             <option
                                 value=""
                                 data-level="0"
@@ -240,6 +278,7 @@
                                     value="{{ $parentOption->id }}"
                                     data-level="{{ $parentOption->level }}"
                                     data-type="{{ $parentOption->type }}"
+                                    data-normal="{{ $parentOption->normal_balance }}"
                                     data-next-code="{{ $nextCodes[(string) $parentOption->id] ?? '' }}"
                                     @selected((string) $defaultParentId === (string) $parentOption->id)
                                 >{{ $parentOption->level === 2 ? ' ↳ ' : '' }}{{ $parentOption->code }} — {{ $parentOption->name }} (Level {{ $parentOption->level }})</option>
@@ -266,9 +305,13 @@
 
                     <div class="hg-field">
                         <label for="coa-type">Type <span class="hg-required">*</span></label>
-                        <select id="coa-type" name="type" required>
+                        <select id="coa-type" name="type" required data-hg-searchable data-hg-search-placeholder="Search account type...">
                             @foreach ($accountTypes as $typeOption)
-                                <option value="{{ $typeOption->value }}" @selected($defaultAccountType === $typeOption->value)>{{ $typeOption->label }}</option>
+                                <option
+                                    value="{{ $typeOption->value }}"
+                                    data-default-normal="{{ $typeOption->metadata['default_normal_balance'] ?? '' }}"
+                                    @selected($defaultAccountType === $typeOption->value)
+                                >{{ $typeOption->label }}</option>
                             @endforeach
                         </select>
                         <input id="coa-type-hidden" type="hidden" name="type" value="{{ $defaultAccountType }}" disabled>
@@ -276,13 +319,15 @@
                         @error('type')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
-                    <div class="hg-field">
-                        <label for="coa-normal">Normal Balance</label>
-                        <select id="coa-normal" name="normal_balance" required>
+                    <div class="hg-field" id="coa-normal-field">
+                        <label for="coa-normal">Normal Balance <span class="hg-required">*</span></label>
+                        <select id="coa-normal" name="normal_balance" required data-hg-searchable data-hg-search-placeholder="Search normal balance...">
                             @foreach ($normalBalances as $normalOption)
                                 <option value="{{ $normalOption->value }}" @selected($defaultNormalBalance === $normalOption->value)>{{ $normalOption->label }}</option>
                             @endforeach
                         </select>
+                        <input id="coa-normal-hidden" type="hidden" name="normal_balance" value="{{ $defaultNormalBalance }}" disabled>
+                        <small class="hg-field-help" id="coa-normal-help">Level 1 normal balance can be selected. Level 2 and Level 3 inherit from their parent.</small>
                         @error('normal_balance')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 

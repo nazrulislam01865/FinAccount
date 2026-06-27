@@ -1,5 +1,5 @@
 const ENHANCED_ATTRIBUTE = 'data-hg-searchable-enhanced';
-const SEARCHABLE_SELECTOR = 'select[data-hg-searchable]';
+const SEARCHABLE_SELECTOR = 'select[data-hg-searchable], .hg-body select:not([data-hg-searchable-ignore]):not([multiple])';
 const MOBILE_BREAKPOINT = 760;
 
 let activeInstance = null;
@@ -19,6 +19,15 @@ const cssEscape = (value) => {
     if (window.CSS?.escape) return CSS.escape(value);
     return String(value).replace(/([ #;?%&,.+*~\':"!^$[\]()=>|/@])/g, '\\$1');
 };
+
+const isMobileViewport = () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+
+function updateMobileViewportVar() {
+    const height = Math.round(window.visualViewport?.height || window.innerHeight || 0);
+    if (height > 0) {
+        document.documentElement.style.setProperty('--hg-searchable-vh', `${height}px`);
+    }
+}
 
 function ensureBackdrop() {
     if (globalBackdrop && document.body.contains(globalBackdrop)) return globalBackdrop;
@@ -119,6 +128,7 @@ class HisebGhorSearchableSelect {
         this.panel = document.createElement('div');
         this.panel.className = 'hg-searchable-panel';
         this.panel.setAttribute('aria-hidden', 'true');
+        this.panelHome = this.wrapper;
         this.panel.innerHTML = `
             <div class="hg-searchable-mobile-handle" aria-hidden="true"></div>
             <div class="hg-searchable-panel-head">
@@ -145,6 +155,7 @@ class HisebGhorSearchableSelect {
         this.searchInput = this.panel.querySelector('.hg-searchable-search-input');
         this.optionList = this.panel.querySelector('.hg-searchable-option-list');
         this.emptyState = this.panel.querySelector('.hg-searchable-empty');
+        this.syncMobileState();
     }
 
     bind() {
@@ -203,7 +214,8 @@ class HisebGhorSearchableSelect {
         });
 
         document.addEventListener('pointerdown', (event) => {
-            if (!this.isOpen || this.wrapper.contains(event.target)) return;
+            if (!this.isOpen) return;
+            if (this.wrapper.contains(event.target) || this.panel.contains(event.target)) return;
             if (globalBackdrop?.contains(event.target)) return;
             this.close({ returnFocus: false });
         });
@@ -293,6 +305,34 @@ class HisebGhorSearchableSelect {
         this.trigger.toggleAttribute('aria-invalid', this.hasValidationError || nativeInvalid);
     }
 
+    syncPanelPlacement() {
+        const mobile = isMobileViewport();
+
+        if (mobile && this.isOpen) {
+            if (this.panel.parentNode !== document.body) {
+                document.body.appendChild(this.panel);
+            }
+            this.panel.classList.add('is-ported', 'is-open');
+            this.panel.dataset.hgSearchableOwner = this.uid;
+            return;
+        }
+
+        if (this.panel.parentNode !== this.panelHome) {
+            this.panelHome.appendChild(this.panel);
+        }
+        this.panel.classList.remove('is-ported');
+        this.panel.classList.toggle('is-open', this.isOpen);
+        delete this.panel.dataset.hgSearchableOwner;
+    }
+
+    syncMobileState() {
+        const mobile = isMobileViewport();
+        this.syncPanelPlacement();
+        this.wrapper.classList.toggle('is-mobile-open', mobile && this.isOpen);
+        this.panel.setAttribute('role', mobile ? 'dialog' : 'presentation');
+        this.panel.setAttribute('aria-modal', mobile && this.isOpen ? 'true' : 'false');
+    }
+
     toggle() {
         this.isOpen ? this.close({ returnFocus: false }) : this.open();
     }
@@ -303,8 +343,11 @@ class HisebGhorSearchableSelect {
 
         activeInstance = this;
         this.isOpen = true;
+        updateMobileViewportVar();
+        this.syncMobileState();
         this.refresh();
         this.wrapper.classList.add('open');
+        this.panel.classList.add('is-open');
         this.trigger.classList.add('active');
         this.trigger.setAttribute('aria-expanded', 'true');
         this.panel.setAttribute('aria-hidden', 'false');
@@ -317,8 +360,10 @@ class HisebGhorSearchableSelect {
         document.body.classList.add('hg-searchable-open');
 
         window.setTimeout(() => {
-            this.searchInput.focus({ preventScroll: true });
-            if (initialQuery) this.searchInput.setSelectionRange(initialQuery.length, initialQuery.length);
+            if (!isMobileViewport() || initialQuery) {
+                this.searchInput.focus({ preventScroll: true });
+                if (initialQuery) this.searchInput.setSelectionRange(initialQuery.length, initialQuery.length);
+            }
         }, 40);
     }
 
@@ -326,10 +371,12 @@ class HisebGhorSearchableSelect {
         if (!this.isOpen) return;
 
         this.isOpen = false;
-        this.wrapper.classList.remove('open', 'drop-up');
+        this.wrapper.classList.remove('open', 'drop-up', 'is-mobile-open');
+        this.panel.classList.remove('is-open');
         this.trigger.classList.remove('active');
         this.trigger.setAttribute('aria-expanded', 'false');
         this.panel.setAttribute('aria-hidden', 'true');
+        this.syncMobileState();
         this.searchInput.value = '';
         this.activeOptionIndex = -1;
 
@@ -344,8 +391,10 @@ class HisebGhorSearchableSelect {
     }
 
     setDesktopDirection() {
+        updateMobileViewportVar();
+        this.syncMobileState();
         this.wrapper.classList.remove('drop-up');
-        if (window.innerWidth <= MOBILE_BREAKPOINT) return;
+        if (isMobileViewport()) return;
 
         const rect = this.trigger.getBoundingClientRect();
         const roomBelow = window.innerHeight - rect.bottom;
@@ -496,6 +545,8 @@ function initialize() {
 
     window.addEventListener('resize', () => activeInstance?.setDesktopDirection(), { passive: true });
     window.addEventListener('orientationchange', () => activeInstance?.setDesktopDirection(), { passive: true });
+    window.visualViewport?.addEventListener('resize', () => activeInstance?.setDesktopDirection(), { passive: true });
+    window.visualViewport?.addEventListener('scroll', () => activeInstance?.setDesktopDirection(), { passive: true });
 }
 
 window.HisebGhorSearchableSelect = {

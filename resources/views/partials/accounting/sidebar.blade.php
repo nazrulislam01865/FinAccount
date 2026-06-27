@@ -8,7 +8,7 @@
         'company_setup.view', 'company_setup.manage',
         'business_types.view', 'business_types.manage', 'currencies.view', 'currencies.manage',
         'time_zones.view', 'time_zones.manage', 'financial_years.view', 'financial_years.manage',
-        'chart_of_accounts.view', 'chart_of_accounts.manage', 'accounting_rules.view', 'accounting_rules.manage',
+        'chart_of_accounts.view', 'chart_of_accounts.manage', 'opening_balances.view', 'opening_balances.manage', 'accounting_rules.view', 'accounting_rules.manage',
         'transaction_heads.view', 'transaction_heads.manage', 'transaction_categories.view', 'transaction_categories.manage',
         'voucher_numbering.view', 'voucher_numbering.manage', 'party_types.view', 'party_types.manage',
         'parties.view', 'parties.manage', 'money_account_types.view', 'money_account_types.manage',
@@ -79,6 +79,7 @@
         <div class="hg-nav-section">Configuration</div>
         @if($user?->canAnyAccounting(['company_setup.view','company_setup.manage']))<a href="{{ route('company-setup.edit') }}" class="{{ request()->routeIs('company-setup.*') ? 'active' : '' }}"><span class="hg-nav-icon">🏢</span><span class="hg-nav-text">Company Setup</span></a>@endif
         @if($user?->canAnyAccounting(['chart_of_accounts.view','chart_of_accounts.manage']))<a href="{{ route('chart-of-accounts.index', $user?->canAccounting('chart_of_accounts.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('chart-of-accounts.*') ? 'active' : '' }}"><span class="hg-nav-icon">📘</span><span class="hg-nav-text">Chart of Accounts</span></a>@endif
+        @if($user?->canAnyAccounting(['opening_balances.view','opening_balances.manage']))<a href="{{ route('opening-balances.index', $user?->canAccounting('opening_balances.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('opening-balances.*') ? 'active' : '' }}"><span class="hg-nav-icon">📥</span><span class="hg-nav-text">Opening Balances</span></a>@endif
         @if($user?->canAnyAccounting(['accounting_rules.view','accounting_rules.manage']))<a href="{{ route('accounting-rules.index', $user?->canAccounting('accounting_rules.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('accounting-rules.*') ? 'active' : '' }}"><span class="hg-nav-icon">⚙️</span><span class="hg-nav-text">Rule Templates (Advanced)</span></a>@endif
         @if($user?->canAnyAccounting(['transaction_heads.view','transaction_heads.manage']))<a href="{{ route('transaction-heads.index', $user?->canAccounting('transaction_heads.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('transaction-heads.*') ? 'active' : '' }}"><span class="hg-nav-icon">🏷️</span><span class="hg-nav-text">Transaction Heads</span></a>@endif
         @if($user?->canAnyAccounting(['transaction_categories.view','transaction_categories.manage']))<a href="{{ route('master.index', ['section' => 'transaction-categories'] + ($user?->canAccounting('transaction_categories.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'transaction-categories' ? 'active' : '' }}"><span class="hg-nav-icon">🗂️</span><span class="hg-nav-text">Transaction Types</span></a>@endif

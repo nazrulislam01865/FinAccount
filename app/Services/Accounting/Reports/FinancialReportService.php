@@ -4,7 +4,7 @@ namespace App\Services\Accounting\Reports;
 
 use App\Models\ChartOfAccount;
 use App\Models\JournalLine;
-use App\Models\MoneyAccount;
+use App\Models\OpeningBalance;
 use App\Models\Party;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -438,7 +438,7 @@ class FinancialReportService
     /** @param Collection<int, ChartOfAccount> $accounts @return array<int, float> */
     private function accountBalancesAsOf(Collection $accounts, int $companyId, string $asOfDate): array
     {
-        $openingAndMovement = $this->openingNetMap($companyId, null);
+        $openingAndMovement = $this->openingNetMap($companyId, null, $asOfDate);
         $movement = $this->journalMovementMap($companyId, null, $asOfDate);
 
         return $accounts->mapWithKeys(function (ChartOfAccount $account) use ($openingAndMovement, $movement): array {
@@ -466,7 +466,7 @@ class FinancialReportService
     }
 
     /** @return array<int, float> */
-    private function openingNetMap(int $companyId, ?string $beforeDate): array
+    private function openingNetMap(int $companyId, ?string $beforeDate, ?string $openingBalanceDate = null): array
     {
         $journal = $beforeDate === null
             ? collect()
@@ -480,39 +480,24 @@ class FinancialReportService
                 ->selectRaw('journal_lines.chart_of_account_id, COALESCE(SUM(journal_lines.debit), 0) - COALESCE(SUM(journal_lines.credit), 0) AS net')
                 ->pluck('net', 'chart_of_account_id');
 
-        $moneyOpening = MoneyAccount::query()
-            ->selectRaw('chart_of_account_id, SUM(opening_balance) AS opening')
+        $openingCutoff = $openingBalanceDate ?? $beforeDate;
+        $openingBalances = OpeningBalance::query()
+            ->selectRaw('chart_of_account_id, COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS opening')
             ->where('company_id', $companyId)
+            ->where('status', OpeningBalance::STATUS_POSTED)
+            ->when($openingCutoff !== null, fn ($query) => $query->whereDate('balance_date', '<=', $openingCutoff))
             ->groupBy('chart_of_account_id')
             ->pluck('opening', 'chart_of_account_id');
 
-        $receivableOpening = Party::query()
-            ->selectRaw('receivable_account_id, SUM(opening_balance) AS opening')
-            ->where('company_id', $companyId)
-            ->whereNotNull('receivable_account_id')
-            ->groupBy('receivable_account_id')
-            ->pluck('opening', 'receivable_account_id');
-
-        $payableOpening = Party::query()
-            ->selectRaw('payable_account_id, SUM(opening_balance) AS opening')
-            ->where('company_id', $companyId)
-            ->whereNotNull('payable_account_id')
-            ->groupBy('payable_account_id')
-            ->pluck('opening', 'payable_account_id');
-
         $ids = collect()
             ->merge($journal->keys())
-            ->merge($moneyOpening->keys())
-            ->merge($receivableOpening->keys())
-            ->merge($payableOpening->keys())
+            ->merge($openingBalances->keys())
             ->unique();
 
         return $ids->mapWithKeys(fn ($accountId): array => [
             (int) $accountId => round(
                 (float) ($journal[$accountId] ?? 0)
-                + (float) ($moneyOpening[$accountId] ?? 0)
-                + (float) ($receivableOpening[$accountId] ?? 0)
-                - (float) ($payableOpening[$accountId] ?? 0),
+                + (float) ($openingBalances[$accountId] ?? 0),
                 2,
             ),
         ])->all();
@@ -548,17 +533,14 @@ class FinancialReportService
             return round((float) ($map[$accountId] ?? 0), 2);
         }
 
-        $party = Party::query()
+        $opening = OpeningBalance::query()
             ->where('company_id', $companyId)
-            ->find($partyId);
-
-        $opening = 0.0;
-        if ($party && (int) $party->receivable_account_id === $accountId) {
-            $opening += (float) $party->opening_balance;
-        }
-        if ($party && (int) $party->payable_account_id === $accountId) {
-            $opening -= (float) $party->opening_balance;
-        }
+            ->where('status', OpeningBalance::STATUS_POSTED)
+            ->where('chart_of_account_id', $accountId)
+            ->where('party_id', $partyId)
+            ->whereDate('balance_date', '<=', $fromDate)
+            ->selectRaw('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS net')
+            ->value('net') ?? 0;
 
         $journalNet = JournalLine::query()
             ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
@@ -612,7 +594,15 @@ class FinancialReportService
                 'journal_entries.entry_date',
             ]);
 
-        $opening = round((float) $party->opening_balance, 2);
+        $rawOpening = OpeningBalance::query()
+            ->where('company_id', $companyId)
+            ->where('status', OpeningBalance::STATUS_POSTED)
+            ->where('party_id', $party->id)
+            ->where('chart_of_account_id', $account->id)
+            ->whereDate('balance_date', '<=', $asOfDate)
+            ->selectRaw('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS net')
+            ->value('net') ?? 0;
+        $opening = round($dueType === 'Receivable' ? (float) $rawOpening : -(float) $rawOpening, 2);
         $periodDebit = round((float) $lines->sum('debit'), 2);
         $periodCredit = round((float) $lines->sum('credit'), 2);
         $movement = round($dueType === 'Receivable'

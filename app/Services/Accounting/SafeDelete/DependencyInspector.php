@@ -8,6 +8,7 @@ use App\Models\ChartOfAccount;
 use App\Models\DocumentSequence;
 use App\Models\JournalLine;
 use App\Models\MoneyAccount;
+use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
@@ -22,6 +23,7 @@ class DependencyInspector
             ['Parties (payable/capital)', $account->payableParties()->count(), 'Payable/capital mapping will be cleared and those parties will become inactive.'],
             ['Transaction Heads', $account->transactionHeads()->count(), 'Posting COA will be cleared and those transaction heads will become inactive.'],
             ['Journal Lines', $account->journalLines()->count(), 'The COA link will be cleared and affected transactions/journals will become incomplete.'],
+            ['Opening Balances', OpeningBalance::query()->where('chart_of_account_id', $account->id)->count(), 'Opening balance rows mapped to this COA will be deleted.'],
         ]));
     }
 
@@ -30,6 +32,7 @@ class DependencyInspector
         return new DeletionPlan('Money Account', $account->name, $this->nonZero([
             ['Transactions', $account->transactions()->count(), 'Money-account links will be cleared and transactions will become incomplete.'],
             ['Journal Lines', JournalLine::query()->where('money_account_id', $account->id)->count(), 'Money-account links will be cleared.'],
+            ['Opening Balances', OpeningBalance::query()->where('money_account_id', $account->id)->count(), 'Money-account link will be cleared from opening rows.'],
         ]));
     }
 
@@ -38,6 +41,7 @@ class DependencyInspector
         return new DeletionPlan('Party', $party->code.' — '.$party->name, $this->nonZero([
             ['Transactions', $party->transactions()->count(), 'Party links will be cleared and transactions will become incomplete.'],
             ['Journal Lines', JournalLine::query()->where('party_id', $party->id)->count(), 'Party links will be cleared.'],
+            ['Opening Balances', OpeningBalance::query()->where('party_id', $party->id)->count(), 'Party link will be cleared from opening rows.'],
         ]));
     }
 

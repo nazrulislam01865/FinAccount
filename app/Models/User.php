@@ -120,7 +120,7 @@ class User extends Authenticatable implements PasskeyUser
         return $this->canAnyAccounting([
             'company_setup.manage', 'business_types.manage', 'currencies.manage',
             'time_zones.manage', 'financial_years.manage',
-            'chart_of_accounts.manage', 'accounting_rules.manage', 'transaction_heads.manage',
+            'chart_of_accounts.manage', 'opening_balances.manage', 'accounting_rules.manage', 'transaction_heads.manage',
             'transaction_categories.manage', 'voucher_numbering.manage', 'party_types.manage',
             'parties.manage', 'money_account_types.manage', 'money_accounts.manage',
         ]);

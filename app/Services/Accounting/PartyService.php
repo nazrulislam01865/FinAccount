@@ -79,8 +79,10 @@ class PartyService
                 });
             });
 
+        $openingBalances = OpeningBalanceService::postedPartyOpeningBalances($parties, $companyId);
+
         return $parties->mapWithKeys(fn (Party $party): array => [
-            $party->id => (float) $party->opening_balance + (float) ($movements[$party->id] ?? 0),
+            $party->id => (float) ($openingBalances[$party->id] ?? 0) + (float) ($movements[$party->id] ?? 0),
         ])->all();
     }
 
@@ -171,7 +173,6 @@ class PartyService
             'code' => trim((string) $data['code']),
             'name' => trim((string) $data['name']),
             'type' => $data['type'],
-            'opening_balance' => $data['opening_balance'] ?? 0,
             'receivable_account_id' => $data['receivable_account_id'] ?: null,
             'payable_account_id' => $data['payable_account_id'] ?: null,
             'is_active' => (bool) $data['is_active'],

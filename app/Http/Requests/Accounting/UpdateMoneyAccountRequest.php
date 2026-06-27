@@ -4,7 +4,6 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
-use App\Support\CompanyContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -37,7 +36,6 @@ class UpdateMoneyAccountRequest extends FormRequest
                     ->where('is_active', true),
                 Rule::unique('money_accounts')->where('company_id', $companyId)->ignore($moneyAccount),
             ],
-            'opening_balance' => ['nullable', 'numeric', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'is_active' => ['required', 'boolean'],
         ];
     }

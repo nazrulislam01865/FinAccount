@@ -46,6 +46,7 @@ class StoreChartOfAccountRequest extends FormRequest
             'code' => trim((string) $this->input('code')),
             'name' => trim((string) $this->input('name')),
             'type' => trim((string) $this->input('type')),
+            'normal_balance' => trim((string) $this->input('normal_balance')),
             'is_active' => $this->boolean('is_active'),
         ]);
     }

@@ -4,7 +4,6 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
-use App\Support\TransactionTypes;
 use App\Support\CompanyContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -31,7 +30,7 @@ class StoreTransactionRequest extends FormRequest
                 'required', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
-                    ->whereIn('category', TransactionTypes::databaseAliases($category))
+                    ->where('category', $category)
                     ->where('is_active', true)
                     ->whereNotNull('posting_account_id')),
             ],
@@ -61,7 +60,7 @@ class StoreTransactionRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'category' => TransactionTypes::normalize((string) $this->input('category')),
+            'category' => strtoupper(trim((string) $this->input('category'))),
             'settlement_type' => filled($this->input('settlement_type'))
                 ? strtoupper(trim((string) $this->input('settlement_type')))
                 : null,

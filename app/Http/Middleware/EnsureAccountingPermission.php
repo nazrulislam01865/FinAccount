@@ -21,7 +21,7 @@ class EnsureAccountingPermission
         $action = strtolower(trim((string) $request->query('action', '')));
 
         $sharedAddScreens = [
-            'chart_of_accounts.view', 'accounting_rules.view', 'transaction_heads.view',
+            'chart_of_accounts.view', 'opening_balances.view', 'accounting_rules.view', 'transaction_heads.view',
             'voucher_numbering.view', 'parties.view', 'money_accounts.view',
             'users.view', 'role_matrix.view',
             'business_types.view', 'currencies.view', 'time_zones.view', 'financial_years.view',

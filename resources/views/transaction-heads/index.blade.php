@@ -52,7 +52,7 @@
                             'record_id' => $head->id,
                             'code' => $head->code,
                             'name' => $head->name,
-                            'category' => \App\Support\TransactionTypes::normalize((string) $head->category),
+                            'category' => $head->category,
                             'posting_account_id' => $head->posting_account_id,
                             'allowed_settlements' => $head->allowedSettlementCodes(),
                             'party_type' => $head->party_type ?: ($transactionTypeDefinitions[$head->category]['party_type'] ?? 'Any'),
@@ -118,10 +118,10 @@
                 </div>
                 <div class="hg-field">
                     <label for="head-category">Transaction Type <span class="hg-required">*</span></label>
-                    <select id="head-category" name="category" required data-head-transaction-type data-value-normalizer="transaction-type">
+                    <select id="head-category" name="category" required data-head-transaction-type>
                         @foreach ($transactionCategories as $categoryOption)
                             @php($definition = $transactionTypeDefinitions[$categoryOption->value] ?? [])
-                            <option value="{{ $categoryOption->value }}" data-allowed-settlements="{{ json_encode($definition['allowed_settlements'] ?? []) }}" data-party-type="{{ $definition['party_type'] ?? 'Any' }}" data-posting-types="{{ json_encode($definition['posting_types'] ?? []) }}" @selected(\App\Support\TransactionTypes::normalize((string) old('category', $editingHead?->category ?? $defaultCategory)) === \App\Support\TransactionTypes::normalize((string) $categoryOption->value))>{{ $categoryOption->label }}</option>
+                            <option value="{{ $categoryOption->value }}" data-allowed-settlements="{{ json_encode($definition['allowed_settlements'] ?? []) }}" data-party-type="{{ $definition['party_type'] ?? 'Any' }}" data-posting-types="{{ json_encode($definition['posting_types'] ?? []) }}" @selected(old('category', $editingHead?->category ?? $defaultCategory) === $categoryOption->value)>{{ $categoryOption->label }}</option>
                         @endforeach
                     </select>
                     @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror

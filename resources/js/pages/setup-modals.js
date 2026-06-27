@@ -20,27 +20,9 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
 
             if (field.type === 'checkbox') {
                 field.checked = value === true || value === 1 || value === '1';
-                return;
+            } else {
+                field.value = value ?? '';
             }
-
-            if (field instanceof HTMLSelectElement && field.dataset.valueNormalizer === 'transaction-type') {
-                const normalizeTransactionType = (input) => String(input ?? '')
-                    .trim()
-                    .toUpperCase()
-                    .replace(/[^A-Z0-9]+/g, '_')
-                    .replace(/^_+|_+$/g, '');
-                const expected = normalizeTransactionType(value);
-                const matchingOption = Array.from(field.options).find((option) =>
-                    normalizeTransactionType(option.value) === expected
-                );
-
-                if (matchingOption) {
-                    field.value = matchingOption.value;
-                    return;
-                }
-            }
-
-            field.value = value ?? '';
         });
     };
 

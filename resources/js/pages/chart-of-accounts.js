@@ -14,6 +14,9 @@ if (modal) {
     const typeHidden = document.getElementById('coa-type-hidden');
     const typeHelp = document.getElementById('coa-type-help');
     const normal = document.getElementById('coa-normal');
+    const normalHidden = document.getElementById('coa-normal-hidden');
+    const normalHelp = document.getElementById('coa-normal-help');
+    const normalField = document.getElementById('coa-normal-field');
     const active = document.getElementById('coa-active');
 
     let originalParentId = modal.dataset.editingParentId || '';
@@ -36,10 +39,13 @@ if (modal) {
         }));
     };
 
+    const refreshSearchableSelects = () => window.HisebGhorSearchableSelect?.refreshAll?.();
+
     const showModal = () => {
         modal.classList.add('show');
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('hg-modal-open');
+        refreshSearchableSelects();
         window.setTimeout(() => name.focus(), 0);
     };
 
@@ -51,6 +57,34 @@ if (modal) {
 
     const unlockParentOptions = () => {
         [...parent.options].forEach((option) => { option.disabled = false; });
+    };
+
+    const typeDefaultNormal = () => type.selectedOptions[0]?.dataset.defaultNormal || '';
+    const defaultNormalForType = () => typeDefaultNormal() || normal.value || modal.dataset.defaultNormal || '';
+
+    const setInheritedNormalBalance = (value, parentLevel = 0) => {
+        const inherited = value || normal.value || defaultNormalForType();
+        if (inherited) normal.value = inherited;
+        normal.disabled = true;
+        normalHidden.disabled = false;
+        normalHidden.value = normal.value;
+        normalField?.classList.add('is-inherited');
+        if (normalHelp) {
+            normalHelp.textContent = parentLevel
+                ? `Inherited automatically from the selected Level ${parentLevel} parent.`
+                : 'Inherited automatically from the selected parent.';
+        }
+    };
+
+    const setEditableNormalBalance = (message = '') => {
+        normal.disabled = false;
+        normalHidden.disabled = true;
+        normalHidden.value = normal.value;
+        normalField?.classList.remove('is-inherited');
+        if (!normal.value) normal.value = defaultNormalForType();
+        if (normalHelp) {
+            normalHelp.textContent = message || 'Level 1 normal balance can be selected. Level 2 and Level 3 inherit from their parent.';
+        }
     };
 
     const syncHierarchy = ({ preserveOriginal = false } = {}) => {
@@ -65,6 +99,7 @@ if (modal) {
             ? 3
             : (parentId ? parentLevel + 1 : 1);
         const inheritedType = selected?.dataset.type || '';
+        const inheritedNormal = selected?.dataset.normal || '';
 
         level.value = String(calculatedLevel);
 
@@ -74,6 +109,7 @@ if (modal) {
             typeHidden.disabled = false;
             typeHidden.value = type.value;
             typeHelp.textContent = `Inherited from the selected Level ${parentLevel} parent.`;
+            setInheritedNormalBalance(inheritedNormal, parentLevel);
         } else {
             type.disabled = false;
             typeHidden.disabled = true;
@@ -81,6 +117,9 @@ if (modal) {
             typeHelp.textContent = isLegacyUnassignedLedger
                 ? 'Existing flat posting ledger. Its type remains editable until it is assigned to a Level 2 parent.'
                 : 'Level 1 account type can be selected. Child levels inherit their parent type.';
+            setEditableNormalBalance(isLegacyUnassignedLedger
+                ? 'Existing flat posting ledger. Its normal balance remains editable until it is assigned to a parent.'
+                : 'Level 1 normal balance can be selected. Child levels inherit from their parent.');
         }
 
         const shouldKeepOriginal = preserveOriginal
@@ -96,6 +135,7 @@ if (modal) {
 
         level.dispatchEvent(new Event('input', { bubbles: true }));
         code.dispatchEvent(new Event('input', { bubbles: true }));
+        refreshSearchableSelects();
     };
 
     const openCreate = () => {
@@ -144,6 +184,7 @@ if (modal) {
         if (selfOption) selfOption.disabled = true;
 
         syncHierarchy({ preserveOriginal: true });
+        refreshSearchableSelects();
         showModal();
         setDraftContext('edit', button.dataset.accountId);
     };
@@ -162,12 +203,23 @@ if (modal) {
         } else if (hierarchyLocked && accountId.value && type.value !== originalType) {
             type.value = originalType;
             window.alert('This account has child accounts. Move or delete its children before changing the account type.');
+        } else {
+            const defaultNormal = typeDefaultNormal();
+            if (defaultNormal) normal.value = defaultNormal;
         }
         typeHidden.value = type.value;
+        normalHidden.value = normal.value;
+        refreshSearchableSelects();
+    });
+
+    normal.addEventListener('change', () => {
+        normalHidden.value = normal.value;
+        refreshSearchableSelects();
     });
 
     form.addEventListener('submit', () => {
         syncHierarchy({ preserveOriginal: Boolean(accountId.value && parent.value === originalParentId) });
+        normalHidden.value = normal.value;
     });
 
     document.querySelectorAll('[data-coa-open]').forEach((button) => {
@@ -196,4 +248,45 @@ if (modal) {
         document.body.classList.add('hg-modal-open');
         syncHierarchy({ preserveOriginal: Boolean(accountId.value && parent.value === originalParentId) });
     }
+}
+
+
+const bulkForm = document.querySelector('[data-coa-bulk-form]');
+
+if (bulkForm) {
+    const checkboxes = Array.from(document.querySelectorAll('[data-coa-bulk-checkbox]'));
+    const master = document.querySelector('[data-coa-bulk-master]');
+    const toolbar = document.querySelector('[data-coa-bulk-toolbar]');
+    const countLabel = document.querySelector('[data-coa-bulk-count]');
+    const deleteButton = document.querySelector('[data-coa-bulk-delete]');
+
+    const syncBulkState = () => {
+        const checked = checkboxes.filter((checkbox) => checkbox.checked);
+        const count = checked.length;
+
+        if (toolbar) toolbar.hidden = count === 0;
+        if (deleteButton) deleteButton.disabled = count === 0;
+        if (countLabel) countLabel.textContent = `${count.toLocaleString()} selected`;
+
+        if (master) {
+            master.checked = count > 0 && count === checkboxes.length;
+            master.indeterminate = count > 0 && count < checkboxes.length;
+        }
+    };
+
+    master?.addEventListener('change', () => {
+        checkboxes.forEach((checkbox) => { checkbox.checked = master.checked; });
+        syncBulkState();
+    });
+
+    checkboxes.forEach((checkbox) => checkbox.addEventListener('change', syncBulkState));
+
+    bulkForm.addEventListener('submit', (event) => {
+        if (!checkboxes.some((checkbox) => checkbox.checked)) {
+            event.preventDefault();
+            window.alert('Select at least one Chart of Account record to delete.');
+        }
+    });
+
+    syncBulkState();
 }

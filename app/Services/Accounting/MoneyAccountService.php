@@ -116,7 +116,6 @@ class MoneyAccountService
             'name' => trim((string) $data['name']),
             'kind' => $data['kind'],
             'chart_of_account_id' => (int) $data['chart_of_account_id'],
-            'opening_balance' => $data['opening_balance'] ?? 0,
             'is_active' => (bool) $data['is_active'],
         ];
     }

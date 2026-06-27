@@ -8,6 +8,7 @@ use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\DocumentSequence;
 use App\Models\MoneyAccount;
+use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
@@ -97,42 +98,71 @@ class HisebGhorDemoSeeder extends Seeder
         $money = [
             'cash' => MoneyAccount::query()->updateOrCreate(
                 ['company_id' => $company->id, 'name' => 'Main Cash Box'],
-                ['chart_of_account_id' => $accounts['cash']->id, 'kind' => 'Cash', 'opening_balance' => 5000, 'is_active' => true],
+                ['chart_of_account_id' => $accounts['cash']->id, 'kind' => 'Cash', 'is_active' => true],
             ),
             'bank' => MoneyAccount::query()->updateOrCreate(
                 ['company_id' => $company->id, 'name' => 'BRAC Bank - Farm Account'],
-                ['chart_of_account_id' => $accounts['bank']->id, 'kind' => 'Bank', 'opening_balance' => 25000, 'is_active' => true],
+                ['chart_of_account_id' => $accounts['bank']->id, 'kind' => 'Bank', 'is_active' => true],
             ),
             'bkash' => MoneyAccount::query()->updateOrCreate(
                 ['company_id' => $company->id, 'name' => 'bKash Merchant Wallet'],
-                ['chart_of_account_id' => $accounts['bkash']->id, 'kind' => 'Digital', 'opening_balance' => 3000, 'is_active' => true],
+                ['chart_of_account_id' => $accounts['bkash']->id, 'kind' => 'Digital', 'is_active' => true],
             ),
         ];
+
+        $openingYear = $company->defaultFinancialYear;
+        $openingDate = $openingYear?->start_date?->toDateString() ?? now()->toDateString();
+        foreach ([
+            ['account' => $accounts['cash'], 'money' => $money['cash'], 'debit' => 5000.00, 'credit' => 0.00],
+            ['account' => $accounts['bank'], 'money' => $money['bank'], 'debit' => 25000.00, 'credit' => 0.00],
+            ['account' => $accounts['bkash'], 'money' => $money['bkash'], 'debit' => 3000.00, 'credit' => 0.00],
+            ['account' => $accounts['capital'], 'money' => null, 'debit' => 0.00, 'credit' => 33000.00],
+        ] as $openingRow) {
+            OpeningBalance::query()->updateOrCreate(
+                [
+                    'company_id' => $company->id,
+                    'financial_year_id' => $openingYear?->id,
+                    'chart_of_account_id' => $openingRow['account']->id,
+                    'money_account_id' => $openingRow['money']?->id,
+                    'party_id' => null,
+                    'reference' => 'DEMO-OPENING',
+                ],
+                [
+                    'balance_date' => $openingDate,
+                    'debit' => $openingRow['debit'],
+                    'credit' => $openingRow['credit'],
+                    'status' => OpeningBalance::STATUS_POSTED,
+                    'note' => 'Demo opening balance created separately from setup masters.',
+                    'created_by' => $user->id,
+                    'updated_by' => $user->id,
+                ],
+            );
+        }
 
         $parties = [
             'customer1' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'C-001'],
-                ['name' => 'Rahim Traders', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'payable_account_id' => null, 'opening_balance' => 0, 'is_active' => true],
+                ['name' => 'Rahim Traders', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'payable_account_id' => null, 'is_active' => true],
             ),
             'customer2' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'C-002'],
-                ['name' => 'Local Vegetable Shop', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'payable_account_id' => null, 'opening_balance' => 0, 'is_active' => true],
+                ['name' => 'Local Vegetable Shop', 'type' => 'Customer', 'receivable_account_id' => $accounts['receivable']->id, 'payable_account_id' => null, 'is_active' => true],
             ),
             'supplier' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'S-001'],
-                ['name' => 'Molla Feed Supplier', 'type' => 'Supplier', 'receivable_account_id' => null, 'payable_account_id' => $accounts['supplier_payable']->id, 'opening_balance' => 0, 'is_active' => true],
+                ['name' => 'Molla Feed Supplier', 'type' => 'Supplier', 'receivable_account_id' => null, 'payable_account_id' => $accounts['supplier_payable']->id, 'is_active' => true],
             ),
             'worker' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'W-001'],
-                ['name' => 'Farm Worker Group', 'type' => 'Worker', 'receivable_account_id' => null, 'payable_account_id' => $accounts['salary_payable']->id, 'opening_balance' => 0, 'is_active' => true],
+                ['name' => 'Farm Worker Group', 'type' => 'Worker', 'receivable_account_id' => null, 'payable_account_id' => $accounts['salary_payable']->id, 'is_active' => true],
             ),
             'lender' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'L-001'],
-                ['name' => 'Agrani Bank Loan', 'type' => 'Lender', 'receivable_account_id' => null, 'payable_account_id' => $accounts['loan']->id, 'opening_balance' => 0, 'is_active' => true],
+                ['name' => 'Agrani Bank Loan', 'type' => 'Lender', 'receivable_account_id' => null, 'payable_account_id' => $accounts['loan']->id, 'is_active' => true],
             ),
             'owner' => Party::query()->updateOrCreate(
                 ['company_id' => $company->id, 'code' => 'O-001'],
-                ['name' => 'Business Owner', 'type' => 'Owner', 'receivable_account_id' => null, 'payable_account_id' => $accounts['capital']->id, 'opening_balance' => 0, 'is_active' => true],
+                ['name' => 'Business Owner', 'type' => 'Owner', 'receivable_account_id' => null, 'payable_account_id' => $accounts['capital']->id, 'is_active' => true],
             ),
         ];
 
