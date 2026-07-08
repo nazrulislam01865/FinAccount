@@ -91,21 +91,25 @@ class FinancialReportController extends Controller
         return $this->csv('balance-sheet-'.$report['as_of_date'].'.csv', function ($handle) use ($report): void {
             fputcsv($handle, ['Balance Sheet As Of', $report['as_of_date']]);
             fputcsv($handle, []);
-            fputcsv($handle, ['Section', 'Account Code', 'Account Name', 'Balance']);
+            fputcsv($handle, ['Type', 'Section', 'Account Code', 'Account Name', 'Balance']);
 
-            foreach (['Asset', 'Liability', 'Equity'] as $section) {
-                foreach (($report['groups'][$section] ?? collect()) as $row) {
-                    fputcsv($handle, [$section, $row['code'], $row['name'], $row['balance']]);
+            foreach (['Asset', 'Liability', 'Equity'] as $type) {
+                foreach (($report['section_groups']->get($type, collect())) as $section => $rows) {
+                    foreach ($rows as $row) {
+                        fputcsv($handle, [$type, $section, $row['code'], $row['name'], $row['balance']]);
+                    }
+
+                    fputcsv($handle, [$type, 'Total '.$section, '', '', $rows->sum('balance')]);
                 }
             }
 
-            fputcsv($handle, ['Equity', 'Retained Profit / Loss', '', $report['retained_profit']]);
+            fputcsv($handle, ['Equity', 'Retained Profit / Loss', '', '', $report['retained_profit']]);
             fputcsv($handle, []);
-            fputcsv($handle, ['Total Assets', '', '', $report['assets']]);
-            fputcsv($handle, ['Total Liabilities', '', '', $report['liabilities']]);
-            fputcsv($handle, ['Total Equity', '', '', $report['equity']]);
-            fputcsv($handle, ['Liabilities + Equity', '', '', $report['liabilities_and_equity']]);
-            fputcsv($handle, ['Difference', '', '', $report['difference']]);
+            fputcsv($handle, ['Total Assets', '', '', '', $report['assets']]);
+            fputcsv($handle, ['Total Liabilities', '', '', '', $report['liabilities']]);
+            fputcsv($handle, ['Total Equity', '', '', '', $report['equity']]);
+            fputcsv($handle, ['Liabilities + Equity', '', '', '', $report['liabilities_and_equity']]);
+            fputcsv($handle, ['Difference', '', '', '', $report['difference']]);
         });
     }
 
@@ -117,15 +121,25 @@ class FinancialReportController extends Controller
             fputcsv($handle, []);
             fputcsv($handle, ['Section', 'Account Code', 'Account Name', 'Amount']);
 
-            foreach (['Income', 'Expense'] as $section) {
-                foreach (($report['groups'][$section] ?? collect()) as $row) {
+            foreach ([
+                'Revenue', 'Cost of Sales', 'Operating Expense', 'Administrative Expense', 'Selling Expense',
+                'Other Income', 'Financial Expense', 'Tax Expense',
+            ] as $section) {
+                foreach (($report['sections']->get($section, collect())) as $row) {
                     fputcsv($handle, [$section, $row['code'], $row['name'], $row['amount']]);
                 }
             }
 
             fputcsv($handle, []);
-            fputcsv($handle, ['Total Income', '', '', $report['income']]);
-            fputcsv($handle, ['Total Expense', '', '', $report['expense']]);
+            fputcsv($handle, ['Revenue', '', '', $report['revenue']]);
+            fputcsv($handle, ['Cost of Sales', '', '', $report['cost_of_sales']]);
+            fputcsv($handle, ['Gross Profit', '', '', $report['gross_profit']]);
+            fputcsv($handle, ['Operating Expenses', '', '', $report['operating_expenses']]);
+            fputcsv($handle, ['Operating Profit', '', '', $report['operating_profit']]);
+            fputcsv($handle, ['Other Income', '', '', $report['other_income']]);
+            fputcsv($handle, ['Financial Expense', '', '', $report['financial_expense']]);
+            fputcsv($handle, ['Net Profit Before Tax', '', '', $report['net_profit_before_tax']]);
+            fputcsv($handle, ['Tax Expense', '', '', $report['tax_expense']]);
             fputcsv($handle, ['Net Profit / Loss', '', '', $report['net_profit']]);
         });
     }

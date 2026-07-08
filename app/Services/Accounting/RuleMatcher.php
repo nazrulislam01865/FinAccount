@@ -20,7 +20,7 @@ class RuleMatcher
 
         if (! $rule) {
             throw ValidationException::withMessages([
-                'settlement_type' => 'Accounting setup is incomplete for the selected transaction type and payment type. Ask an administrator to activate the matching accounting rule template.',
+                'settlement_type' => 'Accounting setup is incomplete for the selected transaction type and payment type. Ask an administrator to activate the matching accounting accounting rule.',
             ]);
         }
 

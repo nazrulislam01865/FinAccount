@@ -22,6 +22,8 @@ class FinancialReportService
         $accounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
             ->whereIn('type', ['Asset', 'Liability', 'Equity'])
+            ->where('is_posting', true)
+            ->orderBy('sort_order')
             ->orderBy('type')
             ->orderBy('code')
             ->get();
@@ -30,11 +32,15 @@ class FinancialReportService
 
         $rows = $accounts
             ->map(function (ChartOfAccount $account) use ($balances): array {
+                $section = $account->report_section ?: $this->defaultBalanceSheetSection((string) $account->type);
+
                 return [
                     'id' => $account->id,
                     'code' => $account->code,
                     'name' => $account->name,
                     'type' => $account->type,
+                    'report_section' => $section,
+                    'sort_order' => (int) ($account->sort_order ?: $this->sectionSortOrder($section)),
                     'normal_balance' => $account->normal_balance,
                     'is_active' => (bool) $account->is_active,
                     'balance' => round((float) ($balances[$account->id] ?? 0), 2),
@@ -49,8 +55,9 @@ class FinancialReportService
                     return true;
                 }
 
-                return str_contains(mb_strtolower($row['code'].' '.$row['name'].' '.$row['type']), $search);
+                return str_contains(mb_strtolower($row['code'].' '.$row['name'].' '.$row['type'].' '.$row['report_section']), $search);
             })
+            ->sortBy(fn (array $row): string => sprintf('%04d-%020s', (int) $row['sort_order'], (string) $row['code']))
             ->values();
 
         $incomeSummary = $this->profitLossTotals(
@@ -72,6 +79,7 @@ class FinancialReportService
             'search' => $search,
             'rows' => $rows,
             'groups' => $rows->groupBy('type'),
+            'section_groups' => $rows->groupBy('type')->map(fn (Collection $typeRows): Collection => $typeRows->groupBy('report_section')),
             'assets' => $assets,
             'liabilities' => $liabilities,
             'equity' => $equity,
@@ -98,6 +106,8 @@ class FinancialReportService
         $accounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
             ->whereIn('type', ['Income', 'Expense'])
+            ->where('is_posting', true)
+            ->orderBy('sort_order')
             ->orderBy('type')
             ->orderBy('code')
             ->get();
@@ -106,11 +116,15 @@ class FinancialReportService
 
         $rows = $accounts
             ->map(function (ChartOfAccount $account) use ($balances): array {
+                $section = $account->report_section ?: $this->defaultIncomeStatementSection((string) $account->type);
+
                 return [
                     'id' => $account->id,
                     'code' => $account->code,
                     'name' => $account->name,
                     'type' => $account->type,
+                    'report_section' => $section,
+                    'sort_order' => (int) ($account->sort_order ?: $this->sectionSortOrder($section)),
                     'normal_balance' => $account->normal_balance,
                     'is_active' => (bool) $account->is_active,
                     'amount' => round((float) ($balances[$account->id] ?? 0), 2),
@@ -125,12 +139,28 @@ class FinancialReportService
                     return true;
                 }
 
-                return str_contains(mb_strtolower($row['code'].' '.$row['name'].' '.$row['type']), $search);
+                return str_contains(mb_strtolower($row['code'].' '.$row['name'].' '.$row['type'].' '.$row['report_section']), $search);
             })
+            ->sortBy(fn (array $row): string => sprintf('%04d-%020s', (int) $row['sort_order'], (string) $row['code']))
             ->values();
 
-        $income = round((float) $rows->where('type', 'Income')->sum('amount'), 2);
-        $expense = round((float) $rows->where('type', 'Expense')->sum('amount'), 2);
+        $sections = $rows->groupBy('report_section');
+        $revenue = round((float) ($sections->get('Revenue', collect())->sum('amount')), 2);
+        $costOfSales = round((float) ($sections->get('Cost of Sales', collect())->sum('amount')), 2);
+        $operatingExpense = round((float) ($sections->get('Operating Expense', collect())->sum('amount')), 2);
+        $administrativeExpense = round((float) ($sections->get('Administrative Expense', collect())->sum('amount')), 2);
+        $sellingExpense = round((float) ($sections->get('Selling Expense', collect())->sum('amount')), 2);
+        $financialExpense = round((float) ($sections->get('Financial Expense', collect())->sum('amount')), 2);
+        $otherIncome = round((float) ($sections->get('Other Income', collect())->sum('amount')), 2);
+        $taxExpense = round((float) ($sections->get('Tax Expense', collect())->sum('amount')), 2);
+
+        $operatingExpenses = round($operatingExpense + $administrativeExpense + $sellingExpense, 2);
+        $grossProfit = round($revenue - $costOfSales, 2);
+        $operatingProfit = round($grossProfit - $operatingExpenses, 2);
+        $netProfitBeforeTax = round($operatingProfit + $otherIncome - $financialExpense, 2);
+        $netProfit = round($netProfitBeforeTax - $taxExpense, 2);
+        $income = round($revenue + $otherIncome, 2);
+        $expense = round($costOfSales + $operatingExpenses + $financialExpense + $taxExpense, 2);
 
         return [
             'from_date' => $fromDate,
@@ -139,9 +169,22 @@ class FinancialReportService
             'search' => $search,
             'rows' => $rows,
             'groups' => $rows->groupBy('type'),
+            'sections' => $sections,
             'income' => $income,
             'expense' => $expense,
-            'net_profit' => round($income - $expense, 2),
+            'revenue' => $revenue,
+            'cost_of_sales' => $costOfSales,
+            'gross_profit' => $grossProfit,
+            'operating_expense' => $operatingExpense,
+            'administrative_expense' => $administrativeExpense,
+            'selling_expense' => $sellingExpense,
+            'operating_expenses' => $operatingExpenses,
+            'operating_profit' => $operatingProfit,
+            'other_income' => $otherIncome,
+            'financial_expense' => $financialExpense,
+            'tax_expense' => $taxExpense,
+            'net_profit_before_tax' => $netProfitBeforeTax,
+            'net_profit' => $netProfit,
         ];
     }
 
@@ -164,7 +207,9 @@ class FinancialReportService
 
         $accounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
+            ->where('is_posting', true)
             ->when($accountType !== 'all' && $accountType !== '', fn ($query) => $query->where('type', $accountType))
+            ->orderBy('sort_order')
             ->orderBy('type')
             ->orderBy('code')
             ->get();
@@ -185,6 +230,7 @@ class FinancialReportService
                     'code' => $account->code,
                     'name' => $account->name,
                     'type' => $account->type,
+                    'report_section' => $account->report_section ?: $this->defaultReportSection((string) $account->type),
                     'normal_balance' => $account->normal_balance,
                     'is_active' => (bool) $account->is_active,
                     'opening_debit' => round(max($openingNet, 0), 2),
@@ -217,7 +263,7 @@ class FinancialReportService
                     return true;
                 }
 
-                return str_contains(mb_strtolower($row['code'].' '.$row['name'].' '.$row['type']), $search);
+                return str_contains(mb_strtolower($row['code'].' '.$row['name'].' '.$row['type'].' '.($row['report_section'] ?? '')), $search);
             })
             ->values();
 
@@ -238,6 +284,7 @@ class FinancialReportService
             'search' => $search,
             'account_types' => ChartOfAccount::query()
                 ->where('company_id', $companyId)
+                ->where('is_posting', true)
                 ->select('type')
                 ->distinct()
                 ->orderBy('type')
@@ -272,6 +319,8 @@ class FinancialReportService
 
         $accounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
+            ->where('is_posting', true)
+            ->orderBy('sort_order')
             ->orderBy('code')
             ->get();
 
@@ -562,6 +611,7 @@ class FinancialReportService
         $accounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
             ->whereIn('type', ['Income', 'Expense'])
+            ->where('is_posting', true)
             ->get();
 
         $balances = $fromDate === null
@@ -691,6 +741,56 @@ class FinancialReportService
         }
 
         return $buckets;
+    }
+
+
+    private function defaultReportSection(string $type): string
+    {
+        return match ($type) {
+            'Income' => 'Revenue',
+            'Expense' => 'Operating Expense',
+            'Asset' => 'Current Asset',
+            'Liability' => 'Current Liability',
+            'Equity' => 'Equity',
+            default => 'General',
+        };
+    }
+
+    private function defaultIncomeStatementSection(string $type): string
+    {
+        return $type === 'Income' ? 'Revenue' : 'Operating Expense';
+    }
+
+    private function defaultBalanceSheetSection(string $type): string
+    {
+        return match ($type) {
+            'Asset' => 'Current Asset',
+            'Liability' => 'Current Liability',
+            'Equity' => 'Equity',
+            default => $this->defaultReportSection($type),
+        };
+    }
+
+    private function sectionSortOrder(string $section): int
+    {
+        return [
+            'Current Asset' => 100,
+            'Fixed Asset' => 120,
+            'Non Current Asset' => 130,
+            'Current Liability' => 200,
+            'Non Current Liability' => 220,
+            'Equity' => 300,
+            'Owner Capital' => 310,
+            'Retained Earnings' => 320,
+            'Revenue' => 400,
+            'Cost of Sales' => 500,
+            'Operating Expense' => 600,
+            'Administrative Expense' => 610,
+            'Selling Expense' => 620,
+            'Financial Expense' => 700,
+            'Other Income' => 800,
+            'Tax Expense' => 900,
+        ][$section] ?? 999;
     }
 
     private function normalBalanceAmount(ChartOfAccount $account, float $debitLessCredit): float

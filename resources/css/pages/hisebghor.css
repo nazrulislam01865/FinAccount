@@ -2271,3 +2271,62 @@ button.is-executing, input.is-executing { pointer-events: none; }
         -webkit-tap-highlight-color: rgba(21, 94, 239, .12);
     }
 }
+
+/* Due management settlement action flow */
+.hg-card-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+.hg-due-management-table td:last-child,
+.hg-due-management-table th:last-child {
+    white-space: nowrap;
+}
+.hg-due-settlement-entry-card {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1fr) minmax(160px, .85fr);
+    gap: 14px;
+    align-items: stretch;
+    padding: 16px;
+    border: 1px solid #bfdbfe;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+.hg-due-settlement-entry-card > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.hg-due-settlement-entry-card span,
+.hg-due-settlement-entry-card small {
+    color: #667085;
+    font-size: 12px;
+    font-weight: 700;
+}
+.hg-due-settlement-entry-card strong {
+    color: var(--hg-text);
+    font-size: 15px;
+    line-height: 1.35;
+}
+.hg-due-settlement-entry-card .hg-overline {
+    color: var(--hg-primary);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+.hg-due-settlement-entry-card .full {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+@media (max-width: 780px) {
+    .hg-card-header-row,
+    .hg-due-settlement-entry-card {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+    .hg-due-management-table td:last-child,
+    .hg-due-management-table th:last-child {
+        white-space: normal;
+    }
+}

@@ -21,6 +21,15 @@
         'money_account_types.view', 'money_account_types.manage', 'transaction_categories.view',
         'transaction_categories.manage', 'voucher_numbering.view', 'voucher_numbering.manage',
     ]);
+    $isOtherMasterDataRoute = request()->routeIs(
+        'master.overview',
+        'master.index',
+        'master.voucher-sequences.*',
+        'master.business-types.*',
+        'master.currencies.*',
+        'master.time-zones.*',
+        'master.financial-years.*',
+    );
     $canAnySystem = $user?->canAnyAccounting(['users.view', 'users.manage', 'role_matrix.view', 'role_matrix.manage', 'settings.manage']);
     $homeDestination = \App\Support\AccountingRbac::firstAllowedDestination($user);
 @endphp
@@ -80,15 +89,41 @@
         @if($user?->canAnyAccounting(['company_setup.view','company_setup.manage']))<a href="{{ route('company-setup.edit') }}" class="{{ request()->routeIs('company-setup.*') ? 'active' : '' }}"><span class="hg-nav-icon">🏢</span><span class="hg-nav-text">Company Setup</span></a>@endif
         @if($user?->canAnyAccounting(['chart_of_accounts.view','chart_of_accounts.manage']))<a href="{{ route('chart-of-accounts.index', $user?->canAccounting('chart_of_accounts.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('chart-of-accounts.*') ? 'active' : '' }}"><span class="hg-nav-icon">📘</span><span class="hg-nav-text">Chart of Accounts</span></a>@endif
         @if($user?->canAnyAccounting(['opening_balances.view','opening_balances.manage']))<a href="{{ route('opening-balances.index', $user?->canAccounting('opening_balances.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('opening-balances.*') ? 'active' : '' }}"><span class="hg-nav-icon">📥</span><span class="hg-nav-text">Opening Balances</span></a>@endif
-        @if($user?->canAnyAccounting(['accounting_rules.view','accounting_rules.manage']))<a href="{{ route('accounting-rules.index', $user?->canAccounting('accounting_rules.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('accounting-rules.*') ? 'active' : '' }}"><span class="hg-nav-icon">⚙️</span><span class="hg-nav-text">Rule Templates (Advanced)</span></a>@endif
+        @if($user?->canAnyAccounting(['accounting_rules.view','accounting_rules.manage']))<a href="{{ route('accounting-rules.index', $user?->canAccounting('accounting_rules.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('accounting-rules.*') ? 'active' : '' }}"><span class="hg-nav-icon">⚙️</span><span class="hg-nav-text">Accounting Rules</span></a>@endif
         @if($user?->canAnyAccounting(['transaction_heads.view','transaction_heads.manage']))<a href="{{ route('transaction-heads.index', $user?->canAccounting('transaction_heads.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('transaction-heads.*') ? 'active' : '' }}"><span class="hg-nav-icon">🏷️</span><span class="hg-nav-text">Transaction Heads</span></a>@endif
-        @if($user?->canAnyAccounting(['transaction_categories.view','transaction_categories.manage']))<a href="{{ route('master.index', ['section' => 'transaction-categories'] + ($user?->canAccounting('transaction_categories.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'transaction-categories' ? 'active' : '' }}"><span class="hg-nav-icon">🗂️</span><span class="hg-nav-text">Transaction Types</span></a>@endif
-        @if($user?->canAnyAccounting(['voucher_numbering.view','voucher_numbering.manage']))<a href="{{ route('master.voucher-sequences.index', $user?->canAccounting('voucher_numbering.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('master.voucher-sequences.*') ? 'active' : '' }}"><span class="hg-nav-icon">🔢</span><span class="hg-nav-text">Voucher Numbering</span></a>@endif
-        @if($user?->canAnyAccounting(['party_types.view','party_types.manage']))<a href="{{ route('master.index', ['section' => 'party-types'] + ($user?->canAccounting('party_types.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'party-types' ? 'active' : '' }}"><span class="hg-nav-icon">🧩</span><span class="hg-nav-text">Party Types</span></a>@endif
         @if($user?->canAnyAccounting(['parties.view','parties.manage']))<a href="{{ route('parties.index', $user?->canAccounting('parties.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('parties.*') ? 'active' : '' }}"><span class="hg-nav-icon">👤</span><span class="hg-nav-text">Parties</span></a>@endif
-        @if($user?->canAnyAccounting(['money_account_types.view','money_account_types.manage']))<a href="{{ route('master.index', ['section' => 'money-account-types'] + ($user?->canAccounting('money_account_types.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'money-account-types' ? 'active' : '' }}"><span class="hg-nav-icon">💳</span><span class="hg-nav-text">Money Account Types</span></a>@endif
         @if($user?->canAnyAccounting(['money_accounts.view','money_accounts.manage']))<a href="{{ route('money-accounts.index', $user?->canAccounting('money_accounts.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('money-accounts.*') ? 'active' : '' }}"><span class="hg-nav-icon">🏦</span><span class="hg-nav-text">Money Accounts</span></a>@endif
-        @if($canOpenOtherMasterData)<a href="{{ route('master.overview') }}" class="{{ request()->routeIs('master.overview', 'master.business-types.*', 'master.currencies.*', 'master.time-zones.*', 'master.financial-years.*') ? 'active' : '' }}"><span class="hg-nav-icon">📁</span><span class="hg-nav-text">Other Master Data</span></a>@endif
+
+        @if($canOpenOtherMasterData)
+        <details class="hg-nav-group" data-hg-nav-group="other-master-data" @if($isOtherMasterDataRoute) open @endif>
+            <summary class="{{ $isOtherMasterDataRoute ? 'active' : '' }}" aria-expanded="{{ $isOtherMasterDataRoute ? 'true' : 'false' }}">
+                <span class="hg-nav-icon">📁</span>
+                <span class="hg-nav-text">Other Master Data</span>
+                <span class="hg-nav-caret">›</span>
+            </summary>
+            <div class="hg-nav-submenu">
+                @if($user?->canAccounting('master_data.view'))
+                <a href="{{ route('master.overview') }}" class="{{ request()->routeIs('master.overview') ? 'active' : '' }}"><span class="hg-nav-icon">▦</span><span class="hg-nav-text">Overview</span></a>
+                @endif
+
+                @if($user?->canAnyAccounting(['business_types.view','business_types.manage', 'currencies.view','currencies.manage', 'time_zones.view','time_zones.manage', 'financial_years.view','financial_years.manage']))
+                <div class="hg-nav-subheading">Company Setup</div>
+                @endif
+                @if($user?->canAnyAccounting(['business_types.view','business_types.manage']))<a href="{{ route('master.business-types.index', $user?->canAccounting('business_types.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('master.business-types.*') ? 'active' : '' }}"><span class="hg-nav-icon">🏢</span><span class="hg-nav-text">Business Types</span></a>@endif
+                @if($user?->canAnyAccounting(['currencies.view','currencies.manage']))<a href="{{ route('master.currencies.index', $user?->canAccounting('currencies.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('master.currencies.*') ? 'active' : '' }}"><span class="hg-nav-icon">৳</span><span class="hg-nav-text">Currencies</span></a>@endif
+                @if($user?->canAnyAccounting(['time_zones.view','time_zones.manage']))<a href="{{ route('master.time-zones.index', $user?->canAccounting('time_zones.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('master.time-zones.*') ? 'active' : '' }}"><span class="hg-nav-icon">◷</span><span class="hg-nav-text">Time Zones</span></a>@endif
+                @if($user?->canAnyAccounting(['financial_years.view','financial_years.manage']))<a href="{{ route('master.financial-years.index', $user?->canAccounting('financial_years.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('master.financial-years.*') ? 'active' : '' }}"><span class="hg-nav-icon">📅</span><span class="hg-nav-text">Financial Years</span></a>@endif
+
+                @if($user?->canAnyAccounting(['party_types.view','party_types.manage', 'money_account_types.view','money_account_types.manage', 'transaction_categories.view','transaction_categories.manage', 'voucher_numbering.view','voucher_numbering.manage']))
+                <div class="hg-nav-subheading">Accounting Masters</div>
+                @endif
+                @if($user?->canAnyAccounting(['party_types.view','party_types.manage']))<a href="{{ route('master.index', ['section' => 'party-types'] + ($user?->canAccounting('party_types.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'party-types' ? 'active' : '' }}"><span class="hg-nav-icon">🧩</span><span class="hg-nav-text">Party Types</span></a>@endif
+                @if($user?->canAnyAccounting(['money_account_types.view','money_account_types.manage']))<a href="{{ route('master.index', ['section' => 'money-account-types'] + ($user?->canAccounting('money_account_types.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'money-account-types' ? 'active' : '' }}"><span class="hg-nav-icon">💳</span><span class="hg-nav-text">Money Account Types</span></a>@endif
+                @if($user?->canAnyAccounting(['transaction_categories.view','transaction_categories.manage']))<a href="{{ route('master.index', ['section' => 'transaction-categories'] + ($user?->canAccounting('transaction_categories.view') ? [] : ['action' => 'add'])) }}" class="{{ request()->routeIs('master.index') && request()->route('section') === 'transaction-categories' ? 'active' : '' }}"><span class="hg-nav-icon">🗂️</span><span class="hg-nav-text">Transaction Types</span></a>@endif
+                @if($user?->canAnyAccounting(['voucher_numbering.view','voucher_numbering.manage']))<a href="{{ route('master.voucher-sequences.index', $user?->canAccounting('voucher_numbering.view') ? [] : ['action' => 'add']) }}" class="{{ request()->routeIs('master.voucher-sequences.*') ? 'active' : '' }}"><span class="hg-nav-icon">🔢</span><span class="hg-nav-text">Voucher Numbering</span></a>@endif
+            </div>
+        </details>
+        @endif
         @endif
 
         @if($canAnySystem)

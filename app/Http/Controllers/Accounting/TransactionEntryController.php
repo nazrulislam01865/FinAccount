@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Accounting;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Accounting\StoreTransactionRequest;
 use App\Models\AccountingOption;
+use App\Models\ChartOfAccount;
 use App\Models\MoneyAccount;
+use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\DecimalAmount;
 use App\Services\Accounting\JournalBuilder;
+use App\Services\Accounting\Reports\FinancialReportService;
 use App\Services\Accounting\RuleMatcher;
 use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Accounting\TransactionEntryOptionService;
@@ -40,18 +43,23 @@ class TransactionEntryController extends Controller
         private readonly TransactionEntryOptionService $entryOptionService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
         private readonly TransactionPartyResolver $partyResolver,
+        private readonly FinancialReportService $reportService,
     ) {}
 
     public function create(Request $request): View
     {
+        $company = $request->user()->company;
+        abort_unless($company, 404);
+
+        $companyId = (int) $company->id;
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
-        $requestedCategory = strtoupper($request->string('category')->toString());
+        $dueSettlementContext = $this->dueSettlementContext($request, $companyId);
+        $requestedCategory = $dueSettlementContext['active']
+            ? $dueSettlementContext['category']
+            : strtoupper($request->string('category')->toString());
         $category = $transactionCategories->contains('value', $requestedCategory)
             ? $requestedCategory
             : ($transactionCategories->first()?->value ?? '');
-        $company = $request->user()->company;
-        abort_unless($company, 404);
-        $companyId = $company->id;
         $categoryOption = $transactionCategories->firstWhere('value', $category);
         $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
 
@@ -71,6 +79,7 @@ class TransactionEntryController extends Controller
                 $categoryMetadata,
                 $categoryOption?->label,
             ),
+            'dueSettlementContext' => $dueSettlementContext,
         ]);
     }
 
@@ -230,7 +239,15 @@ class TransactionEntryController extends Controller
 
     public function store(StoreTransactionRequest $request): RedirectResponse
     {
-        $transaction = $this->transactionPostingService->post($request->validated(), $request->user());
+        $validated = $request->validated();
+
+        if ((bool) ($validated['due_settlement'] ?? false)) {
+            $this->validateDueSettlementPosting($validated, (int) $request->user()->company_id);
+            $validated['settlement_type'] = TransactionTypes::CASH;
+            $validated['paid_amount'] = $validated['amount'];
+        }
+
+        $transaction = $this->transactionPostingService->post($validated, $request->user());
         $this->transactionAttachmentService->storeUploaded(
             $transaction,
             $request->file('transaction_attachments'),
@@ -261,4 +278,199 @@ class TransactionEntryController extends Controller
             ->with('success', $message)
             ->with('warning', 'The transaction was saved, but your role is not allowed to view the register.');
     }
+
+    /** @return array<string, mixed> */
+    private function dueSettlementContext(Request $request, int $companyId): array
+    {
+        $empty = [
+            'active' => false,
+            'category' => null,
+            'due_type' => null,
+            'party_id' => null,
+            'party_label' => null,
+            'account_id' => null,
+            'account_label' => null,
+            'transaction_head_id' => null,
+            'amount' => null,
+            'as_of_date' => null,
+            'message' => null,
+        ];
+
+        if (! $request->boolean('due_settlement')) {
+            return $empty;
+        }
+
+        $dueType = $this->normalizeDueType($request->query('due_type'));
+        $partyId = (int) $request->query('party_id');
+        $accountId = (int) $request->query('account_id');
+        $asOfDate = filled($request->query('as_of_date'))
+            ? (string) $request->query('as_of_date')
+            : now()->toDateString();
+
+        if (! $dueType || $partyId <= 0 || $accountId <= 0) {
+            return array_replace($empty, [
+                'active' => true,
+                'message' => 'The due settlement link is incomplete. Select the party and due again from Due Management.',
+            ]);
+        }
+
+        $category = $dueType === 'Receivable'
+            ? TransactionTypes::CUSTOMER_COLLECTION
+            : TransactionTypes::SUPPLIER_PAYMENT;
+
+        $party = Party::query()
+            ->with(['receivableAccount', 'payableAccount'])
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->find($partyId);
+
+        $account = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('level', 3)
+            ->where('is_active', true)
+            ->find($accountId);
+
+        if (! $party || ! $account) {
+            return array_replace($empty, [
+                'active' => true,
+                'category' => $category,
+                'message' => 'The selected party or due ledger is no longer available.',
+            ]);
+        }
+
+        $mappedAccountId = $dueType === 'Receivable'
+            ? $party->receivable_account_id
+            : $party->payable_account_id;
+
+        if ((int) $mappedAccountId !== (int) $account->id) {
+            return array_replace($empty, [
+                'active' => true,
+                'category' => $category,
+                'message' => 'The selected party is not mapped to this due ledger anymore.',
+            ]);
+        }
+
+        $currentDue = $this->currentDueBalance($companyId, (int) $party->id, (int) $account->id, $dueType, $asOfDate);
+        $head = TransactionHead::query()
+            ->where('company_id', $companyId)
+            ->where('category', $category)
+            ->where('is_active', true)
+            ->whereNotNull('posting_account_id')
+            ->orderByRaw('CASE WHEN posting_account_id = ? THEN 0 ELSE 1 END', [$account->id])
+            ->orderBy('id')
+            ->first();
+
+        return [
+            'active' => true,
+            'category' => $category,
+            'due_type' => $dueType,
+            'party_id' => (int) $party->id,
+            'party_label' => $party->code.' — '.$party->name,
+            'account_id' => (int) $account->id,
+            'account_label' => $account->code.' — '.$account->name,
+            'transaction_head_id' => $head?->id,
+            'amount' => number_format(max($currentDue, 0), \App\Support\CompanyContext::decimalPlaces(), '.', ''),
+            'as_of_date' => $asOfDate,
+            'message' => $currentDue > 0
+                ? null
+                : 'This party has no outstanding due for the selected account.',
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateDueSettlementPosting(array $data, int $companyId): void
+    {
+        $dueType = $this->normalizeDueType($data['due_type'] ?? null);
+
+        if (! $dueType) {
+            throw ValidationException::withMessages(['amount' => 'Invalid due settlement type.']);
+        }
+
+        $expectedCategory = $dueType === 'Receivable'
+            ? TransactionTypes::CUSTOMER_COLLECTION
+            : TransactionTypes::SUPPLIER_PAYMENT;
+
+        if (($data['category'] ?? null) !== $expectedCategory) {
+            throw ValidationException::withMessages(['category' => 'The selected transaction type does not match this due settlement.']);
+        }
+
+        if ((int) ($data['party_id'] ?? 0) !== (int) ($data['due_party_id'] ?? 0)) {
+            throw ValidationException::withMessages(['party_id' => 'The selected party does not match this due settlement.']);
+        }
+
+        $party = Party::query()
+            ->with(['receivableAccount', 'payableAccount'])
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->findOrFail((int) $data['due_party_id']);
+
+        $account = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('level', 3)
+            ->where('is_active', true)
+            ->findOrFail((int) $data['due_account_id']);
+
+        $mappedAccountId = $dueType === 'Receivable'
+            ? $party->receivable_account_id
+            : $party->payable_account_id;
+
+        if ((int) $mappedAccountId !== (int) $account->id) {
+            throw ValidationException::withMessages(['party_id' => 'The selected party is not mapped to this due ledger anymore.']);
+        }
+
+        $head = TransactionHead::query()
+            ->where('company_id', $companyId)
+            ->where('category', $expectedCategory)
+            ->where('is_active', true)
+            ->findOrFail((int) $data['transaction_head_id']);
+
+        if ((int) $head->posting_account_id !== (int) $account->id) {
+            throw ValidationException::withMessages(['transaction_head_id' => 'The selected transaction head is not linked to this due ledger.']);
+        }
+
+        $currentDue = $this->currentDueBalance(
+            $companyId,
+            (int) $party->id,
+            (int) $account->id,
+            $dueType,
+            (string) ($data['due_as_of_date'] ?? now()->toDateString()),
+        );
+
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+
+        if ($currentDue <= 0) {
+            throw ValidationException::withMessages(['amount' => 'This party has no outstanding due for the selected account.']);
+        }
+
+        if ($amount > $currentDue) {
+            throw ValidationException::withMessages(['amount' => 'The settlement amount cannot be greater than the current due balance.']);
+        }
+    }
+
+    private function currentDueBalance(int $companyId, int $partyId, int $accountId, string $dueType, string $asOfDate): float
+    {
+        $report = $this->reportService->dueReport($companyId, [
+            'as_of_date' => $asOfDate,
+            'due_type' => strtolower($dueType),
+            'include_zero_balances' => true,
+        ]);
+
+        $row = collect($report['rows'])->first(fn (array $item): bool =>
+            (int) $item['party_id'] === $partyId
+            && (int) $item['account_id'] === $accountId
+            && $item['due_type'] === $dueType
+        );
+
+        return round((float) ($row['closing_balance'] ?? 0), 2);
+    }
+
+    private function normalizeDueType(mixed $value): ?string
+    {
+        return match (strtolower(trim((string) $value))) {
+            'receivable' => 'Receivable',
+            'payable' => 'Payable',
+            default => null,
+        };
+    }
+
 }

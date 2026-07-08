@@ -100,6 +100,7 @@ class ChartOfAccountService
             $type = $parent?->type ?? (string) $data['type'];
             $normalBalance = $parent?->normal_balance ?? (string) $data['normal_balance'];
             $name = trim((string) $data['name']);
+            $reportSetup = $this->automaticReportSetup($type, $name, $parent, $level);
 
             $this->ensureUniqueName((int) $companyId, $name);
 
@@ -111,6 +112,12 @@ class ChartOfAccountService
                 'name' => $name,
                 'type' => $type,
                 'normal_balance' => $normalBalance,
+                'report_section' => $reportSetup['report_section'],
+                'cash_flow_section' => $reportSetup['cash_flow_section'],
+                'is_cash_bank' => $reportSetup['is_cash_bank'],
+                'is_party_control' => $reportSetup['is_party_control'],
+                'is_posting' => $reportSetup['is_posting'],
+                'sort_order' => $reportSetup['sort_order'],
                 'is_active' => (bool) $data['is_active'],
             ]);
         }, attempts: 5);
@@ -142,6 +149,7 @@ class ChartOfAccountService
             $newType = $parent?->type ?? (string) $data['type'];
             $newNormalBalance = $parent?->normal_balance ?? (string) $data['normal_balance'];
             $name = trim((string) $data['name']);
+            $reportSetup = $this->automaticReportSetup($newType, $name, $parent, $newLevel);
             $typeChanged = (string) $locked->type !== $newType;
             $normalBalanceChanged = (string) $locked->normal_balance !== $newNormalBalance;
 
@@ -174,10 +182,16 @@ class ChartOfAccountService
                 'name' => $name,
                 'type' => $newType,
                 'normal_balance' => $newNormalBalance,
+                'report_section' => $reportSetup['report_section'],
+                'cash_flow_section' => $reportSetup['cash_flow_section'],
+                'is_cash_bank' => $reportSetup['is_cash_bank'],
+                'is_party_control' => $reportSetup['is_party_control'],
+                'is_posting' => $reportSetup['is_posting'],
+                'sort_order' => $reportSetup['sort_order'],
                 'is_active' => (bool) $data['is_active'],
             ]);
 
-            if ($normalBalanceChanged) {
+            if ($normalBalanceChanged || (int) $locked->children_count > 0) {
                 $this->cascadeNormalBalance((int) $locked->id, (int) $locked->company_id, $newNormalBalance);
             }
         }, attempts: 5);
@@ -207,6 +221,160 @@ class ChartOfAccountService
         }
 
         DB::transaction(fn () => $account->delete(), attempts: 5);
+    }
+
+
+    /** @return array{report_section: string, cash_flow_section: ?string, is_cash_bank: bool, is_party_control: bool, is_posting: bool, sort_order: int} */
+    private function automaticReportSetup(string $type, string $name, ?ChartOfAccount $parent, int $level): array
+    {
+        $reportSection = $this->guessReportSection($type, $name, $parent);
+
+        return [
+            'report_section' => $reportSection,
+            'cash_flow_section' => $this->guessCashFlowSection($type, $name, $reportSection),
+            'is_cash_bank' => $this->looksLikeCashBankAccount($type, $name),
+            'is_party_control' => $this->looksLikePartyControlAccount($type, $name, $reportSection),
+            'is_posting' => $level >= 3,
+            'sort_order' => $this->reportSortOrder($type, $reportSection),
+        ];
+    }
+
+    private function guessReportSection(string $type, string $name, ?ChartOfAccount $parent = null): string
+    {
+        $text = $this->normaliseText($name);
+
+        // Level 2 parents become report groups. Level 3 posting ledgers under
+        // those parents inherit the same report group automatically.
+        if ($parent && (int) $parent->level >= 2 && filled($parent->report_section)) {
+            return (string) $parent->report_section;
+        }
+
+        return match ($type) {
+            'Income' => $this->matchesAny($text, [
+                'interest', 'discount received', 'gain', 'commission received', 'other income', 'misc income', 'non operating',
+            ]) ? 'Other Income' : 'Revenue',
+
+            'Expense' => match (true) {
+                $this->matchesAny($text, [
+                    'purchase', 'cost of sale', 'cost of sales', 'cogs', 'product cost', 'service cost', 'direct cost',
+                    'production', 'raw material', 'factory', 'manufacturing', 'inventory cost',
+                ]) => 'Cost of Sales',
+                $this->matchesAny($text, [
+                    'bank charge', 'bank fee', 'finance cost', 'interest', 'loan', 'processing fee', 'card charge',
+                ]) => 'Financial Expense',
+                $this->matchesAny($text, ['tax', 'vat', 'ait', 'income tax']) => 'Tax Expense',
+                $this->matchesAny($text, [
+                    'advertisement', 'advertising', 'marketing', 'delivery', 'sales commission', 'promotion', 'courier',
+                ]) => 'Selling Expense',
+                $this->matchesAny($text, ['office', 'admin', 'stationery', 'audit', 'legal', 'professional']) => 'Administrative Expense',
+                default => 'Operating Expense',
+            },
+
+            'Asset' => match (true) {
+                $this->matchesAny($text, [
+                    'fixed', 'equipment', 'furniture', 'vehicle', 'building', 'land', 'machinery', 'computer',
+                    'depreciation', 'non current', 'non-current',
+                ]) => 'Fixed Asset',
+                default => 'Current Asset',
+            },
+
+            'Liability' => $this->matchesAny($text, ['long term', 'long-term', 'non current', 'non-current'])
+                ? 'Non Current Liability'
+                : 'Current Liability',
+
+            'Equity' => match (true) {
+                $this->matchesAny($text, ['capital', 'owner']) => 'Owner Capital',
+                $this->matchesAny($text, ['retained']) => 'Retained Earnings',
+                default => 'Equity',
+            },
+
+            default => 'General',
+        };
+    }
+
+    private function guessCashFlowSection(string $type, string $name, string $reportSection): ?string
+    {
+        if ($this->looksLikeCashBankAccount($type, $name)) {
+            return 'Cash Bank';
+        }
+
+        return match ($type) {
+            'Income', 'Expense' => 'Operating',
+            'Asset' => $reportSection === 'Current Asset' ? 'Operating' : 'Investing',
+            'Liability', 'Equity' => 'Financing',
+            default => null,
+        };
+    }
+
+    private function looksLikeCashBankAccount(string $type, string $name): bool
+    {
+        if ($type !== 'Asset') {
+            return false;
+        }
+
+        return $this->matchesAny($this->normaliseText($name), [
+            'cash', 'bank', 'petty cash', 'bkash', 'b-kash', 'nagad', 'rocket', 'wallet', 'mobile banking', 'card',
+        ]);
+    }
+
+    private function looksLikePartyControlAccount(string $type, string $name, string $reportSection): bool
+    {
+        $text = $this->normaliseText($name);
+
+        if (in_array($type, ['Asset', 'Liability'], true) && $this->matchesAny($text, [
+            'receivable', 'payable', 'customer', 'supplier', 'vendor', 'party', 'due', 'advance',
+        ])) {
+            return true;
+        }
+
+        return in_array($reportSection, ['Current Asset', 'Current Liability'], true)
+            && $this->matchesAny($text, ['receivable', 'payable']);
+    }
+
+    private function reportSortOrder(string $type, string $reportSection): int
+    {
+        return [
+            'Current Asset' => 100,
+            'Fixed Asset' => 120,
+            'Non Current Asset' => 130,
+            'Current Liability' => 200,
+            'Non Current Liability' => 220,
+            'Equity' => 300,
+            'Owner Capital' => 310,
+            'Retained Earnings' => 320,
+            'Revenue' => 400,
+            'Cost of Sales' => 500,
+            'Operating Expense' => 600,
+            'Administrative Expense' => 610,
+            'Selling Expense' => 620,
+            'Financial Expense' => 700,
+            'Other Income' => 800,
+            'Tax Expense' => 900,
+        ][$reportSection] ?? match ($type) {
+            'Asset' => 100,
+            'Liability' => 200,
+            'Equity' => 300,
+            'Income' => 400,
+            'Expense' => 600,
+            default => 999,
+        };
+    }
+
+    /** @param array<int, string> $needles */
+    private function matchesAny(string $text, array $needles): bool
+    {
+        foreach ($needles as $needle) {
+            if ($needle !== '' && str_contains($text, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normaliseText(string $value): string
+    {
+        return str_replace(['_', '-', '/', '.', ','], ' ', mb_strtolower(trim($value)));
     }
 
     private function resolveParent(
@@ -264,9 +432,29 @@ class ChartOfAccountService
             ->get(['id', 'company_id']);
 
         foreach ($children as $child) {
+            $childAccount = ChartOfAccount::query()->find($child->id);
+            if (! $childAccount) {
+                continue;
+            }
+
+            $reportSetup = $this->automaticReportSetup(
+                (string) $childAccount->type,
+                (string) $childAccount->name,
+                ChartOfAccount::query()->find($parentId),
+                (int) $childAccount->level,
+            );
+
             ChartOfAccount::query()
                 ->whereKey($child->id)
-                ->update(['normal_balance' => $normalBalance]);
+                ->update([
+                    'normal_balance' => $normalBalance,
+                    'report_section' => $reportSetup['report_section'],
+                    'cash_flow_section' => $reportSetup['cash_flow_section'],
+                    'is_cash_bank' => $reportSetup['is_cash_bank'],
+                    'is_party_control' => $reportSetup['is_party_control'],
+                    'is_posting' => $reportSetup['is_posting'],
+                    'sort_order' => $reportSetup['sort_order'],
+                ]);
 
             $this->cascadeNormalBalance((int) $child->id, $companyId, $normalBalance);
         }

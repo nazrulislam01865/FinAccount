@@ -10,6 +10,7 @@ if (shell && sidebar && toggle) {
     const groupStorageKey = `hisebghor.accounting.sidebar.groups.${userId}`;
     let scrollFrame = null;
     let lastFocusedElement = null;
+    let isRestoringGroupState = false;
 
     const storage = {
         get(key) {
@@ -27,6 +28,19 @@ if (shell && sidebar && toggle) {
             }
         },
     };
+
+    function disableSidebarTransitionsForNavigation() {
+        document.body.classList.add('hg-sidebar-navigating');
+    }
+
+    function finishSidebarBoot() {
+        window.requestAnimationFrame(() => {
+            document.body.classList.remove('hg-sidebar-booting');
+            window.requestAnimationFrame(() => {
+                document.body.classList.remove('hg-sidebar-navigating');
+            });
+        });
+    }
 
     function saveScrollPosition() {
         storage.set(scrollStorageKey, String(Math.max(0, sidebar.scrollTop)));
@@ -59,6 +73,8 @@ if (shell && sidebar && toggle) {
     }
 
     function saveGroupState() {
+        if (isRestoringGroupState) return;
+
         const openGroups = Array.from(sidebar.querySelectorAll('details[data-hg-nav-group][open]'))
             .map((group) => group.dataset.hgNavGroup)
             .filter(Boolean);
@@ -70,15 +86,29 @@ if (shell && sidebar && toggle) {
         const rawState = storage.get(groupStorageKey);
         if (!rawState) return;
 
+        isRestoringGroupState = true;
+
         try {
             const openGroups = new Set(JSON.parse(rawState));
+
             sidebar.querySelectorAll('details[data-hg-nav-group]').forEach((group) => {
-                if (group.dataset.hgNavGroup) {
-                    group.open = openGroups.has(group.dataset.hgNavGroup);
+                const groupName = group.dataset.hgNavGroup;
+                if (!groupName) return;
+
+                const hasActiveItem = Boolean(group.querySelector('summary.active, a.active'));
+
+                // Never close the group that contains the current page. Closing it after
+                // the server renders it open is what creates the visible submenu flash.
+                if (hasActiveItem || openGroups.has(groupName)) {
+                    group.open = true;
                 }
             });
         } catch {
             // Ignore invalid state left by an older application version.
+        } finally {
+            window.requestAnimationFrame(() => {
+                isRestoringGroupState = false;
+            });
         }
     }
 
@@ -137,6 +167,7 @@ if (shell && sidebar && toggle) {
 
     sidebar.querySelectorAll('a[href]').forEach((link) => {
         link.addEventListener('click', () => {
+            disableSidebarTransitionsForNavigation();
             saveScrollPosition();
             saveGroupState();
 
@@ -173,6 +204,7 @@ if (shell && sidebar && toggle) {
     });
 
     window.addEventListener('pagehide', () => {
+        disableSidebarTransitionsForNavigation();
         saveScrollPosition();
         saveGroupState();
     });
@@ -186,4 +218,7 @@ if (shell && sidebar && toggle) {
     restoreGroupState();
     restoreScrollPosition();
     syncResponsiveState();
+    finishSidebarBoot();
+} else {
+    document.body?.classList.remove('hg-sidebar-booting');
 }

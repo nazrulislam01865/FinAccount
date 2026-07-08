@@ -18,25 +18,25 @@
     ];
 @endphp
 
-<x-layouts::accounting title="Accounting Rule Templates">
+<x-layouts::accounting title="Accounting Rules">
     <div class="hg-page-header">
         <div>
-            <h1>Accounting Rule Templates</h1>
-            <p class="hg-muted">The system applies these templates automatically from the transaction type and payment type.</p>
+            <h1>Accounting Rules</h1>
+            <p class="hg-muted">The system applies these accounting rules automatically from the transaction type and payment type.</p>
         </div>
         @if($canManage)
-            <button type="button" class="hg-btn hg-btn-primary" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode($defaultRuleValues) }}">+ Add Template</button>
+            <button type="button" class="hg-btn hg-btn-primary" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode($defaultRuleValues) }}">+ Add Accounting Rule</button>
         @endif
     </div>
 
     @if ($rules->isEmpty() && $draftRows->isEmpty())
-        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No rule templates found.' }}</div>
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No accounting rules found.' }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
                 <thead>
                 <tr>
-                    <th>Template</th>
+                    <th>Accounting Rule</th>
                     <th>Transaction Type</th>
                     <th>Payment Type</th>
                     <th>Automatic Posting</th>
@@ -80,7 +80,7 @@
                         <td>
                             <div class="hg-actions">
                                 @if($canManage)
-                                    <button type="button" class="hg-btn hg-btn-small" data-setup-open="edit" data-setup-target="accounting-rule-modal" data-edit-title="Edit Rule Template" data-draft-edit-key="accounting-rules.edit.{{ $rule->id }}" data-update-url="{{ route('accounting-rules.update', $rule) }}" data-values="{{ json_encode($editValues) }}">Edit</button>
+                                    <button type="button" class="hg-btn hg-btn-small" data-setup-open="edit" data-setup-target="accounting-rule-modal" data-edit-title="Edit Accounting Rule" data-draft-edit-key="accounting-rules.edit.{{ $rule->id }}" data-update-url="{{ route('accounting-rules.update', $rule) }}" data-values="{{ json_encode($editValues) }}">Edit</button>
                                 @endif
                                 @if($canDelete)
                                     <form method="POST" action="{{ route('accounting-rules.destroy', $rule) }}" data-safe-delete-form>@csrf @method('DELETE')<button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button></form>
@@ -94,7 +94,7 @@
                     @php($fields = \App\Support\VisibleFormDrafts::fields($draft))
                     @php($isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft))
                     <tr class="hg-table-draft-row">
-                        <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Rule Template' }}</td>
+                        <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Accounting Rule' }}</td>
                         <td>{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</td>
                         <td>{{ $settlementLabels[$fields['settlement_type'] ?? ''] ?? ($fields['settlement_type'] ?? '—') }}</td>
                         <td colspan="2"><span class="hg-muted">Automatic posting will be generated when saved.</span></td>
@@ -108,8 +108,8 @@
     @endif
 
     @if($canManage)
-        <x-accounting.setup-modal id="accounting-rule-modal" :show="$reopenModal" :title="$editingRule ? 'Edit Rule Template' : 'Add Rule Template'" :store-url="route('accounting-rules.store')" create-title="Add Rule Template">
-            <form method="POST" action="{{ $editingRule ? route('accounting-rules.update', $editingRule) : route('accounting-rules.store') }}" class="hg-form-grid" data-setup-form data-accounting-rule-form data-draft-form data-draft-defer data-draft-key-base="accounting-rules" data-draft-key="{{ $editingRule ? 'accounting-rules.edit.'.$editingRule->id : 'accounting-rules.create' }}" data-draft-title="Accounting Rule Template">
+        <x-accounting.setup-modal id="accounting-rule-modal" :show="$reopenModal" :title="$editingRule ? 'Edit Accounting Rule' : 'Add Accounting Rule'" :store-url="route('accounting-rules.store')" create-title="Add Accounting Rule">
+            <form method="POST" action="{{ $editingRule ? route('accounting-rules.update', $editingRule) : route('accounting-rules.store') }}" class="hg-form-grid" data-setup-form data-accounting-rule-form data-draft-form data-draft-defer data-draft-key-base="accounting-rules" data-draft-key="{{ $editingRule ? 'accounting-rules.edit.'.$editingRule->id : 'accounting-rules.create' }}" data-draft-title="Accounting Rule">
                 @csrf
                 <input type="hidden" name="_method" value="PUT" data-setup-method @disabled(! $editingRule)>
                 <input type="hidden" name="setup_modal" value="accounting-rule">
@@ -148,7 +148,7 @@
                     <input type="hidden" name="is_active" value="0">
                     <label class="hg-checkbox-label" for="rule-active"><input id="rule-active" type="checkbox" name="is_active" value="1" @checked(old('is_active', $editingRule?->is_active ?? true))> Active</label>
                 </div>
-                <div class="hg-field full"><x-accounting.form-actions submit-label="Save Rule Template" /></div>
+                <div class="hg-field full"><x-accounting.form-actions submit-label="Save Accounting Rule" /></div>
             </form>
         </x-accounting.setup-modal>
     @endif

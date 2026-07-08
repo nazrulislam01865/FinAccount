@@ -332,7 +332,7 @@ class MasterDataService
 
         if ($isChangingFlow && AccountingRule::query()->where('category', $option->value)->exists()) {
             throw ValidationException::withMessages([
-                'flow' => 'The transaction direction cannot be changed after accounting rule templates exist for this transaction type.',
+                'flow' => 'The transaction direction cannot be changed after accounting accounting rules exist for this transaction type.',
             ]);
         }
 

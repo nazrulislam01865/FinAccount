@@ -1,9 +1,14 @@
 <x-layouts::accounting title="Income Statement">
+    @php
+        $sections = $report['sections'];
+        $sectionRows = fn (string $section) => $sections->get($section, collect());
+    @endphp
+
     <div class="hg-report-page">
         <div class="hg-page-header hg-report-page-header">
             <div>
                 <h1>Income Statement</h1>
-                <p>Shows income, expenses, and net profit or loss from posted journals within the selected period.</p>
+                <p>Shows revenue, cost, expenses, and net profit from posted journals within the selected period.</p>
             </div>
         </div>
 
@@ -29,23 +34,58 @@
             </label>
         </x-reports.partials.filter-toolbar>
 
-        <div class="hg-grid hg-grid-3 hg-report-summary">
-            <section class="hg-card hg-metric"><span class="label">Total Income</span><div class="value">{{ \App\Support\CompanyContext::money($report['income']) }}</div></section>
-            <section class="hg-card hg-metric"><span class="label">Total Expense</span><div class="value">{{ \App\Support\CompanyContext::money($report['expense']) }}</div></section>
+        <div class="hg-grid hg-grid-4 hg-report-summary">
+            <section class="hg-card hg-metric"><span class="label">Revenue</span><div class="value">{{ \App\Support\CompanyContext::money($report['revenue']) }}</div></section>
+            <section class="hg-card hg-metric"><span class="label">Gross Profit</span><div class="value">{{ \App\Support\CompanyContext::money($report['gross_profit']) }}</div></section>
+            <section class="hg-card hg-metric"><span class="label">Operating Profit</span><div class="value">{{ \App\Support\CompanyContext::money($report['operating_profit']) }}</div></section>
             <section class="hg-card hg-metric"><span class="label">Net Profit / Loss</span><div class="value">{{ \App\Support\CompanyContext::money($report['net_profit']) }}</div></section>
         </div>
 
         <div class="hg-grid hg-grid-2 hg-report-sections">
             <section class="hg-card">
-                <h2 class="hg-card-title">Income</h2>
-                @include('reports.partials.financial-rows', ['rows' => $report['groups']['Income'] ?? collect(), 'amountKey' => 'amount'])
-                <div class="hg-report-total"><span>Total Income</span><strong>{{ \App\Support\CompanyContext::money($report['income']) }}</strong></div>
+                <h2 class="hg-card-title">Revenue</h2>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Revenue'), 'amountKey' => 'amount'])
+                <div class="hg-report-total"><span>Total Revenue</span><strong>{{ \App\Support\CompanyContext::money($report['revenue']) }}</strong></div>
+
+                <h3 class="hg-report-subtitle">Less: Cost of Sales</h3>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Cost of Sales'), 'amountKey' => 'amount'])
+                <div class="hg-report-total"><span>Gross Profit</span><strong>{{ \App\Support\CompanyContext::money($report['gross_profit']) }}</strong></div>
             </section>
 
             <section class="hg-card">
-                <h2 class="hg-card-title">Expenses</h2>
-                @include('reports.partials.financial-rows', ['rows' => $report['groups']['Expense'] ?? collect(), 'amountKey' => 'amount'])
-                <div class="hg-report-total"><span>Total Expense</span><strong>{{ \App\Support\CompanyContext::money($report['expense']) }}</strong></div>
+                <h2 class="hg-card-title">Operating Expenses</h2>
+
+                <h3 class="hg-report-subtitle">Operating Expense</h3>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Operating Expense'), 'amountKey' => 'amount'])
+
+                <h3 class="hg-report-subtitle">Administrative Expense</h3>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Administrative Expense'), 'amountKey' => 'amount'])
+
+                <h3 class="hg-report-subtitle">Selling Expense</h3>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Selling Expense'), 'amountKey' => 'amount'])
+
+                <div class="hg-report-total"><span>Total Operating Expenses</span><strong>{{ \App\Support\CompanyContext::money($report['operating_expenses']) }}</strong></div>
+                <div class="hg-report-total"><span>Operating Profit</span><strong>{{ \App\Support\CompanyContext::money($report['operating_profit']) }}</strong></div>
+            </section>
+        </div>
+
+        <div class="hg-grid hg-grid-2 hg-report-sections">
+            <section class="hg-card">
+                <h2 class="hg-card-title">Other Income</h2>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Other Income'), 'amountKey' => 'amount'])
+                <div class="hg-report-total"><span>Total Other Income</span><strong>{{ \App\Support\CompanyContext::money($report['other_income']) }}</strong></div>
+            </section>
+
+            <section class="hg-card">
+                <h2 class="hg-card-title">Other Expenses</h2>
+
+                <h3 class="hg-report-subtitle">Financial Expense</h3>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Financial Expense'), 'amountKey' => 'amount'])
+
+                <h3 class="hg-report-subtitle">Tax Expense</h3>
+                @include('reports.partials.financial-rows', ['rows' => $sectionRows('Tax Expense'), 'amountKey' => 'amount'])
+
+                <div class="hg-report-total"><span>Net Profit Before Tax</span><strong>{{ \App\Support\CompanyContext::money($report['net_profit_before_tax']) }}</strong></div>
             </section>
         </div>
 

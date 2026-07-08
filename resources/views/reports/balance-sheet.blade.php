@@ -1,4 +1,11 @@
 <x-layouts::accounting title="Balance Sheet">
+    @php
+        $sectionGroups = $report['section_groups'];
+        $assetSections = $sectionGroups->get('Asset', collect());
+        $liabilitySections = $sectionGroups->get('Liability', collect());
+        $equitySections = $sectionGroups->get('Equity', collect());
+    @endphp
+
     <div class="hg-report-page">
         <div class="hg-page-header hg-report-page-header">
             <div>
@@ -35,18 +42,37 @@
         <div class="hg-grid hg-grid-2 hg-report-sections">
             <section class="hg-card">
                 <h2 class="hg-card-title">Assets</h2>
-                @include('reports.partials.financial-rows', ['rows' => $report['groups']['Asset'] ?? collect(), 'amountKey' => 'balance'])
+                @forelse($assetSections as $section => $rows)
+                    <h3 class="hg-report-subtitle">{{ $section }}</h3>
+                    @include('reports.partials.financial-rows', ['rows' => $rows, 'amountKey' => 'balance'])
+                    <div class="hg-report-line"><span>Total {{ $section }}</span><strong>{{ \App\Support\CompanyContext::money($rows->sum('balance')) }}</strong></div>
+                @empty
+                    <div class="hg-empty">No asset records found.</div>
+                @endforelse
                 <div class="hg-report-total"><span>Total Assets</span><strong>{{ \App\Support\CompanyContext::money($report['assets']) }}</strong></div>
             </section>
 
             <section class="hg-card">
                 <h2 class="hg-card-title">Liabilities & Equity</h2>
+
                 <h3 class="hg-report-subtitle">Liabilities</h3>
-                @include('reports.partials.financial-rows', ['rows' => $report['groups']['Liability'] ?? collect(), 'amountKey' => 'balance'])
+                @forelse($liabilitySections as $section => $rows)
+                    <h4 class="hg-report-subtitle">{{ $section }}</h4>
+                    @include('reports.partials.financial-rows', ['rows' => $rows, 'amountKey' => 'balance'])
+                    <div class="hg-report-line"><span>Total {{ $section }}</span><strong>{{ \App\Support\CompanyContext::money($rows->sum('balance')) }}</strong></div>
+                @empty
+                    <div class="hg-empty">No liability records found.</div>
+                @endforelse
                 <div class="hg-report-total"><span>Total Liabilities</span><strong>{{ \App\Support\CompanyContext::money($report['liabilities']) }}</strong></div>
 
                 <h3 class="hg-report-subtitle">Equity</h3>
-                @include('reports.partials.financial-rows', ['rows' => $report['groups']['Equity'] ?? collect(), 'amountKey' => 'balance'])
+                @forelse($equitySections as $section => $rows)
+                    <h4 class="hg-report-subtitle">{{ $section }}</h4>
+                    @include('reports.partials.financial-rows', ['rows' => $rows, 'amountKey' => 'balance'])
+                    <div class="hg-report-line"><span>Total {{ $section }}</span><strong>{{ \App\Support\CompanyContext::money($rows->sum('balance')) }}</strong></div>
+                @empty
+                    <div class="hg-empty">No equity records found.</div>
+                @endforelse
                 <div class="hg-report-line"><span>Retained Profit / Loss</span><strong>{{ \App\Support\CompanyContext::money($report['retained_profit']) }}</strong></div>
                 <div class="hg-report-total"><span>Total Liabilities + Equity</span><strong>{{ \App\Support\CompanyContext::money($report['liabilities_and_equity']) }}</strong></div>
             </section>

@@ -38,6 +38,7 @@ if (page) {
     const emptyPreviewTemplate = document.getElementById('journal-preview-empty-template');
     const previewUrl = preview?.dataset.previewUrl;
     let previewTimer;
+    const dueSettlementMode = form?.dataset.dueSettlement === '1';
     let autoSyncPaidAmount = form?.dataset.autoSyncPaid === '1';
 
     const refreshSearchable = (select) => {
@@ -81,6 +82,12 @@ if (page) {
         const allowed = selectedAllowedSettlements();
         const total = numericValue(amount);
 
+        if (dueSettlementMode) {
+            if (paidAmount) paidAmount.value = total > 0 ? total.toFixed(amountScale()) : '';
+            if (settlement) settlement.value = 'CASH';
+            return 'CASH';
+        }
+
         if (allowed.length === 1 && allowed[0] === 'CASH') {
             if (paidAmount) paidAmount.value = total > 0 ? total.toFixed(amountScale()) : '';
             if (settlement) settlement.value = 'CASH';
@@ -120,14 +127,14 @@ if (page) {
         const canChoosePaidNow = allowed.length !== 1 || allowed[0] === 'PARTIAL';
         const hasDue = type === 'CREDIT' || type === 'PARTIAL';
 
-        paidAmountField?.classList.toggle('hidden', !canChoosePaidNow);
+        paidAmountField?.classList.toggle('hidden', dueSettlementMode || !canChoosePaidNow);
         if (paidAmount) {
-            paidAmount.required = canChoosePaidNow;
-            paidAmount.readOnly = !canChoosePaidNow;
+            paidAmount.required = !dueSettlementMode && canChoosePaidNow;
+            paidAmount.readOnly = dueSettlementMode || !canChoosePaidNow;
             paidAmount.max = amount?.value || '';
         }
 
-        dueAmountField?.classList.toggle('hidden', !hasDue || total <= 0);
+        dueAmountField?.classList.toggle('hidden', dueSettlementMode || !hasDue || total <= 0);
         if (dueAmountPreview) {
             dueAmountPreview.value = total > 0 ? due.toFixed(amountScale()) : '';
         }
@@ -201,6 +208,17 @@ if (page) {
         const allowed = selectedAllowedSettlements();
         const totalEntered = numericValue(amount) > 0;
 
+        if (dueSettlementMode) {
+            moneyField?.classList.toggle('hidden', !hasSelectedHead);
+            if (money) money.required = hasSelectedHead;
+            partyField?.classList.add('hidden');
+            autoPartyNotice?.classList.add('hidden');
+            if (party) party.required = false;
+            refreshSearchable(money);
+            refreshSearchable(party);
+            return;
+        }
+
         // Show Receive In / Pay From as soon as a selected head can use a
         // paid amount. Once an amount is entered, the inferred settlement
         // decides whether the money account is actually required.
@@ -266,7 +284,11 @@ if (page) {
                 refreshSearchable(party);
             }
 
-            if (syncPartyRequirement(Boolean(data.partyRequired), data.partyType)) {
+            if (dueSettlementMode) {
+                partyField?.classList.add('hidden');
+                autoPartyNotice?.classList.add('hidden');
+                if (party) party.required = false;
+            } else if (syncPartyRequirement(Boolean(data.partyRequired), data.partyType)) {
                 window.setTimeout(refreshPreview, 0);
             }
         } catch (_) {

@@ -47,6 +47,22 @@ class StoreTransactionRequest extends FormRequest
                     ->where('company_id', $companyId)
                     ->where('is_active', true)),
             ],
+            'due_settlement' => ['nullable', 'boolean'],
+            'due_type' => ['nullable', 'required_if:due_settlement,1', Rule::in(['Receivable', 'Payable'])],
+            'due_party_id' => [
+                'nullable', 'required_if:due_settlement,1', 'integer',
+                Rule::exists('parties', 'id')->where(fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)),
+            ],
+            'due_account_id' => [
+                'nullable', 'required_if:due_settlement,1', 'integer',
+                Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('level', 3)
+                    ->where('is_active', true)),
+            ],
+            'due_as_of_date' => ['nullable', 'required_if:due_settlement,1', 'date'],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'lte:amount', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'reference' => ['nullable', 'string', 'max:100'],
@@ -59,11 +75,19 @@ class StoreTransactionRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $dueType = strtolower(trim((string) $this->input('due_type')));
+
         $this->merge([
             'category' => strtoupper(trim((string) $this->input('category'))),
             'settlement_type' => filled($this->input('settlement_type'))
                 ? strtoupper(trim((string) $this->input('settlement_type')))
                 : null,
+            'due_settlement' => $this->boolean('due_settlement'),
+            'due_type' => match ($dueType) {
+                'receivable' => 'Receivable',
+                'payable' => 'Payable',
+                default => filled($this->input('due_type')) ? trim((string) $this->input('due_type')) : null,
+            },
             'reference' => filled($this->input('reference')) ? trim((string) $this->input('reference')) : null,
             'description' => filled($this->input('description')) ? trim((string) $this->input('description')) : null,
         ]);

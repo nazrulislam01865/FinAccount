@@ -16,28 +16,14 @@ class PartyService
         private readonly AccountingOptionService $optionService,
         private readonly AutomaticCodeService $automaticCodeService,
     ) {}
+
     /**
-     * @return array{parties: Collection<int, Party>, receivableAccounts: Collection<int, ChartOfAccount>, payableAccounts: Collection<int, ChartOfAccount>, balances: array<int, float>}
+     * @return array{parties: Collection<int, Party>, balances: array<int, float>, partyTypes: Collection<int, AccountingOption>, partyTypeLabels: array<string, string>, nextPartyCodes: array<string, string>}
      */
     public function pageData(int $companyId): array
     {
         $parties = Party::query()
-            ->with(['receivableAccount', 'payableAccount'])
             ->where('company_id', $companyId)
-            ->orderBy('code')
-            ->get();
-
-        $receivableAccounts = ChartOfAccount::query()
-            ->where('company_id', $companyId)
-            ->where('level', 3)
-            ->where('type', 'Asset')
-            ->orderBy('code')
-            ->get();
-
-        $payableAccounts = ChartOfAccount::query()
-            ->where('company_id', $companyId)
-            ->where('level', 3)
-            ->whereIn('type', ['Liability', 'Equity'])
             ->orderBy('code')
             ->get();
 
@@ -45,8 +31,6 @@ class PartyService
 
         return [
             'parties' => $parties,
-            'receivableAccounts' => $receivableAccounts,
-            'payableAccounts' => $payableAccounts,
             'balances' => $this->balancesFor($parties, $companyId),
             'partyTypes' => $partyTypes,
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
@@ -89,6 +73,7 @@ class PartyService
     /** @param array<string, mixed> $data */
     public function create(array $data, int $companyId): Party
     {
+        $data = $this->applyDefaultAccountMapping($data, $companyId);
         $this->validateAccountTypes($data, $companyId);
 
         return DB::transaction(function () use ($data, $companyId): Party {
@@ -105,7 +90,9 @@ class PartyService
     /** @param array<string, mixed> $data */
     public function update(Party $party, array $data): Party
     {
+        $data = $this->applyDefaultAccountMapping($data, (int) $party->company_id);
         $this->validateAccountTypes($data, $party->company_id);
+
         DB::transaction(function () use ($party, $data): void {
             $this->automaticCodeService->lockCompany((int) $party->company_id);
             $data['code'] = (string) $data['type'] === (string) $party->type
@@ -130,6 +117,120 @@ class PartyService
         }
 
         DB::transaction(fn () => $party->delete(), attempts: 5);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function applyDefaultAccountMapping(array $data, int $companyId): array
+    {
+        $type = trim((string) ($data['type'] ?? ''));
+
+        $data['receivable_account_id'] = null;
+        $data['payable_account_id'] = null;
+
+        if ($type === 'Customer') {
+            $data['receivable_account_id'] = $this->defaultAccountId(
+                $companyId,
+                ['Asset'],
+                ['Customer Receivable', 'Accounts Receivable', 'Trade Receivable'],
+                ['customer receivable', 'accounts receivable', 'trade receivable', 'customer'],
+                'Create a Level 3 Asset ledger named Customer Receivable before adding Customer parties.',
+            );
+        }
+
+        if ($type === 'Supplier') {
+            $data['payable_account_id'] = $this->defaultAccountId(
+                $companyId,
+                ['Liability'],
+                ['Supplier Payable', 'Accounts Payable', 'Trade Payable'],
+                ['supplier payable', 'accounts payable', 'trade payable', 'supplier'],
+                'Create a Level 3 Liability ledger named Supplier Payable before adding Supplier parties.',
+            );
+        }
+
+        if ($type === 'Worker') {
+            $data['payable_account_id'] = $this->defaultAccountId(
+                $companyId,
+                ['Liability'],
+                ['Salary Payable', 'Wages Payable'],
+                ['salary payable', 'wages payable', 'salary'],
+                'Create a Level 3 Liability ledger named Salary Payable before adding Worker parties.',
+            );
+        }
+
+        if ($type === 'Lender') {
+            $data['payable_account_id'] = $this->defaultAccountId(
+                $companyId,
+                ['Liability'],
+                ['Loan from Bank / Lender', 'Loan Payable', 'Bank Loan'],
+                ['loan from bank', 'loan payable', 'bank loan', 'lender', 'loan'],
+                'Create a Level 3 Liability ledger named Loan from Bank / Lender before adding Lender parties.',
+            );
+        }
+
+        if ($type === 'Owner') {
+            $data['payable_account_id'] = $this->defaultAccountId(
+                $companyId,
+                ['Equity'],
+                ['Owner Capital', 'Capital Account', 'Owner Equity'],
+                ['owner capital', 'capital account', 'owner equity', 'capital'],
+                'Create a Level 3 Equity ledger named Owner Capital before adding Owner parties.',
+            );
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array<int, string> $types
+     * @param array<int, string> $exactNames
+     * @param array<int, string> $nameKeywords
+     */
+    private function defaultAccountId(
+        int $companyId,
+        array $types,
+        array $exactNames,
+        array $nameKeywords,
+        string $missingMessage,
+    ): int {
+        $account = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('level', 3)
+            ->where('is_active', true)
+            ->whereIn('type', $types)
+            ->where(function ($query) use ($exactNames): void {
+                foreach ($exactNames as $index => $name) {
+                    $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                    $query->{$method}('LOWER(name) = ?', [mb_strtolower($name)]);
+                }
+            })
+            ->orderBy('code')
+            ->first();
+
+        if ($account instanceof ChartOfAccount) {
+            return (int) $account->id;
+        }
+
+        $account = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('level', 3)
+            ->where('is_active', true)
+            ->whereIn('type', $types)
+            ->where(function ($query) use ($nameKeywords): void {
+                foreach ($nameKeywords as $index => $keyword) {
+                    $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                    $query->{$method}('LOWER(name) LIKE ?', ['%'.mb_strtolower($keyword).'%']);
+                }
+            })
+            ->orderBy('code')
+            ->first();
+
+        if ($account instanceof ChartOfAccount) {
+            return (int) $account->id;
+        }
+
+        throw ValidationException::withMessages([
+            'type' => $missingMessage,
+        ]);
     }
 
     /** @param array<string, mixed> $data */
@@ -170,7 +271,7 @@ class PartyService
     private function normalized(array $data): array
     {
         return [
-            'code' => trim((string) $data['code']),
+            'code' => trim((string) ($data['code'] ?? '')),
             'name' => trim((string) $data['name']),
             'type' => $data['type'],
             'receivable_account_id' => $data['receivable_account_id'] ?: null,

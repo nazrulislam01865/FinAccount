@@ -125,7 +125,7 @@ class AccountingRuleService
 
         if ($duplicate) {
             throw ValidationException::withMessages([
-                'settlement_type' => 'A rule template already exists for this transaction type and payment type.',
+                'settlement_type' => 'A accounting rule already exists for this transaction type and payment type.',
             ]);
         }
     }

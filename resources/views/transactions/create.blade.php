@@ -1,13 +1,15 @@
 @php
     $transaction = $transaction ?? null;
     $isEditing = $transaction !== null;
+    $dueSettlementContext = $dueSettlementContext ?? ['active' => false];
+    $isDueSettlement = (bool) ($dueSettlementContext['active'] ?? false);
     $formAction = $isEditing ? route('transactions.update', $transaction) : route('transactions.store');
     $categoryRepairRequired = $categoryRepairRequired ?? false;
     $transactionDateContext = $transactionDateContext ?? ['min' => null, 'max' => null, 'default' => now()->toDateString(), 'label' => null];
-    $selectedHeadId = old('transaction_head_id', $isEditing ? $transaction->transaction_head_id : '');
+    $selectedHeadId = old('transaction_head_id', $isEditing ? $transaction->transaction_head_id : ($dueSettlementContext['transaction_head_id'] ?? ''));
     $selectedSettlement = old('settlement_type', $isEditing ? ($transaction->settlement_type ?: \App\Support\TransactionTypes::CASH) : \App\Support\TransactionTypes::CASH);
-    $selectedAmount = old('amount', $isEditing ? $transaction->amount : '');
-    $selectedPaidAmount = old('paid_amount', $isEditing ? $transaction->paid_amount : '');
+    $selectedAmount = old('amount', $isEditing ? $transaction->amount : ($dueSettlementContext['amount'] ?? ''));
+    $selectedPaidAmount = old('paid_amount', $isEditing ? $transaction->paid_amount : ($isDueSettlement ? ($dueSettlementContext['amount'] ?? '') : ''));
     $transactionTypeLabel = $transactionTypeDefinition['label'] ?? ($categoryOption?->label ?? $category);
     $pageTransactionLabel = $category === \App\Support\TransactionTypes::SALE ? 'Sales' : $transactionTypeLabel;
     $moneyLabel = $transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account';
@@ -18,11 +20,11 @@
     <div class="hg-page-header">
         <div>
             <h1>{{ $isEditing ? 'Edit '.$pageTransactionLabel.' Transaction' : 'Record '.$pageTransactionLabel.' Transaction' }}</h1>
-            <p class="hg-muted">Enter the transaction details. Payment status and the journal are calculated automatically.</p>
+            <p class="hg-muted">{{ $isDueSettlement ? 'Settle the selected due. Party, due ledger, and transaction head are filled automatically.' : 'Enter the transaction details. Payment status and the journal are calculated automatically.' }}</p>
         </div>
     </div>
 
-    @if (! $isEditing || $categoryRepairRequired)
+    @if (! $isDueSettlement && (! $isEditing || $categoryRepairRequired))
         <div class="hg-tabs hg-transaction-type-tabs">
             @foreach ($transactionCategories as $categoryTab)
                 @php($definition = \App\Support\TransactionTypes::definition($categoryTab->value))
@@ -39,20 +41,48 @@
 
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
-            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid" data-transaction-form data-default-allowed-settlements='@json($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS)' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null) ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
+            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid" data-transaction-form data-default-allowed-settlements='@json($isDueSettlement ? [\App\Support\TransactionTypes::CASH] : ($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS))' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null && ! $isDueSettlement) ? '1' : '0' }}" data-due-settlement="{{ $isDueSettlement ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
                 @csrf
                 @if ($isEditing) @method('PUT') @else <input type="hidden" name="request_token" value="{{ $requestToken }}"> @endif
                 <input type="hidden" name="category" value="{{ $category }}">
-                <input type="hidden" id="settlement_type" name="settlement_type" value="{{ $selectedSettlement }}">
+                <input type="hidden" id="settlement_type" name="settlement_type" value="{{ $isDueSettlement ? \App\Support\TransactionTypes::CASH : $selectedSettlement }}">
+                @if($isDueSettlement)
+                    <input type="hidden" name="due_settlement" value="1">
+                    <input type="hidden" name="due_type" value="{{ $dueSettlementContext['due_type'] ?? '' }}">
+                    <input type="hidden" name="due_party_id" value="{{ $dueSettlementContext['party_id'] ?? '' }}">
+                    <input type="hidden" name="due_account_id" value="{{ $dueSettlementContext['account_id'] ?? '' }}">
+                    <input type="hidden" name="due_as_of_date" value="{{ $dueSettlementContext['as_of_date'] ?? '' }}">
+                @endif
+
+                @if($isDueSettlement)
+                    <div class="hg-field full hg-due-settlement-entry-card">
+                        <div>
+                            <span class="hg-overline">Due Settlement</span>
+                            <strong>{{ ($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Customer Due Collection' : 'Supplier Due Payment' }}</strong>
+                            <small>{{ $dueSettlementContext['party_label'] ?? 'Party not selected' }}</small>
+                        </div>
+                        <div>
+                            <span>Due Ledger</span>
+                            <strong>{{ $dueSettlementContext['account_label'] ?? 'Not available' }}</strong>
+                        </div>
+                        <div>
+                            <span>Total Outstanding</span>
+                            <strong>{{ \App\Support\CompanyContext::money((float) ($dueSettlementContext['amount'] ?? 0)) }}</strong>
+                        </div>
+                        @if($dueSettlementContext['message'] ?? null)
+                            <p class="hg-field-error full">{{ $dueSettlementContext['message'] }}</p>
+                        @endif
+                    </div>
+                @endif
 
                 <div class="hg-field">
                     <label for="transaction_date">Date <span class="hg-required">*</span></label>
-                    <input id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : $transactionDateContext['default']) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
+                    <input id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : ($dueSettlementContext['as_of_date'] ?? $transactionDateContext['default'])) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
                     @if($transactionDateContext['label'])<small class="hg-field-help">Open period: {{ $transactionDateContext['label'] }}</small>@endif
                     @error('transaction_date')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
-                <div class="hg-field">
+                <div class="hg-field {{ $isDueSettlement ? 'hidden' : '' }}">
                     <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
                     <select
                         id="transaction_head_id"
@@ -79,12 +109,13 @@
                 </div>
 
                 <div class="hg-field">
-                    <label for="amount">Amount ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
-                    <input id="amount" name="amount" type="number" min="{{ \App\Support\CompanyContext::amountStep() }}" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedAmount }}" required>
+                    <label for="amount">{{ $isDueSettlement ? (($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Received Amount' : 'Payment Amount') : 'Amount' }} ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
+                    <input id="amount" name="amount" type="number" min="{{ \App\Support\CompanyContext::amountStep() }}" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedAmount }}" @if($isDueSettlement && filled($dueSettlementContext['amount'] ?? null)) max="{{ $dueSettlementContext['amount'] }}" @endif required>
+                    @if($isDueSettlement)<small class="hg-field-help">Enter the amount being {{ ($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'received from the customer' : 'paid to the supplier' }}. It cannot be more than the outstanding due.</small>@endif
                     @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
-                <div class="hg-field" id="paid-amount-field">
+                <div class="hg-field {{ $isDueSettlement ? 'hidden' : '' }}" id="paid-amount-field">
                     <label for="paid_amount"><span id="paid-amount-label">Paid/Received Now</span> ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
                     <input id="paid_amount" name="paid_amount" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedPaidAmount }}">
                     <small class="hg-field-help" id="paid-amount-help">Enter 0 when the full amount will remain due.</small>
@@ -140,7 +171,7 @@
                                 data-status="{{ $partyTypeLabels[$party->type] ?? $party->type }}"
                                 data-search-keywords="{{ $party->type }} {{ $partyTypeLabels[$party->type] ?? $party->type }}"
                                 data-party-type="{{ $party->type }}"
-                                @selected((string) old('party_id', $isEditing ? $transaction->party_id : '') === (string) $party->id)
+                                @selected((string) old('party_id', $isEditing ? $transaction->party_id : ($dueSettlementContext['party_id'] ?? '')) === (string) $party->id)
                             >{{ $party->code }} — {{ $party->name }} ({{ $partyTypeLabels[$party->type] ?? $party->type }})</option>
                         @endforeach
                     </select>
@@ -162,7 +193,7 @@
 
                 <div class="hg-field full">
                     <label for="description">Description</label>
-                    <textarea id="description" name="description" placeholder="Short business description">{{ old('description', $isEditing ? $transaction->description : '') }}</textarea>
+                    <textarea id="description" name="description" placeholder="Short business description">{{ old('description', $isEditing ? $transaction->description : ($isDueSettlement ? ((($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Customer due collected from ' : 'Supplier due paid to ').($dueSettlementContext['party_label'] ?? '')) : '')) }}</textarea>
                     @error('description')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
@@ -249,8 +280,8 @@
 
 
                 <div class="hg-field full">
-                    <x-accounting.form-actions :submit-label="$isEditing ? 'Update Transaction' : 'Post Transaction'">
-                        <button type="button" class="hg-btn" data-draft-clear data-draft-clear-url="{{ route('transactions.create', ['category' => $category]) }}">Clear</button>
+                    <x-accounting.form-actions :submit-label="$isDueSettlement ? (($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Post Collection' : 'Post Payment') : ($isEditing ? 'Update Transaction' : 'Post Transaction')">
+                        <button type="button" class="hg-btn" data-draft-clear data-draft-clear-url="{{ $isDueSettlement ? route('reports.due-management', ['as_of_date' => $dueSettlementContext['as_of_date'] ?? null, 'due_type' => strtolower((string) ($dueSettlementContext['due_type'] ?? 'all'))]) : route('transactions.create', ['category' => $category]) }}">Clear</button>
                     </x-accounting.form-actions>
                 </div>
             </form>

@@ -46,6 +46,8 @@ class StoreOpeningBalanceRequest extends FormRequest
                     ->where('company_id', $companyId)
                     ->where('is_active', true)),
             ],
+            'opening_amount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
+            'balance_side' => ['nullable', Rule::in(['debit', 'credit'])],
             'debit' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'credit' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'status' => ['required', Rule::in(array_keys(OpeningBalance::statusOptions()))],
@@ -56,12 +58,31 @@ class StoreOpeningBalanceRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $openingAmountInput = $this->input('opening_amount');
+        $balanceSide = $this->input('balance_side') === 'credit' ? 'credit' : 'debit';
+
+        $debit = $this->amount($this->input('debit', 0));
+        $credit = $this->amount($this->input('credit', 0));
+
+        if ($openingAmountInput !== null && $openingAmountInput !== '') {
+            $openingAmount = $this->amount($openingAmountInput);
+            $debit = $balanceSide === 'debit' ? $openingAmount : 0.0;
+            $credit = $balanceSide === 'credit' ? $openingAmount : 0.0;
+        } else {
+            $openingAmount = max($debit, $credit);
+            if ($credit > 0 && $debit <= 0) {
+                $balanceSide = 'credit';
+            }
+        }
+
         $this->merge([
             'financial_year_id' => $this->input('financial_year_id') ?: null,
             'party_id' => $this->input('party_id') ?: null,
             'money_account_id' => $this->input('money_account_id') ?: null,
-            'debit' => $this->amount($this->input('debit', 0)),
-            'credit' => $this->amount($this->input('credit', 0)),
+            'opening_amount' => $openingAmount,
+            'balance_side' => $balanceSide,
+            'debit' => $debit,
+            'credit' => $credit,
             'status' => $this->input('status') ?: OpeningBalance::STATUS_POSTED,
             'reference' => trim((string) $this->input('reference')) ?: null,
             'note' => trim((string) $this->input('note')) ?: null,
@@ -79,11 +100,11 @@ class StoreOpeningBalanceRequest extends FormRequest
             $credit = $this->amount($this->input('credit', 0));
 
             if ($debit <= 0 && $credit <= 0) {
-                $validator->errors()->add('debit', 'Enter either Debit Opening or Credit Opening.');
+                $validator->errors()->add('opening_amount', 'Enter an opening balance amount.');
             }
 
             if ($debit > 0 && $credit > 0) {
-                $validator->errors()->add('debit', 'A row cannot have both Debit Opening and Credit Opening.');
+                $validator->errors()->add('opening_amount', 'A row cannot have both Debit and Credit opening amounts.');
             }
 
             if ($this->filled('financial_year_id')) {

@@ -5,7 +5,6 @@ namespace App\Http\Requests\Accounting;
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdatePartyRequest extends FormRequest
 {
@@ -18,15 +17,10 @@ class UpdatePartyRequest extends FormRequest
 
     public function rules(): array
     {
-        $companyId = $this->user()->company_id;
-        $party = $this->route('party');
-
         return [
             'code' => ['nullable', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_PARTY_TYPE)],
-            'receivable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('level', 3))],
-            'payable_account_id' => ['nullable', 'integer', Rule::exists('chart_of_accounts', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('level', 3))],
             'is_active' => ['required', 'boolean'],
         ];
     }
@@ -36,6 +30,7 @@ class UpdatePartyRequest extends FormRequest
         $this->merge([
             'code' => trim((string) $this->input('code')),
             'name' => trim((string) $this->input('name')),
+            'type' => trim((string) $this->input('type')),
             'is_active' => $this->boolean('is_active'),
         ]);
     }

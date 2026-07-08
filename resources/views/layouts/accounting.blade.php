@@ -3,7 +3,7 @@
 <head>
     @include('partials.head')
 </head>
-<body class="hg-body">
+<body class="hg-body hg-sidebar-booting">
 <div class="hg-app" id="hgAppShell" data-user-id="{{ (int) auth()->id() }}">
     @include('partials.accounting.sidebar')
     <button type="button" class="hg-sidebar-backdrop" data-hg-sidebar-close aria-label="Close navigation menu"></button>

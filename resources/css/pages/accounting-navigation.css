@@ -99,6 +99,29 @@
     border: 0 !important;
 }
 
+
+/* Stop sidebar/submenu flicker during first paint and page navigation. */
+.hg-body.hg-sidebar-booting .hg-side,
+.hg-body.hg-sidebar-booting .hg-sidebar-backdrop,
+.hg-body.hg-sidebar-booting .hg-nav-submenu,
+.hg-body.hg-sidebar-booting .hg-nav-caret,
+.hg-body.hg-sidebar-navigating .hg-side,
+.hg-body.hg-sidebar-navigating .hg-sidebar-backdrop,
+.hg-body.hg-sidebar-navigating .hg-nav-submenu,
+.hg-body.hg-sidebar-navigating .hg-nav-caret {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+}
+
+.hg-body.hg-sidebar-navigating .hg-sidebar-backdrop {
+    pointer-events: none !important;
+}
+
+.hg-nav-group:not([open]) > .hg-nav-submenu {
+    display: none !important;
+}
+
 @media (max-width: 900px) {
     body.hg-sidebar-open {
         overflow: hidden;
