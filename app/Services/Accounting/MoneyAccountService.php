@@ -35,14 +35,7 @@ class MoneyAccountService
             ->orderBy('code')
             ->get();
 
-        $accountBalances = $this->balanceService->balancesFor(
-            $moneyAccounts->pluck('chartOfAccount')->filter()->values(),
-            $companyId,
-        );
-
-        $balances = $moneyAccounts->mapWithKeys(fn (MoneyAccount $account): array => [
-            $account->id => (float) ($accountBalances[$account->chart_of_account_id] ?? 0),
-        ])->all();
+        $balances = $this->balanceService->balancesForMoneyAccounts($moneyAccounts, $companyId);
 
         return compact('moneyAccounts', 'assetAccounts', 'balances') + [
             'moneyKinds' => $this->optionService->forGroup(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),

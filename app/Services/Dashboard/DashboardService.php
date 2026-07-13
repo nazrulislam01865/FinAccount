@@ -54,7 +54,8 @@ class DashboardService
             ->orderBy('id')
             ->get();
 
-        $moneyAccountRows = $this->moneyAccountRows($moneyAccounts, $accountBalances);
+        $moneyAccountBalances = $this->accountBalanceService->balancesForMoneyAccounts($moneyAccounts, $companyId);
+        $moneyAccountRows = $this->moneyAccountRows($moneyAccounts, $moneyAccountBalances);
         $availableMoney = (float) $moneyAccountRows->sum('balance');
 
         $parties = Party::query()
@@ -78,7 +79,7 @@ class DashboardService
 
         $cashMovement = $this->cashMovement(
             $companyId,
-            $moneyAccounts->pluck('chart_of_account_id'),
+            $moneyAccounts->pluck('id'),
             $window['start'],
             $window['end'],
         );
@@ -260,13 +261,13 @@ class DashboardService
 
     /**
      * @param EloquentCollection<int, MoneyAccount> $moneyAccounts
-     * @param array<int, float> $accountBalances
+     * @param array<int, float> $moneyAccountBalances
      * @return Collection<int, array<string, mixed>>
      */
-    private function moneyAccountRows(EloquentCollection $moneyAccounts, array $accountBalances): Collection
+    private function moneyAccountRows(EloquentCollection $moneyAccounts, array $moneyAccountBalances): Collection
     {
-        $rows = $moneyAccounts->map(function (MoneyAccount $moneyAccount) use ($accountBalances): array {
-            $balance = (float) ($accountBalances[$moneyAccount->chart_of_account_id] ?? 0);
+        $rows = $moneyAccounts->map(function (MoneyAccount $moneyAccount) use ($moneyAccountBalances): array {
+            $balance = (float) ($moneyAccountBalances[$moneyAccount->id] ?? 0);
 
             return [
                 'id' => $moneyAccount->id,
@@ -412,7 +413,7 @@ class DashboardService
             ->where('journal_lines.company_id', $companyId)
             ->where('journal_entries.company_id', $companyId)
             ->where('journal_entries.status', 'posted')
-            ->whereIn('journal_lines.chart_of_account_id', $moneyAccountIds)
+            ->whereIn('journal_lines.money_account_id', $moneyAccountIds)
             ->whereBetween('journal_entries.entry_date', [$start->toDateString(), $end->toDateString()])
             ->first([
                 DB::raw('COALESCE(SUM(journal_lines.debit), 0) as debit_total'),

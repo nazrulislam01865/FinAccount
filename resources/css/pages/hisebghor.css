@@ -2330,3 +2330,12 @@ button.is-executing, input.is-executing { pointer-events: none; }
         white-space: normal;
     }
 }
+
+/* Reusable bulk actions for setup tables */
+.hg-bulk-action-toolbar .hg-filter-select { min-width: 220px; }
+.hg-bulk-action-toolbar [data-bulk-count] { min-width: 84px; font-weight: 700; }
+.hg-bulk-action-toolbar .hg-btn-warning { color: #92400e; }
+@media (max-width: 640px) {
+    .hg-bulk-action-toolbar .hg-filter-select,
+    .hg-bulk-action-toolbar [data-bulk-count] { width: 100%; min-width: 0; }
+}

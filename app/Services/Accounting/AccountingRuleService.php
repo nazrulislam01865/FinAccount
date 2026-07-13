@@ -93,6 +93,138 @@ class AccountingRuleService
         return $rule->refresh()->load('lines');
     }
 
+
+    /**
+     * @param Collection<int, AccountingRule> $rules
+     */
+    public function setActive(Collection $rules, bool $active): int
+    {
+        if ($rules->isEmpty()) {
+            return 0;
+        }
+
+        if ($active) {
+            $this->validateBulkActivation($rules);
+        }
+
+        return DB::transaction(function () use ($rules, $active): int {
+            $ids = $rules->pluck('id')->map(fn ($id): int => (int) $id)->all();
+
+            AccountingRule::query()
+                ->whereIn('id', $ids)
+                ->lockForUpdate()
+                ->get(['id']);
+
+            return AccountingRule::query()
+                ->whereIn('id', $ids)
+                ->where('is_active', '!=', $active)
+                ->update(['is_active' => $active]);
+        }, attempts: 5);
+    }
+
+    /**
+     * @param Collection<int, AccountingRule> $rules
+     */
+    private function validateBulkActivation(Collection $rules): void
+    {
+        $activeCategories = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('value');
+        $activeSettlements = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE)
+            ->where('is_active', true)
+            ->pluck('value')
+            ->all();
+        $activePartyTypes = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE)
+            ->where('is_active', true)
+            ->pluck('value')
+            ->all();
+        $companyId = (int) $rules->first()->company_id;
+        $duplicateKeys = AccountingRule::query()
+            ->where('company_id', $companyId)
+            ->get(['id', 'category', 'settlement_type'])
+            ->groupBy(fn (AccountingRule $rule): string => (string) $rule->category.'|'.(string) $rule->settlement_type)
+            ->filter(fn (Collection $group): bool => $group->count() > 1)
+            ->keys()
+            ->all();
+        $validSides = [AccountingRuleLine::SIDE_DEBIT, AccountingRuleLine::SIDE_CREDIT];
+        $validSources = [
+            AccountingRule::SOURCE_SELECTED_MONEY,
+            AccountingRule::SOURCE_HEAD_ACCOUNT,
+            AccountingRule::SOURCE_PARTY_RECEIVABLE,
+            AccountingRule::SOURCE_PARTY_PAYABLE,
+        ];
+        $validBases = [
+            AccountingRuleLine::BASIS_TOTAL,
+            AccountingRuleLine::BASIS_PAID,
+            AccountingRuleLine::BASIS_DUE,
+        ];
+
+        $invalid = $rules->filter(function (AccountingRule $rule) use (
+            $activeCategories,
+            $activeSettlements,
+            $activePartyTypes,
+            $duplicateKeys,
+            $validSides,
+            $validSources,
+            $validBases,
+        ): bool {
+            $category = (string) $rule->category;
+            $settlement = (string) $rule->settlement_type;
+            $categoryOption = $activeCategories->get($category);
+            $lines = $rule->lines;
+
+            if (! $categoryOption
+                || ! in_array($settlement, $activeSettlements, true)
+                || in_array($category.'|'.$settlement, $duplicateKeys, true)) {
+                return true;
+            }
+
+            $definition = TransactionTypes::configuredDefinition(
+                $category,
+                is_array($categoryOption->metadata) ? $categoryOption->metadata : [],
+                $categoryOption->label,
+            );
+            $allowedSettlements = array_values((array) ($definition['allowed_settlements'] ?? []));
+
+            if ($allowedSettlements !== [] && ! in_array($settlement, $allowedSettlements, true)) {
+                return true;
+            }
+
+            if ($lines->isEmpty()
+                || ! $lines->contains('line_side', AccountingRuleLine::SIDE_DEBIT)
+                || ! $lines->contains('line_side', AccountingRuleLine::SIDE_CREDIT)) {
+                return true;
+            }
+
+            if ($lines->contains(fn (AccountingRuleLine $line): bool =>
+                ! in_array($line->line_side, $validSides, true)
+                || ! in_array($line->account_source, $validSources, true)
+                || ! in_array($line->amount_basis, $validBases, true)
+            )) {
+                return true;
+            }
+
+            $partyType = (string) ($rule->party_type ?: 'Any');
+
+            return ! in_array($partyType, $activePartyTypes, true);
+        });
+
+        if ($invalid->isNotEmpty()) {
+            $names = $invalid
+                ->take(5)
+                ->map(fn (AccountingRule $rule): string => $rule->code.' — '.$rule->name)
+                ->implode(', ');
+
+            throw ValidationException::withMessages([
+                'record_ids' => 'These accounting rules cannot be activated because their transaction type, payment type, party type, or posting lines are incomplete or inactive: '.$names.'. Edit and repair them first.',
+            ]);
+        }
+    }
+
     public function delete(AccountingRule $rule): void
     {
         if ($rule->transactionHeads()->exists()) {

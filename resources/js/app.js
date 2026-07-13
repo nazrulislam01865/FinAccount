@@ -8,6 +8,8 @@ import './pages/auto-code';
 import './pages/accounting-rule';
 import './pages/transaction-head';
 
+import './pages/bulk-actions';
+
 import './pages/safe-delete';
 
 import './pages/execution-buttons';

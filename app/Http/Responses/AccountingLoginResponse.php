@@ -20,7 +20,7 @@ class AccountingLoginResponse implements LoginResponseContract
         if ($replacedAnotherSession) {
             $redirect->with(
                 'login_notice',
-                'Login successful. The previous device or browser was logged out because only one active login is allowed per user.'
+                'Login successful. Another active session for this account was logged out. You are now the only active user for this account.'
             );
         }
 

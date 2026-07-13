@@ -4,8 +4,11 @@ namespace App\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class ActiveLoginSession
 {
@@ -50,7 +53,15 @@ class ActiveLoginSession
 
         $user->setAttribute('active_session_id', $currentSessionId);
 
-        return filled($previousSessionId) && $previousSessionId !== $currentSessionId;
+        $replacedAnotherSession = filled($previousSessionId)
+            && $previousSessionId !== $currentSessionId;
+
+        if ($replacedAnotherSession) {
+            $this->rememberReplacement((string) $previousSessionId);
+            $this->destroyStoredSession($request, (string) $previousSessionId);
+        }
+
+        return $replacedAnotherSession;
     }
 
     /**
@@ -76,6 +87,34 @@ class ActiveLoginSession
         }
 
         return hash_equals($activeSessionId, $currentSessionId);
+    }
+
+    /**
+     * Return true once for a session that was replaced by a newer login.
+     *
+     * This marker survives deletion of the old session record, allowing the
+     * old browser to receive a clear logout message instead of a 403 page.
+     */
+    public function consumeReplacement(Request $request): bool
+    {
+        if (! $request->hasSession()) {
+            return false;
+        }
+
+        $sessionId = (string) $request->session()->getId();
+        if ($sessionId === '') {
+            return false;
+        }
+
+        try {
+            return (bool) Cache::pull($this->replacementCacheKey($sessionId), false);
+        } catch (Throwable $exception) {
+            Log::warning('Unable to read the replaced-login marker.', [
+                'exception' => $exception::class,
+            ]);
+
+            return false;
+        }
     }
 
     /**
@@ -139,6 +178,46 @@ class ActiveLoginSession
         $user->setAttribute('active_session_id', $claimedSessionId);
 
         return $claimedSessionId !== null && hash_equals($claimedSessionId, $currentSessionId);
+    }
+
+    private function rememberReplacement(string $sessionId): void
+    {
+        try {
+            $minutes = max(
+                5,
+                (int) config('session.lifetime', 120),
+                (int) config('session.inactive_timeout', 15),
+                (int) config('session.landing_admin_inactive_timeout', 15),
+            );
+
+            Cache::put(
+                $this->replacementCacheKey($sessionId),
+                true,
+                now()->addMinutes($minutes + 5),
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Unable to store the replaced-login marker.', [
+                'exception' => $exception::class,
+            ]);
+        }
+    }
+
+    private function destroyStoredSession(Request $request, string $sessionId): void
+    {
+        try {
+            $request->session()->getHandler()->destroy($sessionId);
+        } catch (Throwable $exception) {
+            // The active-session marker still prevents use of the old login if
+            // a custom session driver cannot destroy another session directly.
+            Log::warning('Unable to immediately destroy the previous login session.', [
+                'exception' => $exception::class,
+            ]);
+        }
+    }
+
+    private function replacementCacheKey(string $sessionId): string
+    {
+        return 'hisebghor:login-session:replaced:'.hash('sha256', $sessionId);
     }
 
     private function isAvailable(Model $user): bool

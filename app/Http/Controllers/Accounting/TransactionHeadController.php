@@ -3,25 +3,30 @@
 namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HandlesBulkSetupActions;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
 use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StoreTransactionHeadRequest;
 use App\Http\Requests\Accounting\UpdateTransactionHeadRequest;
 use App\Models\TransactionHead;
 use App\Services\Accounting\TransactionHeadService;
+use App\Services\Accounting\AccountingSetupExportService;
 use App\Services\Accounting\SafeDelete\SafeDeleteService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class TransactionHeadController extends Controller
 {
-    use PerformsSafeDelete, RedirectsByAccountingAccess;
+    use HandlesBulkSetupActions, PerformsSafeDelete, RedirectsByAccountingAccess;
 
     public function __construct(
         private readonly TransactionHeadService $service,
         private readonly SafeDeleteService $safeDeleteService,
+        private readonly AccountingSetupExportService $exportService,
     ) {}
 
     public function index(Request $request): View
@@ -33,6 +38,14 @@ class TransactionHeadController extends Controller
         }
 
         return view('transaction-heads.index', $data);
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        return $this->exportService->transactionHeads(
+            (int) $request->user()->company_id,
+            (string) ($request->user()->company?->name ?? 'Company'),
+        );
     }
 
     public function store(StoreTransactionHeadRequest $request): RedirectResponse
@@ -48,6 +61,64 @@ class TransactionHeadController extends Controller
         $this->service->update($transactionHead, $request->validated());
 
         return $this->redirectAfterAccountingSave($request, 'transaction_heads.view', 'transaction-heads.index', 'Record saved');
+    }
+
+    public function bulkAction(Request $request): JsonResponse|RedirectResponse
+    {
+        [$action, $heads] = $this->resolveBulkCompanyRecords(
+            $request,
+            TransactionHead::class,
+            'Transaction Head',
+            ['postingAccount'],
+        );
+
+        if ($action === 'delete') {
+            $this->ensureBulkDeletePermission($request);
+            $plan = $this->buildBulkDeletionPlan(
+                $heads,
+                fn (TransactionHead $head) => $this->safeDeleteService->inspectTransactionHead($head),
+                'Transaction Head Bulk Delete',
+                'Transaction Head',
+                'The selected transaction heads will be permanently deleted from the database.',
+                'Transactions using the selected heads will lose their head link and will be marked incomplete. Continue only when these records are no longer needed.',
+            );
+            $count = $heads->count();
+
+            return $this->performSafeDelete(
+                $request,
+                $plan,
+                function () use ($heads): void {
+                    DB::transaction(function () use ($heads): void {
+                        foreach ($heads as $head) {
+                            $this->safeDeleteService->deleteTransactionHead($head);
+                        }
+                    }, attempts: 5);
+                },
+                'transaction-heads.index',
+                number_format($count).' Transaction Head '.($count === 1 ? 'record' : 'records').' deleted permanently.',
+            );
+        }
+
+        $activate = $action === 'activate';
+        $changed = $this->service->setActive($heads, $activate);
+        $count = $heads->count();
+        $state = $activate ? 'active' : 'inactive';
+        $message = number_format($count).' Transaction Head '.($count === 1 ? 'record was' : 'records were').' set to '.$state.'.';
+
+        if ($changed === 0) {
+            $message = 'No changes were needed. All selected Transaction Head records were already '.$state.'.';
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'changed_count' => $changed,
+                'redirect_url' => route('transaction-heads.index'),
+            ]);
+        }
+
+        return redirect()->route('transaction-heads.index')->with('success', $message);
     }
 
     public function destroy(Request $request, TransactionHead $transactionHead): JsonResponse|RedirectResponse

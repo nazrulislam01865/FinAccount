@@ -24,10 +24,54 @@
             <h1>Accounting Rules</h1>
             <p class="hg-muted">The system applies these accounting rules automatically from the transaction type and payment type.</p>
         </div>
-        @if($canManage)
-            <button type="button" class="hg-btn hg-btn-primary" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode($defaultRuleValues) }}">+ Add Accounting Rule</button>
-        @endif
+        <div class="hg-actions">
+            @if(! $addOnlyMode)
+                <a class="hg-btn" href="{{ route('accounting-rules.export') }}">Export Excel</a>
+            @endif
+            @if($canManage)
+                <button type="button" class="hg-btn hg-btn-primary" data-setup-open="create" data-setup-target="accounting-rule-modal" data-defaults="{{ json_encode($defaultRuleValues) }}">+ Add Accounting Rule</button>
+            @endif
+        </div>
     </div>
+
+    @if($canManage)
+        <form
+            id="accounting-rule-bulk-form"
+            method="POST"
+            action="{{ route('accounting-rules.bulk-action') }}"
+            data-bulk-action-form
+            data-bulk-group="accounting-rules"
+            data-bulk-entity="Accounting Rule"
+            data-safe-delete-form
+            data-safe-delete-when-action="delete"
+        >
+            @csrf
+        </form>
+        <div class="hg-toolbar hg-bulk-toolbar hg-bulk-action-toolbar" data-bulk-toolbar="accounting-rules" hidden>
+            <select
+                class="hg-filter-select"
+                name="bulk_action"
+                form="accounting-rule-bulk-form"
+                data-bulk-action-select="accounting-rules"
+                aria-label="Choose Accounting Rule bulk action"
+            >
+                <option value="">Choose bulk action</option>
+                <option value="activate">Set Active</option>
+                <option value="deactivate">Set Inactive</option>
+                @if($canDelete)<option value="delete">Delete Permanently</option>@endif
+            </select>
+            <button
+                type="submit"
+                class="hg-btn hg-btn-primary"
+                form="accounting-rule-bulk-form"
+                data-bulk-apply="accounting-rules"
+                disabled
+            >Apply</button>
+            <button type="button" class="hg-btn" data-bulk-clear="accounting-rules">Clear Selection</button>
+            <span class="hg-muted" data-bulk-count="accounting-rules">0 selected</span>
+            <small class="hg-muted">Inactive rules are ignored during automatic posting. Delete permanently uses safe dependency checking.</small>
+        </div>
+    @endif
 
     @if ($rules->isEmpty() && $draftRows->isEmpty())
         <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No accounting rules found.' }}</div>
@@ -36,6 +80,7 @@
             <table class="hg-table">
                 <thead>
                 <tr>
+                    @if($canManage)<th class="hg-checkbox-col"><input type="checkbox" data-bulk-master="accounting-rules" aria-label="Select all accounting rules"></th>@endif
                     <th>Accounting Rule</th>
                     <th>Transaction Type</th>
                     <th>Payment Type</th>
@@ -58,6 +103,18 @@
                         ];
                     @endphp
                     <tr>
+                        @if($canManage)
+                            <td class="hg-checkbox-col">
+                                <input
+                                    type="checkbox"
+                                    name="record_ids[]"
+                                    value="{{ $rule->id }}"
+                                    form="accounting-rule-bulk-form"
+                                    data-bulk-checkbox="accounting-rules"
+                                    aria-label="Select {{ $rule->code }} — {{ $rule->name }}"
+                                >
+                            </td>
+                        @endif
                         <td><strong>{{ $rule->code }}</strong><br>{{ $rule->name }}</td>
                         <td>{{ $categoryLabels[$rule->category] ?? $rule->category }}</td>
                         <td>{{ $settlementLabels[$rule->settlement_type] ?? $rule->settlement_type }}</td>
@@ -94,6 +151,7 @@
                     @php($fields = \App\Support\VisibleFormDrafts::fields($draft))
                     @php($isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft))
                     <tr class="hg-table-draft-row">
+                        @if($canManage)<td class="hg-checkbox-col"><span class="hg-muted">—</span></td>@endif
                         <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Accounting Rule' }}</td>
                         <td>{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</td>
                         <td>{{ $settlementLabels[$fields['settlement_type'] ?? ''] ?? ($fields['settlement_type'] ?? '—') }}</td>

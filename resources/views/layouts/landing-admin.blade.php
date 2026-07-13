@@ -111,6 +111,9 @@
         </header>
 
         <section class="landing-admin-content">
+            @if (session('login_notice'))
+                <div class="alert-success">{{ session('login_notice') }}</div>
+            @endif
             @yield('content')
         </section>
     </main>

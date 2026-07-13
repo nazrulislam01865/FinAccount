@@ -18,14 +18,19 @@
             <h1>Chart of Accounts</h1>
             <p class="hg-muted">Level 1 is the main group, Level 2 is the category, and Level 3 is the posting ledger.</p>
         </div>
-        @if($canManage)
-        <button
-            type="button"
-            class="hg-btn hg-btn-primary"
-            data-coa-open="create"
-            data-store-url="{{ route('chart-of-accounts.store') }}"
-        >+ Add COA</button>
-        @endif
+        <div class="hg-actions">
+            @if(! $addOnlyMode)
+                <a class="hg-btn" href="{{ route('chart-of-accounts.export') }}">Export Excel</a>
+            @endif
+            @if($canManage)
+                <button
+                    type="button"
+                    class="hg-btn hg-btn-primary"
+                    data-coa-open="create"
+                    data-store-url="{{ route('chart-of-accounts.store') }}"
+                >+ Add COA</button>
+            @endif
+        </div>
     </div>
 
     <div class="hg-coa-level-summary" aria-label="Chart of accounts level summary">

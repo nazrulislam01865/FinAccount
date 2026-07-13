@@ -26,6 +26,10 @@ class LandingAdminAuthController extends Controller
         if (! $request->expectsJson() && ! $request->ajax()) {
             $logoutNotice = trim((string) $request->session()->pull('landing_admin_logout_notice', ''));
 
+            if ($logoutNotice === '' && app(ActiveLoginSession::class)->consumeReplacement($request)) {
+                $logoutNotice = 'You were logged out because a newer login used the same Landing Admin account. The newer user is now signed in.';
+            }
+
             if ($logoutNotice === '' && $request->query('reason') === 'session-replaced') {
                 $logoutNotice = 'You were logged out because this Landing Admin account was signed in on another device or browser. Only one active login is allowed per user.';
             }
@@ -77,7 +81,7 @@ class LandingAdminAuthController extends Controller
         $redirect = redirect()->intended(route('landing-admin.dashboard', absolute: false));
 
         if ($replacedAnotherSession) {
-            $redirect->with('status', 'Login successful. The previous Landing Admin device or browser was logged out because only one active login is allowed per user.');
+            $redirect->with('login_notice', 'Login successful. Another active session for this Landing Admin account was logged out. You are now the only active user for this account.');
         }
 
         return $redirect;

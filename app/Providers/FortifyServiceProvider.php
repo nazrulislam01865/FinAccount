@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\AccountingLoginResponse;
+use App\Support\ActiveLoginSession;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -53,6 +54,10 @@ class FortifyServiceProvider extends ServiceProvider
 
             if (! $request->expectsJson() && ! $request->ajax()) {
                 $logoutNotice = trim((string) $request->session()->pull('hisebghor.logout_notice', ''));
+
+                if ($logoutNotice === '' && app(ActiveLoginSession::class)->consumeReplacement($request)) {
+                    $logoutNotice = 'You were logged out because a newer login used the same account. The newer user is now signed in.';
+                }
 
                 if ($logoutNotice === '' && $request->query('reason') === 'session-replaced') {
                     $logoutNotice = 'You were logged out because this account was signed in on another device or browser. Only one active login is allowed per user. If this was not you, change your password immediately.';

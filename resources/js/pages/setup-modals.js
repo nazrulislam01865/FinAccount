@@ -5,24 +5,42 @@ document.querySelectorAll('[data-setup-modal]').forEach((modal) => {
 
     if (!form || !title) return;
 
+    const matchingFields = (name) => Array.from(form.elements).filter((field) =>
+        field.name === name || field.name === `${name}[]`,
+    );
+
     const applyValues = (values = {}) => {
         Object.entries(values).forEach(([name, value]) => {
-            const field = form.elements.namedItem(name);
-            if (!field) return;
+            const fields = matchingFields(name);
+            if (fields.length === 0) return;
 
-            if (field instanceof RadioNodeList) {
-                const selectedValues = Array.isArray(value) ? value.map(String) : [String(value)];
-                [...field].forEach((item) => {
-                    item.checked = selectedValues.includes(String(item.value));
-                });
-                return;
-            }
+            const selectedValues = (Array.isArray(value) ? value : [value])
+                .filter((item) => item !== null && item !== undefined)
+                .map(String);
 
-            if (field.type === 'checkbox') {
-                field.checked = value === true || value === 1 || value === '1';
-            } else {
+            fields.forEach((field) => {
+                if (field.type === 'radio') {
+                    field.checked = selectedValues.includes(String(field.value));
+                    return;
+                }
+
+                if (field.type === 'checkbox') {
+                    const isArrayField = field.name.endsWith('[]') || fields.length > 1 || Array.isArray(value);
+                    field.checked = isArrayField
+                        ? selectedValues.includes(String(field.value))
+                        : value === true || value === 1 || value === '1';
+                    return;
+                }
+
+                if (field instanceof HTMLSelectElement && field.multiple) {
+                    Array.from(field.options).forEach((option) => {
+                        option.selected = selectedValues.includes(String(option.value));
+                    });
+                    return;
+                }
+
                 field.value = value ?? '';
-            }
+            });
         });
     };
 

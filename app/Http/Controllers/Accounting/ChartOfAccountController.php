@@ -8,6 +8,7 @@ use App\Http\Controllers\Concerns\RedirectsByAccountingAccess;
 use App\Http\Requests\Accounting\StoreChartOfAccountRequest;
 use App\Http\Requests\Accounting\UpdateChartOfAccountRequest;
 use App\Models\ChartOfAccount;
+use App\Services\Accounting\AccountingSetupExportService;
 use App\Services\Accounting\ChartOfAccountService;
 use App\Services\Accounting\SafeDelete\DeletionPlan;
 use App\Services\Accounting\SafeDelete\SafeDeleteService;
@@ -17,6 +18,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ChartOfAccountController extends Controller
 {
@@ -25,6 +27,7 @@ class ChartOfAccountController extends Controller
     public function __construct(
         private readonly ChartOfAccountService $service,
         private readonly SafeDeleteService $safeDeleteService,
+        private readonly AccountingSetupExportService $exportService,
     ) {}
 
     public function index(Request $request): View
@@ -50,6 +53,14 @@ class ChartOfAccountController extends Controller
         }
 
         return view('chart-of-accounts.index', $data);
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        return $this->exportService->chartOfAccounts(
+            (int) $request->user()->company_id,
+            (string) ($request->user()->company?->name ?? 'Company'),
+        );
     }
 
     public function store(StoreChartOfAccountRequest $request): RedirectResponse

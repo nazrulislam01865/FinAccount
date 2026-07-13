@@ -24,10 +24,54 @@
             <h1>Transaction Heads</h1>
             <p class="hg-muted">A head only defines what happened and the account where it is recorded. Accounting rules are selected automatically.</p>
         </div>
-        @if($canManage)
-            <button type="button" class="hg-btn hg-btn-primary" data-setup-open="create" data-setup-target="transaction-head-modal" data-defaults="{{ json_encode($defaultHeadValues) }}">+ Add Transaction Head</button>
-        @endif
+        <div class="hg-actions">
+            @if(! $addOnlyMode)
+                <a class="hg-btn" href="{{ route('transaction-heads.export') }}">Export Excel</a>
+            @endif
+            @if($canManage)
+                <button type="button" class="hg-btn hg-btn-primary" data-setup-open="create" data-setup-target="transaction-head-modal" data-defaults="{{ json_encode($defaultHeadValues) }}">+ Add Transaction Head</button>
+            @endif
+        </div>
     </div>
+
+    @if($canManage)
+        <form
+            id="transaction-head-bulk-form"
+            method="POST"
+            action="{{ route('transaction-heads.bulk-action') }}"
+            data-bulk-action-form
+            data-bulk-group="transaction-heads"
+            data-bulk-entity="Transaction Head"
+            data-safe-delete-form
+            data-safe-delete-when-action="delete"
+        >
+            @csrf
+        </form>
+        <div class="hg-toolbar hg-bulk-toolbar hg-bulk-action-toolbar" data-bulk-toolbar="transaction-heads" hidden>
+            <select
+                class="hg-filter-select"
+                name="bulk_action"
+                form="transaction-head-bulk-form"
+                data-bulk-action-select="transaction-heads"
+                aria-label="Choose Transaction Head bulk action"
+            >
+                <option value="">Choose bulk action</option>
+                <option value="activate">Set Active</option>
+                <option value="deactivate">Set Inactive</option>
+                @if($canDelete)<option value="delete">Delete Permanently</option>@endif
+            </select>
+            <button
+                type="submit"
+                class="hg-btn hg-btn-primary"
+                form="transaction-head-bulk-form"
+                data-bulk-apply="transaction-heads"
+                disabled
+            >Apply</button>
+            <button type="button" class="hg-btn" data-bulk-clear="transaction-heads">Clear Selection</button>
+            <span class="hg-muted" data-bulk-count="transaction-heads">0 selected</span>
+            <small class="hg-muted">Inactive heads are hidden from new transaction entry. Delete permanently uses safe dependency checking.</small>
+        </div>
+    @endif
 
     @if ($transactionHeads->isEmpty() && $draftRows->isEmpty())
         <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No transaction heads found.' }}</div>
@@ -36,6 +80,7 @@
             <table class="hg-table">
                 <thead>
                 <tr>
+                    @if($canManage)<th class="hg-checkbox-col"><input type="checkbox" data-bulk-master="transaction-heads" aria-label="Select all transaction heads"></th>@endif
                     <th>Head</th>
                     <th>Transaction Type</th>
                     <th>Linked Account</th>
@@ -60,6 +105,18 @@
                         ];
                     @endphp
                     <tr>
+                        @if($canManage)
+                            <td class="hg-checkbox-col">
+                                <input
+                                    type="checkbox"
+                                    name="record_ids[]"
+                                    value="{{ $head->id }}"
+                                    form="transaction-head-bulk-form"
+                                    data-bulk-checkbox="transaction-heads"
+                                    aria-label="Select {{ $head->code }} — {{ $head->name }}"
+                                >
+                            </td>
+                        @endif
                         <td><strong>{{ $head->code }}</strong><br>{{ $head->name }}</td>
                         <td>{{ $categoryLabels[$head->category] ?? $head->category }}</td>
                         <td>{{ $head->postingAccount ? ($head->postingAccount->code.' — '.$head->postingAccount->name) : 'Not linked' }}</td>
@@ -83,6 +140,7 @@
                     @php($fields = \App\Support\VisibleFormDrafts::fields($draft))
                     @php($isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft))
                     <tr class="hg-table-draft-row">
+                        @if($canManage)<td class="hg-checkbox-col"><span class="hg-muted">—</span></td>@endif
                         <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Transaction Head' }}</td>
                         <td>{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</td>
                         <td>{{ filled($fields['posting_account_id'] ?? null) ? 'COA ID #'.$fields['posting_account_id'] : 'Not selected' }}</td>
@@ -105,15 +163,12 @@
                 <input type="hidden" name="setup_modal" value="transaction-head">
                 <input type="hidden" name="record_id" value="{{ old('record_id') }}">
 
-                <div class="hg-field">
-                    <label for="head-code">Code <span class="hg-required">*</span></label>
-                    <input id="head-code" name="code" value="{{ old('code', $editingHead?->code) }}" maxlength="50" readonly>
-                    <small class="hg-muted">Generated automatically from the Head Name.</small>
-                    @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
-                </div>
+                <input id="head-code" type="hidden" name="code" value="{{ old('code', $editingHead?->code) }}">
+
                 <div class="hg-field">
                     <label for="head-name">Head Name <span class="hg-required">*</span></label>
                     <input id="head-name" name="name" value="{{ old('name', $editingHead?->name) }}" required maxlength="120" placeholder="Milk Sale">
+                    <small class="hg-muted">The code is generated automatically after saving and appears in the Transaction Heads table.</small>
                     @error('name')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
                 <div class="hg-field">

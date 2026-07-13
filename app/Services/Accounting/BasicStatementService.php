@@ -32,13 +32,15 @@ class BasicStatementService
         $equity = $total('Equity');
         $net = $income - $expense;
 
-        $moneyAccountIds = MoneyAccount::query()
+        $moneyCoaIds = MoneyAccount::query()
             ->where('company_id', $companyId)
             ->where('is_active', true)
             ->whereNotNull('chart_of_account_id')
-            ->pluck('chart_of_account_id');
+            ->pluck('chart_of_account_id')
+            ->unique()
+            ->values();
 
-        $cash = (float) $moneyAccountIds->sum(fn (int $accountId): float => (float) ($balances[$accountId] ?? 0));
+        $cash = (float) $moneyCoaIds->sum(fn (int $accountId): float => (float) ($balances[$accountId] ?? 0));
 
         // Historical cash classifications must come from the journal lines that
         // were stored at posting time. They must not change if a rule is edited later.

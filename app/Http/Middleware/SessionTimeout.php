@@ -22,6 +22,17 @@ class SessionTimeout
             return $this->handleLandingAdminSession($request, $next);
         }
 
+        if ($this->activeLoginSession->consumeReplacement($request)) {
+            return $this->logoutAccountingUser(
+                $request,
+                'You were logged out because a newer login used the same account. The newer user is now signed in.',
+                'You were logged out because a newer login used the same account.',
+                false,
+                'session-replaced',
+                true
+            );
+        }
+
         if (! Auth::check()) {
             return $next($request);
         }
@@ -73,6 +84,17 @@ class SessionTimeout
 
     private function handleLandingAdminSession(Request $request, Closure $next): Response
     {
+        if ($this->activeLoginSession->consumeReplacement($request)) {
+            return $this->logoutLandingAdmin(
+                $request,
+                'You were logged out because a newer login used the same Landing Admin account. The newer user is now signed in.',
+                'You were logged out because a newer login used the same Landing Admin account.',
+                false,
+                'session-replaced',
+                true
+            );
+        }
+
         if (! Auth::guard('landing_admin')->check()) {
             return $next($request);
         }

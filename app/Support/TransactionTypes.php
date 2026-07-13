@@ -21,7 +21,7 @@ final class TransactionTypes
     public const PARTIAL = 'PARTIAL';
 
     /** @var array<int, string> */
-    public const ALL_SETTLEMENTS = [self::CASH, self::CREDIT, self::PARTIAL];
+    public const ALL_SETTLEMENTS = [self::CASH, self::PARTIAL, self::CREDIT];
 
     /** @return array<string, array<string, mixed>> */
     public static function definitions(): array
@@ -156,16 +156,16 @@ final class TransactionTypes
     {
         return [
             self::CASH => [
-                'label' => 'Paid/received in full',
+                'label' => 'Fully paid/received',
                 'description' => 'The full amount is paid or received now.',
+            ],
+            self::PARTIAL => [
+                'label' => 'Partially paid/received',
+                'description' => 'Some money moves now and the remaining amount becomes due.',
             ],
             self::CREDIT => [
                 'label' => 'Fully due',
                 'description' => 'No money moves now; the full amount remains due.',
-            ],
-            self::PARTIAL => [
-                'label' => 'Part paid, remaining due',
-                'description' => 'Some money moves now and the remaining amount becomes due.',
             ],
         ];
     }

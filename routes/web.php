@@ -53,13 +53,13 @@ Route::get('/landing-admin', [LandingAdminAuthController::class, 'create'])->nam
 Route::post('/landing-admin', [LandingAdminAuthController::class, 'store'])->name('landing-admin.login.store');
 Route::post('/landing-admin/logout', [LandingAdminAuthController::class, 'destroy'])->name('landing-admin.logout');
 Route::post('/landing-admin/session/keep-alive', [LandingAdminAuthController::class, 'keepAlive'])
-    ->middleware('landing.admin.auth')
+    ->middleware(['session.timeout', 'landing.admin.auth'])
     ->name('landing-admin.session.keep-alive');
 Route::post('/landing-admin/session/timeout', [LandingAdminAuthController::class, 'timeout'])
     ->name('landing-admin.session.timeout');
 
 Route::post('/session/keep-alive', [SessionController::class, 'keepAlive'])
-    ->middleware('auth')
+    ->middleware(['session.timeout', 'auth'])
     ->name('session.keep-alive');
 Route::post('/session/timeout', [SessionController::class, 'timeout'])
     ->name('session.timeout');
@@ -76,7 +76,7 @@ Route::middleware(['session.timeout', 'landing.admin.auth'])
         Route::delete('/inquiries/{inquiry}', [LandingPageAdminController::class, 'destroyInquiry'])->name('inquiries.destroy');
     });
 
-Route::middleware(['auth', 'verified', 'session.timeout', 'account.active', 'company.context', 'accounting.activity.notifications', 'form.draft.cleanup'])->group(function (): void {
+Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'company.context', 'accounting.activity.notifications', 'form.draft.cleanup'])->group(function (): void {
 
     Route::get('/form-drafts/{draftKey}', [FormDraftController::class, 'show'])
         ->where('draftKey', '[A-Za-z0-9][A-Za-z0-9._:-]{0,190}')
@@ -164,6 +164,8 @@ Route::middleware(['auth', 'verified', 'session.timeout', 'account.active', 'com
 
     Route::get('/chart-of-accounts', [ChartOfAccountController::class, 'index'])
         ->middleware('accounting.permission:chart_of_accounts.view')->name('chart-of-accounts.index');
+    Route::get('/chart-of-accounts/export', [ChartOfAccountController::class, 'export'])
+        ->middleware('accounting.permission:chart_of_accounts.view')->name('chart-of-accounts.export');
     Route::post('/chart-of-accounts', [ChartOfAccountController::class, 'store'])
         ->middleware('accounting.permission:chart_of_accounts.manage')->name('chart-of-accounts.store');
     Route::put('/chart-of-accounts/{chart_of_account}', [ChartOfAccountController::class, 'update'])
@@ -202,19 +204,27 @@ Route::middleware(['auth', 'verified', 'session.timeout', 'account.active', 'com
 
     Route::get('/accounting-rules', [AccountingRuleController::class, 'index'])
         ->middleware('accounting.permission:accounting_rules.view')->name('accounting-rules.index');
+    Route::get('/accounting-rules/export', [AccountingRuleController::class, 'export'])
+        ->middleware('accounting.permission:accounting_rules.view')->name('accounting-rules.export');
     Route::post('/accounting-rules', [AccountingRuleController::class, 'store'])
         ->middleware('accounting.permission:accounting_rules.manage')->name('accounting-rules.store');
     Route::put('/accounting-rules/{accounting_rule}', [AccountingRuleController::class, 'update'])
         ->middleware('accounting.permission:accounting_rules.manage')->name('accounting-rules.update');
+    Route::post('/accounting-rules/bulk-action', [AccountingRuleController::class, 'bulkAction'])
+        ->middleware('accounting.permission:accounting_rules.manage')->name('accounting-rules.bulk-action');
     Route::delete('/accounting-rules/{accounting_rule}', [AccountingRuleController::class, 'destroy'])
         ->middleware(['accounting.permission:accounting_rules.manage', 'accounting.permission:records.delete'])->name('accounting-rules.destroy');
 
     Route::get('/transaction-heads', [TransactionHeadController::class, 'index'])
         ->middleware('accounting.permission:transaction_heads.view')->name('transaction-heads.index');
+    Route::get('/transaction-heads/export', [TransactionHeadController::class, 'export'])
+        ->middleware('accounting.permission:transaction_heads.view')->name('transaction-heads.export');
     Route::post('/transaction-heads', [TransactionHeadController::class, 'store'])
         ->middleware('accounting.permission:transaction_heads.manage')->name('transaction-heads.store');
     Route::put('/transaction-heads/{transaction_head}', [TransactionHeadController::class, 'update'])
         ->middleware('accounting.permission:transaction_heads.manage')->name('transaction-heads.update');
+    Route::post('/transaction-heads/bulk-action', [TransactionHeadController::class, 'bulkAction'])
+        ->middleware('accounting.permission:transaction_heads.manage')->name('transaction-heads.bulk-action');
     Route::delete('/transaction-heads/{transaction_head}', [TransactionHeadController::class, 'destroy'])
         ->middleware(['accounting.permission:transaction_heads.manage', 'accounting.permission:records.delete'])->name('transaction-heads.destroy');
 

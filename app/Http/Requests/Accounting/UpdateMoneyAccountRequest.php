@@ -34,7 +34,6 @@ class UpdateMoneyAccountRequest extends FormRequest
                     ->where('level', 3)
                     ->where('type', 'Asset')
                     ->where('is_active', true),
-                Rule::unique('money_accounts')->where('company_id', $companyId)->ignore($moneyAccount),
             ],
             'is_active' => ['required', 'boolean'],
         ];

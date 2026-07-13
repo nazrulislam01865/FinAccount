@@ -156,6 +156,7 @@
                         </option>
                     @endforeach
                 </select>
+                <small class="hg-field-help">You may map multiple bank accounts to the same Asset COA. Their balances remain separate by Money Account.</small>
                 @if ($assetAccounts->isEmpty())
                     <small class="hg-field-error">No active Asset COA is available. Add or activate an Asset account in Chart of Accounts first.</small>
                 @endif

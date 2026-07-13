@@ -85,6 +85,115 @@ class TransactionHeadService
         return $head->refresh();
     }
 
+
+    /**
+     * @param Collection<int, TransactionHead> $heads
+     */
+    public function setActive(Collection $heads, bool $active): int
+    {
+        if ($heads->isEmpty()) {
+            return 0;
+        }
+
+        if ($active) {
+            $this->validateBulkActivation($heads);
+        }
+
+        return DB::transaction(function () use ($heads, $active): int {
+            $ids = $heads->pluck('id')->map(fn ($id): int => (int) $id)->all();
+
+            TransactionHead::query()
+                ->whereIn('id', $ids)
+                ->lockForUpdate()
+                ->get(['id']);
+
+            return TransactionHead::query()
+                ->whereIn('id', $ids)
+                ->where('is_active', '!=', $active)
+                ->update(['is_active' => $active]);
+        }, attempts: 5);
+    }
+
+    /**
+     * @param Collection<int, TransactionHead> $heads
+     */
+    private function validateBulkActivation(Collection $heads): void
+    {
+        $activeCategories = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('value');
+        $activeSettlements = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE)
+            ->where('is_active', true)
+            ->pluck('value')
+            ->all();
+        $activePartyTypes = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE)
+            ->where('is_active', true)
+            ->pluck('value')
+            ->all();
+
+        $invalid = $heads->filter(function (TransactionHead $head) use (
+            $activeCategories,
+            $activeSettlements,
+            $activePartyTypes,
+        ): bool {
+            $category = (string) $head->category;
+            $categoryOption = $activeCategories->get($category);
+            $account = $head->postingAccount;
+            $settlements = $head->allowedSettlementCodes();
+            $partyType = (string) ($head->party_type ?: 'Any');
+
+            if (! $categoryOption || ! $account || ! $account->is_active || (int) $account->level !== 3) {
+                return true;
+            }
+
+            if ((int) $account->company_id !== (int) $head->company_id) {
+                return true;
+            }
+
+            if ($settlements === [] || array_diff($settlements, $activeSettlements) !== []) {
+                return true;
+            }
+
+            if (! in_array($partyType, $activePartyTypes, true)) {
+                return true;
+            }
+
+            $definition = TransactionTypes::configuredDefinition(
+                $category,
+                is_array($categoryOption->metadata) ? $categoryOption->metadata : [],
+                $categoryOption->label,
+            );
+            $postingTypes = array_values((array) ($definition['posting_types'] ?? []));
+            $allowedSettlements = array_values((array) ($definition['allowed_settlements'] ?? []));
+            $expectedPartyType = (string) ($definition['party_type'] ?? 'Any');
+
+            if ($allowedSettlements !== [] && array_diff($settlements, $allowedSettlements) !== []) {
+                return true;
+            }
+
+            if ($expectedPartyType !== 'Any' && $partyType !== $expectedPartyType) {
+                return true;
+            }
+
+            return $postingTypes !== [] && ! in_array($account->type, $postingTypes, true);
+        });
+
+        if ($invalid->isNotEmpty()) {
+            $names = $invalid
+                ->take(5)
+                ->map(fn (TransactionHead $head): string => $head->code.' — '.$head->name)
+                ->implode(', ');
+
+            throw ValidationException::withMessages([
+                'record_ids' => 'These transaction heads cannot be activated because their linked COA, transaction type, party type, or payment types are incomplete or inactive: '.$names.'. Edit and repair them first.',
+            ]);
+        }
+    }
+
     public function delete(TransactionHead $head): void
     {
         if ($head->transactions()->exists()) {

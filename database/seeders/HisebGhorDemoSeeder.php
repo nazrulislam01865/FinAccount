@@ -169,18 +169,18 @@ class HisebGhorDemoSeeder extends Seeder
         $this->ensureRuleTemplates((int) $company->id);
 
         $headDefinitions = [
-            'sale' => ['TH-SALE', 'Milk and Product Sale', TransactionTypes::SALE, 'sales', ['CASH', 'CREDIT', 'PARTIAL'], 'Customer'],
-            'purchase' => ['TH-PUR', 'Feed and Materials Purchase', TransactionTypes::PURCHASE, 'feed_expense', ['CASH', 'CREDIT', 'PARTIAL'], 'Supplier'],
+            'sale' => ['TH-SALE', 'Milk and Product Sale', TransactionTypes::SALE, 'sales', ['CASH', 'PARTIAL', 'CREDIT'], 'Customer'],
+            'purchase' => ['TH-PUR', 'Feed and Materials Purchase', TransactionTypes::PURCHASE, 'feed_expense', ['CASH', 'PARTIAL', 'CREDIT'], 'Supplier'],
             'customer_collection' => ['TH-COL', 'Customer Due Collection', TransactionTypes::CUSTOMER_COLLECTION, 'receivable', ['CASH'], 'Customer'],
             'supplier_payment' => ['TH-SPY', 'Supplier Due Payment', TransactionTypes::SUPPLIER_PAYMENT, 'supplier_payable', ['CASH'], 'Supplier'],
-            'salary' => ['TH-EXP-SAL', 'Salary Expense', TransactionTypes::EXPENSE, 'salary', ['CASH', 'CREDIT', 'PARTIAL'], 'Worker'],
-            'internet' => ['TH-EXP-NET', 'Internet and Mobile Expense', TransactionTypes::EXPENSE, 'internet', ['CASH', 'CREDIT', 'PARTIAL'], 'Any'],
+            'salary' => ['TH-EXP-SAL', 'Salary Expense', TransactionTypes::EXPENSE, 'salary', ['CASH', 'PARTIAL', 'CREDIT'], 'Worker'],
+            'internet' => ['TH-EXP-NET', 'Internet and Mobile Expense', TransactionTypes::EXPENSE, 'internet', ['CASH', 'PARTIAL', 'CREDIT'], 'Any'],
             'owner_investment' => ['TH-OIN', 'Owner Investment', TransactionTypes::OWNER_INVESTMENT, 'capital', ['CASH'], 'Owner'],
             'owner_withdrawal' => ['TH-OWD', 'Owner Withdrawal', TransactionTypes::OWNER_WITHDRAWAL, 'drawing', ['CASH'], 'Owner'],
             'loan_received' => ['TH-LRV', 'Loan Received', TransactionTypes::LOAN_RECEIVED, 'loan', ['CASH'], 'Lender'],
             'loan_repayment' => ['TH-LRP', 'Loan Principal Repayment', TransactionTypes::LOAN_REPAYMENT, 'loan', ['CASH'], 'Lender'],
             'loan_interest' => ['TH-LIP', 'Loan Interest Payment', TransactionTypes::LOAN_INTEREST_PAYMENT, 'interest', ['CASH'], 'Lender'],
-            'asset_purchase' => ['TH-AST', 'Vehicle or Equipment Purchase', TransactionTypes::ASSET_PURCHASE, 'vehicle_asset', ['CASH', 'CREDIT', 'PARTIAL'], 'Supplier'],
+            'asset_purchase' => ['TH-AST', 'Vehicle or Equipment Purchase', TransactionTypes::ASSET_PURCHASE, 'vehicle_asset', ['CASH', 'PARTIAL', 'CREDIT'], 'Supplier'],
         ];
 
         $heads = [];

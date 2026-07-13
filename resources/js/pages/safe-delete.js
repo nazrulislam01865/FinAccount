@@ -89,6 +89,11 @@ if (safeDeleteModal) {
 
     document.querySelectorAll('[data-safe-delete-form]').forEach((form) => {
         form.addEventListener('submit', async (event) => {
+            if (event.defaultPrevented) return;
+
+            const requiredAction = form.dataset.safeDeleteWhenAction;
+            if (requiredAction && new FormData(form).get('bulk_action') !== requiredAction) return;
+
             event.preventDefault();
             activeForm = form;
             errorBox.hidden = true;
