@@ -15,3 +15,5 @@ import './pages/safe-delete';
 import './pages/execution-buttons';
 import './pages/form-drafts';
 import './pages/profile-photo';
+
+import './pages/feed-module';

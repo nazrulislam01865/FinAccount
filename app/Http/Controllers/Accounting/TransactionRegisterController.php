@@ -52,9 +52,13 @@ class TransactionRegisterController extends Controller
         ]);
     }
 
-    public function edit(Request $request, Transaction $transaction): View
+    public function edit(Request $request, Transaction $transaction): View|RedirectResponse
     {
         $this->ensureCompany($request, $transaction);
+
+        if ($transaction->feedDocument()->exists()) {
+            return redirect()->route('feed.inventory.index')->with('error', 'Feed purchases and sales cannot be edited from the generic Transaction Entry page because stock and COGS must remain synchronized. Delete the latest feed movement and repost it instead.');
+        }
 
         $transaction->load(['transactionHead.postingAccount', 'moneyAccount', 'party', 'attachments.uploader']);
         $company = $request->user()->company;
@@ -62,8 +66,10 @@ class TransactionRegisterController extends Controller
         $companyId = $company->id;
 
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
-        $storedCategoryOption = $transactionCategories->firstWhere('value', $transaction->category);
-        $requestedCategoryOption = $transactionCategories->firstWhere('value', $request->string('category')->toString());
+        $storedCategoryOption = $transactionCategories
+            ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, (string) $transaction->category) === 0);
+        $requestedCategoryOption = $transactionCategories
+            ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $request->string('category')->toString()) === 0);
         $categoryOption = $storedCategoryOption ?? $requestedCategoryOption ?? $transactionCategories->first();
         abort_if($categoryOption === null, 422, 'Add an active Transaction Type before repairing this transaction.');
         $category = $categoryOption->value;
@@ -97,6 +103,10 @@ class TransactionRegisterController extends Controller
         Transaction $transaction,
     ): RedirectResponse {
         $this->ensureCompany($request, $transaction);
+
+        if ($transaction->feedDocument()->exists()) {
+            return redirect()->route('feed.inventory.index')->with('error', 'Feed purchases and sales cannot be updated from generic Transaction Entry because stock and COGS must remain synchronized.');
+        }
 
         $updated = $this->transactionUpdateService->update(
             $transaction,

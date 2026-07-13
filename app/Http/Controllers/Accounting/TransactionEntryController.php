@@ -55,12 +55,12 @@ class TransactionEntryController extends Controller
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
         $dueSettlementContext = $this->dueSettlementContext($request, $companyId);
         $requestedCategory = $dueSettlementContext['active']
-            ? $dueSettlementContext['category']
-            : strtoupper($request->string('category')->toString());
-        $category = $transactionCategories->contains('value', $requestedCategory)
-            ? $requestedCategory
-            : ($transactionCategories->first()?->value ?? '');
-        $categoryOption = $transactionCategories->firstWhere('value', $category);
+            ? (string) $dueSettlementContext['category']
+            : $request->string('category')->toString();
+        $categoryOption = $transactionCategories
+            ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, trim($requestedCategory)) === 0)
+            ?? $transactionCategories->first();
+        $category = $categoryOption?->value ?? '';
         $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
 
         return view('transactions.create', [
@@ -86,7 +86,11 @@ class TransactionEntryController extends Controller
     public function preview(Request $request): JsonResponse
     {
         $companyId = (int) $request->user()->company_id;
-        $category = strtoupper((string) $request->input('category'));
+        $category = $this->optionService->canonicalActiveValue(
+            AccountingOption::GROUP_TRANSACTION_CATEGORY,
+            (string) $request->input('category'),
+        ) ?? trim((string) $request->input('category'));
+        $request->merge(['category' => $category]);
 
         $validated = $request->validate([
             'category' => [
@@ -105,8 +109,9 @@ class TransactionEntryController extends Controller
                 'required', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
-                    ->where('category', $category)
+                    ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                     ->where('is_active', true)
+                    ->where('code', 'not like', 'SYS-FEED-%')
                     ->whereNotNull('posting_account_id')),
             ],
             'money_account_id' => [
@@ -129,8 +134,9 @@ class TransactionEntryController extends Controller
         $head = TransactionHead::query()
             ->with('postingAccount')
             ->where('company_id', $companyId)
-            ->where('category', $category)
+            ->whereRaw('LOWER(category) = ?', [strtolower($category)])
             ->where('is_active', true)
+            ->where('code', 'not like', 'SYS-FEED-%')
             ->whereNotNull('posting_account_id')
             ->whereHas('postingAccount', fn ($query) => $query
                 ->where('company_id', $companyId)

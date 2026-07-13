@@ -18,8 +18,9 @@ class TransactionEntryOptionService
         return TransactionHead::query()
             ->with('postingAccount')
             ->where('company_id', $companyId)
-            ->where('category', $category)
+            ->whereRaw('LOWER(category) = ?', [strtolower($category)])
             ->where('is_active', true)
+            ->where('code', 'not like', 'SYS-FEED-%')
             ->whereNotNull('posting_account_id')
             ->whereHas('postingAccount', fn ($query) => $query
                 ->where('company_id', $companyId)

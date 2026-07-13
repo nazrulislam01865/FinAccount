@@ -37,7 +37,10 @@ class StoreTransactionHeadRequest extends FormRequest
         $this->merge([
             'code' => trim((string) $this->input('code')),
             'name' => trim((string) $this->input('name')),
-            'category' => strtoupper(trim((string) $this->input('category'))),
+            'category' => $this->canonicalActiveAccountingOption(
+                AccountingOption::GROUP_TRANSACTION_CATEGORY,
+                $this->input('category'),
+            ),
             'allowed_settlements' => array_values(array_unique(array_map(
                 static fn ($value): string => strtoupper(trim((string) $value)),
                 (array) $this->input('allowed_settlements', []),

@@ -66,6 +66,11 @@ class Transaction extends Model
         return $this->hasOne(SalesInvoice::class);
     }
 
+    public function feedDocument(): HasOne
+    {
+        return $this->hasOne(\App\Models\Feed\FeedDocument::class);
+    }
+
     public function attachments(): HasMany
     {
         return $this->hasMany(TransactionAttachment::class);

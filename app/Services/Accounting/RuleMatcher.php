@@ -12,7 +12,7 @@ class RuleMatcher
         $rule = AccountingRule::query()
             ->with('lines')
             ->where('company_id', $companyId)
-            ->where('category', $transactionType)
+            ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
             ->where('settlement_type', $settlementType)
             ->where('is_active', true)
             ->orderBy('id')

@@ -14,7 +14,21 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
-return Application::configure(basePath: dirname(__DIR__))
+$basePath = dirname(__DIR__);
+
+foreach ([
+    $basePath.'/bootstrap/cache',
+    $basePath.'/storage/framework/cache/data',
+    $basePath.'/storage/framework/sessions',
+    $basePath.'/storage/framework/testing',
+    $basePath.'/storage/framework/views',
+] as $runtimePath) {
+    if (! is_dir($runtimePath)) {
+        @mkdir($runtimePath, 0775, true);
+    }
+}
+
+return Application::configure(basePath: $basePath)
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',

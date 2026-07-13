@@ -22,13 +22,25 @@
             <h1>{{ $isEditing ? 'Edit '.$pageTransactionLabel.' Transaction' : 'Record '.$pageTransactionLabel.' Transaction' }}</h1>
             <p class="hg-muted">{{ $isDueSettlement ? 'Settle the selected due. Party, due ledger, and transaction head are filled automatically.' : 'Enter the transaction details. Payment status and the journal are calculated automatically.' }}</p>
         </div>
+        @if(! $isEditing && ! $isDueSettlement && auth()->user()?->canAccounting('transactions.manage'))
+            <div class="hg-actions">
+                <a class="hg-btn" href="{{ route('feed.purchases.create') }}">🛒 Feed Purchase</a>
+                <a class="hg-btn" href="{{ route('feed.sales.create') }}">🧾 Feed Sale</a>
+            </div>
+        @endif
     </div>
 
     @if (! $isDueSettlement && (! $isEditing || $categoryRepairRequired))
         <div class="hg-tabs hg-transaction-type-tabs">
             @foreach ($transactionCategories as $categoryTab)
                 @php($definition = \App\Support\TransactionTypes::definition($categoryTab->value))
-                <a href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['category' => $categoryTab->value]) }}" class="{{ $category === $categoryTab->value ? 'active' : '' }}">
+                <a
+                    href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['category' => $categoryTab->value]) }}"
+                    class="{{ strcasecmp((string) $category, (string) $categoryTab->value) === 0 ? 'active' : '' }}"
+                    data-transaction-category-tab
+                    data-category="{{ $categoryTab->value }}"
+                    @if(strcasecmp((string) $category, (string) $categoryTab->value) === 0) aria-current="page" @endif
+                >
                     {{ $definition['label'] ?? $categoryTab->label }}
                 </a>
             @endforeach
@@ -106,6 +118,9 @@
                         @endforeach
                     </select>
                     @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    @if($transactionHeads->isEmpty() && ! $isDueSettlement)
+                        <small class="hg-field-error">No active Transaction Head is linked to {{ $transactionTypeLabel }}. Activate or create a matching head with an active posting account.</small>
+                    @endif
                 </div>
 
                 <div class="hg-field">

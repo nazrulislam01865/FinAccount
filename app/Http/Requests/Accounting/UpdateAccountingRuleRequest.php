@@ -35,7 +35,10 @@ class UpdateAccountingRuleRequest extends FormRequest
         $this->merge([
             'code' => strtoupper(trim((string) $this->input('code'))),
             'name' => trim((string) $this->input('name')),
-            'category' => strtoupper(trim((string) $this->input('category'))),
+            'category' => $this->canonicalActiveAccountingOption(
+                AccountingOption::GROUP_TRANSACTION_CATEGORY,
+                $this->input('category'),
+            ),
             'settlement_type' => strtoupper(trim((string) $this->input('settlement_type'))),
             'is_active' => $this->boolean('is_active'),
         ]);

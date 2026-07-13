@@ -35,7 +35,7 @@ class TransactionUpdateService
         if (
             $transaction->category !== null
             && $transaction->status !== 'incomplete'
-            && $transaction->category !== $data['category']
+            && strcasecmp((string) $transaction->category, (string) $data['category']) !== 0
         ) {
             throw ValidationException::withMessages([
                 'category' => 'The transaction type cannot be changed while editing a complete posted transaction.',
@@ -60,8 +60,9 @@ class TransactionUpdateService
             $head = TransactionHead::query()
                 ->with('postingAccount')
                 ->where('company_id', $user->company_id)
-                ->where('category', $transactionType)
+                ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
                 ->where('is_active', true)
+                ->where('code', 'not like', 'SYS-FEED-%')
                 ->whereNotNull('posting_account_id')
                 ->whereHas('postingAccount', fn ($query) => $query
                     ->where('company_id', $user->company_id)

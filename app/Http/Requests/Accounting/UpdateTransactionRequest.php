@@ -30,8 +30,9 @@ class UpdateTransactionRequest extends FormRequest
                 'required', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
-                    ->where('category', $category)
+                    ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                     ->where('is_active', true)
+                    ->where('code', 'not like', 'SYS-FEED-%')
                     ->whereNotNull('posting_account_id')),
             ],
             'money_account_id' => [
@@ -59,7 +60,10 @@ class UpdateTransactionRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'category' => strtoupper(trim((string) $this->input('category'))),
+            'category' => $this->canonicalActiveAccountingOption(
+                AccountingOption::GROUP_TRANSACTION_CATEGORY,
+                $this->input('category'),
+            ),
             'settlement_type' => filled($this->input('settlement_type'))
                 ? strtoupper(trim((string) $this->input('settlement_type')))
                 : null,

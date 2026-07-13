@@ -4,10 +4,15 @@ namespace App\Services\Accounting;
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Feed\FeedPostingService;
 use Illuminate\Support\Facades\DB;
 
 class TransactionDeletionService
 {
+    public function __construct(
+        private readonly FeedPostingService $feedPostingService,
+    ) {}
+
     public function delete(Transaction $transaction, User $user): void
     {
         if ($transaction->company_id !== $user->company_id) {
@@ -16,9 +21,14 @@ class TransactionDeletionService
 
         DB::transaction(function () use ($transaction, $user): void {
             $lockedTransaction = Transaction::query()
+                ->with('feedDocument.movements')
                 ->where('company_id', $user->company_id)
                 ->lockForUpdate()
                 ->findOrFail($transaction->id);
+
+            if ($lockedTransaction->feedDocument) {
+                $this->feedPostingService->reverseDocument($lockedTransaction->feedDocument);
+            }
 
             $journalEntry = $lockedTransaction->journalEntry()->first();
             $journalEntryId = $journalEntry?->id;

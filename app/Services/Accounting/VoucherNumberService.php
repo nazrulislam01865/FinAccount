@@ -8,14 +8,22 @@ use Illuminate\Validation\ValidationException;
 
 class VoucherNumberService
 {
+    public function __construct(private readonly AccountingOptionService $optionService) {}
+
     public function lock(int $companyId, string $category): DocumentSequence
     {
-        $categoryOption = AccountingOption::query()
-            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
-            ->active()
-            ->where('value', $category)
-            ->lockForUpdate()
-            ->first();
+        $canonicalCategory = $this->optionService->canonicalActiveValue(
+            AccountingOption::GROUP_TRANSACTION_CATEGORY,
+            $category,
+        );
+        $categoryOption = $canonicalCategory === null
+            ? null
+            : AccountingOption::query()
+                ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+                ->active()
+                ->where('value', $canonicalCategory)
+                ->lockForUpdate()
+                ->first();
 
         if (! $categoryOption) {
             throw ValidationException::withMessages([
@@ -23,9 +31,11 @@ class VoucherNumberService
             ]);
         }
 
+        $category = $categoryOption->value;
+
         $sequence = DocumentSequence::query()
             ->where('company_id', $companyId)
-            ->where('category', $category)
+            ->whereRaw('LOWER(category) = ?', [strtolower($category)])
             ->where('is_active', true)
             ->lockForUpdate()
             ->first();
@@ -66,7 +76,7 @@ class VoucherNumberService
 
             $sequence = DocumentSequence::query()
                 ->where('company_id', $companyId)
-                ->where('category', $category)
+                ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                 ->where('is_active', true)
                 ->lockForUpdate()
                 ->first();

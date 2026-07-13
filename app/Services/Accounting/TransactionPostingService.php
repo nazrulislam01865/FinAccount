@@ -59,8 +59,9 @@ class TransactionPostingService
             $head = TransactionHead::query()
                 ->with('postingAccount')
                 ->where('company_id', $user->company_id)
-                ->where('category', $transactionType)
+                ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
                 ->where('is_active', true)
+                ->where('code', 'not like', 'SYS-FEED-%')
                 ->whereNotNull('posting_account_id')
                 ->whereHas('postingAccount', fn ($query) => $query
                     ->where('company_id', $user->company_id)

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\MoneyAccount;
@@ -40,6 +41,58 @@ class TransactionEntryDropdownTest extends TestCase
             ->assertOk()
             ->assertSee('Database Expense Head')
             ->assertDontSee('Database Sale Head');
+    }
+
+
+    public function test_mixed_case_custom_transaction_type_can_be_selected_and_loads_legacy_case_heads(): void
+    {
+        [$user, $accounts] = $this->companyUserWithAccounts();
+
+        AccountingOption::query()->create([
+            'option_group' => AccountingOption::GROUP_TRANSACTION_CATEGORY,
+            'value' => 'Payment',
+            'label' => 'Payment',
+            'sort_order' => 15,
+            'metadata' => [
+                'voucher_prefix' => 'PAY',
+                'money_label' => 'Pay From',
+                'flow' => 'outgoing',
+                'allowed_settlements' => TransactionTypes::ALL_SETTLEMENTS,
+                'default_settlements' => [TransactionTypes::CASH],
+            ],
+            'is_active' => true,
+        ]);
+
+        $head = $this->head(
+            $user->company_id,
+            $accounts['expense']->id,
+            'HPM',
+            'Legacy Payment Head',
+            'PAYMENT',
+        );
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['category' => 'Payment']))
+            ->assertOk()
+            ->assertSee('Record Payment Transaction')
+            ->assertSee('name="category" value="Payment"', false)
+            ->assertSee('Legacy Payment Head');
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['category' => 'payment']))
+            ->assertOk()
+            ->assertSee('name="category" value="Payment"', false)
+            ->assertSee('Legacy Payment Head');
+
+        $this->actingAs($user)
+            ->getJson(route('transactions.preview', [
+                'category' => 'payment',
+                'settlement_type' => TransactionTypes::CASH,
+                'transaction_head_id' => $head->id,
+                'amount' => 100,
+                'paid_amount' => 100,
+            ]))
+            ->assertOk();
     }
 
     public function test_money_dropdown_only_uses_active_money_accounts_with_active_coa(): void

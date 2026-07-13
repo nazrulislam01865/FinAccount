@@ -12,6 +12,21 @@ document.documentElement.classList.toggle('hg-mobile-capture-device', mobileCapt
 document.body?.classList.toggle('hg-mobile-capture-device', mobileCaptureDevice);
 window.HisebGhorMobileCaptureDevice = mobileCaptureDevice;
 
+
+const transactionCategoryTabs = document.querySelectorAll('[data-transaction-category-tab]');
+
+transactionCategoryTabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+        window.HisebGhorSearchableSelect?.closeAll();
+        transactionCategoryTabs.forEach((item) => {
+            item.classList.remove('active');
+            item.removeAttribute('aria-current');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-current', 'page');
+    });
+});
+
 const page = document.querySelector('[data-transaction-entry]');
 
 if (page) {
@@ -38,6 +53,8 @@ if (page) {
     const emptyPreviewTemplate = document.getElementById('journal-preview-empty-template');
     const previewUrl = preview?.dataset.previewUrl;
     let previewTimer;
+    let previewRequestController = null;
+    let previewRequestVersion = 0;
     const dueSettlementMode = form?.dataset.dueSettlement === '1';
     let autoSyncPaidAmount = form?.dataset.autoSyncPaid === '1';
 
@@ -256,10 +273,18 @@ if (page) {
             paid_amount: paidAmount?.value || '',
         });
 
+        previewRequestController?.abort();
+        previewRequestController = new AbortController();
+        const requestVersion = ++previewRequestVersion;
+
         try {
-            const response = await fetch(`${previewUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
+            const response = await fetch(`${previewUrl}?${params.toString()}`, {
+                headers: { Accept: 'application/json' },
+                signal: previewRequestController.signal,
+            });
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || 'Preview request failed.');
+            if (requestVersion !== previewRequestVersion) return;
 
             preview.innerHTML = data.html;
             if (settlement && data.settlementType) settlement.value = data.settlementType;
@@ -291,7 +316,8 @@ if (page) {
             } else if (syncPartyRequirement(Boolean(data.partyRequired), data.partyType)) {
                 window.setTimeout(refreshPreview, 0);
             }
-        } catch (_) {
+        } catch (error) {
+            if (error?.name === 'AbortError' || requestVersion !== previewRequestVersion) return;
             preview.innerHTML = '<div class="hg-notice">The summary could not be loaded. Check the selected setup and try again.</div>';
         }
     };

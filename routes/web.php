@@ -29,6 +29,10 @@ use App\Http\Controllers\Accounting\TransactionAttachmentController;
 use App\Http\Controllers\Accounting\TransactionHeadController;
 use App\Http\Controllers\Accounting\TransactionRegisterController;
 use App\Http\Controllers\Accounting\VoucherSequenceController;
+use App\Http\Controllers\Feed\FeedInventoryController;
+use App\Http\Controllers\Feed\FeedPurchaseController;
+use App\Http\Controllers\Feed\FeedSaleController;
+use App\Http\Controllers\Feed\FeedSetupController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BrandAssetController;
 use App\Http\Controllers\Landing\LandingAdminAuthController;
@@ -132,6 +136,32 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
 
     Route::delete('/transactions/{transaction}', [TransactionRegisterController::class, 'destroy'])
         ->middleware(['accounting.permission:transactions.manage', 'accounting.permission:records.delete'])->name('transactions.destroy');
+
+
+    Route::prefix('feed')->name('feed.')->group(function (): void {
+        Route::get('/purchase', [FeedPurchaseController::class, 'create'])
+            ->middleware('accounting.permission:transactions.manage')->name('purchases.create');
+        Route::post('/purchase', [FeedPurchaseController::class, 'store'])
+            ->middleware('accounting.permission:transactions.manage')->name('purchases.store');
+        Route::get('/sale', [FeedSaleController::class, 'create'])
+            ->middleware('accounting.permission:transactions.manage')->name('sales.create');
+        Route::post('/sale', [FeedSaleController::class, 'store'])
+            ->middleware('accounting.permission:transactions.manage')->name('sales.store');
+        Route::get('/inventory', [FeedInventoryController::class, 'index'])
+            ->middleware('accounting.permission:transactions.view')->name('inventory.index');
+        Route::get('/setup', [FeedSetupController::class, 'index'])
+            ->middleware('accounting.permission:transactions.manage')->name('setup.index');
+        Route::post('/setup/items', [FeedSetupController::class, 'storeItem'])
+            ->middleware('accounting.permission:transactions.manage')->name('setup.items.store');
+        Route::patch('/setup/items/{feedItem}/toggle', [FeedSetupController::class, 'toggleItem'])
+            ->middleware('accounting.permission:transactions.manage')->name('setup.items.toggle');
+        Route::post('/setup/warehouses', [FeedSetupController::class, 'storeWarehouse'])
+            ->middleware('accounting.permission:transactions.manage')->name('setup.warehouses.store');
+        Route::patch('/setup/warehouses/{feedWarehouse}/toggle', [FeedSetupController::class, 'toggleWarehouse'])
+            ->middleware('accounting.permission:transactions.manage')->name('setup.warehouses.toggle');
+        Route::patch('/setup/warehouses/{feedWarehouse}/default', [FeedSetupController::class, 'setDefaultWarehouse'])
+            ->middleware('accounting.permission:transactions.manage')->name('setup.warehouses.default');
+    });
 
     Route::get('/journal-entries', [JournalEntryController::class, 'index'])
         ->middleware('accounting.permission:journals.view')->name('journal-entries.index');

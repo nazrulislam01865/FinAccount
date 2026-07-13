@@ -39,12 +39,24 @@ class AccountingOptionService
         return $this->forGroup($group)->first()?->value ?? $fallback;
     }
 
+    public function activeOption(string $group, ?string $value): ?AccountingOption
+    {
+        $candidate = trim((string) $value);
+        if ($candidate === '') {
+            return null;
+        }
+
+        return $this->forGroup($group)
+            ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $candidate) === 0);
+    }
+
+    public function canonicalActiveValue(string $group, ?string $value): ?string
+    {
+        return $this->activeOption($group, $value)?->value;
+    }
+
     public function isActiveValue(string $group, string $value): bool
     {
-        return AccountingOption::query()
-            ->forGroup($group)
-            ->active()
-            ->where('value', $value)
-            ->exists();
+        return $this->activeOption($group, $value) !== null;
     }
 }

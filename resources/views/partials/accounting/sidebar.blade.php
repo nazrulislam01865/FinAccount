@@ -65,6 +65,20 @@
         @endif
         @endif
 
+        @if($user?->canAnyAccounting(['transactions.view','transactions.manage']))
+        <div class="hg-nav-section">Feed Business</div>
+        @if($user?->canAccounting('transactions.manage'))
+        <a href="{{ route('feed.purchases.create') }}" class="{{ request()->routeIs('feed.purchases.*') ? 'active' : '' }}"><span class="hg-nav-icon">🛒</span><span class="hg-nav-text">Feed Purchase</span></a>
+        <a href="{{ route('feed.sales.create') }}" class="{{ request()->routeIs('feed.sales.*') ? 'active' : '' }}"><span class="hg-nav-icon">🧾</span><span class="hg-nav-text">Feed Sale</span></a>
+        @endif
+        @if($user?->canAccounting('transactions.view'))
+        <a href="{{ route('feed.inventory.index') }}" class="{{ request()->routeIs('feed.inventory.*') ? 'active' : '' }}"><span class="hg-nav-icon">▦</span><span class="hg-nav-text">Feed Inventory</span></a>
+        @endif
+        @if($user?->canAccounting('transactions.manage'))
+        <a href="{{ route('feed.setup.index') }}" class="{{ request()->routeIs('feed.setup.*') ? 'active' : '' }}"><span class="hg-nav-icon">⚙️</span><span class="hg-nav-text">Feed Setup</span></a>
+        @endif
+        @endif
+
         @if($user?->canAnyAccounting(['balances.view','statements.view']))
         <div class="hg-nav-section">Reports</div>
         @if($user?->canAccounting('statements.view'))
