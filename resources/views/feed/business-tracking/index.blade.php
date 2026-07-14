@@ -70,6 +70,7 @@
                                                     data-unit-type="{{ $unit->unit_type }}"
                                                     data-location="{{ $unit->location }}"
                                                     data-name="{{ $unit->name }}"
+                                                    data-items="{{ json_encode($unit->items ?? []) }}"
                                                     data-parent-id="{{ $unit->parent_id }}"
                                                     data-responsible-person="{{ $unit->responsible_person }}"
                                                     data-start-date="{{ optional($unit->start_date)->format('Y-m-d') }}"
@@ -104,6 +105,7 @@
                                                         data-unit-type="{{ $child->unit_type }}"
                                                         data-location="{{ $child->location }}"
                                                         data-name="{{ $child->name }}"
+                                                        data-items="{{ json_encode($child->items ?? []) }}"
                                                         data-parent-id="{{ $child->parent_id }}"
                                                         data-responsible-person="{{ $child->responsible_person }}"
                                                         data-start-date="{{ optional($child->start_date)->format('Y-m-d') }}"
@@ -160,6 +162,14 @@
                             <div class="feed-field">
                                 <label id="trackingUnitNameLabel">Unit Name <span class="feed-req">*</span></label>
                                 <input id="trackingUnitName" class="feed-control" name="name" value="{{ old('name') }}" placeholder="e.g. Shed 03" required>
+                            </div>
+
+                            <div class="feed-field">
+                                <label>Items (Optional)</label>
+                                <div id="trackingUnitItemsContainer">
+                                    <input type="text" class="feed-control" name="items[]" placeholder="Enter item name" style="margin-bottom: 8px;">
+                                </div>
+                                <button type="button" id="addTrackingUnitItemBtn" class="feed-btn feed-btn-sm feed-btn-soft" style="margin-top: 4px;">+ Add Item</button>
                             </div>
 
                             <div class="feed-field">

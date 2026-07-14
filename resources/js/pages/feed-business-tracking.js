@@ -13,6 +13,8 @@ if (config) {
     const statusSelect = document.getElementById('trackingStatus');
     const description = document.getElementById('trackingDescription');
     const methodField = unitForm?.querySelector('[data-form-method]');
+    const itemsContainer = document.getElementById('trackingUnitItemsContainer');
+    const addItemBtn = document.getElementById('addTrackingUnitItemBtn');
     const submitLabel = unitForm?.querySelector('[data-unit-submit-label]');
 
     const defaultBusinessArea = config.defaultBusinessArea || Object.keys(config.config || {})[0] || '';
@@ -43,6 +45,26 @@ if (config) {
         if (unitName) unitName.placeholder = `e.g. ${business.unitLabel || 'Unit'} ${businessKey === 'cattle' ? '03' : businessKey === 'fish' ? 'C' : 'Name'}`;
     };
 
+    const createItemRow = (value = '') => {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'feed-control';
+        input.name = 'items[]';
+        input.placeholder = 'Enter item name';
+        input.style.marginBottom = '8px';
+        input.value = value;
+        return input;
+    };
+
+    document.body.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'addTrackingUnitItemBtn') {
+            const container = document.getElementById('trackingUnitItemsContainer');
+            if (container) {
+                container.appendChild(createItemRow());
+            }
+        }
+    });
+
     const resetUnitForm = () => {
         if (!unitForm) return;
 
@@ -56,6 +78,10 @@ if (config) {
         startDate.value = new Date().toISOString().slice(0, 10);
         statusSelect.value = '1';
         description.value = '';
+        if (itemsContainer) {
+            itemsContainer.innerHTML = '';
+            itemsContainer.appendChild(createItemRow());
+        }
         submitLabel.textContent = 'Save Tracking Unit';
     };
 
@@ -72,6 +98,20 @@ if (config) {
         startDate.value = button.dataset.startDate || '';
         statusSelect.value = button.dataset.isActive === '0' ? '0' : '1';
         description.value = button.dataset.description || '';
+        
+        if (itemsContainer) {
+            itemsContainer.innerHTML = '';
+            let items = [];
+            try {
+                items = JSON.parse(button.dataset.items || '[]');
+            } catch (e) {}
+            if (!items.length) {
+                itemsContainer.appendChild(createItemRow());
+            } else {
+                items.forEach(item => itemsContainer.appendChild(createItemRow(item)));
+            }
+        }
+        
         submitLabel.textContent = 'Update Tracking Unit';
         unitName.focus();
     };

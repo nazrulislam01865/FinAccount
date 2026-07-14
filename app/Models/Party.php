@@ -10,7 +10,7 @@ class Party extends Model
 {
     protected $fillable = [
         'company_id', 'code', 'name', 'type', 'receivable_account_id',
-        'payable_account_id', 'is_active',
+        'payable_account_id', 'is_active', 'phone', 'email', 'address', 'profile_pic',
     ];
 
     protected function casts(): array

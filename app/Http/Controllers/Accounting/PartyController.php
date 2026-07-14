@@ -38,7 +38,12 @@ class PartyController extends Controller
 
     public function store(StorePartyRequest $request): RedirectResponse
     {
-        $this->service->create($request->validated(), $request->user()->company_id);
+        $data = $request->validated();
+        if ($request->hasFile('profile_pic')) {
+            $data['profile_pic'] = $request->file('profile_pic')->store('parties', 'public');
+        }
+
+        $this->service->create($data, $request->user()->company_id);
 
         return $this->redirectAfterAccountingSave($request, 'parties.view', 'parties.index', 'Record saved');
     }
@@ -46,7 +51,16 @@ class PartyController extends Controller
     public function update(UpdatePartyRequest $request, Party $party): RedirectResponse
     {
         $this->ensureCompany($request, $party);
-        $this->service->update($party, $request->validated());
+        
+        $data = $request->validated();
+        if ($request->hasFile('profile_pic')) {
+            if ($party->profile_pic) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($party->profile_pic);
+            }
+            $data['profile_pic'] = $request->file('profile_pic')->store('parties', 'public');
+        }
+
+        $this->service->update($party, $data);
 
         return $this->redirectAfterAccountingSave($request, 'parties.view', 'parties.index', 'Record saved');
     }

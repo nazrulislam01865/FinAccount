@@ -270,13 +270,22 @@ class PartyService
     /** @param array<string, mixed> $data @return array<string, mixed> */
     private function normalized(array $data): array
     {
-        return [
+        $normalized = [
             'code' => trim((string) ($data['code'] ?? '')),
             'name' => trim((string) $data['name']),
             'type' => $data['type'],
             'receivable_account_id' => $data['receivable_account_id'] ?: null,
             'payable_account_id' => $data['payable_account_id'] ?: null,
             'is_active' => (bool) $data['is_active'],
+            'phone' => filled($data['phone'] ?? null) ? $data['phone'] : null,
+            'email' => filled($data['email'] ?? null) ? $data['email'] : null,
+            'address' => filled($data['address'] ?? null) ? $data['address'] : null,
         ];
+
+        if (array_key_exists('profile_pic', $data)) {
+            $normalized['profile_pic'] = $data['profile_pic'];
+        }
+
+        return $normalized;
     }
 }

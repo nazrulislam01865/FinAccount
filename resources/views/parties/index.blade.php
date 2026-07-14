@@ -80,6 +80,8 @@
 
         #party-modal .hg-modal-body {
             padding: 24px;
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
         }
 
         .hg-party-form {
@@ -296,6 +298,9 @@
                                             'code' => $party->code,
                                             'name' => $party->name,
                                             'type' => $party->type,
+                                            'phone' => $party->phone,
+                                            'email' => $party->email,
+                                            'address' => $party->address,
                                             'is_active' => $party->is_active ? '1' : '0',
                                         ]) }}"
                                     >Edit</button>
@@ -352,7 +357,7 @@
             :store-url="route('parties.store')"
             create-title="Add Party"
         >
-            <form method="POST" action="{{ $editingParty ? route('parties.update', $editingParty) : route('parties.store') }}" class="hg-party-form" data-setup-form data-party-form
+            <form method="POST" action="{{ $editingParty ? route('parties.update', $editingParty) : route('parties.store') }}" enctype="multipart/form-data" class="hg-party-form" data-setup-form data-party-form
                 data-draft-form
                 data-draft-defer
                 data-draft-key-base="parties"
@@ -373,6 +378,33 @@
                     <label for="party-name">Party Name <span class="hg-required">*</span></label>
                     <input id="party-name" name="name" value="{{ old('name', $editingParty?->name) }}" required autocomplete="off" placeholder="Enter party name">
                     @error('name')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field full">
+                    <label for="party-phone">Phone</label>
+                    <input id="party-phone" name="phone" value="{{ old('phone', $editingParty?->phone) }}" autocomplete="off" placeholder="Enter phone number">
+                    @error('phone')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field full">
+                    <label for="party-email">Email</label>
+                    <input type="email" id="party-email" name="email" value="{{ old('email', $editingParty?->email) }}" autocomplete="off" placeholder="Enter email address">
+                    @error('email')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field full">
+                    <label for="party-address">Address</label>
+                    <textarea id="party-address" name="address" rows="3" class="feed-control" placeholder="Enter full address">{{ old('address', $editingParty?->address) }}</textarea>
+                    @error('address')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field full">
+                    <label for="party-profile-pic">Profile Picture (Optional)</label>
+                    <input type="file" id="party-profile-pic" name="profile_pic" accept="image/*">
+                    @if($editingParty && $editingParty->profile_pic)
+                        <small class="hg-field-help">A profile picture is already uploaded. Uploading a new one will replace it.</small>
+                    @endif
+                    @error('profile_pic')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
                 <div class="hg-field full">

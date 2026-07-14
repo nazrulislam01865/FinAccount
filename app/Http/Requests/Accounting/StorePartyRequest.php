@@ -22,6 +22,10 @@ class StorePartyRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_PARTY_TYPE)],
             'is_active' => ['required', 'boolean'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'address' => ['nullable', 'string', 'max:1000'],
+            'profile_pic' => ['nullable', 'image', 'max:5120'],
         ];
     }
 
@@ -32,6 +36,9 @@ class StorePartyRequest extends FormRequest
             'name' => trim((string) $this->input('name')),
             'type' => trim((string) $this->input('type')),
             'is_active' => $this->boolean('is_active'),
+            'phone' => trim((string) $this->input('phone')),
+            'email' => trim((string) $this->input('email')),
+            'address' => trim((string) $this->input('address')),
         ]);
     }
 }

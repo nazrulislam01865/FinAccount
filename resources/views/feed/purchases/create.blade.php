@@ -53,7 +53,7 @@
                     @csrf
                     <input type="hidden" name="request_token" value="{{ $requestToken }}">
 
-                    <div class="feed-grid-4">
+                    <div class="feed-grid-3">
                         <div class="feed-field">
                             <label for="transaction_date">Date <span class="feed-req">*</span></label>
                             <input class="feed-control" id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $transactionDateContext['default']) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
@@ -70,10 +70,6 @@
                             @if($suppliers->isEmpty())<div class="feed-warning-text">Add an active Supplier in Parties before posting.</div>@endif
                         </div>
                         <div class="feed-field">
-                            <label for="external_invoice_no">Supplier Invoice</label>
-                            <input class="feed-control" id="external_invoice_no" name="external_invoice_no" value="{{ old('external_invoice_no') }}" placeholder="Supplier invoice / challan">
-                        </div>
-                        <div class="feed-field">
                             <label for="tracking_unit_id">Warehouse <span class="feed-req">*</span></label>
                             <select class="feed-control" id="tracking_unit_id" name="tracking_unit_id" required data-feed-warehouse data-hg-searchable-ignore>
                                 @foreach($warehouses as $warehouse)
@@ -83,24 +79,7 @@
                         </div>
                     </div>
 
-                    <div class="feed-grid-4 feed-section-gap">
-                        <div class="feed-field">
-                            <label>Posting Mode</label>
-                            <input class="feed-control feed-readonly" value="Direct to Feed Ledger" readonly>
-                        </div>
-                        <div class="feed-field">
-                            <label>Purchase Type</label>
-                            <input class="feed-control feed-readonly" value="Regular Purchase" readonly>
-                        </div>
-                        <div class="feed-field">
-                            <label>Inventory Ledger</label>
-                            <input class="feed-control feed-readonly" value="{{ $settings->purchaseTransactionHead?->postingAccount?->code ?? 'N/A' }} — {{ $settings->purchaseTransactionHead?->postingAccount?->name ?? 'Account not configured' }}" readonly>
-                        </div>
-                        <div class="feed-field">
-                            <label for="reference">Reference</label>
-                            <input class="feed-control" id="reference" name="reference" value="{{ old('reference') }}" placeholder="Challan / PO / payment reference">
-                        </div>
-                    </div>
+
 
                     <div class="feed-divider"></div>
                     <div class="feed-section-title">Feed Items</div>
@@ -127,22 +106,14 @@
                     </div>
 
                     <div class="feed-divider"></div>
-                    <div class="feed-grid-3">
+                    <div class="feed-grid-2">
                         <div class="feed-field">
-                            <label for="transport_cost">Transport Cost</label>
-                            <input class="feed-control" id="transport_cost" name="transport_cost" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('transport_cost', 0) }}" data-feed-money-input>
-                        </div>
-                        <div class="feed-field">
-                            <label for="other_cost">Other Cost</label>
+                            <label for="other_cost">Other Cost (Transport, etc.)</label>
                             <input class="feed-control" id="other_cost" name="other_cost" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('other_cost', 0) }}" data-feed-money-input>
                         </div>
                         <div class="feed-field">
-                            <label for="cost_allocation">Cost Allocation</label>
-                            <select class="feed-control" id="cost_allocation" name="cost_allocation" data-hg-searchable-ignore>
-                                <option value="quantity" @selected(old('cost_allocation', 'value') === 'quantity')>Allocate by quantity</option>
-                                <option value="value" @selected(old('cost_allocation', 'value') === 'value')>Allocate by item value</option>
-                            </select>
-                            <div class="feed-help">Landed costs are included in weighted-average inventory value.</div>
+                            <label for="calculated_total_cost">Total Cost</label>
+                            <input class="feed-control feed-readonly" id="calculated_total_cost" readonly>
                         </div>
                     </div>
 

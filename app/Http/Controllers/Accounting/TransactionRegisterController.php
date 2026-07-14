@@ -115,9 +115,7 @@ class TransactionRegisterController extends Controller
                 ->orderBy('name')
                 ->get()
             : collect();
-        $saleSellingTypeOptions = [SaleSellingTypes::OTHERS => 'Others'] + $saleBusinessAreas
-            ->mapWithKeys(fn (FeedBusinessArea $area): array => [$area->code => $area->name])
-            ->all();
+        $saleSellingTypeOptions = [SaleSellingTypes::OTHERS => 'Others', 'feed' => 'Feed'];
         $saleWarehouses = $isSaleCategory
             ? FeedWarehouse::query()
                 ->where('company_id', $companyId)

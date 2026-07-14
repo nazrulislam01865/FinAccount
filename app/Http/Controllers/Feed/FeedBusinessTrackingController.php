@@ -223,6 +223,8 @@ class FeedBusinessTrackingController extends Controller
             'start_date' => ['nullable', 'date'],
             'is_active' => ['required', 'boolean'],
             'description' => ['nullable', 'string', 'max:5000'],
+            'items' => ['nullable', 'array', 'max:50'],
+            'items.*' => ['nullable', 'string', 'max:255'],
         ]);
 
         if (! in_array($validated['unit_type'], $this->unitTypesForArea($companyId, $validated['business_area']), true)) {
@@ -253,6 +255,9 @@ class FeedBusinessTrackingController extends Controller
         $validated['description'] = filled($validated['description'] ?? null) ? trim($validated['description']) : null;
         $validated['is_active'] = (bool) $validated['is_active'];
         $validated['parent_id'] = $validated['parent_id'] ?? null;
+        
+        $items = array_filter(array_map('trim', $validated['items'] ?? []));
+        $validated['items'] = array_values($items);
 
         return $validated;
     }

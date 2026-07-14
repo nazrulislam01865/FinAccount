@@ -27,6 +27,7 @@ class FeedBusinessTrackingUnit extends Model
         'start_date',
         'description',
         'is_active',
+        'items',
     ];
 
     protected function casts(): array
@@ -34,6 +35,7 @@ class FeedBusinessTrackingUnit extends Model
         return [
             'start_date' => 'date',
             'is_active' => 'boolean',
+            'items' => 'array',
         ];
     }
 
