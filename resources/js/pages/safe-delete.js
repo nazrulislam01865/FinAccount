@@ -43,12 +43,21 @@ if (safeDeleteModal) {
             },
         });
 
-        const payload = await response.json().catch(() => ({
-            success: false,
-            message: 'The server returned an invalid response.',
-        }));
+        const responseText = await response.text();
+        let payload = null;
 
-        if (!response.ok) {
+        try {
+            payload = responseText ? JSON.parse(responseText) : {};
+        } catch (error) {
+            payload = {
+                success: false,
+                message: response.ok
+                    ? 'The server returned an invalid response.'
+                    : `Deletion request failed with HTTP ${response.status}. Please check the server log.`,
+            };
+        }
+
+        if (!response.ok || payload?.success === false) {
             const firstValidationError = Object.values(payload.errors || {})
                 .flat()
                 .find((message) => typeof message === 'string' && message.length > 0);

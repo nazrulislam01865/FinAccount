@@ -108,7 +108,7 @@ class FeedSetupController extends Controller
             $request,
             $this->safeDeleteService->inspectFeedItem($feedItem),
             fn () => $this->safeDeleteService->deleteFeedItem($feedItem),
-            'feed.setup',
+            'feed.setup.index',
             'Feed item deleted permanently.',
         );
     }
@@ -193,7 +193,7 @@ class FeedSetupController extends Controller
             $request,
             $this->safeDeleteService->inspectFeedWarehouse($feedWarehouse),
             fn () => $this->safeDeleteService->deleteFeedWarehouse($feedWarehouse),
-            'feed.setup',
+            'feed.setup.index',
             'Feed warehouse deleted permanently.',
         );
     }
