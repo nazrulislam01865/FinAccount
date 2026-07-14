@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
+use App\Models\Feed\FeedWarehouse;
 use App\Models\MoneyAccount;
 use App\Models\TransactionHead;
 use App\Models\User;
@@ -196,6 +197,57 @@ class TransactionEntryDropdownTest extends TestCase
             ->assertOk()
             ->assertSee('Record Sales Transaction')
             ->assertSee('name="category" value="SALE"', false);
+    }
+
+    public function test_sales_form_shows_selling_type_and_company_feed_warehouses_only(): void
+    {
+        [$user, $accounts] = $this->companyUserWithAccounts();
+        $this->head($user->company_id, $accounts['income']->id, 'HS', 'Database Sale Head', TransactionTypes::SALE);
+
+        FeedWarehouse::query()->create([
+            'company_id' => $user->company_id,
+            'code' => 'MAIN',
+            'name' => 'Main Godown',
+            'location' => 'North Yard',
+            'is_active' => true,
+        ]);
+        FeedWarehouse::query()->create([
+            'company_id' => $user->company_id,
+            'code' => 'OLD',
+            'name' => 'Inactive Godown',
+            'location' => null,
+            'is_active' => false,
+        ]);
+
+        $otherCompany = Company::query()->create([
+            'code' => 'OTHER-'.uniqid(), 'name' => 'Other Company', 'currency_code' => 'BDT', 'timezone' => 'Asia/Dhaka', 'status' => 'active',
+        ]);
+        FeedWarehouse::query()->create([
+            'company_id' => $otherCompany->id,
+            'code' => 'OTHER',
+            'name' => 'Other Company Godown',
+            'location' => null,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['category' => TransactionTypes::SALE]))
+            ->assertOk()
+            ->assertSee('What are you selling?')
+            ->assertSee('Fish')
+            ->assertSee('Cattle')
+            ->assertSee('Vegetable')
+            ->assertSee('Others')
+            ->assertSee('Location / Godown')
+            ->assertSee('Main Godown')
+            ->assertDontSee('Inactive Godown')
+            ->assertDontSee('Other Company Godown');
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['category' => TransactionTypes::PURCHASE]))
+            ->assertOk()
+            ->assertDontSee('What are you selling?')
+            ->assertDontSee('Location / Godown');
     }
 
     public function test_money_dropdown_only_uses_active_money_accounts_with_active_coa(): void

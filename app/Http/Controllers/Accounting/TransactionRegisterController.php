@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
 use App\Http\Requests\Accounting\UpdateTransactionRequest;
 use App\Models\AccountingOption;
+use App\Models\Feed\FeedSetting;
+use App\Models\Feed\FeedWarehouse;
 use App\Models\Transaction;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\TransactionDeletionService;
@@ -14,6 +16,7 @@ use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Accounting\TransactionUpdateService;
 use App\Services\Accounting\SafeDelete\SafeDeleteService;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Support\SaleSellingTypes;
 use App\Support\TransactionTypes;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -92,6 +95,23 @@ class TransactionRegisterController extends Controller
         }
 
         $category = $categoryOption->value;
+        $saleWarehouses = SaleSellingTypes::isSaleCategory($category)
+            ? FeedWarehouse::query()
+                ->where('company_id', $companyId)
+                ->where(function ($query) use ($transaction): void {
+                    $query->where('is_active', true);
+
+                    if ($transaction->warehouse_id) {
+                        $query->orWhereKey($transaction->warehouse_id);
+                    }
+                })
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $defaultSaleWarehouseId = SaleSellingTypes::isSaleCategory($category)
+            ? FeedSetting::query()->where('company_id', $companyId)->value('default_warehouse_id')
+            : null;
 
         return view('transactions.create', [
             'transaction' => $transaction,
@@ -119,6 +139,9 @@ class TransactionRegisterController extends Controller
                 $company,
                 $transaction->transaction_date?->toDateString(),
             ),
+            'saleSellingTypeOptions' => SaleSellingTypes::labels(),
+            'saleWarehouses' => $saleWarehouses,
+            'defaultSaleWarehouseId' => $defaultSaleWarehouseId,
         ]);
     }
 

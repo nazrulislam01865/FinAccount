@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TransactionTypes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -40,7 +41,26 @@ class TransactionHead extends Model
     /** @return array<int, string> */
     public function allowedSettlementCodes(): array
     {
-        return $this->allowed_settlements ?: \App\Support\TransactionTypes::allowedSettlements((string) $this->category);
+        if ($this->allowed_settlements) {
+            return $this->allowed_settlements;
+        }
+
+        $option = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', (string) $this->category)
+            ->first();
+
+        if ($option) {
+            $definition = TransactionTypes::configuredDefinition(
+                (string) $this->category,
+                is_array($option->metadata) ? $option->metadata : [],
+                $option->label,
+            );
+
+            return $definition['allowed_settlements'] ?: [TransactionTypes::CASH];
+        }
+
+        return TransactionTypes::allowedSettlements((string) $this->category);
     }
 
     public function allowsSettlement(string $settlementType): bool

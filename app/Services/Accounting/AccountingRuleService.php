@@ -211,8 +211,14 @@ class AccountingRuleService
                 $categoryOption->label,
             );
             $allowedSettlements = array_values((array) ($definition['allowed_settlements'] ?? []));
+            $flow = (string) ($definition['flow'] ?? '');
 
             if ($allowedSettlements !== [] && ! in_array($settlement, $allowedSettlements, true)) {
+                return true;
+            }
+
+            if ($flow === TransactionTypes::FLOW_NON_CASH
+                && (! $rule->transaction_head_id || $rule->money_required)) {
                 return true;
             }
 
@@ -330,10 +336,12 @@ class AccountingRuleService
         $transactionHeadId = filled($data['transaction_head_id'] ?? null)
             ? (int) $data['transaction_head_id']
             : null;
-        $transactionHead = $transactionHeadId ? TransactionHead::query()->find($transactionHeadId) : null;
+        $transactionHead = $transactionHeadId
+            ? TransactionHead::query()->with('postingAccount')->find($transactionHeadId)
+            : null;
         $isFeedRule = $transactionHead
             && str_starts_with(strtoupper((string) $transactionHead->code), 'SYS-FEED-');
-        $template = $this->template($type, $settlement);
+        $template = $this->template($type, $settlement, $transactionHead);
         $lines = $template['lines'];
         $firstDebit = collect($lines)->firstWhere('line_side', AccountingRuleLine::SIDE_DEBIT);
         $firstCredit = collect($lines)->firstWhere('line_side', AccountingRuleLine::SIDE_CREDIT);
@@ -363,7 +371,7 @@ class AccountingRuleService
     }
 
     /** @return array{party_required:bool,party_type:string,money_required:bool,lines:array<int,array{line_side:string,account_source:string,amount_basis:string}>} */
-    private function template(string $type, string $settlement): array
+    private function template(string $type, string $settlement, ?TransactionHead $transactionHead = null): array
     {
         $debit = AccountingRuleLine::SIDE_DEBIT;
         $credit = AccountingRuleLine::SIDE_CREDIT;
@@ -593,13 +601,119 @@ class AccountingRuleService
                     'settlement_type' => 'Transfer direction supports only a fully paid/received transaction because no due balance is created.',
                 ]),
             },
-            TransactionTypes::FLOW_NON_CASH => throw ValidationException::withMessages([
-                'category' => 'Non-Cash transaction types need a dedicated accounting template and are not treated as Money Out automatically.',
-            ]),
+            TransactionTypes::FLOW_NON_CASH => $this->nonCashTemplate(
+                $settlement,
+                $transactionHead,
+                $partyType,
+                $debit,
+                $credit,
+                $total,
+                $head,
+                $receivable,
+                $payable,
+            ),
             default => throw ValidationException::withMessages([
                 'category' => 'The selected transaction direction is not supported.',
             ]),
         };
+    }
+
+
+    /**
+     * @return array{party_required:bool,party_type:string,money_required:bool,lines:array<int,array{line_side:string,account_source:string,amount_basis:string}>}
+     */
+    private function nonCashTemplate(
+        string $settlement,
+        ?TransactionHead $transactionHead,
+        string $configuredPartyType,
+        string $debit,
+        string $credit,
+        string $total,
+        string $headSource,
+        string $receivableSource,
+        string $payableSource,
+    ): array {
+        if ($settlement !== TransactionTypes::CASH) {
+            throw ValidationException::withMessages([
+                'settlement_type' => 'Non-Cash transaction types support only the Fully paid/received payment type because no cash/bank movement or due split is created.',
+            ]);
+        }
+
+        if (! $transactionHead) {
+            throw ValidationException::withMessages([
+                'transaction_head_id' => 'Select a Transaction Head Scope for Non-Cash rules. Non-Cash entries need a head-specific template so the posting COA is known.',
+            ]);
+        }
+
+        $partyType = (string) ($transactionHead->party_type ?: $configuredPartyType ?: 'Any');
+
+        if ($partyType === 'Any') {
+            $partyType = $this->inferNonCashPartyType($transactionHead);
+        }
+
+        if ($partyType === 'Any') {
+            throw ValidationException::withMessages([
+                'transaction_head_id' => 'Set the selected Non-Cash transaction head party type to Customer, Supplier, Worker, Owner, Lender, or another payable party type before creating its accounting rule.',
+            ]);
+        }
+
+        $postingAccountType = (string) ($transactionHead->postingAccount?->type ?? '');
+        $debitNormalTypes = ['Asset', 'Expense'];
+        $headIsDebitNormal = in_array($postingAccountType, $debitNormalTypes, true);
+        $usesReceivable = strcasecmp($partyType, 'Customer') === 0;
+
+        if ($usesReceivable) {
+            $lines = $headIsDebitNormal
+                ? [
+                    ['line_side' => $debit, 'account_source' => $headSource, 'amount_basis' => $total],
+                    ['line_side' => $credit, 'account_source' => $receivableSource, 'amount_basis' => $total],
+                ]
+                : [
+                    ['line_side' => $debit, 'account_source' => $receivableSource, 'amount_basis' => $total],
+                    ['line_side' => $credit, 'account_source' => $headSource, 'amount_basis' => $total],
+                ];
+        } else {
+            $lines = $headIsDebitNormal
+                ? [
+                    ['line_side' => $debit, 'account_source' => $headSource, 'amount_basis' => $total],
+                    ['line_side' => $credit, 'account_source' => $payableSource, 'amount_basis' => $total],
+                ]
+                : [
+                    ['line_side' => $debit, 'account_source' => $payableSource, 'amount_basis' => $total],
+                    ['line_side' => $credit, 'account_source' => $headSource, 'amount_basis' => $total],
+                ];
+        }
+
+        return [
+            'party_required' => true,
+            'party_type' => $partyType,
+            'money_required' => false,
+            'lines' => $lines,
+        ];
+    }
+
+
+    private function inferNonCashPartyType(TransactionHead $transactionHead): string
+    {
+        $searchText = strtolower(implode(' ', array_filter([
+            $transactionHead->code,
+            $transactionHead->name,
+            $transactionHead->postingAccount?->name,
+        ])));
+
+        foreach (['bad debt', 'bad-debt', 'write off', 'write-off', 'writeoff', 'customer', 'receivable', 'debtor'] as $keyword) {
+            if (str_contains($searchText, $keyword)) {
+                return 'Customer';
+            }
+        }
+
+        foreach (['supplier', 'vendor', 'payable', 'creditor'] as $keyword) {
+            if (str_contains($searchText, $keyword)) {
+                return 'Supplier';
+            }
+        }
+
+        return 'Any';
     }
 
     /** @param array<int, array{line_side:string,account_source:string,amount_basis:string}> $lines */

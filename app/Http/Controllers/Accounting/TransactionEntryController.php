@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Accounting\StoreTransactionRequest;
 use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
+use App\Models\Feed\FeedSetting;
+use App\Models\Feed\FeedWarehouse;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
@@ -21,6 +23,7 @@ use App\Services\Accounting\TransactionPostingService;
 use App\Services\Accounting\TransactionPartyResolver;
 use App\Services\Accounting\TransactionSettlementService;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Support\SaleSellingTypes;
 use App\Support\TransactionTypes;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -98,6 +101,16 @@ class TransactionEntryController extends Controller
 
         $category = $categoryOption?->value ?? '';
         $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
+        $saleWarehouses = SaleSellingTypes::isSaleCategory($category)
+            ? FeedWarehouse::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $defaultSaleWarehouseId = SaleSellingTypes::isSaleCategory($category)
+            ? FeedSetting::query()->where('company_id', $companyId)->value('default_warehouse_id')
+            : null;
 
         return view('transactions.create', [
             'category' => $category,
@@ -123,6 +136,9 @@ class TransactionEntryController extends Controller
                 $categoryOption?->label,
             ),
             'dueSettlementContext' => $dueSettlementContext,
+            'saleSellingTypeOptions' => SaleSellingTypes::labels(),
+            'saleWarehouses' => $saleWarehouses,
+            'defaultSaleWarehouseId' => $defaultSaleWarehouseId,
         ]);
     }
 

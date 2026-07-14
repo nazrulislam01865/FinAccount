@@ -211,6 +211,20 @@ final class TransactionTypes
         $definition = self::definition($type);
         $source = $definition !== [] ? $definition : $metadata;
         $displayLabel = (string) ($definition['label'] ?? $label ?: $type);
+        $flow = self::flow($type, $metadata);
+        $allowedSettlements = array_values(array_map(
+            static fn ($value): string => (string) $value,
+            (array) ($source['allowed_settlements'] ?? self::ALL_SETTLEMENTS),
+        ));
+        $defaultSettlements = array_values(array_map(
+            static fn ($value): string => (string) $value,
+            (array) ($source['default_settlements'] ?? [self::CASH]),
+        ));
+
+        if (in_array($flow, [self::FLOW_TRANSFER, self::FLOW_NON_CASH], true)) {
+            $allowedSettlements = [self::CASH];
+            $defaultSettlements = [self::CASH];
+        }
 
         return [
             'label' => $displayLabel,
@@ -219,19 +233,13 @@ final class TransactionTypes
             'money_label' => (string) ($source['money_label'] ?? 'Cash / Bank / Mobile Account'),
             'party_label' => (string) ($source['party_label'] ?? 'Party'),
             'party_type' => (string) ($source['party_type'] ?? 'Any'),
-            'allowed_settlements' => array_values(array_map(
-                static fn ($value): string => (string) $value,
-                (array) ($source['allowed_settlements'] ?? self::ALL_SETTLEMENTS),
-            )),
-            'default_settlements' => array_values(array_map(
-                static fn ($value): string => (string) $value,
-                (array) ($source['default_settlements'] ?? [self::CASH]),
-            )),
+            'allowed_settlements' => $allowedSettlements,
+            'default_settlements' => $defaultSettlements,
             'posting_types' => array_values(array_map(
                 static fn ($value): string => (string) $value,
                 (array) ($source['posting_types'] ?? []),
             )),
-            'flow' => self::flow($type, $metadata),
+            'flow' => $flow,
         ];
     }
 

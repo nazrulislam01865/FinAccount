@@ -296,7 +296,7 @@ class MasterDataService
                 'voucher_prefix' => $prefix,
                 'money_label' => trim((string) $data['money_label']),
                 'flow' => (string) $data['flow'],
-                'allowed_settlements' => TransactionTypes::ALL_SETTLEMENTS,
+                'allowed_settlements' => $this->settlementsForFlow((string) $data['flow']),
                 'default_settlements' => [TransactionTypes::CASH],
             ],
             'is_active' => (bool) $data['is_active'],
@@ -372,7 +372,7 @@ class MasterDataService
             $metadata['voucher_prefix'] = $newPrefix;
             $metadata['money_label'] = trim((string) $data['money_label']);
             $metadata['flow'] = (string) $data['flow'];
-            $metadata['allowed_settlements'] = TransactionTypes::ALL_SETTLEMENTS;
+            $metadata['allowed_settlements'] = $this->settlementsForFlow((string) $data['flow']);
             $metadata['default_settlements'] = [TransactionTypes::CASH];
 
             $option->update([
@@ -391,6 +391,15 @@ class MasterDataService
 
             return $option->refresh();
         }, attempts: 5);
+    }
+
+
+    /** @return array<int, string> */
+    private function settlementsForFlow(string $flow): array
+    {
+        return in_array($flow, [TransactionTypes::FLOW_TRANSFER, TransactionTypes::FLOW_NON_CASH], true)
+            ? [TransactionTypes::CASH]
+            : TransactionTypes::ALL_SETTLEMENTS;
     }
 
     private function assertVoucherPrefixAvailable(string $prefix, ?int $ignoreOptionId = null): void

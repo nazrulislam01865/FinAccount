@@ -28,6 +28,13 @@
     $hasSelectedTransactionDirection = $isEditing || $isDueSettlement || filled($activeTransactionDirection);
     $hasTransactionTypeForDirection = $hasSelectedTransactionDirection && $filteredTransactionCategories->isNotEmpty();
     $highlightTransactionDirection = $showTransactionTypeSelection && $hasSelectedTransactionDirection;
+    $saleSellingTypeOptions = $saleSellingTypeOptions ?? \App\Support\SaleSellingTypes::labels();
+    $saleWarehouses = $saleWarehouses ?? collect();
+    $defaultSaleWarehouseId = $defaultSaleWarehouseId ?? null;
+    $isSalesTransaction = \App\Support\SaleSellingTypes::isSaleCategory($category);
+    $selectedSellingType = old('selling_type', $isEditing ? $transaction->selling_type : '');
+    $selectedWarehouseId = old('warehouse_id', $isEditing ? $transaction->warehouse_id : $defaultSaleWarehouseId);
+    $showSaleWarehouse = \App\Support\SaleSellingTypes::requiresWarehouse($selectedSellingType);
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
@@ -170,6 +177,41 @@
                         <small class="hg-field-error">No active Transaction Head is linked to {{ $transactionTypeLabel }}. Activate or create a matching head with an active posting account.</small>
                     @endif
                 </div>
+
+                @if($isSalesTransaction && ! $isDueSettlement)
+                    <div class="hg-field">
+                        <label for="selling_type">What are you selling? <span class="hg-required">*</span></label>
+                        <select id="selling_type" name="selling_type" required data-sale-selling-type>
+                            <option value="">Select what you are selling</option>
+                            @foreach($saleSellingTypeOptions as $sellingTypeValue => $sellingTypeLabel)
+                                <option
+                                    value="{{ $sellingTypeValue }}"
+                                    data-requires-warehouse="{{ \App\Support\SaleSellingTypes::requiresWarehouse($sellingTypeValue) ? '1' : '0' }}"
+                                    @selected((string) $selectedSellingType === (string) $sellingTypeValue)
+                                >{{ $sellingTypeLabel }}</option>
+                            @endforeach
+                        </select>
+                        @error('selling_type')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+
+                    <div class="hg-field {{ $showSaleWarehouse ? '' : 'hidden' }}" id="sale-warehouse-field" data-sale-warehouse-field>
+                        <label for="warehouse_id">Location / Godown <span class="hg-required">*</span></label>
+                        <select id="warehouse_id" name="warehouse_id" data-sale-warehouse @if(! $showSaleWarehouse) disabled @endif>
+                            <option value="">{{ $saleWarehouses->isEmpty() ? 'No active warehouse available' : 'Select location / godown' }}</option>
+                            @foreach($saleWarehouses as $warehouse)
+                                <option value="{{ $warehouse->id }}" @selected((string) $selectedWarehouseId === (string) $warehouse->id)>
+                                    {{ $warehouse->name }} ({{ $warehouse->code }}){{ filled($warehouse->location) ? ' — '.$warehouse->location : '' }}{{ ! $warehouse->is_active ? ' — Inactive' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @if($saleWarehouses->isEmpty())
+                            <small class="hg-field-help">Add a warehouse from Feed Setup before posting Fish, Cattle, or Vegetable sales.</small>
+                        @else
+                            <small class="hg-field-help">This list comes from Feed Setup → Warehouses.</small>
+                        @endif
+                        @error('warehouse_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+                @endif
 
                 <div class="hg-field">
                     <label for="amount">{{ $isDueSettlement ? (($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Received Amount' : 'Payment Amount') : 'Amount' }} ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>

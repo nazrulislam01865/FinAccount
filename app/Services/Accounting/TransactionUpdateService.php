@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Models\TransactionHead;
 use App\Models\User;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Support\SaleSellingTypes;
 use App\Support\TransactionTypes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -128,6 +129,13 @@ class TransactionUpdateService
                 'transaction_head_id' => $head->id,
                 'money_account_id' => $requiresMoney ? $moneyAccount?->id : null,
                 'party_id' => $requiresParty ? $party?->id : null,
+                'selling_type' => SaleSellingTypes::isSaleCategory($transactionType)
+                    ? ($data['selling_type'] ?? null)
+                    : null,
+                'warehouse_id' => SaleSellingTypes::isSaleCategory($transactionType)
+                    && SaleSellingTypes::requiresWarehouse($data['selling_type'] ?? null)
+                        ? ($data['warehouse_id'] ?? null)
+                        : null,
                 'transaction_date' => $data['transaction_date'],
                 'amount' => $amount,
                 'settlement_type' => $settlement['settlement_type'],

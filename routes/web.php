@@ -33,6 +33,7 @@ use App\Http\Controllers\Feed\FeedInventoryController;
 use App\Http\Controllers\Feed\FeedPurchaseController;
 use App\Http\Controllers\Feed\FeedSaleController;
 use App\Http\Controllers\Feed\FeedSetupController;
+use App\Http\Controllers\Feed\FeedBusinessTrackingController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BrandAssetController;
 use App\Http\Controllers\Landing\LandingAdminAuthController;
@@ -139,6 +140,18 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
 
 
     Route::prefix('feed')->name('feed.')->group(function (): void {
+        Route::get('/business-tracking', [FeedBusinessTrackingController::class, 'index'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-tracking.index');
+        Route::post('/business-tracking/units', [FeedBusinessTrackingController::class, 'storeUnit'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-tracking.units.store');
+        Route::put('/business-tracking/units/{trackingUnit}', [FeedBusinessTrackingController::class, 'updateUnit'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-tracking.units.update');
+        Route::post('/business-tracking/rules', [FeedBusinessTrackingController::class, 'saveRules'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-tracking.rules.save');
+        Route::post('/business-tracking/default-assignments', [FeedBusinessTrackingController::class, 'storeDefaultAssignment'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-tracking.default-assignments.store');
+        Route::delete('/business-tracking/default-assignments/{assignment}', [FeedBusinessTrackingController::class, 'deleteDefaultAssignment'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-tracking.default-assignments.destroy');
         Route::get('/purchase', [FeedPurchaseController::class, 'create'])
             ->middleware('accounting.permission:transactions.manage')->name('purchases.create');
         Route::post('/purchase', [FeedPurchaseController::class, 'store'])

@@ -49,6 +49,9 @@ if (page) {
     const partyLabel = document.getElementById('party-label');
     const paidAmountLabel = document.getElementById('paid-amount-label');
     const paidAmountHelp = document.getElementById('paid-amount-help');
+    const sellingType = form?.querySelector('[data-sale-selling-type]');
+    const saleWarehouseField = form?.querySelector('[data-sale-warehouse-field]');
+    const saleWarehouse = form?.querySelector('[data-sale-warehouse]');
     const preview = document.getElementById('journal-preview');
     const emptyPreviewTemplate = document.getElementById('journal-preview-empty-template');
     const previewUrl = preview?.dataset.previewUrl;
@@ -60,6 +63,26 @@ if (page) {
 
     const refreshSearchable = (select) => {
         window.HisebGhorSearchableSelect?.refresh(select);
+    };
+
+    let rememberedWarehouseId = saleWarehouse?.value || '';
+
+    const syncSaleWarehouseField = () => {
+        if (!sellingType || !saleWarehouse || !saleWarehouseField) return;
+
+        const requiresWarehouse = sellingType.selectedOptions[0]?.dataset.requiresWarehouse === '1';
+        saleWarehouseField.classList.toggle('hidden', !requiresWarehouse);
+        saleWarehouse.required = requiresWarehouse;
+        saleWarehouse.disabled = !requiresWarehouse;
+
+        if (requiresWarehouse) {
+            if (!saleWarehouse.value && rememberedWarehouseId) {
+                saleWarehouse.value = rememberedWarehouseId;
+            }
+        } else {
+            if (saleWarehouse.value) rememberedWarehouseId = saleWarehouse.value;
+            saleWarehouse.value = '';
+        }
     };
 
     const parseJson = (value, fallback = []) => {
@@ -343,7 +366,12 @@ if (page) {
         syncAmountFields();
         schedulePreview();
     });
+    sellingType?.addEventListener('change', syncSaleWarehouseField);
+    saleWarehouse?.addEventListener('change', () => {
+        if (saleWarehouse.value) rememberedWarehouseId = saleWarehouse.value;
+    });
 
+    syncSaleWarehouseField();
     refreshPreview();
 }
 

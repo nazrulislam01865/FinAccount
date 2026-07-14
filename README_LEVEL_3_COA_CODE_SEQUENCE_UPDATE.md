@@ -8,6 +8,13 @@
   - Parent `1100` → `1101`, `1102`, `1103`, ... `1199`
   - Parent `1200` → `1201`, `1202`, `1203`, ... `1299`
 
+## What was changed
+
+1. `AutomaticCodeService` now uses `LEVEL_THREE_STEP = 1`.
+2. Level 3 child capacity is now 99 accounts per Level 2 parent instead of 9.
+3. Existing assigned Level 3 COA rows are resequenced automatically by migration.
+4. Existing relationship IDs are not changed, so journal lines, money accounts, parties, transaction heads, opening balances, and feed settings continue pointing to the same COA records.
+
 ## Existing data migration
 
 Migration file:
@@ -20,9 +27,23 @@ The migration:
 2. Groups them by company and Level 2 parent.
 3. Keeps their existing order by old numeric code and record ID.
 4. Changes only the `code` field to the new `+1` sequence.
-5. Keeps every Chart of Account ID unchanged, so transaction, journal, money-account, party, transaction-head, and opening-balance relationships remain intact.
-6. Leaves unassigned legacy Level 3 accounts unchanged because they do not have a Level 2 parent from which a safe sequence can be calculated.
+5. Uses temporary safe codes during the update so the existing unique `company_id + code` constraint does not block the resequence.
+6. Leaves unassigned legacy Level 3 accounts unchanged because they do not have a Level 2 parent from which a safe hierarchy sequence can be calculated.
 7. Runs inside a database transaction and stops without partial changes if it detects malformed hierarchy data or a code collision.
+
+## Example
+
+Before migration under Level 2 parent `1100`:
+
+- `1110` Cash in Hand
+- `1120` Bank Account
+- `1130` Mobile Banking
+
+After migration:
+
+- `1101` Cash in Hand
+- `1102` Bank Account
+- `1103` Mobile Banking
 
 ## Deployment
 
@@ -38,20 +59,9 @@ php artisan view:cache
 php artisan up
 ```
 
-The compiled frontend assets are already included. If rebuilding from source, also run:
-
-```bash
-npm ci
-npm run build
-```
-
 ## Main changed files
 
 - `app/Services/Accounting/AutomaticCodeService.php`
 - `database/migrations/2026_07_13_000400_resequence_level_three_chart_of_account_codes.php`
-- `resources/js/pages/chart-of-accounts.js`
-- `resources/views/chart-of-accounts/index.blade.php`
 - `tests/Feature/Accounting/ChartOfAccountHierarchyTest.php`
-- `public/build/manifest.json`
-- `public/build/assets/app-D8xLF76H.js`
-- `public/build/assets/app-DeNqDf2t.css`
+- `README_LEVEL_3_COA_CODE_SEQUENCE_UPDATE.md`

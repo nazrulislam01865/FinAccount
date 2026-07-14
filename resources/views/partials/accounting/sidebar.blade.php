@@ -68,6 +68,7 @@
         @if($user?->canAnyAccounting(['transactions.view','transactions.manage']))
         <div class="hg-nav-section">Feed Business</div>
         @if($user?->canAccounting('transactions.manage'))
+        <a href="{{ route('feed.business-tracking.index') }}" class="{{ request()->routeIs('feed.business-tracking.*') ? 'active' : '' }}"><span class="hg-nav-icon">◫</span><span class="hg-nav-text">Business Tracking</span></a>
         <a href="{{ route('feed.purchases.create') }}" class="{{ request()->routeIs('feed.purchases.*') ? 'active' : '' }}"><span class="hg-nav-icon">🛒</span><span class="hg-nav-text">Feed Purchase</span></a>
         <a href="{{ route('feed.sales.create') }}" class="{{ request()->routeIs('feed.sales.*') ? 'active' : '' }}"><span class="hg-nav-icon">🧾</span><span class="hg-nav-text">Feed Sale</span></a>
         @endif

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Feed\FeedWarehouse;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,8 +18,8 @@ class Transaction extends Model
     public const SETTLEMENT_NORMAL = self::SETTLEMENT_CASH;
 
     protected $fillable = [
-        'uuid', 'company_id', 'transaction_head_id', 'money_account_id', 'party_id',
-        'created_by', 'voucher_no', 'category', 'transaction_date', 'amount',
+        'uuid', 'company_id', 'transaction_head_id', 'money_account_id', 'party_id', 'warehouse_id',
+        'created_by', 'voucher_no', 'category', 'selling_type', 'transaction_date', 'amount',
         'settlement_type', 'paid_amount', 'due_amount', 'due_date',
         'reference', 'description', 'request_token', 'status', 'posted_at',
     ];
@@ -48,6 +49,11 @@ class Transaction extends Model
     public function party(): BelongsTo
     {
         return $this->belongsTo(Party::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(FeedWarehouse::class, 'warehouse_id');
     }
 
     public function creator(): BelongsTo

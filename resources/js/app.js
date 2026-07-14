@@ -17,3 +17,4 @@ import './pages/form-drafts';
 import './pages/profile-photo';
 
 import './pages/feed-module';
+import './pages/feed-business-tracking';

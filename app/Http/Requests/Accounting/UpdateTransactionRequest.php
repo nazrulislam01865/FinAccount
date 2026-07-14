@@ -4,7 +4,9 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Models\Transaction;
 use App\Support\CompanyContext;
+use App\Support\SaleSellingTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,6 +26,28 @@ class UpdateTransactionRequest extends FormRequest
 
         return [
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
+            'selling_type' => [
+                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
+                'nullable',
+                Rule::in(array_keys(SaleSellingTypes::labels())),
+            ],
+            'warehouse_id' => [
+                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))
+                    && SaleSellingTypes::requiresWarehouse($this->input('selling_type'))),
+                'nullable',
+                'integer',
+                Rule::exists('feed_warehouses', 'id')->where(function ($query) use ($companyId): void {
+                    $query->where('company_id', $companyId)
+                        ->where(function ($warehouseQuery): void {
+                            $warehouseQuery->where('is_active', true);
+
+                            $transaction = $this->route('transaction');
+                            if ($transaction instanceof Transaction && $transaction->warehouse_id) {
+                                $warehouseQuery->orWhere('id', $transaction->warehouse_id);
+                            }
+                        });
+                }),
+            ],
             'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
             'transaction_head_id' => [
@@ -57,13 +81,30 @@ class UpdateTransactionRequest extends FormRequest
         ];
     }
 
+    public function attributes(): array
+    {
+        return [
+            'selling_type' => 'what are you selling',
+            'warehouse_id' => 'location / godown',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
+        $category = $this->canonicalActiveAccountingOption(
+            AccountingOption::GROUP_TRANSACTION_CATEGORY,
+            $this->input('category'),
+        );
+        $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
+        $warehouseRequired = SaleSellingTypes::isSaleCategory($category)
+            && SaleSellingTypes::requiresWarehouse($sellingType);
+
         $this->merge([
-            'category' => $this->canonicalActiveAccountingOption(
-                AccountingOption::GROUP_TRANSACTION_CATEGORY,
-                $this->input('category'),
-            ),
+            'category' => $category,
+            'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
+            'warehouse_id' => $warehouseRequired && filled($this->input('warehouse_id'))
+                ? $this->input('warehouse_id')
+                : null,
             'settlement_type' => filled($this->input('settlement_type'))
                 ? strtoupper(trim((string) $this->input('settlement_type')))
                 : null,
