@@ -23,11 +23,10 @@ class StoreTransactionRequest extends FormRequest
     {
         $companyId = $this->user()?->company_id;
         $category = (string) $this->input('category');
-
         return [
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
             'selling_type' => [
-                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
+                Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()),
                 'nullable',
                 'string',
                 function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
@@ -52,8 +51,7 @@ class StoreTransactionRequest extends FormRequest
                 },
             ],
             'tracking_unit_id' => [
-                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))
-                    && SaleSellingTypes::requiresWarehouse($this->input('selling_type'))),
+                Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()),
                 'nullable',
                 'integer',
                 Rule::exists('feed_warehouses', 'id')->where(fn ($query) => $query
@@ -79,7 +77,7 @@ class StoreTransactionRequest extends FormRequest
                     ->whereNotNull('chart_of_account_id')),
             ],
             'party_id' => [
-                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
+                Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()),
                 'nullable', 'integer',
                 Rule::exists('parties', 'id')->where(function ($query) use ($companyId, $category): void {
                     $query->where('company_id', $companyId)
@@ -108,12 +106,34 @@ class StoreTransactionRequest extends FormRequest
             'due_as_of_date' => ['nullable', 'required_if:due_settlement,1', 'date'],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'lte:amount', 'decimal:0,'.CompanyContext::decimalPlaces()],
+            'other_charges' => [Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()), 'nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
+            'lines' => [Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()), 'nullable', 'array', 'min:1', 'max:100'],
+            'lines.*.item_id' => [
+                'required_with:lines', 'integer',
+                Rule::exists('feed_items', 'id')->where(fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)),
+            ],
+            'lines.*.unit' => ['required_with:lines', Rule::in(['BAG', 'KG'])],
+            'lines.*.quantity' => ['required_with:lines', 'numeric', 'gt:0', 'decimal:0,4'],
+            'lines.*.rate' => ['required_with:lines', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'reference' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
             'transaction_attachments' => ['nullable', 'array', 'max:5'],
             'transaction_attachments.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,csv,txt'],
             'request_token' => ['required', 'uuid'],
         ];
+    }
+
+
+    private function isFeedSaleSelected(): bool
+    {
+        $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
+
+        return SaleSellingTypes::isSaleCategory($this->input('category'))
+            && filled($sellingType)
+            && ! SaleSellingTypes::isOthers($sellingType);
     }
 
     public function attributes(): array
@@ -150,6 +170,7 @@ class StoreTransactionRequest extends FormRequest
                 'payable' => 'Payable',
                 default => filled($this->input('due_type')) ? trim((string) $this->input('due_type')) : null,
             },
+            'other_charges' => $this->input('other_charges', 0),
             'reference' => filled($this->input('reference')) ? trim((string) $this->input('reference')) : null,
             'description' => filled($this->input('description')) ? trim((string) $this->input('description')) : null,
         ]);

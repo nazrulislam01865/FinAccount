@@ -10,7 +10,7 @@ use App\Models\Feed\FeedBusinessArea;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
 use App\Models\Feed\FeedStockBalance;
-use App\Models\Feed\FeedBusinessTrackingUnit;
+use App\Models\Feed\FeedWarehouse;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
@@ -26,6 +26,7 @@ use App\Services\Accounting\TransactionPostingService;
 use App\Services\Accounting\TransactionPartyResolver;
 use App\Services\Accounting\TransactionSettlementService;
 use App\Services\Company\CompanyAccountingPeriodService;
+use App\Services\Feed\FeedPostingService;
 use App\Support\SaleSellingTypes;
 use App\Support\TransactionTypes;
 use Illuminate\Contracts\View\View;
@@ -49,6 +50,7 @@ class TransactionEntryController extends Controller
         private readonly TransactionEntryOptionService $entryOptionService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
         private readonly TransactionPartyResolver $partyResolver,
+        private readonly FeedPostingService $feedPostingService,
         private readonly FinancialReportService $reportService,
     ) {}
 
@@ -117,10 +119,9 @@ class TransactionEntryController extends Controller
             ->mapWithKeys(fn (FeedBusinessArea $area): array => [$area->code => $area->name])
             ->all();
         $saleTrackingUnits = $isSaleCategory
-            ? FeedBusinessTrackingUnit::query()
+            ? FeedWarehouse::query()
                 ->where('company_id', $companyId)
                 ->where('is_active', true)
-                ->orderBy('business_area')
                 ->orderBy('name')
                 ->get()
             : collect();
@@ -378,6 +379,22 @@ class TransactionEntryController extends Controller
             $validated['paid_amount'] = $validated['amount'];
         }
 
+        if ($this->shouldPostAsFeedSale($validated)) {
+            $document = $this->feedPostingService->postSale($this->feedSalePayload($validated), $request->user());
+            $transaction = $document->transaction;
+            $this->transactionAttachmentService->storeUploaded(
+                $transaction,
+                $request->file('transaction_attachments'),
+                $request->user(),
+            );
+
+            return $this->redirectAfterStore(
+                $request,
+                $transaction,
+                'Feed sale '.$transaction->voucher_no.' posted successfully. Stock, sales income, customer receivable/payment, and cost of goods sold were updated together.'
+            );
+        }
+
         $transaction = $this->transactionPostingService->post($validated, $request->user());
         $this->transactionAttachmentService->storeUploaded(
             $transaction,
@@ -392,6 +409,11 @@ class TransactionEntryController extends Controller
             $message .= ' Sales invoice '.$transaction->salesInvoice->invoice_no.' generated and download started.';
         }
 
+        return $this->redirectAfterStore($request, $transaction, $message);
+    }
+
+    private function redirectAfterStore(Request $request, Transaction $transaction, string $message): RedirectResponse
+    {
         if ($request->user()->canAccounting('transactions.view')) {
             $redirect = redirect()->route('transactions.index')->with('success', $message);
 
@@ -408,6 +430,35 @@ class TransactionEntryController extends Controller
             ->route('transactions.create', ['category' => $transaction->category])
             ->with('success', $message)
             ->with('warning', 'The transaction was saved, but your role is not allowed to view the register.');
+    }
+
+    /** @param array<string, mixed> $data */
+    private function shouldPostAsFeedSale(array $data): bool
+    {
+        $sellingType = SaleSellingTypes::normalize($data['selling_type'] ?? null);
+
+        return SaleSellingTypes::isSaleCategory($data['category'] ?? null)
+            && filled($sellingType)
+            && ! SaleSellingTypes::isOthers($sellingType);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function feedSalePayload(array $data): array
+    {
+        return [
+            'transaction_date' => $data['transaction_date'],
+            'party_id' => $data['party_id'],
+            'tracking_unit_id' => $data['tracking_unit_id'],
+            'money_account_id' => $data['money_account_id'] ?? null,
+            'reference' => $data['reference'] ?? null,
+            'description' => $data['description'] ?? 'Feed sale from transaction entry',
+            'delivery_charge' => $data['other_charges'] ?? 0,
+            'overall_discount' => 0,
+            'paid_amount' => $data['paid_amount'] ?? 0,
+            'request_token' => $data['request_token'],
+            'selling_type' => $data['selling_type'] ?? null,
+            'lines' => $data['lines'] ?? [],
+        ];
     }
 
 

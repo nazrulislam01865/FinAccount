@@ -50,7 +50,6 @@ class FeedLedgerPostingService
             ! $head
             || (int) $head->company_id !== $companyId
             || ! $head->is_active
-            || ! str_starts_with(strtoupper((string) $head->code), 'SYS-FEED-')
             || strcasecmp((string) $head->category, $category) !== 0
         ) {
             throw ValidationException::withMessages([

@@ -38,6 +38,67 @@ class FeedAccountingSetupService
                 ]);
             }
 
+            $existing = FeedSetting::query()
+                ->with([
+                    'purchaseTransactionHead.postingAccount',
+                    'saleTransactionHead.postingAccount',
+                    'cogsAccount',
+                    'defaultWarehouse',
+                ])
+                ->where('company_id', $companyId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                $inventoryAccount = $this->usableAccount($existing->purchaseTransactionHead?->postingAccount, $companyId, 'Asset')
+                    ? $existing->purchaseTransactionHead->postingAccount
+                    : $this->ensureSystemAccount($companyId, self::INVENTORY_CODE, 'Feed Inventory', 'Asset', 'Debit');
+
+                $salesAccount = $this->usableAccount($existing->saleTransactionHead?->postingAccount, $companyId, 'Income')
+                    ? $existing->saleTransactionHead->postingAccount
+                    : $this->ensureSystemAccount($companyId, self::SALES_CODE, 'Feed Sales', 'Income', 'Credit');
+
+                $cogsAccount = $this->usableAccount($existing->cogsAccount, $companyId, 'Expense')
+                    && ! $existing->cogsAccount->is($inventoryAccount)
+                        ? $existing->cogsAccount
+                        : $this->ensureSystemAccount($companyId, self::COGS_CODE, 'Feed Cost of Goods Sold', 'Expense', 'Debit', [$inventoryAccount->id]);
+
+                $purchaseHead = $this->usableHead($existing->purchaseTransactionHead, $companyId, TransactionTypes::PURCHASE, $inventoryAccount->id)
+                    ? $existing->purchaseTransactionHead
+                    : $this->ensureSystemHead($companyId, self::PURCHASE_HEAD_CODE, 'Feed Purchase', TransactionTypes::PURCHASE, 'Supplier', $inventoryAccount);
+
+                $saleHead = $this->usableHead($existing->saleTransactionHead, $companyId, TransactionTypes::SALE, $salesAccount->id)
+                    ? $existing->saleTransactionHead
+                    : $this->ensureSystemHead($companyId, self::SALE_HEAD_CODE, 'Feed Sale', TransactionTypes::SALE, 'Customer', $salesAccount);
+
+                $this->ensureHeadRules($purchaseHead, 'Supplier', false, 'PUR');
+                $this->ensureHeadRules($saleHead, 'Customer', true, 'SAL');
+
+                $defaultWarehouseId = $existing->defaultWarehouse
+                    && (int) $existing->defaultWarehouse->company_id === $companyId
+                    && $existing->defaultWarehouse->is_active
+                        ? (int) $existing->defaultWarehouse->id
+                        : FeedWarehouse::query()
+                            ->where('company_id', $companyId)
+                            ->where('is_active', true)
+                            ->orderBy('id')
+                            ->value('id');
+
+                $existing->update([
+                    'purchase_transaction_head_id' => $purchaseHead->id,
+                    'sale_transaction_head_id' => $saleHead->id,
+                    'cogs_account_id' => $cogsAccount->id,
+                    'default_tracking_unit_id' => $defaultWarehouseId,
+                ]);
+
+                return $existing->fresh([
+                    'purchaseTransactionHead.postingAccount',
+                    'saleTransactionHead.postingAccount',
+                    'cogsAccount',
+                    'defaultWarehouse',
+                ]);
+            }
+
             $inventoryAccount = $this->ensureSystemAccount(
                 $companyId,
                 self::INVENTORY_CODE,
@@ -90,54 +151,6 @@ class FeedAccountingSetupService
                 ->orderBy('id')
                 ->value('id');
 
-            $existing = FeedSetting::query()
-                ->with([
-                    'purchaseTransactionHead.postingAccount',
-                    'saleTransactionHead.postingAccount',
-                    'cogsAccount',
-                    'defaultWarehouse',
-                ])
-                ->where('company_id', $companyId)
-                ->lockForUpdate()
-                ->first();
-
-            if ($existing) {
-                $updates = [];
-
-                if ((int) ($existing->purchase_transaction_head_id ?? 0) !== (int) $purchaseHead->id || ! $existing->purchaseTransactionHead) {
-                    $updates['purchase_transaction_head_id'] = $purchaseHead->id;
-                }
-
-                if ((int) ($existing->sale_transaction_head_id ?? 0) !== (int) $saleHead->id || ! $existing->saleTransactionHead) {
-                    $updates['sale_transaction_head_id'] = $saleHead->id;
-                }
-
-                if ((int) ($existing->cogs_account_id ?? 0) !== (int) $cogsAccount->id || ! $existing->cogsAccount) {
-                    $updates['cogs_account_id'] = $cogsAccount->id;
-                }
-
-                $existingDefaultWarehouseId = $existing->defaultWarehouse
-                    && (int) $existing->defaultWarehouse->company_id === $companyId
-                    && $existing->defaultWarehouse->is_active
-                        ? (int) $existing->defaultWarehouse->id
-                        : null;
-
-                if ((int) ($existingDefaultWarehouseId ?? 0) !== (int) ($defaultWarehouseId ?? 0)) {
-                    $updates['default_tracking_unit_id'] = $defaultWarehouseId;
-                }
-
-                if ($updates !== []) {
-                    $existing->update($updates);
-                }
-
-                return $existing->fresh([
-                    'purchaseTransactionHead.postingAccount',
-                    'saleTransactionHead.postingAccount',
-                    'cogsAccount',
-                    'defaultWarehouse',
-                ]);
-            }
-
             $settings = FeedSetting::query()->create([
                 'company_id' => $companyId,
                 'purchase_transaction_head_id' => $purchaseHead->id,
@@ -153,6 +166,25 @@ class FeedAccountingSetupService
                 'defaultWarehouse',
             ]);
         }, attempts: 5);
+    }
+
+
+    private function usableAccount(?ChartOfAccount $account, int $companyId, string $type): bool
+    {
+        return $account !== null
+            && (int) $account->company_id === $companyId
+            && $account->is_active
+            && $account->type === $type
+            && (int) $account->level === 3;
+    }
+
+    private function usableHead(?TransactionHead $head, int $companyId, string $category, int $postingAccountId): bool
+    {
+        return $head !== null
+            && (int) $head->company_id === $companyId
+            && $head->is_active
+            && strcasecmp((string) $head->category, $category) === 0
+            && (int) $head->posting_account_id === $postingAccountId;
     }
 
     /** @param array<int, int> $excludedIds */

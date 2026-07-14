@@ -16,7 +16,6 @@ use App\Models\TransactionHead;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedBusinessTrackingUnit;
 use App\Models\Feed\FeedWarehouse;
@@ -237,21 +236,15 @@ class DependencyDetacher
             $transactionIds = Transaction::query()->where('transaction_head_id', $locked->id)->pluck('id');
             $this->markTransactionsIncomplete($transactionIds);
             Transaction::query()->where('transaction_head_id', $locked->id)->update(['transaction_head_id' => null]);
-
-            if (Schema::hasColumn('accounting_rules', 'transaction_head_id')) {
-                AccountingRule::query()->where('transaction_head_id', $locked->id)->update([
-                    'transaction_head_id' => null,
-                    'is_active' => false,
-                ]);
-            }
-
-            $this->clearFeedSettingsTransactionHeadReferences($locked);
+            
+            FeedSetting::query()->where('purchase_transaction_head_id', $locked->id)->update([
+                'purchase_transaction_head_id' => null,
+            ]);
+            FeedSetting::query()->where('sale_transaction_head_id', $locked->id)->update([
+                'sale_transaction_head_id' => null,
+            ]);
 
             $this->assertNoReference(Transaction::query()->where('transaction_head_id', $locked->id), 'transaction head');
-            if (Schema::hasColumn('accounting_rules', 'transaction_head_id')) {
-                $this->assertNoReference(AccountingRule::query()->where('transaction_head_id', $locked->id), 'head-specific accounting rule');
-            }
-            $this->assertNoFeedSettingReference($locked->id);
             $this->assertTransactionsIncomplete($transactionIds);
             $locked->delete();
             $this->assertDeleted(TransactionHead::class, $locked->id);
@@ -361,102 +354,6 @@ class DependencyDetacher
             $locked->delete();
             $this->assertDeleted(DocumentSequence::class, $locked->id);
         }, attempts: 5);
-    }
-
-    private function clearFeedSettingsTransactionHeadReferences(TransactionHead $head): void
-    {
-        if (! Schema::hasTable('feed_settings')) {
-            return;
-        }
-
-        $hasPurchaseColumn = Schema::hasColumn('feed_settings', 'purchase_transaction_head_id');
-        $hasSaleColumn = Schema::hasColumn('feed_settings', 'sale_transaction_head_id');
-
-        if (! $hasPurchaseColumn && ! $hasSaleColumn) {
-            return;
-        }
-
-        $query = FeedSetting::query();
-        $query->where(function (Builder $builder) use ($head, $hasPurchaseColumn, $hasSaleColumn): void {
-            if ($hasPurchaseColumn) {
-                $builder->where('purchase_transaction_head_id', $head->id);
-            }
-
-            if ($hasSaleColumn) {
-                $method = $hasPurchaseColumn ? 'orWhere' : 'where';
-                $builder->{$method}('sale_transaction_head_id', $head->id);
-            }
-        });
-
-        $settingIds = $query->pluck('id');
-
-        if ($settingIds->isEmpty()) {
-            return;
-        }
-
-        $purchaseNullable = ! $hasPurchaseColumn || $this->columnIsNullable('feed_settings', 'purchase_transaction_head_id');
-        $saleNullable = ! $hasSaleColumn || $this->columnIsNullable('feed_settings', 'sale_transaction_head_id');
-
-        if ($purchaseNullable && $saleNullable) {
-            if ($hasPurchaseColumn) {
-                FeedSetting::query()->whereKey($settingIds)->where('purchase_transaction_head_id', $head->id)->update([
-                    'purchase_transaction_head_id' => null,
-                ]);
-            }
-
-            if ($hasSaleColumn) {
-                FeedSetting::query()->whereKey($settingIds)->where('sale_transaction_head_id', $head->id)->update([
-                    'sale_transaction_head_id' => null,
-                ]);
-            }
-
-            return;
-        }
-
-        // Older/cloud databases may still have NOT NULL feed-setting head columns.
-        // In that schema, clearing one column is impossible, so remove the setting row.
-        // Feed setup/purchase/sale pages call FeedAccountingSetupService::ensure() and recreate it safely.
-        FeedSetting::query()->whereKey($settingIds)->delete();
-    }
-
-    private function assertNoFeedSettingReference(int $transactionHeadId): void
-    {
-        if (! Schema::hasTable('feed_settings')) {
-            return;
-        }
-
-        $query = FeedSetting::query();
-        $hasPurchaseColumn = Schema::hasColumn('feed_settings', 'purchase_transaction_head_id');
-        $hasSaleColumn = Schema::hasColumn('feed_settings', 'sale_transaction_head_id');
-
-        if (! $hasPurchaseColumn && ! $hasSaleColumn) {
-            return;
-        }
-
-        $query->where(function (Builder $builder) use ($transactionHeadId, $hasPurchaseColumn, $hasSaleColumn): void {
-            if ($hasPurchaseColumn) {
-                $builder->where('purchase_transaction_head_id', $transactionHeadId);
-            }
-
-            if ($hasSaleColumn) {
-                $method = $hasPurchaseColumn ? 'orWhere' : 'where';
-                $builder->{$method}('sale_transaction_head_id', $transactionHeadId);
-            }
-        });
-
-        $this->assertNoReference($query, 'feed setting transaction head');
-    }
-
-    private function columnIsNullable(string $table, string $column): bool
-    {
-        $database = DB::getDatabaseName();
-        $result = DB::table('information_schema.columns')
-            ->where('table_schema', $database)
-            ->where('table_name', $table)
-            ->where('column_name', $column)
-            ->value('is_nullable');
-
-        return strtoupper((string) $result) === 'YES';
     }
 
     private function assertNoReference(Builder $query, string $relationship): void

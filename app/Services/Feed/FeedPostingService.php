@@ -171,6 +171,8 @@ class FeedPostingService
                 'reference' => $data['reference'] ?? null,
                 'description' => $data['description'] ?? 'Feed sale',
                 'request_token' => $data['request_token'],
+                'selling_type' => $data['selling_type'] ?? null,
+                'tracking_unit_id' => $warehouse->id,
             ], $user, $settings);
 
             $existing = FeedDocument::query()->where('transaction_id', $transaction->id)->first();
@@ -400,13 +402,11 @@ class FeedPostingService
         if (
             ! $purchaseHead || (int) $purchaseHead->company_id !== $companyId
             || ! $purchaseHead->is_active
-            || ! str_starts_with(strtoupper((string) $purchaseHead->code), 'SYS-FEED-')
             || strcasecmp((string) $purchaseHead->category, TransactionTypes::PURCHASE) !== 0
             || ! $inventoryAccount || (int) $inventoryAccount->company_id !== $companyId
             || ! $inventoryAccount->is_active || $inventoryAccount->type !== 'Asset' || (int) $inventoryAccount->level !== 3
             || ! $saleHead || (int) $saleHead->company_id !== $companyId
             || ! $saleHead->is_active
-            || ! str_starts_with(strtoupper((string) $saleHead->code), 'SYS-FEED-')
             || strcasecmp((string) $saleHead->category, TransactionTypes::SALE) !== 0
             || ! $salesAccount || (int) $salesAccount->company_id !== $companyId
             || ! $salesAccount->is_active || $salesAccount->type !== 'Income' || (int) $salesAccount->level !== 3

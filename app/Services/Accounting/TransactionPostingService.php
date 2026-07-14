@@ -190,7 +190,7 @@ class TransactionPostingService
                     ? ($data['selling_type'] ?? null)
                     : null,
                 'tracking_unit_id' => SaleSellingTypes::isSaleCategory($transactionType)
-                    && SaleSellingTypes::requiresWarehouse($data['selling_type'] ?? null)
+                    && filled($data['tracking_unit_id'] ?? null)
                         ? ($data['tracking_unit_id'] ?? null)
                         : null,
                 'transaction_date' => $data['transaction_date'],

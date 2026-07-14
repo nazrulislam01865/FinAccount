@@ -9,289 +9,175 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // This migration may be re-run after a previous failed attempt. Keep it
-        // idempotent and repair any partially-created foreign keys.
-        $this->renameWarehouseColumn('transactions', 'warehouse_id', 'tracking_unit_id', 'tx_tracking_unit_wh_fk');
-        $this->renameWarehouseColumn('feed_settings', 'default_warehouse_id', 'default_tracking_unit_id', 'feed_settings_def_track_wh_fk');
-        $this->renameWarehouseColumn('feed_documents', 'warehouse_id', 'tracking_unit_id', 'feed_docs_tracking_wh_fk', [
-            'new_index' => ['columns' => ['company_id', 'tracking_unit_id'], 'name' => 'feed_documents_company_tracking_idx'],
-        ]);
+        // This migration keeps the database naming used by the application (`tracking_unit_id`)
+        // but the value is still the Feed Setup warehouse/location id. It must NOT point to
+        // feed_business_tracking_units because stock is stored by warehouse/location.
+        $this->renameWarehouseColumn('transactions', 'warehouse_id', 'tracking_unit_id');
+        $this->ensureForeign('transactions', 'tracking_unit_id', 'feed_warehouses', 'tx_tracking_unit_fw_fk');
 
-        $this->renameFeedStockBalances();
-        $this->renameFeedStockMovements();
+        $this->renameWarehouseColumn('feed_settings', 'default_warehouse_id', 'default_tracking_unit_id');
+        $this->ensureForeign('feed_settings', 'default_tracking_unit_id', 'feed_warehouses', 'feed_settings_default_wh_fk');
+
+        $this->renameWarehouseColumn('feed_documents', 'warehouse_id', 'tracking_unit_id');
+        $this->ensureIndex('feed_documents', 'feed_documents_company_tracking_idx', ['company_id', 'tracking_unit_id']);
+        $this->ensureForeign('feed_documents', 'tracking_unit_id', 'feed_warehouses', 'feed_documents_tracking_fw_fk');
+
+        $this->renameWarehouseColumn('feed_stock_balances', 'warehouse_id', 'tracking_unit_id');
+        $this->dropIndexIfExists('feed_stock_balances', 'feed_stock_balance_unique');
+        $this->dropIndexIfExists('feed_stock_balances', 'feed_stock_balances_company_id_warehouse_id_index');
+        $this->dropIndexIfExists('feed_stock_balances', 'feed_stock_balances_company_id_tracking_unit_id_index');
+        $this->ensureIndex('feed_stock_balances', 'feed_stock_balances_company_tracking_idx', ['company_id', 'tracking_unit_id']);
+        $this->ensureUnique('feed_stock_balances', 'feed_stock_balance_unique', ['company_id', 'feed_item_id', 'tracking_unit_id']);
+        $this->ensureForeign('feed_stock_balances', 'tracking_unit_id', 'feed_warehouses', 'feed_stock_balances_tracking_fw_fk');
+
+        $this->renameWarehouseColumn('feed_stock_movements', 'warehouse_id', 'tracking_unit_id');
+        $this->dropIndexIfExists('feed_stock_movements', 'feed_movement_stock_lookup');
+        $this->ensureIndex('feed_stock_movements', 'feed_movement_stock_lookup', ['company_id', 'feed_item_id', 'tracking_unit_id']);
+        $this->ensureForeign('feed_stock_movements', 'tracking_unit_id', 'feed_warehouses', 'feed_stock_movements_tracking_fw_fk');
     }
 
     public function down(): void
     {
-        $this->renameWarehouseColumn('transactions', 'tracking_unit_id', 'warehouse_id', 'tx_warehouse_fk');
-        $this->renameWarehouseColumn('feed_settings', 'default_tracking_unit_id', 'default_warehouse_id', 'feed_settings_def_wh_fk');
-        $this->renameWarehouseColumn('feed_documents', 'tracking_unit_id', 'warehouse_id', 'feed_docs_warehouse_fk', [
-            'new_index' => ['columns' => ['company_id', 'warehouse_id'], 'name' => 'feed_documents_company_id_warehouse_id_index'],
-        ]);
+        $this->dropForeignsForColumn('feed_stock_movements', 'tracking_unit_id');
+        $this->dropIndexIfExists('feed_stock_movements', 'feed_movement_stock_lookup');
+        $this->renameWarehouseColumn('feed_stock_movements', 'tracking_unit_id', 'warehouse_id');
+        $this->ensureIndex('feed_stock_movements', 'feed_movement_stock_lookup', ['company_id', 'feed_item_id', 'warehouse_id']);
+        $this->ensureForeign('feed_stock_movements', 'warehouse_id', 'feed_warehouses', 'feed_stock_movements_warehouse_fk');
 
-        $this->renameFeedStockBalances(true);
-        $this->renameFeedStockMovements(true);
+        $this->dropForeignsForColumn('feed_stock_balances', 'tracking_unit_id');
+        $this->dropIndexIfExists('feed_stock_balances', 'feed_stock_balance_unique');
+        $this->dropIndexIfExists('feed_stock_balances', 'feed_stock_balances_company_tracking_idx');
+        $this->renameWarehouseColumn('feed_stock_balances', 'tracking_unit_id', 'warehouse_id');
+        $this->ensureIndex('feed_stock_balances', 'feed_stock_balances_company_id_warehouse_id_index', ['company_id', 'warehouse_id']);
+        $this->ensureUnique('feed_stock_balances', 'feed_stock_balance_unique', ['company_id', 'feed_item_id', 'warehouse_id']);
+        $this->ensureForeign('feed_stock_balances', 'warehouse_id', 'feed_warehouses', 'feed_stock_balances_warehouse_fk');
+
+        $this->dropForeignsForColumn('feed_documents', 'tracking_unit_id');
+        $this->dropIndexIfExists('feed_documents', 'feed_documents_company_tracking_idx');
+        $this->renameWarehouseColumn('feed_documents', 'tracking_unit_id', 'warehouse_id');
+        $this->ensureIndex('feed_documents', 'feed_documents_company_id_warehouse_id_index', ['company_id', 'warehouse_id']);
+        $this->ensureForeign('feed_documents', 'warehouse_id', 'feed_warehouses', 'feed_documents_warehouse_fk');
+
+        $this->dropForeignsForColumn('feed_settings', 'default_tracking_unit_id');
+        $this->renameWarehouseColumn('feed_settings', 'default_tracking_unit_id', 'default_warehouse_id');
+        $this->ensureForeign('feed_settings', 'default_warehouse_id', 'feed_warehouses', 'feed_settings_default_warehouse_fk');
+
+        $this->dropForeignsForColumn('transactions', 'tracking_unit_id');
+        $this->renameWarehouseColumn('transactions', 'tracking_unit_id', 'warehouse_id');
+        $this->ensureForeign('transactions', 'warehouse_id', 'feed_warehouses', 'transactions_warehouse_fk');
     }
 
-    private function renameWarehouseColumn(
-        string $table,
-        string $from,
-        string $to,
-        string $foreignName,
-        array $options = []
-    ): void {
+    private function renameWarehouseColumn(string $table, string $from, string $to): void
+    {
         if (! Schema::hasTable($table)) {
             return;
         }
 
-        if (Schema::hasColumn($table, $from) && ! Schema::hasColumn($table, $to)) {
-            $this->dropForeignKeysForColumn($table, $from);
+        if (Schema::hasColumn($table, $from)) {
+            $this->dropForeignsForColumn($table, $from);
+            Schema::table($table, function (Blueprint $blueprint) use ($from, $to): void {
+                $blueprint->renameColumn($from, $to);
+            });
+        }
 
-            foreach ($options['old_indexes'] ?? [] as $oldIndex) {
-                $this->dropIndexIfExists($table, $oldIndex);
+        if (Schema::hasColumn($table, $to)) {
+            $this->dropForeignsForColumn($table, $to);
+        }
+    }
+
+    /** @param array<int, string> $columns */
+    private function ensureIndex(string $table, string $name, array $columns): void
+    {
+        if (! Schema::hasTable($table) || $this->indexExists($table, $name)) {
+            return;
+        }
+
+        foreach ($columns as $column) {
+            if (! Schema::hasColumn($table, $column)) {
+                return;
             }
-
-            Schema::table($table, function (Blueprint $tableBlueprint) use ($from, $to): void {
-                $tableBlueprint->renameColumn($from, $to);
-            });
         }
 
-        if (! Schema::hasColumn($table, $to)) {
-            return;
-        }
-
-        if (isset($options['new_index'])) {
-            $this->addIndexIfMissing($table, $options['new_index']['columns'], $options['new_index']['name']);
-        }
-
-        $this->ensureWarehouseForeign($table, $to, $foreignName);
+        Schema::table($table, function (Blueprint $blueprint) use ($columns, $name): void {
+            $blueprint->index($columns, $name);
+        });
     }
 
-    private function renameFeedStockBalances(bool $reverse = false): void
+    /** @param array<int, string> $columns */
+    private function ensureUnique(string $table, string $name, array $columns): void
     {
-        $table = 'feed_stock_balances';
-
-        if (! Schema::hasTable($table)) {
+        if (! Schema::hasTable($table) || $this->indexExists($table, $name)) {
             return;
         }
 
-        $from = $reverse ? 'tracking_unit_id' : 'warehouse_id';
-        $to = $reverse ? 'warehouse_id' : 'tracking_unit_id';
-        $locationIndex = $reverse ? 'fsb_tracking_unit_fk_idx' : 'fsb_warehouse_fk_idx';
-        $newLocationIndex = $reverse ? 'fsb_warehouse_fk_idx' : 'fsb_tracking_unit_fk_idx';
-        $companyLocationIndex = $reverse ? 'feed_stock_bal_company_warehouse_idx' : 'feed_stock_bal_company_tracking_idx';
-
-        if (Schema::hasColumn($table, $from) && ! Schema::hasColumn($table, $to)) {
-            // The old unique index can be used by MySQL to support foreign keys.
-            // Drop/recreate those FKs explicitly before replacing the unique index.
-            $this->dropForeignKeysForColumn($table, 'company_id');
-            $this->dropForeignKeysForColumn($table, 'feed_item_id');
-            $this->dropForeignKeysForColumn($table, $from);
-
-            $this->addIndexIfMissing($table, ['company_id'], 'fsb_company_fk_idx');
-            $this->addIndexIfMissing($table, ['feed_item_id'], 'fsb_item_fk_idx');
-            $this->addIndexIfMissing($table, [$from], $locationIndex);
-            $this->dropIndexIfExists($table, 'feed_stock_balance_unique');
-
-            Schema::table($table, function (Blueprint $tableBlueprint) use ($from, $to): void {
-                $tableBlueprint->renameColumn($from, $to);
-            });
+        foreach ($columns as $column) {
+            if (! Schema::hasColumn($table, $column)) {
+                return;
+            }
         }
 
-        if (! Schema::hasColumn($table, $to)) {
-            return;
-        }
-
-        $this->dropForeignKeysForColumn($table, 'company_id');
-        $this->dropForeignKeysForColumn($table, 'feed_item_id');
-        $this->dropForeignKeysForColumn($table, $to);
-
-        $this->addIndexIfMissing($table, ['company_id'], 'fsb_company_fk_idx');
-        $this->addIndexIfMissing($table, ['feed_item_id'], 'fsb_item_fk_idx');
-        $this->addIndexIfMissing($table, [$to], $newLocationIndex);
-        $this->addIndexIfMissing($table, ['company_id', $to], $companyLocationIndex);
-
-        $this->dropIndexIfExists($table, 'feed_stock_balance_unique');
-        $this->addUniqueIfMissing($table, ['company_id', 'feed_item_id', $to], 'feed_stock_balance_unique');
-
-        $this->addForeignIfMissing($table, 'company_id', 'companies', 'id', 'fsb_company_fk', 'CASCADE');
-        $this->addForeignIfMissing($table, 'feed_item_id', 'feed_items', 'id', 'fsb_item_fk', 'RESTRICT');
-        $this->addForeignIfMissing($table, $to, 'feed_warehouses', 'id', $reverse ? 'fsb_warehouse_fk' : 'fsb_tracking_wh_fk', 'RESTRICT');
+        Schema::table($table, function (Blueprint $blueprint) use ($columns, $name): void {
+            $blueprint->unique($columns, $name);
+        });
     }
 
-    private function renameFeedStockMovements(bool $reverse = false): void
+    private function ensureForeign(string $table, string $column, string $referencesTable, string $constraintName): void
     {
-        $table = 'feed_stock_movements';
-
-        if (! Schema::hasTable($table)) {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
             return;
         }
 
-        $from = $reverse ? 'tracking_unit_id' : 'warehouse_id';
-        $to = $reverse ? 'warehouse_id' : 'tracking_unit_id';
-        $lookupColumns = ['company_id', 'feed_item_id', $to];
+        $this->dropForeignsForColumn($table, $column);
 
-        if (Schema::hasColumn($table, $from) && ! Schema::hasColumn($table, $to)) {
-            $this->dropForeignKeysForColumn($table, 'company_id');
-            $this->dropForeignKeysForColumn($table, 'feed_item_id');
-            $this->dropForeignKeysForColumn($table, $from);
+        Schema::table($table, function (Blueprint $blueprint) use ($column, $referencesTable, $constraintName): void {
+            $blueprint->foreign($column, $constraintName)
+                ->references('id')
+                ->on($referencesTable)
+                ->restrictOnDelete();
+        });
+    }
 
-            $this->addIndexIfMissing($table, ['company_id'], 'fsm_company_fk_idx');
-            $this->addIndexIfMissing($table, ['feed_item_id'], 'fsm_item_fk_idx');
-            $this->addIndexIfMissing($table, [$from], 'fsm_location_fk_idx');
-            $this->dropIndexIfExists($table, 'feed_movement_stock_lookup');
-
-            Schema::table($table, function (Blueprint $tableBlueprint) use ($from, $to): void {
-                $tableBlueprint->renameColumn($from, $to);
-            });
-        }
-
-        if (! Schema::hasColumn($table, $to)) {
+    private function dropForeignsForColumn(string $table, string $column): void
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
             return;
         }
 
-        $this->dropForeignKeysForColumn($table, 'company_id');
-        $this->dropForeignKeysForColumn($table, 'feed_item_id');
-        $this->dropForeignKeysForColumn($table, $to);
-
-        $this->addIndexIfMissing($table, ['company_id'], 'fsm_company_fk_idx');
-        $this->addIndexIfMissing($table, ['feed_item_id'], 'fsm_item_fk_idx');
-        $this->addIndexIfMissing($table, [$to], 'fsm_location_fk_idx');
-        $this->dropIndexIfExists($table, 'feed_movement_stock_lookup');
-        $this->addIndexIfMissing($table, $lookupColumns, 'feed_movement_stock_lookup');
-
-        $this->addForeignIfMissing($table, 'company_id', 'companies', 'id', 'fsm_company_fk', 'CASCADE');
-        $this->addForeignIfMissing($table, 'feed_item_id', 'feed_items', 'id', 'fsm_item_fk', 'RESTRICT');
-        $this->addForeignIfMissing($table, $to, 'feed_warehouses', 'id', $reverse ? 'fsm_warehouse_fk' : 'fsm_tracking_wh_fk', 'RESTRICT');
-    }
-
-    private function ensureWarehouseForeign(string $table, string $column, string $constraintName): void
-    {
-        if ($this->hasForeignKey($table, $column, 'feed_warehouses')) {
-            return;
-        }
-
-        $this->dropForeignKeysForColumn($table, $column);
-        $this->addIndexIfMissing($table, [$column], $constraintName.'_idx');
-        $this->addForeignIfMissing($table, $column, 'feed_warehouses', 'id', $constraintName, 'RESTRICT');
-    }
-
-    private function addForeignIfMissing(
-        string $table,
-        string $column,
-        string $referencedTable,
-        string $referencedColumn,
-        string $constraintName,
-        string $onDelete = 'RESTRICT'
-    ): void {
-        if ($this->hasForeignKey($table, $column, $referencedTable)) {
-            return;
-        }
-
-        $this->dropForeignKeyByName($table, $constraintName);
-
-        DB::statement(sprintf(
-            'ALTER TABLE `%s` ADD CONSTRAINT `%s` FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`) ON DELETE %s',
-            $table,
-            $constraintName,
-            $column,
-            $referencedTable,
-            $referencedColumn,
-            $onDelete
-        ));
-    }
-
-    private function addIndexIfMissing(string $table, array $columns, string $indexName): void
-    {
-        if ($this->indexExists($table, $indexName)) {
-            return;
-        }
-
-        DB::statement(sprintf(
-            'ALTER TABLE `%s` ADD INDEX `%s` (%s)',
-            $table,
-            $indexName,
-            implode(', ', array_map(fn (string $column): string => '`'.$column.'`', $columns))
-        ));
-    }
-
-    private function addUniqueIfMissing(string $table, array $columns, string $indexName): void
-    {
-        if ($this->indexExists($table, $indexName)) {
-            return;
-        }
-
-        DB::statement(sprintf(
-            'ALTER TABLE `%s` ADD UNIQUE `%s` (%s)',
-            $table,
-            $indexName,
-            implode(', ', array_map(fn (string $column): string => '`'.$column.'`', $columns))
-        ));
-    }
-
-    private function dropIndexIfExists(string $table, string $indexName): void
-    {
-        if (! $this->indexExists($table, $indexName)) {
-            return;
-        }
-
-        DB::statement(sprintf('ALTER TABLE `%s` DROP INDEX `%s`', $table, $indexName));
-    }
-
-    private function indexExists(string $table, string $indexName): bool
-    {
-        return DB::table('information_schema.statistics')
-            ->whereRaw('table_schema = database()')
-            ->where('table_name', $table)
-            ->where('index_name', $indexName)
-            ->exists();
-    }
-
-    private function hasForeignKey(string $table, string $column, ?string $referencedTable = null): bool
-    {
-        $query = DB::table('information_schema.key_column_usage')
-            ->whereRaw('table_schema = database()')
-            ->where('table_name', $table)
-            ->where('column_name', $column)
-            ->whereNotNull('referenced_table_name');
-
-        if ($referencedTable !== null) {
-            $query->where('referenced_table_name', $referencedTable);
-        }
-
-        return $query->exists();
-    }
-
-    private function dropForeignKeysForColumn(string $table, string $column): void
-    {
-        $constraints = DB::table('information_schema.key_column_usage')
+        $constraints = DB::table('information_schema.KEY_COLUMN_USAGE')
             ->selectRaw('CONSTRAINT_NAME as constraint_name')
             ->whereRaw('TABLE_SCHEMA = DATABASE()')
-            ->whereRaw('TABLE_NAME = ?', [$table])
-            ->whereRaw('COLUMN_NAME = ?', [$column])
+            ->where('TABLE_NAME', $table)
+            ->where('COLUMN_NAME', $column)
             ->whereNotNull('REFERENCED_TABLE_NAME')
             ->pluck('constraint_name')
+            ->filter()
             ->unique()
             ->values();
 
         foreach ($constraints as $constraint) {
-            $this->dropForeignKeyByName($table, (string) $constraint);
+            DB::statement('ALTER TABLE `'.$table.'` DROP FOREIGN KEY `'.$constraint.'`');
         }
     }
 
-    private function dropForeignKeyByName(string $table, string $constraintName): void
+    private function dropIndexIfExists(string $table, string $index): void
     {
-        $exists = DB::table('information_schema.table_constraints')
-            ->whereRaw('table_schema = database()')
-            ->where('table_name', $table)
-            ->where('constraint_name', $constraintName)
-            ->where('constraint_type', 'FOREIGN KEY')
-            ->exists();
-
-        if (! $exists) {
+        if (! Schema::hasTable($table) || ! $this->indexExists($table, $index)) {
             return;
         }
 
-        DB::statement(sprintf('ALTER TABLE `%s` DROP FOREIGN KEY `%s`', $table, $constraintName));
+        DB::statement('ALTER TABLE `'.$table.'` DROP INDEX `'.$index.'`');
+    }
+
+    private function indexExists(string $table, string $index): bool
+    {
+        if (! Schema::hasTable($table)) {
+            return false;
+        }
+
+        return DB::table('information_schema.STATISTICS')
+            ->whereRaw('TABLE_SCHEMA = DATABASE()')
+            ->where('TABLE_NAME', $table)
+            ->where('INDEX_NAME', $index)
+            ->exists();
     }
 };
