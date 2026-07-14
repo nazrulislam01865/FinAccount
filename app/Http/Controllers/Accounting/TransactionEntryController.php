@@ -115,7 +115,14 @@ class TransactionEntryController extends Controller
                 ->orderBy('name')
                 ->get()
             : collect();
-        $saleSellingTypeOptions = [SaleSellingTypes::OTHERS => 'Others', 'feed' => 'Feed'];
+        // Keep the Sales transaction entry behavior stable: normal sales use Others,
+        // and feed-item sales are opened only by selecting Feed. Business areas are
+        // managed in Business Tracking; they must not replace this Sales dropdown.
+        $saleSellingTypeOptions = [
+            SaleSellingTypes::OTHERS => 'Others',
+            SaleSellingTypes::FEED => 'Feed',
+        ];
+
         $saleTrackingUnits = $isSaleCategory
             ? FeedWarehouse::query()
                 ->where('company_id', $companyId)

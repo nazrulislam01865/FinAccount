@@ -240,7 +240,7 @@
                                 >{{ $sellingTypeLabel }}</option>
                             @endforeach
                         </select>
-                        <small class="hg-field-help">Select Others for the normal sales form. Select Fish, Cattle, Vegetables, or any custom business area to open the feed-item sales form.</small>
+                        <small class="hg-field-help">Select Others for the normal sales form. Select Feed to open the feed-item sales form.</small>
                         @error('selling_type')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
@@ -278,15 +278,15 @@
                         <select id="tracking_unit_id" name="tracking_unit_id" data-sale-warehouse>
                             <option value="">{{ $saleTrackingUnits->isEmpty() ? 'No active location available' : 'Select warehouse / location' }}</option>
                             @foreach($saleTrackingUnits as $unit)
-                                <option value="{{ $unit->id }}" data-business-area="{{ $unit->business_area }}" @selected((string) $selectedTrackingUnitId === (string) $unit->id)>
+                                <option value="{{ $unit->id }}" data-business-area="" @selected((string) $selectedTrackingUnitId === (string) $unit->id)>
                                     {{ $unit->name }} ({{ $unit->code }}){{ filled($unit->location) ? ' — '.$unit->location : '' }}{{ ! $unit->is_active ? ' — Inactive' : '' }}
                                 </option>
                             @endforeach
                         </select>
                         @if($saleTrackingUnits->isEmpty())
-                            <small class="hg-field-error">Add a tracking unit from Business Tracking Setup before posting sales.</small>
+                            <small class="hg-field-error">Add an active warehouse from Feed Setup before posting feed sales.</small>
                         @else
-                            <small class="hg-field-help">This list comes from Configuration → Business Tracking.</small>
+                            <small class="hg-field-help">This list comes from Feed Setup → Warehouses.</small>
                         @endif
                         @error('tracking_unit_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>

@@ -41,13 +41,23 @@ class UpdateTransactionRequest extends FormRequest
                         return;
                     }
 
+                    $hasActiveBusinessAreas = FeedBusinessArea::query()
+                        ->where('company_id', $companyId)
+                        ->where('is_active', true)
+                        ->exists();
+
                     $exists = FeedBusinessArea::query()
                         ->where('company_id', $companyId)
                         ->where('code', $sellingType)
                         ->where('is_active', true)
                         ->exists();
 
-                    if (! $exists) {
+                    $isBuiltInFeed = $sellingType === SaleSellingTypes::FEED;
+                    $isBuiltInFallback = ! $hasActiveBusinessAreas
+                        && array_key_exists($sellingType, SaleSellingTypes::labels())
+                        && ! SaleSellingTypes::isOthers($sellingType);
+
+                    if (! $exists && ! $isBuiltInFeed && ! $isBuiltInFallback) {
                         $fail('The selected what are you selling is not an active business area.');
                     }
                 },

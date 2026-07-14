@@ -4,6 +4,8 @@ namespace App\Support;
 
 final class SaleSellingTypes
 {
+    public const FEED = 'feed';
+
     public const FISH = 'fish';
 
     public const CATTLE = 'cattle';
@@ -18,6 +20,7 @@ final class SaleSellingTypes
     public static function labels(): array
     {
         return [
+            self::FEED => 'Feed',
             self::FISH => 'Fish',
             self::CATTLE => 'Cattle',
             self::VEGETABLE => 'Vegetable',

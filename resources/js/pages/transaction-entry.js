@@ -123,7 +123,7 @@ if (page) {
             Array.from(saleWarehouse.options).forEach((opt) => {
                 if (opt.value === '') return;
                 const optArea = String(opt.dataset.businessArea || '').toLowerCase();
-                const matches = !selectedArea || selectedArea === 'others' || optArea === selectedArea;
+                const matches = !selectedArea || selectedArea === 'others' || optArea === '' || optArea === selectedArea;
                 opt.hidden = !matches;
                 opt.disabled = !matches;
                 if (matches && !firstValid) firstValid = opt.value;
