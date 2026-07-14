@@ -265,10 +265,11 @@ return new class extends Migration
     private function dropForeignKeysForColumn(string $table, string $column): void
     {
         $constraints = DB::table('information_schema.key_column_usage')
-            ->whereRaw('table_schema = database()')
-            ->where('table_name', $table)
-            ->where('column_name', $column)
-            ->whereNotNull('referenced_table_name')
+            ->selectRaw('CONSTRAINT_NAME as constraint_name')
+            ->whereRaw('TABLE_SCHEMA = DATABASE()')
+            ->whereRaw('TABLE_NAME = ?', [$table])
+            ->whereRaw('COLUMN_NAME = ?', [$column])
+            ->whereNotNull('REFERENCED_TABLE_NAME')
             ->pluck('constraint_name')
             ->unique()
             ->values();
