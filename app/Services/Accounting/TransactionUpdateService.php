@@ -94,7 +94,7 @@ class TransactionUpdateService
                 ]);
             }
 
-            $rule = $this->ruleMatcher->match((int) $user->company_id, $transactionType, $settlementType);
+            $rule = $this->ruleMatcher->match((int) $user->company_id, $transactionType, $settlementType, $head);
             $requiresMoney = $this->settlementService->requiresMoney($rule);
             $requiresParty = $this->settlementService->requiresParty($rule);
             $party = $requiresParty

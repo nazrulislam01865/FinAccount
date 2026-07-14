@@ -13,6 +13,7 @@
     $defaultRuleValues = [
         'record_id' => '',
         'category' => $defaultCategory,
+        'transaction_head_id' => '',
         'settlement_type' => $defaultSettlement,
         'is_active' => '1',
     ];
@@ -22,7 +23,7 @@
     <div class="hg-page-header">
         <div>
             <h1>Accounting Rules</h1>
-            <p class="hg-muted">The system applies these accounting rules automatically from the transaction type and payment type.</p>
+            <p class="hg-muted">The system applies a head-specific rule first, then falls back to the transaction-type rule for the same payment type.</p>
         </div>
         <div class="hg-actions">
             @if(! $addOnlyMode)
@@ -83,6 +84,7 @@
                     @if($canManage)<th class="hg-checkbox-col"><input type="checkbox" data-bulk-master="accounting-rules" aria-label="Select all accounting rules"></th>@endif
                     <th>Accounting Rule</th>
                     <th>Transaction Type</th>
+                    <th>Rule Scope</th>
                     <th>Payment Type</th>
                     <th>Automatic Posting</th>
                     <th>Required Information</th>
@@ -98,6 +100,7 @@
                             'code' => $rule->code,
                             'name' => $rule->name,
                             'category' => $rule->category,
+                            'transaction_head_id' => $rule->transaction_head_id,
                             'settlement_type' => $rule->settlement_type,
                             'is_active' => $rule->is_active ? '1' : '0',
                         ];
@@ -117,6 +120,13 @@
                         @endif
                         <td><strong>{{ $rule->code }}</strong><br>{{ $rule->name }}</td>
                         <td>{{ $categoryLabels[$rule->category] ?? $rule->category }}</td>
+                        <td>
+                            @if($rule->transactionHead)
+                                <strong>{{ $rule->transactionHead->name }}</strong><br><small class="hg-muted">Transaction Head</small>
+                            @else
+                                <strong>All {{ $categoryLabels[$rule->category] ?? $rule->category }} Heads</strong><br><small class="hg-muted">Fallback rule</small>
+                            @endif
+                        </td>
                         <td>{{ $settlementLabels[$rule->settlement_type] ?? $rule->settlement_type }}</td>
                         <td>
                             @foreach($rule->lines as $line)
@@ -154,6 +164,7 @@
                         @if($canManage)<td class="hg-checkbox-col"><span class="hg-muted">—</span></td>@endif
                         <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Accounting Rule' }}</td>
                         <td>{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</td>
+                        <td>{{ filled($fields['transaction_head_id'] ?? null) ? 'Selected Transaction Head' : 'All Heads' }}</td>
                         <td>{{ $settlementLabels[$fields['settlement_type'] ?? ''] ?? ($fields['settlement_type'] ?? '—') }}</td>
                         <td colspan="2"><span class="hg-muted">Automatic posting will be generated when saved.</span></td>
                         <td><span class="hg-badge draft">Draft</span></td>
@@ -192,6 +203,21 @@
                         @endforeach
                     </select>
                     @error('category')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+                <div class="hg-field">
+                    <label for="rule-head">Transaction Head Scope</label>
+                    <select id="rule-head" name="transaction_head_id" data-rule-transaction-head>
+                        <option value="">All heads of this transaction type</option>
+                        @foreach ($transactionHeads as $transactionHead)
+                            <option
+                                value="{{ $transactionHead->id }}"
+                                data-head-category="{{ $transactionHead->category }}"
+                                @selected((string) old('transaction_head_id', $editingRule?->transaction_head_id) === (string) $transactionHead->id)
+                            >{{ $transactionHead->name }} ({{ $transactionHead->code }})</option>
+                        @endforeach
+                    </select>
+                    <small class="hg-muted">Choose a head to override the general rule only for that head. Feed Purchase and Feed Sale use this scope.</small>
+                    @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
                 <div class="hg-field">
                     <label for="rule-settlement">Payment Type <span class="hg-required">*</span></label>

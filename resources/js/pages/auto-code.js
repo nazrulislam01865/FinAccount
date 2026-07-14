@@ -26,12 +26,18 @@ const bindNameGeneratedCode = (form, nameSelector, codeSelector, fallback) => {
     const code = form.querySelector(codeSelector);
     if (!name || !code) return;
 
+    let protectedSystemCode = code.value.toUpperCase().startsWith('SYS-FEED-');
+
     name.addEventListener('input', () => {
+        if (form.dataset.setupMode === 'edit' && protectedSystemCode) return;
         code.value = slugCode(name.value, fallback);
         code.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     form.addEventListener('hisebghor:setup-values-applied', (event) => {
+        protectedSystemCode = String(event.detail?.values?.code || code.value || '')
+            .toUpperCase()
+            .startsWith('SYS-FEED-');
         if (event.detail?.mode === 'create') {
             code.value = name.value ? slugCode(name.value, fallback) : '';
         }

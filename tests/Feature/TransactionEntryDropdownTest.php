@@ -95,6 +95,109 @@ class TransactionEntryDropdownTest extends TestCase
             ->assertOk();
     }
 
+
+    public function test_transaction_entry_filters_transaction_types_by_selected_direction(): void
+    {
+        [$user] = $this->companyUserWithAccounts();
+
+        AccountingOption::query()->create([
+            'option_group' => AccountingOption::GROUP_TRANSACTION_CATEGORY,
+            'value' => 'BANK_TRANSFER',
+            'label' => 'Bank Transfer',
+            'sort_order' => 200,
+            'metadata' => [
+                'voucher_prefix' => 'BTR',
+                'money_label' => 'Transfer Through',
+                'flow' => TransactionTypes::FLOW_TRANSFER,
+                'allowed_settlements' => [TransactionTypes::CASH],
+                'default_settlements' => [TransactionTypes::CASH],
+            ],
+            'is_active' => true,
+        ]);
+        AccountingOption::query()->create([
+            'option_group' => AccountingOption::GROUP_TRANSACTION_CATEGORY,
+            'value' => 'JOURNAL_ADJUSTMENT',
+            'label' => 'Journal Adjustment',
+            'sort_order' => 210,
+            'metadata' => [
+                'voucher_prefix' => 'JAD',
+                'flow' => TransactionTypes::FLOW_NON_CASH,
+                'allowed_settlements' => [TransactionTypes::CASH],
+                'default_settlements' => [TransactionTypes::CASH],
+            ],
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['direction' => TransactionTypes::FLOW_INCOMING]))
+            ->assertOk()
+            ->assertSee('Transaction Direction')
+            ->assertSee('Money In')
+            ->assertSee('Money Out')
+            ->assertSee('Transfer')
+            ->assertSee('Non-Cash')
+            ->assertSee('data-category="SALE"', false)
+            ->assertDontSee('data-category="PURCHASE"', false)
+            ->assertDontSee('data-category="BANK_TRANSFER"', false);
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['direction' => TransactionTypes::FLOW_OUTGOING]))
+            ->assertOk()
+            ->assertSee('data-category="PURCHASE"', false)
+            ->assertSee('data-category="EXPENSE"', false)
+            ->assertDontSee('data-category="SALE"', false)
+            ->assertDontSee('data-category="BANK_TRANSFER"', false);
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['direction' => TransactionTypes::FLOW_TRANSFER]))
+            ->assertOk()
+            ->assertSee('data-category="BANK_TRANSFER"', false)
+            ->assertDontSee('data-category="SALE"', false)
+            ->assertDontSee('data-category="PURCHASE"', false);
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['direction' => TransactionTypes::FLOW_NON_CASH]))
+            ->assertOk()
+            ->assertSee('data-category="JOURNAL_ADJUSTMENT"', false)
+            ->assertDontSee('data-category="SALE"', false)
+            ->assertDontSee('data-category="PURCHASE"', false);
+    }
+
+
+    public function test_transaction_entry_initial_page_hides_only_type_buttons_not_the_form(): void
+    {
+        [$user] = $this->companyUserWithAccounts();
+
+        $this->actingAs($user)
+            ->get(route('transactions.create'))
+            ->assertOk()
+            ->assertSee('Transaction Direction')
+            ->assertSee('Money In')
+            ->assertSee('Money Out')
+            ->assertSee('Transfer')
+            ->assertSee('Non-Cash')
+            ->assertDontSee('Transaction Type')
+            ->assertDontSee('data-category="SALE"', false)
+            ->assertSee('name="category" value="SALE"', false)
+            ->assertSee('Transaction Head');
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', ['direction' => TransactionTypes::FLOW_INCOMING]))
+            ->assertOk()
+            ->assertSee('Transaction Type')
+            ->assertSee('data-category="SALE"', false)
+            ->assertSee('name="category" value="SALE"', false);
+
+        $this->actingAs($user)
+            ->get(route('transactions.create', [
+                'direction' => TransactionTypes::FLOW_INCOMING,
+                'category' => TransactionTypes::SALE,
+            ]))
+            ->assertOk()
+            ->assertSee('Record Sales Transaction')
+            ->assertSee('name="category" value="SALE"', false);
+    }
+
     public function test_money_dropdown_only_uses_active_money_accounts_with_active_coa(): void
     {
         [$user, $accounts] = $this->companyUserWithAccounts();

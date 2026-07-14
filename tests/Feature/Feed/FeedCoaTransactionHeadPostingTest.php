@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Feed;
 
+use App\Models\AccountingRule;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
 use App\Models\Feed\FeedStockBalance;
@@ -19,18 +20,18 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-class FeedDirectLedgerPostingTest extends TestCase
+class FeedCoaTransactionHeadPostingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_feed_setup_has_no_manual_accounting_connection_and_prepares_internal_heads(): void
+    public function test_feed_setup_uses_purchase_and_sale_heads_with_head_specific_rules(): void
     {
         [$user] = $this->seedFeedCompany();
 
         $this->actingAs($user)
             ->get(route('feed.setup.index'))
             ->assertOk()
-            ->assertSee('Direct ledger posting is active.')
+            ->assertSee('COA and Transaction Head posting is active.')
             ->assertDontSee('Accounting Connection')
             ->assertDontSee('feed.setup.settings.store');
 
@@ -41,8 +42,28 @@ class FeedDirectLedgerPostingTest extends TestCase
 
         $this->assertSame('SYS-FEED-PUR', $settings->purchaseTransactionHead->code);
         $this->assertSame('SYS-FEED-SAL', $settings->saleTransactionHead->code);
-        $this->assertNull($settings->purchaseTransactionHead->accounting_rule_id);
-        $this->assertNull($settings->saleTransactionHead->accounting_rule_id);
+        $this->assertSame(TransactionTypes::PURCHASE, $settings->purchaseTransactionHead->category);
+        $this->assertSame(TransactionTypes::SALE, $settings->saleTransactionHead->category);
+
+        foreach ([
+            $settings->purchaseTransactionHead->id => TransactionTypes::PURCHASE,
+            $settings->saleTransactionHead->id => TransactionTypes::SALE,
+        ] as $headId => $category) {
+            $rules = AccountingRule::query()
+                ->where('company_id', $user->company_id)
+                ->where('transaction_head_id', $headId)
+                ->where('category', $category)
+                ->where('is_active', true)
+                ->pluck('settlement_type')
+                ->sort()
+                ->values()
+                ->all();
+
+            $this->assertSame(
+                collect(TransactionTypes::ALL_SETTLEMENTS)->sort()->values()->all(),
+                $rules,
+            );
+        }
 
         $purchaseHeads = app(TransactionEntryOptionService::class)
             ->transactionHeads((int) $user->company_id, TransactionTypes::PURCHASE);
@@ -53,7 +74,7 @@ class FeedDirectLedgerPostingTest extends TestCase
         $this->assertFalse($saleHeads->contains('id', $settings->sale_transaction_head_id));
     }
 
-    public function test_feed_purchase_posts_inventory_cash_and_supplier_payable_directly(): void
+    public function test_feed_purchase_posts_through_purchase_head_and_head_specific_rule(): void
     {
         [$user, $warehouse, $item] = $this->seedFeedCompany();
         $supplier = Party::query()
@@ -131,7 +152,7 @@ class FeedDirectLedgerPostingTest extends TestCase
         $this->assertSame('21.000000', number_format((float) $balance->average_cost, 6, '.', ''));
     }
 
-    public function test_feed_sale_posts_collection_receivable_income_cogs_and_inventory_directly(): void
+    public function test_feed_sale_posts_through_sale_head_and_head_specific_rule_with_cogs(): void
     {
         [$user, $warehouse, $item] = $this->seedFeedCompany();
         $supplier = Party::query()->where('company_id', $user->company_id)->where('code', 'S-001')->firstOrFail();

@@ -54,12 +54,48 @@ class TransactionEntryController extends Controller
         $companyId = (int) $company->id;
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
         $dueSettlementContext = $this->dueSettlementContext($request, $companyId);
+
         $requestedCategory = $dueSettlementContext['active']
             ? (string) $dueSettlementContext['category']
-            : $request->string('category')->toString();
-        $categoryOption = $transactionCategories
-            ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, trim($requestedCategory)) === 0)
-            ?? $transactionCategories->first();
+            : trim($request->string('category')->toString());
+        $requestedDirection = $dueSettlementContext['active']
+            ? null
+            : strtolower(trim($request->string('direction')->toString()));
+        $requestedDirection = in_array($requestedDirection, TransactionTypes::flowCodes(), true)
+            ? $requestedDirection
+            : null;
+
+        $requestedCategoryOption = $transactionCategories
+            ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $requestedCategory) === 0);
+        $showTransactionTypeSelection = $dueSettlementContext['active']
+            || $requestedDirection !== null
+            || $requestedCategoryOption !== null;
+
+        $activeDirection = $requestedDirection
+            ?? ($requestedCategoryOption ? $this->transactionCategoryDirection($requestedCategoryOption) : null);
+
+        $filteredTransactionCategories = $activeDirection !== null
+            ? $transactionCategories
+                ->filter(fn (AccountingOption $option): bool => $this->transactionCategoryDirection($option) === $activeDirection)
+                ->values()
+            : collect();
+
+        if ($dueSettlementContext['active']) {
+            $categoryOption = $requestedCategoryOption;
+        } elseif ($requestedCategoryOption !== null && ($activeDirection === null || $this->transactionCategoryDirection($requestedCategoryOption) === $activeDirection)) {
+            $categoryOption = $requestedCategoryOption;
+        } elseif ($requestedDirection !== null) {
+            $categoryOption = $filteredTransactionCategories->first();
+        } else {
+            $categoryOption = $transactionCategories->first();
+            $activeDirection = $categoryOption ? $this->transactionCategoryDirection($categoryOption) : null;
+            $filteredTransactionCategories = $activeDirection !== null
+                ? $transactionCategories
+                    ->filter(fn (AccountingOption $option): bool => $this->transactionCategoryDirection($option) === $activeDirection)
+                    ->values()
+                : collect();
+        }
+
         $category = $categoryOption?->value ?? '';
         $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
 
@@ -67,7 +103,14 @@ class TransactionEntryController extends Controller
             'category' => $category,
             'categoryOption' => $categoryOption,
             'transactionCategories' => $transactionCategories,
-            'transactionHeads' => $this->entryOptionService->transactionHeads($companyId, $category),
+            'filteredTransactionCategories' => $filteredTransactionCategories,
+            'transactionDirectionOptions' => TransactionTypes::flowLabels(),
+            'activeTransactionDirection' => $activeDirection,
+            'showTransactionTypeSelection' => $showTransactionTypeSelection,
+            'transactionCategoryDirections' => $transactionCategories
+                ->mapWithKeys(fn (AccountingOption $option): array => [$option->value => $this->transactionCategoryDirection($option)])
+                ->all(),
+            'transactionHeads' => $category !== '' ? $this->entryOptionService->transactionHeads($companyId, $category) : collect(),
             'moneyAccounts' => $this->entryOptionService->moneyAccounts($companyId),
             'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
             'parties' => $this->entryOptionService->parties($companyId),
@@ -181,7 +224,7 @@ class TransactionEntryController extends Controller
                 ]);
             }
 
-            $rule = $this->ruleMatcher->match($companyId, $category, $settlementType);
+            $rule = $this->ruleMatcher->match($companyId, $category, $settlementType, $head);
             $requiresMoney = $this->settlementService->requiresMoney($rule);
             $requiresParty = $this->settlementService->requiresParty($rule);
             $expectedPartyType = $this->partyResolver->expectedPartyType($head, $rule);
@@ -283,6 +326,14 @@ class TransactionEntryController extends Controller
             ->route('transactions.create', ['category' => $transaction->category])
             ->with('success', $message)
             ->with('warning', 'The transaction was saved, but your role is not allowed to view the register.');
+    }
+
+
+    private function transactionCategoryDirection(AccountingOption $option): string
+    {
+        $metadata = is_array($option->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow((string) $option->value, $metadata);
     }
 
     /** @return array<string, mixed> */

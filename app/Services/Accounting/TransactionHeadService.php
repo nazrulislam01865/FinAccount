@@ -69,10 +69,11 @@ class TransactionHeadService
     /** @param array<string, mixed> $data */
     public function update(TransactionHead $head, array $data): TransactionHead
     {
-        $this->validateSetup($data, (int) $head->company_id);
+        $this->validateSetup($data, (int) $head->company_id, $head);
         DB::transaction(function () use ($head, $data): void {
             $this->automaticCodeService->lockCompany((int) $head->company_id);
-            $data['code'] = (string) $data['name'] === (string) $head->name
+            $data['code'] = str_starts_with(strtoupper((string) $head->code), 'SYS-FEED-')
+                || (string) $data['name'] === (string) $head->name
                 ? $head->code
                 : $this->automaticCodeService->transactionHeadCode(
                     (int) $head->company_id,
@@ -206,8 +207,27 @@ class TransactionHeadService
     }
 
     /** @param array<string, mixed> $data */
-    private function validateSetup(array $data, int $companyId): void
+    private function validateSetup(array $data, int $companyId, ?TransactionHead $existingHead = null): void
     {
+        if ($existingHead && str_starts_with(strtoupper((string) $existingHead->code), 'SYS-FEED-')) {
+            $expectedCategory = str_starts_with(strtoupper((string) $existingHead->code), 'SYS-FEED-PUR')
+                ? TransactionTypes::PURCHASE
+                : TransactionTypes::SALE;
+            $expectedPartyType = $expectedCategory === TransactionTypes::PURCHASE ? 'Supplier' : 'Customer';
+
+            if (strcasecmp((string) $data['category'], $expectedCategory) !== 0) {
+                throw ValidationException::withMessages([
+                    'category' => 'The Feed module head must remain under the existing '.$expectedCategory.' transaction type.',
+                ]);
+            }
+
+            if ((string) $data['party_type'] !== $expectedPartyType) {
+                throw ValidationException::withMessages([
+                    'party_type' => 'The Feed module head must keep the '.$expectedPartyType.' party type.',
+                ]);
+            }
+        }
+
         $account = ChartOfAccount::query()
             ->whereKey($data['posting_account_id'])
             ->where('company_id', $companyId)

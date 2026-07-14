@@ -100,7 +100,7 @@ final class AccountingSetupExportService
         ];
 
         $rows = AccountingRule::query()
-            ->with('lines')
+            ->with(['lines', 'transactionHead'])
             ->where('company_id', $companyId)
             ->orderBy('category')
             ->orderBy('settlement_type')
@@ -127,6 +127,7 @@ final class AccountingSetupExportService
                     $rule->code,
                     $rule->name,
                     $categoryLabels[$rule->category] ?? $rule->category,
+                    $rule->transactionHead?->name ?? 'All '.($categoryLabels[$rule->category] ?? $rule->category).' Heads',
                     $settlementLabels[$rule->settlement_type] ?? $rule->settlement_type,
                     $posting !== '' ? $posting : 'No posting lines configured',
                     $requirements !== '' ? $requirements : 'No additional selection',
@@ -140,9 +141,9 @@ final class AccountingSetupExportService
             'Accounting Rules',
             'Accounting Rules',
             $companyName,
-            ['Code', 'Accounting Rule', 'Transaction Type', 'Payment Type', 'Automatic Posting', 'Required Information', 'Status'],
+            ['Code', 'Accounting Rule', 'Transaction Type', 'Rule Scope', 'Payment Type', 'Automatic Posting', 'Required Information', 'Status'],
             $rows,
-            [20, 32, 25, 24, 56, 40, 14],
+            [20, 32, 25, 32, 24, 56, 40, 14],
         );
     }
 

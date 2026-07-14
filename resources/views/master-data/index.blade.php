@@ -97,7 +97,7 @@
                         <td>{{ $option->label }}</td>
                         @if ($isTransactionCategory)
                             <td><strong>{{ $option->metadata['voucher_prefix'] ?? '—' }}</strong></td>
-                            <td>{{ $transactionFlow === 'incoming' ? 'Money In' : 'Money Out' }}</td>
+                            <td>{{ \App\Support\TransactionTypes::flowLabel($transactionFlow) }}</td>
                             <td>{{ $option->metadata['money_label'] ?? 'Money Account' }}</td>
                         @endif
                         <td>{{ $option->sort_order }}</td>
@@ -165,7 +165,7 @@
                         <td>{{ $fields['label'] ?? 'Draft '.$singularTitle }}</td>
                         @if ($isTransactionCategory)
                             <td><strong>{{ $fields['voucher_prefix'] ?? '—' }}</strong></td>
-                            <td>{{ ($fields['flow'] ?? 'outgoing') === 'incoming' ? 'Money In' : 'Money Out' }}</td>
+                            <td>{{ \App\Support\TransactionTypes::flowLabel((string) ($fields['flow'] ?? \App\Support\TransactionTypes::FLOW_OUTGOING)) }}</td>
                             <td>{{ $fields['money_label'] ?? 'Money Account' }}</td>
                         @endif
                         <td>{{ $fields['sort_order'] ?? '—' }}</td>
@@ -258,11 +258,23 @@
 
                 <div class="hg-field">
                     <label for="master-flow">Transaction Direction <span class="hg-required">*</span></label>
+                    @php
+                        $selectedFlow = old(
+                            'flow',
+                            $editingOption
+                                ? \App\Support\TransactionTypes::flow(
+                                    $editingOption->value,
+                                    is_array($editingOption->metadata) ? $editingOption->metadata : [],
+                                )
+                                : \App\Support\TransactionTypes::FLOW_OUTGOING,
+                        );
+                    @endphp
                     <select id="master-flow" name="flow" required>
-                        <option value="incoming" @selected(old('flow', $editingOption ? \App\Support\TransactionTypes::flow($editingOption->value, is_array($editingOption->metadata) ? $editingOption->metadata : []) : 'outgoing') === 'incoming')>Money In / Receive</option>
-                        <option value="outgoing" @selected(old('flow', $editingOption ? \App\Support\TransactionTypes::flow($editingOption->value, is_array($editingOption->metadata) ? $editingOption->metadata : []) : 'outgoing') === 'outgoing')>Money Out / Pay</option>
+                        @foreach (\App\Support\TransactionTypes::flowLabels() as $flowValue => $flowLabel)
+                            <option value="{{ $flowValue }}" @selected($selectedFlow === $flowValue)>{{ $flowLabel }}</option>
+                        @endforeach
                     </select>
-                    <small class="hg-muted">Used to generate the correct automatic accounting rule for this transaction type.</small>
+                    <small class="hg-muted">Defines whether the transaction brings money in, sends money out, transfers money, or records a non-cash event.</small>
                     @error('flow')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 

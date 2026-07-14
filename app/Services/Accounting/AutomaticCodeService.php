@@ -20,7 +20,7 @@ class AutomaticCodeService
 
     private const LEVEL_TWO_STEP = 100;
 
-    private const LEVEL_THREE_STEP = 10;
+    private const LEVEL_THREE_STEP = 1;
 
     public function lockCompany(int $companyId): void
     {
@@ -60,10 +60,13 @@ class AutomaticCodeService
         }
 
         $parentCode = (int) $parent->code;
-        $step = (int) $parent->level === 1
+        $parentLevel = (int) $parent->level;
+        $step = $parentLevel === 1
             ? self::LEVEL_TWO_STEP
             : self::LEVEL_THREE_STEP;
-        $maximum = $parentCode + ($step * 9);
+        $maximum = $parentLevel === 1
+            ? $parentCode + (self::LEVEL_TWO_STEP * 9)
+            : $parentCode + 99;
 
         $lastNumber = ChartOfAccount::query()
             ->where('company_id', $companyId)

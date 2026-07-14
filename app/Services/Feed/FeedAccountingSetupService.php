@@ -2,6 +2,8 @@
 
 namespace App\Services\Feed;
 
+use App\Models\AccountingRule;
+use App\Models\AccountingRuleLine;
 use App\Models\ChartOfAccount;
 use App\Models\Feed\FeedSetting;
 use App\Models\Feed\FeedWarehouse;
@@ -47,11 +49,30 @@ class FeedAccountingSetupService
                 ->lockForUpdate()
                 ->first();
 
-            $inventoryAccount = $this->validAccount(
-                $existing?->purchaseTransactionHead?->postingAccount,
-                $companyId,
-                'Asset',
-            ) ?: $this->ensureSystemAccount(
+            if ($existing) {
+                $defaultWarehouseId = $existing->defaultWarehouse
+                    && (int) $existing->defaultWarehouse->company_id === $companyId
+                    && $existing->defaultWarehouse->is_active
+                        ? (int) $existing->defaultWarehouse->id
+                        : FeedWarehouse::query()
+                            ->where('company_id', $companyId)
+                            ->where('is_active', true)
+                            ->orderBy('id')
+                            ->value('id');
+
+                if ((int) ($existing->default_warehouse_id ?? 0) !== (int) ($defaultWarehouseId ?? 0)) {
+                    $existing->update(['default_warehouse_id' => $defaultWarehouseId]);
+                }
+
+                return $existing->fresh([
+                    'purchaseTransactionHead.postingAccount',
+                    'saleTransactionHead.postingAccount',
+                    'cogsAccount',
+                    'defaultWarehouse',
+                ]);
+            }
+
+            $inventoryAccount = $this->ensureSystemAccount(
                 $companyId,
                 self::INVENTORY_CODE,
                 'Feed Inventory',
@@ -59,11 +80,7 @@ class FeedAccountingSetupService
                 'Debit',
             );
 
-            $salesAccount = $this->validAccount(
-                $existing?->saleTransactionHead?->postingAccount,
-                $companyId,
-                'Income',
-            ) ?: $this->ensureSystemAccount(
+            $salesAccount = $this->ensureSystemAccount(
                 $companyId,
                 self::SALES_CODE,
                 'Feed Sales',
@@ -71,27 +88,15 @@ class FeedAccountingSetupService
                 'Credit',
             );
 
-            $cogsAccount = $this->validAccount(
-                $existing?->cogsAccount,
+            $cogsAccount = $this->ensureSystemAccount(
                 $companyId,
+                self::COGS_CODE,
+                'Feed Cost of Goods Sold',
                 'Expense',
+                'Debit',
+                [$inventoryAccount->id],
             );
 
-            if (! $cogsAccount || $cogsAccount->is($inventoryAccount)) {
-                $cogsAccount = $this->ensureSystemAccount(
-                    $companyId,
-                    self::COGS_CODE,
-                    'Feed Cost of Goods Sold',
-                    'Expense',
-                    'Debit',
-                    [$inventoryAccount->id],
-                );
-            }
-
-            // Feed inventory documents use dedicated internal heads. Existing valid
-            // posting ledgers are preserved, but generic transaction heads are never
-            // reused because that would allow stock-changing entries to be posted
-            // outside the Feed Purchase/Feed Sale workflow.
             $purchaseHead = $this->ensureSystemHead(
                 $companyId,
                 self::PURCHASE_HEAD_CODE,
@@ -110,25 +115,22 @@ class FeedAccountingSetupService
                 $salesAccount,
             );
 
-            $defaultWarehouseId = $existing?->defaultWarehouse
-                && (int) $existing->defaultWarehouse->company_id === $companyId
-                && $existing->defaultWarehouse->is_active
-                    ? (int) $existing->defaultWarehouse->id
-                    : FeedWarehouse::query()
-                        ->where('company_id', $companyId)
-                        ->where('is_active', true)
-                        ->orderBy('id')
-                        ->value('id');
+            $this->ensureHeadRules($purchaseHead, 'Supplier', false, 'PUR');
+            $this->ensureHeadRules($saleHead, 'Customer', true, 'SAL');
 
-            $settings = FeedSetting::query()->updateOrCreate(
-                ['company_id' => $companyId],
-                [
-                    'purchase_transaction_head_id' => $purchaseHead->id,
-                    'sale_transaction_head_id' => $saleHead->id,
-                    'cogs_account_id' => $cogsAccount->id,
-                    'default_warehouse_id' => $defaultWarehouseId,
-                ],
-            );
+            $defaultWarehouseId = FeedWarehouse::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->value('id');
+
+            $settings = FeedSetting::query()->create([
+                'company_id' => $companyId,
+                'purchase_transaction_head_id' => $purchaseHead->id,
+                'sale_transaction_head_id' => $saleHead->id,
+                'cogs_account_id' => $cogsAccount->id,
+                'default_warehouse_id' => $defaultWarehouseId,
+            ]);
 
             return $settings->fresh([
                 'purchaseTransactionHead.postingAccount',
@@ -137,24 +139,6 @@ class FeedAccountingSetupService
                 'defaultWarehouse',
             ]);
         }, attempts: 5);
-    }
-
-    private function validAccount(
-        ?ChartOfAccount $account,
-        int $companyId,
-        string $type,
-    ): ?ChartOfAccount {
-        if (
-            ! $account
-            || (int) $account->company_id !== $companyId
-            || ! $account->is_active
-            || $account->type !== $type
-            || (int) $account->level !== 3
-        ) {
-            return null;
-        }
-
-        return $account;
     }
 
     /** @param array<int, int> $excludedIds */
@@ -274,5 +258,114 @@ class FeedAccountingSetupService
             'party_type' => $partyType,
             'is_active' => true,
         ]);
+    }
+
+    private function ensureHeadRules(
+        TransactionHead $head,
+        string $partyType,
+        bool $generatesInvoice,
+        string $shortCode,
+    ): void {
+        foreach (TransactionTypes::ALL_SETTLEMENTS as $settlement) {
+            $existing = AccountingRule::query()
+                ->where('company_id', $head->company_id)
+                ->where('transaction_head_id', $head->id)
+                ->where('category', $head->category)
+                ->where('settlement_type', $settlement)
+                ->first();
+
+            if ($existing) {
+                continue;
+            }
+
+            $lines = $this->ruleLines((string) $head->category, $settlement);
+            $firstDebit = collect($lines)->firstWhere('line_side', AccountingRuleLine::SIDE_DEBIT);
+            $firstCredit = collect($lines)->firstWhere('line_side', AccountingRuleLine::SIDE_CREDIT);
+            $baseCode = 'SYS-FEED-RULE-'.$shortCode.'-'.$settlement;
+            $code = $this->availableRuleCode((int) $head->company_id, $baseCode);
+
+            $rule = AccountingRule::query()->create([
+                'company_id' => $head->company_id,
+                'transaction_head_id' => $head->id,
+                'code' => $code,
+                'name' => $head->name.' — '.$this->settlementLabel($settlement),
+                'category' => $head->category,
+                'settlement_type' => $settlement,
+                'debit_source' => $firstDebit['account_source'],
+                'credit_source' => $firstCredit['account_source'],
+                'party_required' => true,
+                'party_type' => $partyType,
+                'money_required' => in_array($settlement, [TransactionTypes::CASH, TransactionTypes::PARTIAL], true),
+                'generates_invoice' => $generatesInvoice,
+                'invoice_title' => $generatesInvoice ? 'Feed Sales Invoice' : null,
+                'is_active' => true,
+            ]);
+
+            foreach ($lines as $index => $line) {
+                $rule->lines()->create([
+                    ...$line,
+                    'sort_order' => $index + 1,
+                ]);
+            }
+        }
+    }
+
+    /** @return array<int, array{line_side:string,account_source:string,amount_basis:string}> */
+    private function ruleLines(string $category, string $settlement): array
+    {
+        if ($category === TransactionTypes::SALE) {
+            return match ($settlement) {
+                TransactionTypes::CASH => [
+                    ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_SELECTED_MONEY, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                    ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_HEAD_ACCOUNT, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                ],
+                TransactionTypes::CREDIT => [
+                    ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_PARTY_RECEIVABLE, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                    ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_HEAD_ACCOUNT, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                ],
+                default => [
+                    ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_SELECTED_MONEY, 'amount_basis' => AccountingRuleLine::BASIS_PAID],
+                    ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_PARTY_RECEIVABLE, 'amount_basis' => AccountingRuleLine::BASIS_DUE],
+                    ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_HEAD_ACCOUNT, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                ],
+            };
+        }
+
+        return match ($settlement) {
+            TransactionTypes::CASH => [
+                ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_HEAD_ACCOUNT, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_SELECTED_MONEY, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+            ],
+            TransactionTypes::CREDIT => [
+                ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_HEAD_ACCOUNT, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_PARTY_PAYABLE, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+            ],
+            default => [
+                ['line_side' => AccountingRuleLine::SIDE_DEBIT, 'account_source' => AccountingRule::SOURCE_HEAD_ACCOUNT, 'amount_basis' => AccountingRuleLine::BASIS_TOTAL],
+                ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_SELECTED_MONEY, 'amount_basis' => AccountingRuleLine::BASIS_PAID],
+                ['line_side' => AccountingRuleLine::SIDE_CREDIT, 'account_source' => AccountingRule::SOURCE_PARTY_PAYABLE, 'amount_basis' => AccountingRuleLine::BASIS_DUE],
+            ],
+        };
+    }
+
+    private function settlementLabel(string $settlement): string
+    {
+        return match ($settlement) {
+            TransactionTypes::CASH => 'Paid in Full',
+            TransactionTypes::CREDIT => 'Fully Due',
+            default => 'Part Paid',
+        };
+    }
+
+    private function availableRuleCode(int $companyId, string $baseCode): string
+    {
+        $candidate = $baseCode;
+        $suffix = 2;
+
+        while (AccountingRule::query()->where('company_id', $companyId)->where('code', $candidate)->exists()) {
+            $candidate = $baseCode.'-'.$suffix++;
+        }
+
+        return $candidate;
     }
 }

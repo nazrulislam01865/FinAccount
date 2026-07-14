@@ -4,6 +4,21 @@ namespace App\Support;
 
 final class TransactionTypes
 {
+    public const FLOW_INCOMING = 'incoming';
+
+    public const FLOW_OUTGOING = 'outgoing';
+
+    public const FLOW_TRANSFER = 'transfer';
+
+    public const FLOW_NON_CASH = 'non_cash';
+
+    public const FLOWS = [
+        self::FLOW_INCOMING,
+        self::FLOW_OUTGOING,
+        self::FLOW_TRANSFER,
+        self::FLOW_NON_CASH,
+    ];
+
     public const SALE = 'SALE';
     public const PURCHASE = 'PURCHASE';
     public const CUSTOMER_COLLECTION = 'CUSTOMER_COLLECTION';
@@ -220,6 +235,28 @@ final class TransactionTypes
         ];
     }
 
+    /** @return array<string, string> */
+    public static function flowLabels(): array
+    {
+        return [
+            self::FLOW_INCOMING => 'Money In',
+            self::FLOW_OUTGOING => 'Money Out',
+            self::FLOW_TRANSFER => 'Transfer',
+            self::FLOW_NON_CASH => 'Non-Cash',
+        ];
+    }
+
+    /** @return array<int, string> */
+    public static function flowCodes(): array
+    {
+        return self::FLOWS;
+    }
+
+    public static function flowLabel(string $flow): string
+    {
+        return self::flowLabels()[$flow] ?? ucwords(str_replace('_', ' ', $flow));
+    }
+
     /** @param array<string, mixed> $metadata */
     public static function flow(string $type, array $metadata = []): string
     {
@@ -229,7 +266,7 @@ final class TransactionTypes
             self::OWNER_INVESTMENT,
             self::LOAN_RECEIVED,
         ], true)) {
-            return 'incoming';
+            return self::FLOW_INCOMING;
         }
 
         if (in_array($type, [
@@ -241,12 +278,14 @@ final class TransactionTypes
             self::LOAN_INTEREST_PAYMENT,
             self::ASSET_PURCHASE,
         ], true)) {
-            return 'outgoing';
+            return self::FLOW_OUTGOING;
         }
 
-        return in_array(($metadata['flow'] ?? null), ['incoming', 'outgoing'], true)
-            ? (string) $metadata['flow']
-            : 'outgoing';
+        $flow = strtolower(trim((string) ($metadata['flow'] ?? '')));
+
+        return in_array($flow, self::FLOWS, true)
+            ? $flow
+            : self::FLOW_OUTGOING;
     }
 
     /** @return array<int, string> */

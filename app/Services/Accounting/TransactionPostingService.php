@@ -31,13 +31,38 @@ class TransactionPostingService
     /** @param array<string, mixed> $data */
     public function post(array $data, User $user): Transaction
     {
+        return $this->postUsingHead($data, $user, null, false);
+    }
+
+    /**
+     * Post through a trusted module-owned transaction head.
+     *
+     * The normal Transaction Entry endpoint cannot select SYS-FEED heads. The Feed
+     * module uses this method after resolving its own dedicated SALE/PURCHASE head,
+     * so the same central rule matcher, journal builder, voucher and invoice logic
+     * are used without exposing stock-changing heads in the generic form.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function postForHead(array $data, User $user, TransactionHead $transactionHead): Transaction
+    {
+        return $this->postUsingHead($data, $user, $transactionHead, true);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function postUsingHead(
+        array $data,
+        User $user,
+        ?TransactionHead $trustedHead,
+        bool $allowInternalHead,
+    ): Transaction {
         if (! $user->company_id) {
             throw ValidationException::withMessages([
                 'company' => 'Your user account is not connected to a company.',
             ]);
         }
 
-        return DB::transaction(function () use ($data, $user): Transaction {
+        return DB::transaction(function () use ($data, $user, $trustedHead, $allowInternalHead): Transaction {
             $company = Company::query()
                 ->with(['defaultFinancialYear', 'currency', 'timeZone'])
                 ->lockForUpdate()
@@ -45,30 +70,37 @@ class TransactionPostingService
 
             $this->accountingPeriodService->assertPostingAllowed($company, (string) $data['transaction_date']);
 
-            $existing = Transaction::query()
-                ->where('company_id', $user->company_id)
-                ->where('request_token', $data['request_token'])
-                ->first();
-
-            if ($existing) {
-                return $existing;
-            }
-
             $transactionType = (string) $data['category'];
+            $headId = $trustedHead?->id ?? ($data['transaction_head_id'] ?? null);
 
             $head = TransactionHead::query()
                 ->with('postingAccount')
                 ->where('company_id', $user->company_id)
                 ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
                 ->where('is_active', true)
-                ->where('code', 'not like', 'SYS-FEED-%')
+                ->when(! $allowInternalHead, fn ($query) => $query->where('code', 'not like', 'SYS-FEED-%'))
                 ->whereNotNull('posting_account_id')
                 ->whereHas('postingAccount', fn ($query) => $query
                     ->where('company_id', $user->company_id)
                     ->where('is_active', true))
-                ->findOrFail($data['transaction_head_id']);
+                ->findOrFail($headId);
+
+            if ($trustedHead && (int) $trustedHead->id !== (int) $head->id) {
+                throw ValidationException::withMessages([
+                    'transaction_head_id' => 'The requested module transaction head is no longer available.',
+                ]);
+            }
 
             $this->validateHeadNature($head, $transactionType);
+
+            $existing = Transaction::query()
+                ->where('company_id', $user->company_id)
+                ->where('request_token', $data['request_token'])
+                ->first();
+
+            if ($existing) {
+                return $this->matchingExistingTransaction($existing, $head, $transactionType);
+            }
 
             $moneyAccount = filled($data['money_account_id'] ?? null)
                 ? MoneyAccount::query()
@@ -93,7 +125,12 @@ class TransactionPostingService
                 ]);
             }
 
-            $rule = $this->ruleMatcher->match((int) $user->company_id, $transactionType, $settlementType);
+            $rule = $this->ruleMatcher->match(
+                (int) $user->company_id,
+                $transactionType,
+                $settlementType,
+                $head,
+            );
             $requiresMoney = $this->settlementService->requiresMoney($rule);
             $requiresParty = $this->settlementService->requiresParty($rule);
             $party = $requiresParty
@@ -121,7 +158,7 @@ class TransactionPostingService
                 $rule,
             );
 
-            $sequence = $this->voucherNumberService->lock($user->company_id, $transactionType);
+            $sequence = $this->voucherNumberService->lock((int) $user->company_id, $transactionType);
 
             $existing = Transaction::query()
                 ->where('company_id', $user->company_id)
@@ -130,11 +167,14 @@ class TransactionPostingService
                 ->first();
 
             if ($existing) {
-                return $existing;
+                return $this->matchingExistingTransaction($existing, $head, $transactionType);
             }
 
             $voucherNo = $this->voucherNumberService->issue($sequence);
             $now = now();
+            $description = filled($data['description'] ?? null)
+                ? (string) $data['description']
+                : $head->name;
 
             $transaction = Transaction::query()->create([
                 'uuid' => (string) Str::uuid(),
@@ -165,7 +205,7 @@ class TransactionPostingService
                 'posted_by' => $user->id,
                 'voucher_no' => $voucherNo,
                 'entry_date' => $data['transaction_date'],
-                'narration' => filled($data['description'] ?? null) ? $data['description'] : $head->name,
+                'narration' => $description,
                 'status' => 'posted',
                 'posted_at' => $now,
             ]);
@@ -182,7 +222,7 @@ class TransactionPostingService
                         AccountingRule::SOURCE_PARTY_PAYABLE,
                     ], true) ? $party?->id : null,
                     'sequence' => $index + 1,
-                    'description' => filled($data['description'] ?? null) ? $data['description'] : $head->name,
+                    'description' => $description,
                     'debit' => $line['debit'],
                     'credit' => $line['credit'],
                 ]);
@@ -195,6 +235,27 @@ class TransactionPostingService
                 'journalEntry.lines.chartOfAccount', 'salesInvoice',
             ]);
         }, attempts: 5);
+    }
+
+    private function matchingExistingTransaction(
+        Transaction $transaction,
+        TransactionHead $head,
+        string $transactionType,
+    ): Transaction {
+        if (
+            (int) $transaction->transaction_head_id !== (int) $head->id
+            || strcasecmp((string) $transaction->category, $transactionType) !== 0
+            || $transaction->status !== 'posted'
+        ) {
+            throw ValidationException::withMessages([
+                'request_token' => 'This request token has already been used by another transaction. Reload the form and submit again.',
+            ]);
+        }
+
+        return $transaction->load([
+            'transactionHead', 'moneyAccount', 'party',
+            'journalEntry.lines.chartOfAccount', 'salesInvoice',
+        ]);
     }
 
     private function validateHeadNature(TransactionHead $head, string $transactionType): void

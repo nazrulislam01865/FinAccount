@@ -32,7 +32,7 @@ class MoneyAccountSharedCoaTest extends TestCase
         $user = User::factory()->create(['company_id' => $company->id]);
         $bankCoa = ChartOfAccount::query()->create([
             'company_id' => $company->id,
-            'code' => '1120',
+            'code' => '1102',
             'name' => 'Cash at Bank',
             'type' => 'Asset',
             'normal_balance' => 'Debit',

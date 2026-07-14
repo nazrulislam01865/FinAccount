@@ -2,6 +2,7 @@
 
 namespace App\Services\Feed;
 
+use App\Models\AccountingRule;
 use App\Models\Feed\FeedDocument;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
@@ -377,6 +378,24 @@ class FeedPostingService
         $inventoryAccount = $purchaseHead?->postingAccount;
         $salesAccount = $saleHead?->postingAccount;
         $cogsAccount = $settings->cogsAccount;
+        $purchaseRuleSettlements = $purchaseHead
+            ? AccountingRule::query()
+                ->where('company_id', $companyId)
+                ->where('transaction_head_id', $purchaseHead->id)
+                ->whereRaw('LOWER(category) = ?', [strtolower(TransactionTypes::PURCHASE)])
+                ->where('is_active', true)
+                ->pluck('settlement_type')
+                ->all()
+            : [];
+        $saleRuleSettlements = $saleHead
+            ? AccountingRule::query()
+                ->where('company_id', $companyId)
+                ->where('transaction_head_id', $saleHead->id)
+                ->whereRaw('LOWER(category) = ?', [strtolower(TransactionTypes::SALE)])
+                ->where('is_active', true)
+                ->pluck('settlement_type')
+                ->all()
+            : [];
 
         if (
             ! $purchaseHead || (int) $purchaseHead->company_id !== $companyId
@@ -394,9 +413,11 @@ class FeedPostingService
             || ! $cogsAccount || (int) $cogsAccount->company_id !== $companyId
             || ! $cogsAccount->is_active || $cogsAccount->type !== 'Expense' || (int) $cogsAccount->level !== 3
             || $inventoryAccount->is($cogsAccount)
+            || array_diff(TransactionTypes::ALL_SETTLEMENTS, $purchaseRuleSettlements) !== []
+            || array_diff(TransactionTypes::ALL_SETTLEMENTS, $saleRuleSettlements) !== []
         ) {
             throw ValidationException::withMessages([
-                'feed_setup' => 'The automatic feed ledgers could not be prepared. Reload the page and try again.',
+                'feed_setup' => 'Feed accounting setup is incomplete. Check the Feed Purchase and Feed Sale heads, their linked COA accounts, and all three head-specific accounting rules.',
             ]);
         }
 

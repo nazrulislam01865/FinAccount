@@ -10,16 +10,30 @@
     $selectedSettlement = old('settlement_type', $isEditing ? ($transaction->settlement_type ?: \App\Support\TransactionTypes::CASH) : \App\Support\TransactionTypes::CASH);
     $selectedAmount = old('amount', $isEditing ? $transaction->amount : ($dueSettlementContext['amount'] ?? ''));
     $selectedPaidAmount = old('paid_amount', $isEditing ? $transaction->paid_amount : ($isDueSettlement ? ($dueSettlementContext['amount'] ?? '') : ''));
-    $transactionTypeLabel = $transactionTypeDefinition['label'] ?? ($categoryOption?->label ?? $category);
-    $pageTransactionLabel = $category === \App\Support\TransactionTypes::SALE ? 'Sales' : $transactionTypeLabel;
+    $transactionCategories = $transactionCategories ?? collect();
+    $filteredTransactionCategories = $filteredTransactionCategories ?? $transactionCategories;
+    $transactionDirectionOptions = $transactionDirectionOptions ?? \App\Support\TransactionTypes::flowLabels();
+    $transactionCategoryDirections = $transactionCategoryDirections ?? $transactionCategories
+        ->mapWithKeys(fn ($option) => [$option->value => \App\Support\TransactionTypes::flow((string) $option->value, is_array($option->metadata) ? $option->metadata : [])])
+        ->all();
+    $activeTransactionDirection = $activeTransactionDirection
+        ?? ($transactionCategoryDirections[$category] ?? null);
+    $transactionTypeLabel = $transactionTypeDefinition['label'] ?? ($categoryOption?->label ?? $category ?: 'Transaction');
+    $pageTransactionLabel = filled($category)
+        ? ($category === \App\Support\TransactionTypes::SALE ? 'Sales' : $transactionTypeLabel)
+        : 'Transaction';
     $moneyLabel = $transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account';
     $partyLabel = $transactionTypeDefinition['party_label'] ?? 'Party';
+    $showTransactionTypeSelection = $showTransactionTypeSelection ?? ($isEditing || $isDueSettlement || request()->filled('direction') || request()->filled('category'));
+    $hasSelectedTransactionDirection = $isEditing || $isDueSettlement || filled($activeTransactionDirection);
+    $hasTransactionTypeForDirection = $hasSelectedTransactionDirection && $filteredTransactionCategories->isNotEmpty();
+    $highlightTransactionDirection = $showTransactionTypeSelection && $hasSelectedTransactionDirection;
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
     <div class="hg-page-header">
         <div>
-            <h1>{{ $isEditing ? 'Edit '.$pageTransactionLabel.' Transaction' : 'Record '.$pageTransactionLabel.' Transaction' }}</h1>
+            <h1>{{ $isEditing ? 'Edit '.$pageTransactionLabel.' Transaction' : (filled($category) ? 'Record '.$pageTransactionLabel.' Transaction' : 'Record Transaction') }}</h1>
             <p class="hg-muted">{{ $isDueSettlement ? 'Settle the selected due. Party, due ledger, and transaction head are filled automatically.' : 'Enter the transaction details. Payment status and the journal are calculated automatically.' }}</p>
         </div>
         @if(! $isEditing && ! $isDueSettlement && auth()->user()?->canAccounting('transactions.manage'))
@@ -31,19 +45,47 @@
     </div>
 
     @if (! $isDueSettlement && (! $isEditing || $categoryRepairRequired))
-        <div class="hg-tabs hg-transaction-type-tabs">
-            @foreach ($transactionCategories as $categoryTab)
-                @php($definition = \App\Support\TransactionTypes::definition($categoryTab->value))
-                <a
-                    href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['category' => $categoryTab->value]) }}"
-                    class="{{ strcasecmp((string) $category, (string) $categoryTab->value) === 0 ? 'active' : '' }}"
-                    data-transaction-category-tab
-                    data-category="{{ $categoryTab->value }}"
-                    @if(strcasecmp((string) $category, (string) $categoryTab->value) === 0) aria-current="page" @endif
-                >
-                    {{ $definition['label'] ?? $categoryTab->label }}
-                </a>
-            @endforeach
+        <div class="hg-entry-filter-panel">
+            <div class="hg-page-kicker">Transaction Direction</div>
+            <div class="hg-tabs hg-transaction-direction-tabs" aria-label="Transaction Direction">
+                @foreach ($transactionDirectionOptions as $directionValue => $directionLabel)
+                    <a
+                        href="{{ $isEditing ? route('transactions.edit', [$transaction, 'direction' => $directionValue]) : route('transactions.create', ['direction' => $directionValue]) }}"
+                        class="{{ $highlightTransactionDirection && $activeTransactionDirection === $directionValue ? 'active' : '' }}"
+                        data-transaction-direction-tab
+                        data-direction="{{ $directionValue }}"
+                        @if($highlightTransactionDirection && $activeTransactionDirection === $directionValue) aria-current="page" @endif
+                    >
+                        {{ $directionLabel }}
+                    </a>
+                @endforeach
+            </div>
+
+            @if($showTransactionTypeSelection && $hasSelectedTransactionDirection)
+                <div class="hg-page-kicker">Transaction Type</div>
+                @if($filteredTransactionCategories->isEmpty())
+                    <div class="hg-notice" style="margin-bottom:14px">
+                        No active transaction type is set up under {{ $transactionDirectionOptions[$activeTransactionDirection] ?? \App\Support\TransactionTypes::flowLabel((string) $activeTransactionDirection) }}.
+                        Add or edit a Transaction Type and select this Transaction Direction from Master Data.
+                    </div>
+                @else
+                    <div class="hg-tabs hg-transaction-type-tabs" aria-label="Filtered Transaction Types">
+                        @foreach ($filteredTransactionCategories as $categoryTab)
+                            @php($definition = \App\Support\TransactionTypes::definition($categoryTab->value))
+                            <a
+                                href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['direction' => $activeTransactionDirection, 'category' => $categoryTab->value]) }}"
+                                class="{{ strcasecmp((string) $category, (string) $categoryTab->value) === 0 ? 'active' : '' }}"
+                                data-transaction-category-tab
+                                data-direction="{{ $transactionCategoryDirections[$categoryTab->value] ?? $activeTransactionDirection }}"
+                                data-category="{{ $categoryTab->value }}"
+                                @if(strcasecmp((string) $category, (string) $categoryTab->value) === 0) aria-current="page" @endif
+                            >
+                                {{ $definition['label'] ?? $categoryTab->label }}
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
+            @endif
         </div>
     @endif
 
@@ -51,9 +93,15 @@
         <div class="hg-notice" style="margin-bottom:14px"><strong>This transaction is incomplete.</strong> Select valid active setup records and update it to rebuild the journal.</div>
     @endif
 
+    @if (! $categoryOption && ! $isDueSettlement)
+        <section class="hg-card">
+            <h2 class="hg-card-title">No Transaction Type Available</h2>
+            <p class="hg-muted">Create or activate a Transaction Type before recording a transaction.</p>
+        </section>
+    @else
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
-            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid" data-transaction-form data-default-allowed-settlements='@json($isDueSettlement ? [\App\Support\TransactionTypes::CASH] : ($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS))' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null && ! $isDueSettlement) ? '1' : '0' }}" data-due-settlement="{{ $isDueSettlement ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
+            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid hg-transaction-entry-form" data-transaction-form data-default-allowed-settlements='@json($isDueSettlement ? [\App\Support\TransactionTypes::CASH] : ($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS))' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null && ! $isDueSettlement) ? '1' : '0' }}" data-due-settlement="{{ $isDueSettlement ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
                 @csrf
                 @if ($isEditing) @method('PUT') @else <input type="hidden" name="request_token" value="{{ $requestToken }}"> @endif
                 <input type="hidden" name="category" value="{{ $category }}">
@@ -309,4 +357,5 @@
     </div>
 
     <template id="journal-preview-empty-template">@include('transactions.partials.preview-empty')</template>
+    @endif
 </x-layouts::accounting>

@@ -26,6 +26,12 @@ class TransactionHead extends Model
         return $this->belongsTo(AccountingRule::class);
     }
 
+
+    public function accountingRules(): HasMany
+    {
+        return $this->hasMany(AccountingRule::class);
+    }
+
     public function postingAccount(): BelongsTo
     {
         return $this->belongsTo(ChartOfAccount::class, 'posting_account_id');

@@ -43,7 +43,7 @@ class ChartOfAccountHierarchyTest extends TestCase
         $levelThree = ChartOfAccount::query()->where('name', 'Cash in Hand')->sole();
         $this->assertSame(3, $levelThree->level);
         $this->assertSame($levelTwo->id, $levelThree->parent_id);
-        $this->assertSame('1110', $levelThree->code);
+        $this->assertSame('1101', $levelThree->code);
         $this->assertSame('Asset', $levelThree->type);
     }
 
@@ -82,8 +82,8 @@ class ChartOfAccountHierarchyTest extends TestCase
             ->post(route('chart-of-accounts.store'), $this->payload('Bank Account', $currentAssets->id, 'Equity'))
             ->assertSessionHasNoErrors();
 
-        $this->assertSame('1110', ChartOfAccount::query()->where('name', 'Cash in Hand')->sole()->code);
-        $this->assertSame('1120', ChartOfAccount::query()->where('name', 'Bank Account')->sole()->code);
+        $this->assertSame('1101', ChartOfAccount::query()->where('name', 'Cash in Hand')->sole()->code);
+        $this->assertSame('1102', ChartOfAccount::query()->where('name', 'Bank Account')->sole()->code);
     }
 
     public function test_level_three_account_cannot_be_selected_as_a_parent(): void
@@ -91,7 +91,7 @@ class ChartOfAccountHierarchyTest extends TestCase
         $user = $this->companyUser();
         $root = $this->account($user, '1000', 'Assets', 1);
         $category = $this->account($user, '1100', 'Current Assets', 2, $root->id);
-        $ledger = $this->account($user, '1110', 'Cash in Hand', 3, $category->id);
+        $ledger = $this->account($user, '1101', 'Cash in Hand', 3, $category->id);
 
         $this->actingAs($user)
             ->post(route('chart-of-accounts.store'), $this->payload('Invalid Level Four', $ledger->id, 'Asset'))
@@ -146,7 +146,7 @@ class ChartOfAccountHierarchyTest extends TestCase
         $user = $this->companyUser();
         $root = $this->account($user, '1000', 'Assets Main Group', 1);
         $category = $this->account($user, '1100', 'Current Assets Category', 2, $root->id);
-        $this->account($user, '1110', 'Cash Posting Ledger', 3, $category->id);
+        $this->account($user, '1101', 'Cash Posting Ledger', 3, $category->id);
 
         $this->actingAs($user)
             ->get(route('transaction-heads.index'))

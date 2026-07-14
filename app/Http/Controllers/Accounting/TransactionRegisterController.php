@@ -72,8 +72,26 @@ class TransactionRegisterController extends Controller
             ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $request->string('category')->toString()) === 0);
         $categoryOption = $storedCategoryOption ?? $requestedCategoryOption ?? $transactionCategories->first();
         abort_if($categoryOption === null, 422, 'Add an active Transaction Type before repairing this transaction.');
-        $category = $categoryOption->value;
         $categoryRepairRequired = $storedCategoryOption === null;
+
+        $requestedDirection = strtolower(trim($request->string('direction')->toString()));
+        $requestedDirection = in_array($requestedDirection, TransactionTypes::flowCodes(), true)
+            ? $requestedDirection
+            : null;
+        $activeDirection = $requestedDirection
+            ?? $this->transactionCategoryDirection($categoryOption);
+        $filteredTransactionCategories = $transactionCategories
+            ->filter(fn (AccountingOption $option): bool => $this->transactionCategoryDirection($option) === $activeDirection)
+            ->values();
+
+        if ($categoryRepairRequired && $requestedDirection !== null) {
+            $categoryOption = $filteredTransactionCategories
+                ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $request->string('category')->toString()) === 0)
+                ?? $filteredTransactionCategories->first()
+                ?? $categoryOption;
+        }
+
+        $category = $categoryOption->value;
 
         return view('transactions.create', [
             'transaction' => $transaction,
@@ -81,6 +99,12 @@ class TransactionRegisterController extends Controller
             'categoryOption' => $categoryOption,
             'categoryRepairRequired' => $categoryRepairRequired,
             'transactionCategories' => $transactionCategories,
+            'filteredTransactionCategories' => $filteredTransactionCategories,
+            'transactionDirectionOptions' => TransactionTypes::flowLabels(),
+            'activeTransactionDirection' => $activeDirection,
+            'transactionCategoryDirections' => $transactionCategories
+                ->mapWithKeys(fn (AccountingOption $option): array => [$option->value => $this->transactionCategoryDirection($option)])
+                ->all(),
             'transactionHeads' => $this->entryOptionService->transactionHeads($companyId, $category),
             'moneyAccounts' => $this->entryOptionService->moneyAccounts($companyId),
             'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
@@ -210,6 +234,14 @@ class TransactionRegisterController extends Controller
         }, 'hisebghor_transactions.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+
+    private function transactionCategoryDirection(AccountingOption $option): string
+    {
+        $metadata = is_array($option->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow((string) $option->value, $metadata);
     }
 
     private function filteredQuery(Request $request): Builder

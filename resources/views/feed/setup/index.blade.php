@@ -3,14 +3,14 @@
         <div>
             <div class="hg-page-kicker">Feed Business & Inventory</div>
             <h1>Feed Setup</h1>
-            <p>Manage feed items and warehouses. Feed purchases and sales post directly to the main accounting ledger without any manual accounting connection.</p>
+            <p>Manage feed items and warehouses. Feed Purchase uses the existing PURCHASE transaction type, and Feed Sale uses the existing SALE transaction type.</p>
         </div>
     </div>
 
     @include('feed.partials.tabs')
 
     <div class="hg-notice">
-        <strong>Direct ledger posting is active.</strong> Purchases debit <strong>{{ $settings->purchaseTransactionHead->postingAccount->name }}</strong>; sales credit <strong>{{ $settings->saleTransactionHead->postingAccount->name }}</strong>; and every sale automatically posts COGS to <strong>{{ $settings->cogsAccount->name }}</strong>. Cash, bank, supplier payable, and customer receivable are selected directly from each feed transaction.
+        <strong>COA and Transaction Head posting is active.</strong> The <strong>{{ $settings->purchaseTransactionHead->name }}</strong> head is under PURCHASE and posts to <strong>{{ $settings->purchaseTransactionHead->postingAccount->name }}</strong>. The <strong>{{ $settings->saleTransactionHead->name }}</strong> head is under SALE and posts to <strong>{{ $settings->saleTransactionHead->postingAccount->name }}</strong>. Head-specific accounting rules handle Cash, Credit, and Partial payments; every feed sale also posts COGS to <strong>{{ $settings->cogsAccount->name }}</strong>.
     </div>
 
     <div class="hg-grid hg-grid-2 hg-feed-section-gap">

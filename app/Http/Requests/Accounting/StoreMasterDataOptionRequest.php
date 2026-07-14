@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Models\AccountingOption;
 use App\Services\Accounting\MasterDataService;
+use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -53,7 +54,7 @@ class StoreMasterDataOptionRequest extends FormRequest
         if ($isTransactionCategory) {
             $rules['money_label'] = ['required', 'string', 'max:120'];
             $rules['voucher_prefix'] = ['required', 'string', 'min:2', 'max:10', 'regex:/^[A-Z0-9]+$/'];
-            $rules['flow'] = ['required', Rule::in(['incoming', 'outgoing'])];
+            $rules['flow'] = ['required', Rule::in(TransactionTypes::flowCodes())];
         }
 
         return $rules;

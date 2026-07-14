@@ -5,6 +5,7 @@ namespace App\Services\Accounting;
 use App\Models\AccountingOption;
 use App\Models\AccountingRule;
 use App\Models\AccountingRuleLine;
+use App\Models\TransactionHead;
 use App\Support\TransactionTypes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,11 @@ class AccountingRuleService
 
         return [
             'rules' => $this->allForCompany($companyId),
+            'transactionHeads' => TransactionHead::query()
+                ->where('company_id', $companyId)
+                ->orderBy('category')
+                ->orderBy('name')
+                ->get(),
             'transactionCategories' => $transactionCategories,
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
             'settlementTypes' => $this->optionService->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE),
@@ -44,9 +50,11 @@ class AccountingRuleService
     public function allForCompany(int $companyId): Collection
     {
         return AccountingRule::query()
-            ->with('lines')
+            ->with(['lines', 'transactionHead'])
             ->where('company_id', $companyId)
             ->orderBy('category')
+            ->orderByRaw('CASE WHEN transaction_head_id IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('transaction_head_id')
             ->orderBy('settlement_type')
             ->orderBy('code')
             ->get();
@@ -67,7 +75,7 @@ class AccountingRuleService
             ]);
             $this->syncLines($rule, $normalized['lines']);
 
-            return $rule->load('lines');
+            return $rule->load(['lines', 'transactionHead']);
         }, attempts: 5);
     }
 
@@ -78,7 +86,8 @@ class AccountingRuleService
 
         DB::transaction(function () use ($rule, $data): void {
             $this->automaticCodeService->lockCompany((int) $rule->company_id);
-            $data['code'] = (string) $data['name'] === (string) $rule->name
+            $data['code'] = str_starts_with(strtoupper((string) $rule->code), 'SYS-FEED-RULE-')
+                || (string) $data['name'] === (string) $rule->name
                 ? $rule->code
                 : $this->automaticCodeService->accountingRuleCode(
                     (int) $rule->company_id,
@@ -90,7 +99,7 @@ class AccountingRuleService
             $this->syncLines($rule, $normalized['lines']);
         }, attempts: 5);
 
-        return $rule->refresh()->load('lines');
+        return $rule->refresh()->load(['lines', 'transactionHead']);
     }
 
 
@@ -145,11 +154,15 @@ class AccountingRuleService
         $companyId = (int) $rules->first()->company_id;
         $duplicateKeys = AccountingRule::query()
             ->where('company_id', $companyId)
-            ->get(['id', 'category', 'settlement_type'])
-            ->groupBy(fn (AccountingRule $rule): string => (string) $rule->category.'|'.(string) $rule->settlement_type)
+            ->get(['id', 'transaction_head_id', 'category', 'settlement_type'])
+            ->groupBy(fn (AccountingRule $rule): string => $this->scopeKey($rule->category, $rule->settlement_type, $rule->transaction_head_id))
             ->filter(fn (Collection $group): bool => $group->count() > 1)
             ->keys()
             ->all();
+        $transactionHeads = TransactionHead::query()
+            ->where('company_id', $companyId)
+            ->get()
+            ->keyBy('id');
         $validSides = [AccountingRuleLine::SIDE_DEBIT, AccountingRuleLine::SIDE_CREDIT];
         $validSources = [
             AccountingRule::SOURCE_SELECTED_MONEY,
@@ -168,6 +181,7 @@ class AccountingRuleService
             $activeSettlements,
             $activePartyTypes,
             $duplicateKeys,
+            $transactionHeads,
             $validSides,
             $validSources,
             $validBases,
@@ -177,9 +191,17 @@ class AccountingRuleService
             $categoryOption = $activeCategories->get($category);
             $lines = $rule->lines;
 
+            $scopeKey = $this->scopeKey($category, $settlement, $rule->transaction_head_id);
+            $transactionHead = $rule->transaction_head_id
+                ? $transactionHeads->get((int) $rule->transaction_head_id)
+                : null;
+
             if (! $categoryOption
                 || ! in_array($settlement, $activeSettlements, true)
-                || in_array($category.'|'.$settlement, $duplicateKeys, true)) {
+                || in_array($scopeKey, $duplicateKeys, true)
+                || ($rule->transaction_head_id && (! $transactionHead
+                    || ! $transactionHead->is_active
+                    || strcasecmp((string) $transactionHead->category, $category) !== 0))) {
                 return true;
             }
 
@@ -248,16 +270,51 @@ class AccountingRuleService
             ]);
         }
 
+        $transactionHeadId = filled($data['transaction_head_id'] ?? null)
+            ? (int) $data['transaction_head_id']
+            : null;
+
+        if ($transactionHeadId) {
+            $transactionHead = TransactionHead::query()
+                ->where('company_id', $companyId)
+                ->find($transactionHeadId);
+
+            if (! $transactionHead || strcasecmp((string) $transactionHead->category, $type) !== 0) {
+                throw ValidationException::withMessages([
+                    'transaction_head_id' => 'Select a transaction head that belongs to the selected transaction type.',
+                ]);
+            }
+        }
+
+        if ($ignore && str_starts_with(strtoupper((string) $ignore->code), 'SYS-FEED-RULE-')) {
+            if (
+                (int) ($ignore->transaction_head_id ?? 0) !== (int) ($transactionHeadId ?? 0)
+                || strcasecmp((string) $ignore->category, $type) !== 0
+                || (string) $ignore->settlement_type !== $settlement
+            ) {
+                throw ValidationException::withMessages([
+                    'transaction_head_id' => 'The Feed module rule scope and payment type are protected. You may rename it or change its active status, but its Feed head mapping cannot be changed.',
+                ]);
+            }
+        }
+
         $duplicate = AccountingRule::query()
             ->where('company_id', $companyId)
             ->where('category', $type)
             ->where('settlement_type', $settlement)
+            ->when(
+                $transactionHeadId,
+                fn ($query) => $query->where('transaction_head_id', $transactionHeadId),
+                fn ($query) => $query->whereNull('transaction_head_id'),
+            )
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->id))
             ->exists();
 
         if ($duplicate) {
             throw ValidationException::withMessages([
-                'settlement_type' => 'A accounting rule already exists for this transaction type and payment type.',
+                'settlement_type' => $transactionHeadId
+                    ? 'An accounting rule already exists for this transaction head and payment type.'
+                    : 'An accounting rule already exists for this transaction type and payment type.',
             ]);
         }
     }
@@ -270,6 +327,12 @@ class AccountingRuleService
     {
         $type = (string) $data['category'];
         $settlement = (string) $data['settlement_type'];
+        $transactionHeadId = filled($data['transaction_head_id'] ?? null)
+            ? (int) $data['transaction_head_id']
+            : null;
+        $transactionHead = $transactionHeadId ? TransactionHead::query()->find($transactionHeadId) : null;
+        $isFeedRule = $transactionHead
+            && str_starts_with(strtoupper((string) $transactionHead->code), 'SYS-FEED-');
         $template = $this->template($type, $settlement);
         $lines = $template['lines'];
         $firstDebit = collect($lines)->firstWhere('line_side', AccountingRuleLine::SIDE_DEBIT);
@@ -277,17 +340,22 @@ class AccountingRuleService
 
         return [
             'rule' => [
+                'transaction_head_id' => $transactionHeadId,
                 'code' => trim((string) $data['code']),
                 'name' => trim((string) $data['name']),
                 'category' => $type,
                 'settlement_type' => $settlement,
                 'debit_source' => $firstDebit['account_source'],
                 'credit_source' => $firstCredit['account_source'],
-                'party_required' => $template['party_required'],
-                'party_type' => $template['party_type'],
+                'party_required' => $isFeedRule ? true : $template['party_required'],
+                'party_type' => $isFeedRule
+                    ? ($type === TransactionTypes::SALE ? 'Customer' : 'Supplier')
+                    : $template['party_type'],
                 'money_required' => $template['money_required'],
                 'generates_invoice' => TransactionTypes::isSale($type),
-                'invoice_title' => TransactionTypes::isSale($type) ? 'Sales Invoice' : null,
+                'invoice_title' => TransactionTypes::isSale($type)
+                    ? ($isFeedRule ? 'Feed Sales Invoice' : 'Sales Invoice')
+                    : null,
                 'is_active' => (bool) $data['is_active'],
             ],
             'lines' => $lines,
@@ -505,10 +573,33 @@ class AccountingRuleService
         }
 
         $metadata = is_array($transactionType->metadata) ? $transactionType->metadata : [];
+        $partyType = (string) ($metadata['party_type'] ?? 'Any');
+        $flow = TransactionTypes::flow($type, $metadata);
 
-        return TransactionTypes::flow($type, $metadata) === 'incoming'
-            ? $incoming((string) ($metadata['party_type'] ?? 'Any'))
-            : $outgoing((string) ($metadata['party_type'] ?? 'Any'));
+        return match ($flow) {
+            TransactionTypes::FLOW_INCOMING => $incoming($partyType),
+            TransactionTypes::FLOW_OUTGOING => $outgoing($partyType),
+            TransactionTypes::FLOW_TRANSFER => match ($settlement) {
+                TransactionTypes::CASH => [
+                    'party_required' => false,
+                    'party_type' => 'Any',
+                    'money_required' => true,
+                    'lines' => [
+                        ['line_side' => $debit, 'account_source' => $head, 'amount_basis' => $total],
+                        ['line_side' => $credit, 'account_source' => $money, 'amount_basis' => $total],
+                    ],
+                ],
+                default => throw ValidationException::withMessages([
+                    'settlement_type' => 'Transfer direction supports only a fully paid/received transaction because no due balance is created.',
+                ]),
+            },
+            TransactionTypes::FLOW_NON_CASH => throw ValidationException::withMessages([
+                'category' => 'Non-Cash transaction types need a dedicated accounting template and are not treated as Money Out automatically.',
+            ]),
+            default => throw ValidationException::withMessages([
+                'category' => 'The selected transaction direction is not supported.',
+            ]),
+        };
     }
 
     /** @param array<int, array{line_side:string,account_source:string,amount_basis:string}> $lines */
@@ -525,6 +616,11 @@ class AccountingRuleService
     }
 
     /** @return array<string, string> */
+    private function scopeKey(string $category, string $settlement, mixed $transactionHeadId): string
+    {
+        return strtolower($category).'|'.$settlement.'|'.($transactionHeadId ? (int) $transactionHeadId : 'GLOBAL');
+    }
+
     public function amountBasisLabels(): array
     {
         return [
