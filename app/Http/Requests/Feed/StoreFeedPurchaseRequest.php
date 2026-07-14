@@ -41,6 +41,7 @@ class StoreFeedPurchaseRequest extends FormRequest
             ],
             'description' => ['nullable', 'string', 'max:1000'],
             'other_cost' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
+            'cost_allocation' => ['nullable', Rule::in(['value', 'quantity'])],
             'paid_amount' => ['required', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'request_token' => ['required', 'uuid'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
@@ -66,6 +67,7 @@ class StoreFeedPurchaseRequest extends FormRequest
         $this->merge([
             'description' => $this->filled('description') ? trim((string) $this->input('description')) : null,
             'other_cost' => $this->input('other_cost', 0),
+            'cost_allocation' => $this->input('cost_allocation', 'value'),
         ]);
     }
 }

@@ -79,7 +79,7 @@ class FeedPostingService
                 'cogs_total' => '0.00',
             ]);
 
-            $allocations = $this->allocateExtraCost($preparedLines, $extra, (string) $data['cost_allocation']);
+            $allocations = $this->allocateExtraCost($preparedLines, $extra, (string) ($data['cost_allocation'] ?? 'value'));
 
             foreach ($preparedLines->values() as $index => $line) {
                 $allocatedCost = $allocations[$index] ?? 0.0;
