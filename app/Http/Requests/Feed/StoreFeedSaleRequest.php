@@ -27,7 +27,7 @@ class StoreFeedSaleRequest extends FormRequest
                     ->where('type', 'Customer')
                     ->where('is_active', true)),
             ],
-            'warehouse_id' => [
+            'tracking_unit_id' => [
                 'required', 'integer',
                 Rule::exists('feed_warehouses', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)

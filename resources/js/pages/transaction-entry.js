@@ -32,6 +32,7 @@ const page = document.querySelector('[data-transaction-entry]');
 if (page) {
     const form = page.querySelector('[data-transaction-form]');
     const head = document.getElementById('transaction_head_id');
+    const categoryInput = form?.querySelector('[data-transaction-category-input]');
     const settlement = document.getElementById('settlement_type');
     const money = document.getElementById('money_account_id');
     const party = document.getElementById('party_id');
@@ -52,6 +53,12 @@ if (page) {
     const sellingType = form?.querySelector('[data-sale-selling-type]');
     const saleWarehouseField = form?.querySelector('[data-sale-warehouse-field]');
     const saleWarehouse = form?.querySelector('[data-sale-warehouse]');
+    const saleCustomerField = form?.querySelector('[data-sale-customer-field]');
+    const saleFeedSection = form?.querySelector('[data-transaction-sale-feed]');
+    const saleFeedConfig = window.HISEBGHOR_TRANSACTION_SALE;
+    const saleFeedOnlyFields = Array.from(form?.querySelectorAll('[data-sale-feed-only]') || []);
+    const saleTotalBillLabel = form?.querySelector('[data-sale-total-bill-label]');
+    const saleTotalBillHelp = form?.querySelector('[data-sale-total-bill-help]');
     const preview = document.getElementById('journal-preview');
     const emptyPreviewTemplate = document.getElementById('journal-preview-empty-template');
     const previewUrl = preview?.dataset.previewUrl;
@@ -66,24 +73,99 @@ if (page) {
     };
 
     let rememberedWarehouseId = saleWarehouse?.value || '';
+    let recalculateSaleFeed = () => {};
 
-    const syncSaleWarehouseField = () => {
-        if (!sellingType || !saleWarehouse || !saleWarehouseField) return;
+    const isCurrentSaleCategory = () => String(categoryInput?.value || '').toUpperCase() === 'SALE';
 
-        const requiresWarehouse = sellingType.selectedOptions[0]?.dataset.requiresWarehouse === '1';
-        saleWarehouseField.classList.toggle('hidden', !requiresWarehouse);
-        saleWarehouse.required = requiresWarehouse;
-        saleWarehouse.disabled = !requiresWarehouse;
-
-        if (requiresWarehouse) {
-            if (!saleWarehouse.value && rememberedWarehouseId) {
-                saleWarehouse.value = rememberedWarehouseId;
-            }
-        } else {
-            if (saleWarehouse.value) rememberedWarehouseId = saleWarehouse.value;
-            saleWarehouse.value = '';
-        }
+    const syncCategoryFromHead = () => {
+        const selectedCategory = head?.selectedOptions[0]?.dataset.category || '';
+        if (!selectedCategory || !categoryInput || categoryInput.value === selectedCategory) return false;
+        categoryInput.value = selectedCategory;
+        return true;
     };
+
+    const isFeedSaleMode = () => {
+        if (!isCurrentSaleCategory() || !sellingType || !saleFeedSection) return false;
+        const option = sellingType.selectedOptions[0];
+        const selected = String(sellingType.value || '').toLowerCase();
+
+        return option?.dataset.feedSaleMode === '1' || (selected !== '' && selected !== 'others');
+    };
+
+    const setNestedControlsDisabled = (container, disabled) => {
+        container?.querySelectorAll?.('input, select, textarea, button').forEach((control) => {
+            control.disabled = disabled;
+        });
+    };
+
+    const syncSaleMode = () => {
+        const feedMode = isFeedSaleMode();
+
+        saleFeedOnlyFields.forEach((field) => {
+            field.classList.toggle('hidden', !feedMode);
+            setNestedControlsDisabled(field, !feedMode);
+        });
+
+        if (saleCustomerField && party) {
+            saleCustomerField.classList.toggle('hidden', !feedMode);
+            party.required = feedMode;
+            autoPartyNotice?.classList.add('hidden');
+        }
+
+        if (saleWarehouseField && saleWarehouse) {
+            saleWarehouseField.classList.toggle('hidden', !feedMode);
+            saleWarehouse.required = feedMode;
+            saleWarehouse.disabled = !feedMode;
+
+            const selectedArea = sellingType ? String(sellingType.value || '').toLowerCase() : null;
+            let firstValid = null;
+
+            Array.from(saleWarehouse.options).forEach((opt) => {
+                if (opt.value === '') return;
+                const optArea = String(opt.dataset.businessArea || '').toLowerCase();
+                const matches = !selectedArea || selectedArea === 'others' || optArea === selectedArea;
+                opt.hidden = !matches;
+                opt.disabled = !matches;
+                if (matches && !firstValid) firstValid = opt.value;
+            });
+
+            if (feedMode) {
+                const currentOpt = saleWarehouse.options[saleWarehouse.selectedIndex];
+                if (!currentOpt || currentOpt.hidden) {
+                    saleWarehouse.value = firstValid || '';
+                } else if (!saleWarehouse.value && rememberedWarehouseId) {
+                    const rememberedOpt = Array.from(saleWarehouse.options).find(o => o.value === rememberedWarehouseId);
+                    if (rememberedOpt && !rememberedOpt.hidden) {
+                        saleWarehouse.value = rememberedWarehouseId;
+                    }
+                }
+            } else {
+                if (saleWarehouse.value) rememberedWarehouseId = saleWarehouse.value;
+                saleWarehouse.value = '';
+            }
+        }
+
+        if (amount) {
+            amount.readOnly = feedMode;
+            amount.classList.toggle('hg-readonly-input', feedMode);
+        }
+
+        if (saleTotalBillLabel) saleTotalBillLabel.textContent = feedMode ? 'Total Bill' : 'Amount';
+        if (saleTotalBillHelp) {
+            saleTotalBillHelp.textContent = feedMode
+                ? 'Total Bill = Total Amount + Other Charges.'
+                : 'Enter the total sale amount for all other sales.';
+        }
+
+        if (form) {
+            form.dataset.saleStockInvalid = '0';
+            form.dataset.saleHasFeedLine = feedMode ? form.dataset.saleHasFeedLine || '0' : '0';
+        }
+
+        if (feedMode) recalculateSaleFeed();
+    };
+
+    const syncSaleWarehouseField = syncSaleMode;
 
     const parseJson = (value, fallback = []) => {
         try { return JSON.parse(value || '[]'); } catch (_) { return fallback; }
@@ -109,6 +191,12 @@ if (page) {
     const usesReceivedWording = () => (moneyLabel?.textContent || '').toLowerCase().includes('receive');
 
     const updatePaidAmountCopy = () => {
+        if (isFeedSaleMode()) {
+            if (paidAmountLabel) paidAmountLabel.textContent = 'Received Amount';
+            if (paidAmountHelp) paidAmountHelp.textContent = 'Enter 0 when the full bill will remain due.';
+            return;
+        }
+
         const received = usesReceivedWording();
         if (paidAmountLabel) paidAmountLabel.textContent = received ? 'Received Now' : 'Paid Now';
         if (paidAmountHelp) {
@@ -201,6 +289,15 @@ if (page) {
 
     const syncPartyRequirement = (needsParty, partyType) => {
         if (!party) return false;
+
+        if (saleCustomerField && isFeedSaleMode()) {
+            matchingPartyOptions('Customer');
+            party.required = true;
+            partyField?.classList.remove('hidden');
+            autoPartyNotice?.classList.add('hidden');
+            refreshSearchable(party);
+            return false;
+        }
 
         const matches = matchingPartyOptions(partyType);
         let changed = false;
@@ -351,6 +448,8 @@ if (page) {
     };
 
     head?.addEventListener('change', () => {
+        syncCategoryFromHead();
+        syncSaleMode();
         const allowed = selectedAllowedSettlements();
         if (allowed.length === 1) autoSyncPaidAmount = true;
         refreshPreview();
@@ -366,12 +465,241 @@ if (page) {
         syncAmountFields();
         schedulePreview();
     });
-    sellingType?.addEventListener('change', syncSaleWarehouseField);
+    sellingType?.addEventListener('change', () => {
+        syncSaleMode();
+        updatePaidAmountCopy();
+        schedulePreview();
+    });
     saleWarehouse?.addEventListener('change', () => {
         if (saleWarehouse.value) rememberedWarehouseId = saleWarehouse.value;
     });
 
-    syncSaleWarehouseField();
+    const initTransactionSaleFeed = () => {
+        if (!saleFeedSection || !saleFeedConfig || !Array.isArray(saleFeedConfig.items)) return;
+
+        const rowsContainer = form?.querySelector('[data-transaction-sale-feed-lines]');
+        const addButton = form?.querySelector('[data-transaction-sale-feed-add]');
+        const itemsTotalInput = form?.querySelector('[data-sale-items-total]');
+        const otherChargesInput = form?.querySelector('[data-sale-other-charges]');
+        const totalBillInput = form?.querySelector('[data-sale-total-bill]');
+        const itemsById = new Map(saleFeedConfig.items.map((item) => [String(item.id), item]));
+        const scale = Number.isInteger(saleFeedConfig.decimalPlaces) ? saleFeedConfig.decimalPlaces : 2;
+        const numberValue = (value) => {
+            const parsed = Number.parseFloat(value ?? 0);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        let rowCounter = 0;
+
+        if (!rowsContainer || !addButton || !totalBillInput) return;
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+
+        const moneyText = (value) => `${saleFeedConfig.currencyCode ?? ''} ${numberValue(value).toLocaleString(undefined, {
+            minimumFractionDigits: scale,
+            maximumFractionDigits: scale,
+        })}`.trim();
+
+        const stockFor = (itemId) => {
+            const warehouseId = String(saleWarehouse?.value ?? '');
+            const stock = saleFeedConfig.stock?.[warehouseId]?.[String(itemId)] ?? {};
+            return {
+                quantity: numberValue(stock.quantity),
+                averageCost: numberValue(stock.average_cost),
+            };
+        };
+
+        const itemOptions = (selectedId) => {
+            const first = '<option value="">Select feed item</option>';
+            return first + saleFeedConfig.items.map((item) => {
+                const selected = String(item.id) === String(selectedId ?? '') ? ' selected' : '';
+                const meta = [item.code, item.brand, item.category].filter(Boolean).join(' · ');
+                return `<option value="${escapeHtml(item.id)}"${selected}>${escapeHtml(item.name)}${meta ? ` — ${escapeHtml(meta)}` : ''}</option>`;
+            }).join('');
+        };
+
+        const defaultItemId = () => saleFeedConfig.items[0]?.id ?? '';
+        const defaultRate = (item, unit) => {
+            if (!item) return 0;
+            const bagPrice = numberValue(item.salePrice);
+            return unit === 'KG' && numberValue(item.packSize) > 0 ? bagPrice / numberValue(item.packSize) : bagPrice;
+        };
+
+        const syncRowItem = (row, resetRate = true) => {
+            const itemSelect = row.querySelector('[data-sale-feed-item]');
+            const unitSelect = row.querySelector('[data-sale-feed-unit]');
+            const rateInput = row.querySelector('[data-sale-feed-rate]');
+            const item = itemsById.get(String(itemSelect?.value ?? ''));
+            const unit = unitSelect?.value ?? 'BAG';
+            const meta = row.querySelector('[data-sale-feed-meta]');
+
+            if (meta) {
+                meta.textContent = item
+                    ? `${item.code} · ${numberValue(item.packSize).toFixed(2)} KG/bag${item.brand ? ` · ${item.brand}` : ''}`
+                    : '';
+            }
+
+            if (resetRate && rateInput && item) {
+                rateInput.value = defaultRate(item, unit).toFixed(2);
+            }
+        };
+
+        const lineMarkup = (index, values = {}) => {
+            const selectedItemId = values.item_id ?? defaultItemId();
+            const item = itemsById.get(String(selectedItemId));
+            const unit = String(values.unit ?? 'BAG').toUpperCase() === 'KG' ? 'KG' : 'BAG';
+            const rate = values.rate !== undefined && values.rate !== null && values.rate !== ''
+                ? numberValue(values.rate)
+                : defaultRate(item, unit);
+            const quantity = values.quantity ?? 1;
+            const discount = values.discount ?? 0;
+
+            return `
+                <tr data-sale-feed-line>
+                    <td class="hg-feed-item-cell">
+                        <select name="lines[${index}][item_id]" data-sale-feed-item required data-hg-searchable-ignore>${itemOptions(selectedItemId)}</select>
+                        <small data-sale-feed-meta></small>
+                    </td>
+                    <td class="right"><strong data-sale-feed-available>0.0000 KG</strong></td>
+                    <td><select name="lines[${index}][unit]" data-sale-feed-unit data-hg-searchable-ignore><option value="BAG"${unit === 'BAG' ? ' selected' : ''}>Bag</option><option value="KG"${unit === 'KG' ? ' selected' : ''}>KG</option></select></td>
+                    <td><input class="right" name="lines[${index}][quantity]" data-sale-feed-quantity type="number" min="0.0001" step="0.0001" value="${escapeHtml(quantity)}" required></td>
+                    <td><input class="right" name="lines[${index}][rate]" data-sale-feed-rate type="number" min="0" step="0.01" value="${escapeHtml(rate.toFixed(2))}" required></td>
+                    <td><input class="right" name="lines[${index}][discount]" data-sale-feed-discount type="number" min="0" step="0.01" value="${escapeHtml(discount)}"></td>
+                    <td class="right"><strong data-sale-feed-line-total>${moneyText(0)}</strong><small data-sale-feed-base-qty></small></td>
+                    <td><button class="hg-btn hg-btn-small hg-btn-danger" type="button" data-sale-feed-remove aria-label="Remove feed item">×</button></td>
+                </tr>`;
+        };
+
+        const addLine = (values = {}) => {
+            rowsContainer.insertAdjacentHTML('beforeend', lineMarkup(rowCounter++, values));
+            const row = rowsContainer.lastElementChild;
+            syncRowItem(row, false);
+            calculateSaleFeed();
+        };
+
+        const setTotalBill = (value) => {
+            const formatted = numberValue(value).toFixed(scale);
+            if (totalBillInput.value === formatted) return;
+            totalBillInput.value = formatted;
+            totalBillInput.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        const calculateSaleFeed = () => {
+            if (!isFeedSaleMode()) {
+                form.dataset.saleStockInvalid = '0';
+                form.dataset.saleHasFeedLine = '0';
+                return;
+            }
+
+            let subtotal = 0;
+            let hasStockError = false;
+            let hasValidLine = false;
+
+            rowsContainer.querySelectorAll('[data-sale-feed-line]').forEach((row) => {
+                const itemId = row.querySelector('[data-sale-feed-item]')?.value;
+                const item = itemsById.get(String(itemId ?? ''));
+                const unit = row.querySelector('[data-sale-feed-unit]')?.value ?? 'BAG';
+                const quantity = Math.max(0, numberValue(row.querySelector('[data-sale-feed-quantity]')?.value));
+                const rate = Math.max(0, numberValue(row.querySelector('[data-sale-feed-rate]')?.value));
+                const discount = Math.max(0, numberValue(row.querySelector('[data-sale-feed-discount]')?.value));
+                const lineTotal = Math.max(0, (quantity * rate) - discount);
+                const baseQuantity = unit === 'BAG' ? quantity * numberValue(item?.packSize) : quantity;
+                const stock = stockFor(itemId);
+                const insufficient = Boolean(itemId) && baseQuantity > stock.quantity + 0.00005;
+
+                subtotal += lineTotal;
+                hasStockError ||= insufficient;
+                hasValidLine ||= Boolean(itemId) && quantity > 0;
+
+                row.classList.toggle('hg-feed-stock-error', insufficient);
+                const available = row.querySelector('[data-sale-feed-available]');
+                const total = row.querySelector('[data-sale-feed-line-total]');
+                const base = row.querySelector('[data-sale-feed-base-qty]');
+                if (available) available.textContent = `${stock.quantity.toFixed(4)} KG${insufficient ? ' — insufficient' : ''}`;
+                if (total) total.textContent = moneyText(lineTotal);
+                if (base) base.textContent = `${baseQuantity.toFixed(4)} KG`;
+            });
+
+            const otherCharges = Math.max(0, numberValue(otherChargesInput?.value));
+            const totalBill = subtotal + otherCharges;
+
+            if (itemsTotalInput) itemsTotalInput.value = subtotal.toFixed(scale);
+            setTotalBill(totalBill);
+            form.dataset.saleStockInvalid = hasStockError ? '1' : '0';
+            form.dataset.saleHasFeedLine = hasValidLine ? '1' : '0';
+        };
+
+        recalculateSaleFeed = calculateSaleFeed;
+
+        const initialLines = Array.isArray(saleFeedConfig.initialLines) && saleFeedConfig.initialLines.length
+            ? saleFeedConfig.initialLines
+            : [{ item_id: defaultItemId(), unit: 'BAG', quantity: 1, rate: saleFeedConfig.items[0]?.salePrice ?? 0, discount: 0 }];
+        initialLines.forEach((line) => addLine(line));
+
+        addButton.addEventListener('click', () => addLine({
+            item_id: defaultItemId(),
+            unit: 'BAG',
+            quantity: 1,
+            rate: saleFeedConfig.items[0]?.salePrice ?? 0,
+            discount: 0,
+        }));
+
+        rowsContainer.addEventListener('input', (event) => {
+            if (event.target.matches('[data-sale-feed-quantity], [data-sale-feed-rate], [data-sale-feed-discount]')) {
+                calculateSaleFeed();
+            }
+        });
+
+        rowsContainer.addEventListener('change', (event) => {
+            const row = event.target.closest('[data-sale-feed-line]');
+            if (!row) return;
+
+            if (event.target.matches('[data-sale-feed-item], [data-sale-feed-unit]')) {
+                syncRowItem(row, true);
+            }
+            calculateSaleFeed();
+        });
+
+        rowsContainer.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-sale-feed-remove]');
+            if (!button) return;
+            const rows = rowsContainer.querySelectorAll('[data-sale-feed-line]');
+            if (rows.length <= 1) return;
+            button.closest('[data-sale-feed-line]')?.remove();
+            calculateSaleFeed();
+        });
+
+        otherChargesInput?.addEventListener('input', calculateSaleFeed);
+        saleWarehouse?.addEventListener('change', calculateSaleFeed);
+
+        form?.addEventListener('submit', (event) => {
+            if (!isFeedSaleMode()) return;
+
+            calculateSaleFeed();
+
+            if (form.dataset.saleHasFeedLine !== '1') {
+                event.preventDefault();
+                window.alert('Add at least one feed item before posting the sale.');
+                return;
+            }
+
+            if (form.dataset.saleStockInvalid === '1') {
+                event.preventDefault();
+                window.alert('One or more sale lines are greater than the available stock in the selected warehouse.');
+            }
+        });
+
+        calculateSaleFeed();
+    };
+
+    syncCategoryFromHead();
+    initTransactionSaleFeed();
+    syncSaleMode();
+    updatePaidAmountCopy();
     refreshPreview();
 }
 
@@ -570,3 +898,29 @@ cameraWidgets.forEach((widget) => {
         }
     });
 });
+
+// Transaction Entry: prevent browser scroll restoration from keeping the page horizontally shifted after direction/type tab navigation.
+const resetTransactionEntryHorizontalScroll = () => {
+    const transactionEntryPage = document.querySelector('.hg-entry-filter-panel, [data-transaction-entry]');
+    if (!transactionEntryPage) return;
+
+    if (document.documentElement) document.documentElement.scrollLeft = 0;
+    if (document.body) document.body.scrollLeft = 0;
+    if (window.scrollX !== 0) window.scrollTo({ left: 0, top: window.scrollY, behavior: 'auto' });
+};
+
+if (document.querySelector('.hg-entry-filter-panel, [data-transaction-entry]')) {
+    if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+    }
+
+    resetTransactionEntryHorizontalScroll();
+    window.addEventListener('load', () => window.requestAnimationFrame(resetTransactionEntryHorizontalScroll));
+    window.addEventListener('pageshow', () => window.requestAnimationFrame(resetTransactionEntryHorizontalScroll));
+    window.setTimeout(resetTransactionEntryHorizontalScroll, 50);
+    window.setTimeout(resetTransactionEntryHorizontalScroll, 250);
+
+    document.querySelectorAll('[data-transaction-direction-tab], [data-transaction-category-tab]').forEach((tab) => {
+        tab.addEventListener('click', resetTransactionEntryHorizontalScroll, { capture: true });
+    });
+}

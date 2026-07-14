@@ -30,6 +30,23 @@ class TransactionEntryOptionService
             ->get();
     }
 
+    /** @return Collection<int, TransactionHead> */
+    public function allTransactionHeads(int $companyId): Collection
+    {
+        return TransactionHead::query()
+            ->with('postingAccount')
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->where('code', 'not like', 'SYS-FEED-%')
+            ->whereNotNull('posting_account_id')
+            ->whereHas('postingAccount', fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->where('is_active', true))
+            ->orderBy('category')
+            ->orderBy('name')
+            ->get();
+    }
+
     /** @return Collection<int, MoneyAccount> */
     public function moneyAccounts(int $companyId): Collection
     {

@@ -10,7 +10,7 @@
     @include('feed.partials.tabs')
 
     <div class="hg-notice">
-        <strong>COA and Transaction Head posting is active.</strong> The <strong>{{ $settings->purchaseTransactionHead->name }}</strong> head is under PURCHASE and posts to <strong>{{ $settings->purchaseTransactionHead->postingAccount->name }}</strong>. The <strong>{{ $settings->saleTransactionHead->name }}</strong> head is under SALE and posts to <strong>{{ $settings->saleTransactionHead->postingAccount->name }}</strong>. Head-specific accounting rules handle Cash, Credit, and Partial payments; every feed sale also posts COGS to <strong>{{ $settings->cogsAccount->name }}</strong>.
+        <strong>COA and Transaction Head posting is active.</strong> The <strong>{{ $settings->purchaseTransactionHead?->name ?? 'None' }}</strong> head is under PURCHASE and posts to <strong>{{ $settings->purchaseTransactionHead?->postingAccount?->name ?? 'None' }}</strong>. The <strong>{{ $settings->saleTransactionHead?->name ?? 'None' }}</strong> head is under SALE and posts to <strong>{{ $settings->saleTransactionHead?->postingAccount?->name ?? 'None' }}</strong>. Head-specific accounting rules handle Cash, Credit, and Partial payments; every feed sale also posts COGS to <strong>{{ $settings->cogsAccount?->name ?? 'None' }}</strong>.
     </div>
 
     <div class="hg-grid hg-grid-2 hg-feed-section-gap">
@@ -33,10 +33,18 @@
                                     <td class="right">{{ number_format((float) ($item->stock_quantity ?? 0), 4) }} KG</td>
                                     <td><span class="hg-badge {{ $item->is_active ? 'on' : 'off' }}">{{ $item->is_active ? 'Active' : 'Inactive' }}</span></td>
                                     <td>
-                                        <form method="POST" action="{{ route('feed.setup.items.toggle', $item) }}">
-                                            @csrf @method('PATCH')
-                                            <button class="hg-btn hg-btn-small {{ $item->is_active ? 'hg-btn-warning' : 'hg-btn-soft' }}" type="submit">{{ $item->is_active ? 'Set Inactive' : 'Set Active' }}</button>
-                                        </form>
+                                        <div style="display: flex; gap: 5px;">
+                                            <form method="POST" action="{{ route('feed.setup.items.toggle', $item) }}">
+                                                @csrf @method('PATCH')
+                                                <button class="hg-btn hg-btn-small {{ $item->is_active ? 'hg-btn-warning' : 'hg-btn-soft' }}" type="submit">{{ $item->is_active ? 'Set Inactive' : 'Set Active' }}</button>
+                                            </form>
+                                            @if(auth()->user()->canDeleteAccountingRecords())
+                                                <form method="POST" action="{{ route('feed.setup.items.destroy', $item) }}" data-safe-delete-form>
+                                                    @csrf @method('DELETE')
+                                                    <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
@@ -48,9 +56,8 @@
 
         <section class="hg-card">
             <h2 class="hg-card-title">Add Feed Item</h2>
-            <form method="POST" action="{{ route('feed.setup.items.store') }}" class="hg-form-grid">
+            <form method="POST" action="{{ route('feed.setup.items.store') }}" style="display: flex; flex-direction: column; gap: 15px;">
                 @csrf
-                <div class="hg-field"><label>Item Code <span class="hg-required">*</span></label><input name="code" value="{{ old('code') }}" placeholder="e.g. PF-001" required></div>
                 <div class="hg-field"><label>Item Name <span class="hg-required">*</span></label><input name="name" value="{{ old('name') }}" placeholder="e.g. Broiler Grower Feed" required></div>
                 <div class="hg-field"><label>Category</label><input name="category" value="{{ old('category') }}" placeholder="Poultry / Fish / Cattle"></div>
                 <div class="hg-field"><label>Brand</label><input name="brand" value="{{ old('brand') }}" placeholder="Brand name"></div>
@@ -78,7 +85,7 @@
                         <thead><tr><th>Warehouse</th><th>Location</th><th>Default</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody>
                             @foreach($warehouses as $warehouse)
-                                @php($isDefaultWarehouse = (int) $settings->default_warehouse_id === (int) $warehouse->id)
+                                @php($isDefaultWarehouse = (int) $settings->default_tracking_unit_id === (int) $warehouse->id)
                                 <tr>
                                     <td><strong>{{ $warehouse->name }}</strong><br><span class="hg-muted">{{ $warehouse->code }}</span></td>
                                     <td>{{ $warehouse->location ?: '—' }}</td>
@@ -96,10 +103,18 @@
                                     </td>
                                     <td><span class="hg-badge {{ $warehouse->is_active ? 'on' : 'off' }}">{{ $warehouse->is_active ? 'Active' : 'Inactive' }}</span></td>
                                     <td>
-                                        <form method="POST" action="{{ route('feed.setup.warehouses.toggle', $warehouse) }}">
-                                            @csrf @method('PATCH')
-                                            <button class="hg-btn hg-btn-small {{ $warehouse->is_active ? 'hg-btn-warning' : 'hg-btn-soft' }}" type="submit">{{ $warehouse->is_active ? 'Set Inactive' : 'Set Active' }}</button>
-                                        </form>
+                                        <div style="display: flex; gap: 5px;">
+                                            <form method="POST" action="{{ route('feed.setup.warehouses.toggle', $warehouse) }}">
+                                                @csrf @method('PATCH')
+                                                <button class="hg-btn hg-btn-small {{ $warehouse->is_active ? 'hg-btn-warning' : 'hg-btn-soft' }}" type="submit">{{ $warehouse->is_active ? 'Set Inactive' : 'Set Active' }}</button>
+                                            </form>
+                                            @if(auth()->user()->canDeleteAccountingRecords())
+                                                <form method="POST" action="{{ route('feed.setup.warehouses.destroy', $warehouse) }}" data-safe-delete-form>
+                                                    @csrf @method('DELETE')
+                                                    <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
@@ -111,9 +126,8 @@
 
         <section class="hg-card">
             <h2 class="hg-card-title">Add Warehouse</h2>
-            <form method="POST" action="{{ route('feed.setup.warehouses.store') }}" class="hg-form-grid">
+            <form method="POST" action="{{ route('feed.setup.warehouses.store') }}" style="display: flex; flex-direction: column; gap: 15px;">
                 @csrf
-                <div class="hg-field"><label>Warehouse Code <span class="hg-required">*</span></label><input name="code" value="{{ old('code') }}" placeholder="e.g. WH-01" required></div>
                 <div class="hg-field"><label>Warehouse Name <span class="hg-required">*</span></label><input name="name" value="{{ old('name') }}" placeholder="Main Godown" required></div>
                 <div class="hg-field full"><label>Location</label><input name="location" value="{{ old('location') }}" placeholder="Optional address or note"></div>
                 <div class="hg-field full"><button class="hg-btn hg-btn-primary" type="submit">Add Warehouse</button></div>

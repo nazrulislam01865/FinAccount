@@ -12,7 +12,7 @@ class FeedSetting extends Model
 {
     protected $fillable = [
         'company_id', 'purchase_transaction_head_id', 'sale_transaction_head_id',
-        'cogs_account_id', 'default_warehouse_id',
+        'cogs_account_id', 'default_tracking_unit_id',
     ];
 
     public function company(): BelongsTo
@@ -37,6 +37,6 @@ class FeedSetting extends Model
 
     public function defaultWarehouse(): BelongsTo
     {
-        return $this->belongsTo(FeedWarehouse::class, 'default_warehouse_id');
+        return $this->belongsTo(FeedWarehouse::class, 'default_tracking_unit_id');
     }
 }

@@ -223,11 +223,7 @@ class MasterDataService
             ]);
         }
 
-        if ($this->isCoreTransactionCategory($option)) {
-            throw ValidationException::withMessages([
-                'master_data' => 'System transaction types cannot be deleted.',
-            ]);
-        }
+
     }
 
     public function delete(string $section, AccountingOption $option): void
@@ -336,17 +332,7 @@ class MasterDataService
             ]);
         }
 
-        if ($isCore && $isChangingValue) {
-            throw ValidationException::withMessages([
-                'value' => 'The internal code of a system transaction type cannot be changed.',
-            ]);
-        }
 
-        if ($isCore && $isDeactivating) {
-            throw ValidationException::withMessages([
-                'is_active' => 'System transaction types cannot be deactivated.',
-            ]);
-        }
 
         if (! $isCore && ($isChangingValue || $isDeactivating) && $usage['count'] > 0) {
             throw ValidationException::withMessages([

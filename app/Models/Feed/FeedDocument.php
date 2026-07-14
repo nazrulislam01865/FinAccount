@@ -15,7 +15,7 @@ class FeedDocument extends Model
     public const TYPE_SALE = 'SALE';
 
     protected $fillable = [
-        'uuid', 'company_id', 'transaction_id', 'warehouse_id', 'party_id', 'created_by',
+        'uuid', 'company_id', 'transaction_id', 'tracking_unit_id', 'party_id', 'created_by',
         'document_type', 'external_invoice_no', 'reference', 'cost_allocation',
         'subtotal', 'transport_cost', 'other_cost', 'delivery_charge', 'overall_discount',
         'total_amount', 'cogs_total',
@@ -41,7 +41,7 @@ class FeedDocument extends Model
 
     public function warehouse(): BelongsTo
     {
-        return $this->belongsTo(FeedWarehouse::class, 'warehouse_id');
+        return $this->belongsTo(FeedWarehouse::class, 'tracking_unit_id');
     }
 
     public function party(): BelongsTo

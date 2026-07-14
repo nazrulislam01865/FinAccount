@@ -17,7 +17,9 @@
             <strong>Recommended HisebGhor design:</strong> Cattle, Fish and Vegetables should be maintained as a separate <strong>Business Tracking Dimension</strong>, not as separate Chart of Accounts. The normal sales, purchase, expense and inventory accounts remain unchanged.
         </div>
 
-        <div class="business-layout">
+
+
+        <div class="business-layout feed-section-gap">
             <section class="feed-card">
                 <div class="feed-card-header">
                     <div>
@@ -57,22 +59,30 @@
                                                     <span class="feed-status feed-status-red">Inactive</span>
                                                 @endif
                                             </div>
-                                            <button
-                                                class="feed-btn feed-btn-sm"
-                                                type="button"
-                                                data-edit-unit
-                                                data-id="{{ $unit->id }}"
-                                                data-update-url="{{ route('feed.business-tracking.units.update', $unit) }}"
-                                                data-business-area="{{ $unit->business_area }}"
-                                                data-unit-type="{{ $unit->unit_type }}"
-                                                data-code="{{ $unit->code }}"
-                                                data-name="{{ $unit->name }}"
-                                                data-parent-id="{{ $unit->parent_id }}"
-                                                data-responsible-person="{{ $unit->responsible_person }}"
-                                                data-start-date="{{ optional($unit->start_date)->format('Y-m-d') }}"
-                                                data-is-active="{{ $unit->is_active ? 1 : 0 }}"
-                                                data-description="{{ $unit->description }}"
-                                            >Edit</button>
+                                            <div style="display: flex; gap: 5px;">
+                                                <button
+                                                    class="feed-btn feed-btn-sm"
+                                                    type="button"
+                                                    data-edit-unit
+                                                    data-id="{{ $unit->id }}"
+                                                    data-update-url="{{ route('feed.business-tracking.units.update', $unit) }}"
+                                                    data-business-area="{{ $unit->business_area }}"
+                                                    data-unit-type="{{ $unit->unit_type }}"
+                                                    data-location="{{ $unit->location }}"
+                                                    data-name="{{ $unit->name }}"
+                                                    data-parent-id="{{ $unit->parent_id }}"
+                                                    data-responsible-person="{{ $unit->responsible_person }}"
+                                                    data-start-date="{{ optional($unit->start_date)->format('Y-m-d') }}"
+                                                    data-is-active="{{ $unit->is_active ? 1 : 0 }}"
+                                                    data-description="{{ $unit->description }}"
+                                                >Edit</button>
+                                                @if(auth()->user()->canDeleteAccountingRecords())
+                                                    <form method="POST" action="{{ route('feed.business-tracking.units.destroy', $unit) }}" data-safe-delete-form>
+                                                        @csrf @method('DELETE')
+                                                        <button class="feed-btn feed-btn-sm feed-btn-red" type="submit">Delete</button>
+                                                    </form>
+                                                @endif
+                                            </div>
                                         </div>
 
                                         @foreach($unit->children as $child)
@@ -83,22 +93,30 @@
                                                 </div>
                                                 <div>{{ $child->unit_type }}</div>
                                                 <div><span class="feed-status {{ $child->is_active ? 'feed-status-green' : 'feed-status-red' }}">{{ $child->is_active ? 'Active' : 'Inactive' }}</span></div>
-                                                <button
-                                                    class="feed-btn feed-btn-sm"
-                                                    type="button"
-                                                    data-edit-unit
-                                                    data-id="{{ $child->id }}"
-                                                    data-update-url="{{ route('feed.business-tracking.units.update', $child) }}"
-                                                    data-business-area="{{ $child->business_area }}"
-                                                    data-unit-type="{{ $child->unit_type }}"
-                                                    data-code="{{ $child->code }}"
-                                                    data-name="{{ $child->name }}"
-                                                    data-parent-id="{{ $child->parent_id }}"
-                                                    data-responsible-person="{{ $child->responsible_person }}"
-                                                    data-start-date="{{ optional($child->start_date)->format('Y-m-d') }}"
-                                                    data-is-active="{{ $child->is_active ? 1 : 0 }}"
-                                                    data-description="{{ $child->description }}"
-                                                >Edit</button>
+                                                <div style="display: flex; gap: 5px;">
+                                                    <button
+                                                        class="feed-btn feed-btn-sm"
+                                                        type="button"
+                                                        data-edit-unit
+                                                        data-id="{{ $child->id }}"
+                                                        data-update-url="{{ route('feed.business-tracking.units.update', $child) }}"
+                                                        data-business-area="{{ $child->business_area }}"
+                                                        data-unit-type="{{ $child->unit_type }}"
+                                                        data-location="{{ $child->location }}"
+                                                        data-name="{{ $child->name }}"
+                                                        data-parent-id="{{ $child->parent_id }}"
+                                                        data-responsible-person="{{ $child->responsible_person }}"
+                                                        data-start-date="{{ optional($child->start_date)->format('Y-m-d') }}"
+                                                        data-is-active="{{ $child->is_active ? 1 : 0 }}"
+                                                        data-description="{{ $child->description }}"
+                                                    >Edit</button>
+                                                    @if(auth()->user()->canDeleteAccountingRecords())
+                                                        <form method="POST" action="{{ route('feed.business-tracking.units.destroy', $child) }}" data-safe-delete-form>
+                                                            @csrf @method('DELETE')
+                                                            <button class="feed-btn feed-btn-sm feed-btn-red" type="submit">Delete</button>
+                                                        </form>
+                                                    @endif
+                                                </div>
                                             </div>
                                         @endforeach
                                     @empty
@@ -122,12 +140,12 @@
                     <form id="businessTrackingUnitForm" method="POST" action="{{ route('feed.business-tracking.units.store') }}">
                         @csrf
                         <input type="hidden" name="_method" value="POST" data-form-method>
-                        <div class="feed-grid-2">
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div class="feed-field">
                                 <label>Business Area <span class="feed-req">*</span></label>
                                 <select id="trackingBusiness" name="business_area" class="feed-control" required>
                                     @foreach($businessAreas as $key => $business)
-                                        <option value="{{ $key }}" @selected(old('business_area', 'cattle') === $key)>{{ $business['name'] }}</option>
+                                        <option value="{{ $key }}" @selected(old('business_area', array_key_first($businessAreas)) === $key)>{{ $business['name'] }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -136,17 +154,14 @@
                                 <select id="trackingUnitType" name="unit_type" class="feed-control" data-old-value="{{ old('unit_type') }}" required></select>
                             </div>
                             <div class="feed-field">
-                                <label>Unit Code <span class="feed-req">*</span></label>
-                                <input id="trackingUnitCode" class="feed-control" name="code" value="{{ old('code', 'CAT-S03') }}" required>
+                                <label>Location</label>
+                                <input id="trackingUnitLocation" class="feed-control" name="location" value="{{ old('location') }}" placeholder="e.g. Farm Side A">
                             </div>
                             <div class="feed-field">
                                 <label id="trackingUnitNameLabel">Unit Name <span class="feed-req">*</span></label>
                                 <input id="trackingUnitName" class="feed-control" name="name" value="{{ old('name') }}" placeholder="e.g. Shed 03" required>
                             </div>
-                            <div class="feed-field">
-                                <label>Parent Unit</label>
-                                <select id="trackingParent" name="parent_id" class="feed-control" data-old-value="{{ old('parent_id') }}"></select>
-                            </div>
+
                             <div class="feed-field">
                                 <label>Responsible Person</label>
                                 <input id="trackingResponsiblePerson" class="feed-control" name="responsible_person" value="{{ old('responsible_person') }}" placeholder="Optional">
@@ -162,10 +177,10 @@
                                     <option value="0" @selected(old('is_active') === '0')>Inactive</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="feed-field" style="margin-top:13px">
-                            <label>Description</label>
-                            <textarea id="trackingDescription" class="feed-control" name="description" placeholder="Optional note about the shed, pond, crop, plot or production cycle">{{ old('description') }}</textarea>
+                            <div class="feed-field">
+                                <label>Description</label>
+                                <textarea id="trackingDescription" class="feed-control" name="description" placeholder="Optional note about the shed, pond, crop, plot or production cycle">{{ old('description') }}</textarea>
+                            </div>
                         </div>
                         <div class="feed-action-bar">
                             <button class="feed-btn" type="button" data-clear-unit-form>Clear</button>
@@ -317,10 +332,11 @@
         window.HISEBGHOR_BUSINESS_TRACKING = {
             storeUrl: @json(route('feed.business-tracking.units.store')),
             config: @json($businessConfigJson),
-            oldBusinessArea: @json(old('business_area', 'cattle')),
+            defaultBusinessArea: @json(array_key_first($businessAreas)),
+            oldBusinessArea: @json(old('business_area', array_key_first($businessAreas))),
             oldParentId: @json(old('parent_id')),
             oldUnitType: @json(old('unit_type')),
-            oldAssignmentBusinessArea: @json(old('business_area', 'cattle')),
+            oldAssignmentBusinessArea: @json(old('business_area', array_key_first($businessAreas))),
         };
     </script>
 </x-layouts::accounting>

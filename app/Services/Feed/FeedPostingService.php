@@ -31,7 +31,7 @@ class FeedPostingService
     {
         return DB::transaction(function () use ($data, $user): FeedDocument {
             $settings = $this->settings((int) $user->company_id, true);
-            $warehouse = $this->warehouse((int) $user->company_id, (int) $data['warehouse_id']);
+            $warehouse = $this->warehouse((int) $user->company_id, (int) $data['tracking_unit_id']);
             $preparedLines = $this->prepareLines((int) $user->company_id, (array) $data['lines']);
 
             $subtotal = round($preparedLines->sum('line_total'), 2);
@@ -63,7 +63,7 @@ class FeedPostingService
                 'uuid' => (string) Str::uuid(),
                 'company_id' => $user->company_id,
                 'transaction_id' => $transaction->id,
-                'warehouse_id' => $warehouse->id,
+                'tracking_unit_id' => $warehouse->id,
                 'party_id' => $data['party_id'],
                 'created_by' => $user->id,
                 'document_type' => FeedDocument::TYPE_PURCHASE,
@@ -121,7 +121,7 @@ class FeedPostingService
                     'company_id' => $user->company_id,
                     'transaction_id' => $transaction->id,
                     'feed_item_id' => $line['item']->id,
-                    'warehouse_id' => $warehouse->id,
+                    'tracking_unit_id' => $warehouse->id,
                     'movement_type' => FeedStockMovement::TYPE_PURCHASE,
                     'movement_date' => $data['transaction_date'],
                     'quantity_in' => $this->quantity($line['base_quantity']),
@@ -145,7 +145,7 @@ class FeedPostingService
     {
         return DB::transaction(function () use ($data, $user): FeedDocument {
             $settings = $this->settings((int) $user->company_id, true);
-            $warehouse = $this->warehouse((int) $user->company_id, (int) $data['warehouse_id']);
+            $warehouse = $this->warehouse((int) $user->company_id, (int) $data['tracking_unit_id']);
             $preparedLines = $this->prepareLines((int) $user->company_id, (array) $data['lines']);
 
             $subtotal = round($preparedLines->sum('line_total'), 2);
@@ -182,7 +182,7 @@ class FeedPostingService
                 'uuid' => (string) Str::uuid(),
                 'company_id' => $user->company_id,
                 'transaction_id' => $transaction->id,
-                'warehouse_id' => $warehouse->id,
+                'tracking_unit_id' => $warehouse->id,
                 'party_id' => $data['party_id'],
                 'created_by' => $user->id,
                 'document_type' => FeedDocument::TYPE_SALE,
@@ -241,7 +241,7 @@ class FeedPostingService
                     'company_id' => $user->company_id,
                     'transaction_id' => $transaction->id,
                     'feed_item_id' => $line['item']->id,
-                    'warehouse_id' => $warehouse->id,
+                    'tracking_unit_id' => $warehouse->id,
                     'movement_type' => FeedStockMovement::TYPE_SALE,
                     'movement_date' => $data['transaction_date'],
                     'quantity_in' => '0.0000',
@@ -269,7 +269,7 @@ class FeedPostingService
 
         $groups = $document->movements
             ->sortBy('id')
-            ->groupBy(fn (FeedStockMovement $movement): string => $movement->feed_item_id.':'.$movement->warehouse_id);
+            ->groupBy(fn (FeedStockMovement $movement): string => $movement->feed_item_id.':'.$movement->tracking_unit_id);
 
         foreach ($groups as $movements) {
             /** @var FeedStockMovement $first */
@@ -280,7 +280,7 @@ class FeedPostingService
             $hasLaterMovement = FeedStockMovement::query()
                 ->where('company_id', $document->company_id)
                 ->where('feed_item_id', $first->feed_item_id)
-                ->where('warehouse_id', $first->warehouse_id)
+                ->where('tracking_unit_id', $first->tracking_unit_id)
                 ->where('id', '>', $last->id)
                 ->where('feed_document_id', '!=', $document->id)
                 ->exists();
@@ -294,7 +294,7 @@ class FeedPostingService
             $balance = $this->lockBalance(
                 (int) $document->company_id,
                 (int) $first->feed_item_id,
-                (int) $first->warehouse_id,
+                (int) $first->tracking_unit_id,
             );
 
             $balance->update([
@@ -528,7 +528,7 @@ class FeedPostingService
         $balance = FeedStockBalance::query()
             ->where('company_id', $companyId)
             ->where('feed_item_id', $itemId)
-            ->where('warehouse_id', $warehouseId)
+            ->where('tracking_unit_id', $warehouseId)
             ->lockForUpdate()
             ->first();
 
@@ -540,7 +540,7 @@ class FeedPostingService
             FeedStockBalance::query()->create([
                 'company_id' => $companyId,
                 'feed_item_id' => $itemId,
-                'warehouse_id' => $warehouseId,
+                'tracking_unit_id' => $warehouseId,
                 'quantity' => '0.0000',
                 'average_cost' => '0.000000',
             ]);
@@ -553,7 +553,7 @@ class FeedPostingService
         return FeedStockBalance::query()
             ->where('company_id', $companyId)
             ->where('feed_item_id', $itemId)
-            ->where('warehouse_id', $warehouseId)
+            ->where('tracking_unit_id', $warehouseId)
             ->lockForUpdate()
             ->firstOrFail();
     }

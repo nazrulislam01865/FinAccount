@@ -9,26 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FeedBusinessTrackingUnit extends Model
 {
-    public const BUSINESS_AREAS = [
-        'cattle' => [
-            'name' => 'Cattle',
-            'icon' => '🐄',
-            'unit_label' => 'Shed',
-            'unit_types' => ['Shed', 'Batch / Herd'],
-        ],
-        'fish' => [
-            'name' => 'Fish',
-            'icon' => '🐟',
-            'unit_label' => 'Pond',
-            'unit_types' => ['Pond', 'Species / Cycle'],
-        ],
-        'vegetables' => [
-            'name' => 'Vegetables',
-            'icon' => '🥬',
-            'unit_label' => 'Vegetable / Crop',
-            'unit_types' => ['Vegetable / Crop', 'Plot / Field', 'Season / Cycle'],
-        ],
-    ];
+    /**
+     * Fallback metadata kept for compatibility with existing reports and seed data.
+     * The active Business Area dropdown now comes from feed_business_areas.
+     */
+    public const BUSINESS_AREAS = FeedBusinessArea::DEFAULT_AREAS;
 
     protected $fillable = [
         'company_id',
@@ -37,6 +22,7 @@ class FeedBusinessTrackingUnit extends Model
         'unit_type',
         'code',
         'name',
+        'location',
         'responsible_person',
         'start_date',
         'description',
@@ -58,7 +44,7 @@ class FeedBusinessTrackingUnit extends Model
 
     public static function unitTypesFor(string $businessArea): array
     {
-        return self::BUSINESS_AREAS[$businessArea]['unit_types'] ?? [];
+        return FeedBusinessArea::defaultMeta($businessArea)['unit_types'] ?? ['Unit', 'Batch / Production Cycle'];
     }
 
     public function company(): BelongsTo
@@ -83,16 +69,16 @@ class FeedBusinessTrackingUnit extends Model
 
     public function getBusinessNameAttribute(): string
     {
-        return self::BUSINESS_AREAS[$this->business_area]['name'] ?? ucfirst((string) $this->business_area);
+        return FeedBusinessArea::defaultMeta((string) $this->business_area)['name'] ?? ucfirst((string) $this->business_area);
     }
 
     public function getBusinessIconAttribute(): string
     {
-        return self::BUSINESS_AREAS[$this->business_area]['icon'] ?? '◫';
+        return FeedBusinessArea::defaultMeta((string) $this->business_area)['icon'] ?? '◫';
     }
 
     public function getUnitLabelAttribute(): string
     {
-        return self::BUSINESS_AREAS[$this->business_area]['unit_label'] ?? 'Unit';
+        return FeedBusinessArea::defaultMeta((string) $this->business_area)['unit_label'] ?? 'Unit';
     }
 }

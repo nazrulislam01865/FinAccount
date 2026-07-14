@@ -12,7 +12,7 @@ class FeedStockMovement extends Model
     public const TYPE_SALE = 'SALE';
 
     protected $fillable = [
-        'company_id', 'feed_document_id', 'transaction_id', 'feed_item_id', 'warehouse_id',
+        'company_id', 'feed_document_id', 'transaction_id', 'feed_item_id', 'tracking_unit_id',
         'movement_type', 'movement_date', 'quantity_in', 'quantity_out', 'unit_cost',
         'total_value', 'quantity_before', 'quantity_after', 'average_cost_before',
         'average_cost_after', 'reference',
@@ -50,6 +50,6 @@ class FeedStockMovement extends Model
 
     public function warehouse(): BelongsTo
     {
-        return $this->belongsTo(FeedWarehouse::class, 'warehouse_id');
+        return $this->belongsTo(FeedWarehouse::class, 'tracking_unit_id');
     }
 }

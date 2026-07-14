@@ -45,7 +45,7 @@ class FeedSaleController extends Controller
         $stockBalances = FeedStockBalance::query()
             ->where('company_id', $companyId)
             ->get()
-            ->groupBy('warehouse_id')
+            ->groupBy('tracking_unit_id')
             ->map(fn ($rows) => $rows->mapWithKeys(fn ($row) => [(string) $row->feed_item_id => [
                 'quantity' => (float) $row->quantity,
                 'average_cost' => (float) $row->average_cost,

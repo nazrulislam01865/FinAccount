@@ -6,8 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PerformsSafeDelete;
 use App\Http\Requests\Accounting\UpdateTransactionRequest;
 use App\Models\AccountingOption;
+use App\Models\Feed\FeedBusinessArea;
+use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
+use App\Models\Feed\FeedStockBalance;
 use App\Models\Feed\FeedWarehouse;
+use App\Models\Party;
 use App\Models\Transaction;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\TransactionDeletionService;
@@ -95,23 +99,76 @@ class TransactionRegisterController extends Controller
         }
 
         $category = $categoryOption->value;
-        $saleWarehouses = SaleSellingTypes::isSaleCategory($category)
-            ? FeedWarehouse::query()
+        $isSaleCategory = SaleSellingTypes::isSaleCategory($category);
+        $saleBusinessAreas = $isSaleCategory
+            ? FeedBusinessArea::query()
                 ->where('company_id', $companyId)
                 ->where(function ($query) use ($transaction): void {
                     $query->where('is_active', true);
 
-                    if ($transaction->warehouse_id) {
-                        $query->orWhereKey($transaction->warehouse_id);
+                    $storedSellingType = SaleSellingTypes::normalize($transaction->selling_type);
+                    if ($storedSellingType) {
+                        $query->orWhere('code', $storedSellingType);
                     }
                 })
                 ->orderByDesc('is_active')
                 ->orderBy('name')
                 ->get()
             : collect();
-        $defaultSaleWarehouseId = SaleSellingTypes::isSaleCategory($category)
-            ? FeedSetting::query()->where('company_id', $companyId)->value('default_warehouse_id')
+        $saleSellingTypeOptions = [SaleSellingTypes::OTHERS => 'Others'] + $saleBusinessAreas
+            ->mapWithKeys(fn (FeedBusinessArea $area): array => [$area->code => $area->name])
+            ->all();
+        $saleWarehouses = $isSaleCategory
+            ? FeedWarehouse::query()
+                ->where('company_id', $companyId)
+                ->where(function ($query) use ($transaction): void {
+                    $query->where('is_active', true);
+
+                    if ($transaction->tracking_unit_id) {
+                        $query->orWhereKey($transaction->tracking_unit_id);
+                    }
+                })
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $defaultSaleWarehouseId = $isSaleCategory
+            ? FeedSetting::query()->where('company_id', $companyId)->value('default_tracking_unit_id')
             : null;
+        $saleCustomers = $isSaleCategory
+            ? Party::query()
+                ->where('company_id', $companyId)
+                ->where(function ($query) use ($transaction): void {
+                    $query->where(function ($customerQuery): void {
+                        $customerQuery->where('type', 'Customer')
+                            ->where('is_active', true);
+                    });
+
+                    if ($transaction->party_id) {
+                        $query->orWhereKey($transaction->party_id);
+                    }
+                })
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $saleFeedItems = $isSaleCategory
+            ? FeedItem::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $saleStockBalances = $isSaleCategory
+            ? FeedStockBalance::query()
+                ->where('company_id', $companyId)
+                ->get()
+                ->groupBy('tracking_unit_id')
+                ->map(fn ($rows) => $rows->mapWithKeys(fn (FeedStockBalance $row): array => [(string) $row->feed_item_id => [
+                    'quantity' => (float) $row->quantity,
+                    'average_cost' => (float) $row->average_cost,
+                ]]))
+            : collect();
 
         return view('transactions.create', [
             'transaction' => $transaction,
@@ -139,9 +196,13 @@ class TransactionRegisterController extends Controller
                 $company,
                 $transaction->transaction_date?->toDateString(),
             ),
-            'saleSellingTypeOptions' => SaleSellingTypes::labels(),
+            'saleSellingTypeOptions' => $saleSellingTypeOptions,
+            'saleBusinessAreas' => $saleBusinessAreas,
             'saleWarehouses' => $saleWarehouses,
             'defaultSaleWarehouseId' => $defaultSaleWarehouseId,
+            'saleCustomers' => $saleCustomers,
+            'saleFeedItems' => $saleFeedItems,
+            'saleStockBalances' => $saleStockBalances,
         ]);
     }
 

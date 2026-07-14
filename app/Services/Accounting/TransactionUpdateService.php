@@ -132,9 +132,9 @@ class TransactionUpdateService
                 'selling_type' => SaleSellingTypes::isSaleCategory($transactionType)
                     ? ($data['selling_type'] ?? null)
                     : null,
-                'warehouse_id' => SaleSellingTypes::isSaleCategory($transactionType)
+                'tracking_unit_id' => SaleSellingTypes::isSaleCategory($transactionType)
                     && SaleSellingTypes::requiresWarehouse($data['selling_type'] ?? null)
-                        ? ($data['warehouse_id'] ?? null)
+                        ? ($data['tracking_unit_id'] ?? null)
                         : null,
                 'transaction_date' => $data['transaction_date'],
                 'amount' => $amount,

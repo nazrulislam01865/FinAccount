@@ -60,8 +60,8 @@ class FeedAccountingSetupService
                             ->orderBy('id')
                             ->value('id');
 
-                if ((int) ($existing->default_warehouse_id ?? 0) !== (int) ($defaultWarehouseId ?? 0)) {
-                    $existing->update(['default_warehouse_id' => $defaultWarehouseId]);
+                if ((int) ($existing->default_tracking_unit_id ?? 0) !== (int) ($defaultWarehouseId ?? 0)) {
+                    $existing->update(['default_tracking_unit_id' => $defaultWarehouseId]);
                 }
 
                 return $existing->fresh([
@@ -129,7 +129,7 @@ class FeedAccountingSetupService
                 'purchase_transaction_head_id' => $purchaseHead->id,
                 'sale_transaction_head_id' => $saleHead->id,
                 'cogs_account_id' => $cogsAccount->id,
-                'default_warehouse_id' => $defaultWarehouseId,
+                'default_tracking_unit_id' => $defaultWarehouseId,
             ]);
 
             return $settings->fresh([

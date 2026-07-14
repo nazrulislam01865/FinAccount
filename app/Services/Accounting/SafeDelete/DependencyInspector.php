@@ -12,6 +12,13 @@ use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
+use App\Models\Feed\FeedItem;
+use App\Models\Feed\FeedBusinessTrackingUnit;
+use App\Models\Feed\FeedWarehouse;
+use App\Models\Feed\FeedStockBalance;
+use App\Models\Feed\FeedStockMovement;
+use App\Models\Feed\FeedBusinessTrackingDefaultAssignment;
+use App\Models\Feed\FeedSetting;
 
 class DependencyInspector
 {
@@ -23,6 +30,7 @@ class DependencyInspector
             ['Parties (payable/capital)', $account->payableParties()->count(), 'Payable/capital mapping will be cleared and those parties will become inactive.'],
             ['Transaction Heads', $account->transactionHeads()->count(), 'Posting COA will be cleared and those transaction heads will become inactive.'],
             ['Journal Lines', $account->journalLines()->count(), 'The COA link will be cleared and affected transactions/journals will become incomplete.'],
+            ['Feed Settings', FeedSetting::query()->where('cogs_account_id', $account->id)->count(), 'The Feed COGS account configuration will be cleared.'],
             ['Opening Balances', OpeningBalance::query()->where('chart_of_account_id', $account->id)->count(), 'Opening balance rows mapped to this COA will be deleted.'],
         ]));
     }
@@ -59,6 +67,7 @@ class DependencyInspector
     {
         return new DeletionPlan('Transaction Head', $head->code.' — '.$head->name, $this->nonZero([
             ['Transactions', $head->transactions()->count(), 'Transaction-head links will be cleared and transactions/journals will become incomplete.'],
+            ['Feed Settings', FeedSetting::query()->where('purchase_transaction_head_id', $head->id)->orWhere('sale_transaction_head_id', $head->id)->count(), 'The Feed purchase or sale transaction head configuration will be cleared.'],
         ]));
     }
 
@@ -108,6 +117,31 @@ class DependencyInspector
         $label = ($sequence->category ?: 'Unlinked').' / '.$sequence->prefix;
 
         return new DeletionPlan('Voucher Numbering', $label, []);
+    }
+
+    public function feedItem(FeedItem $item): DeletionPlan
+    {
+        return new DeletionPlan('Feed Item', $item->code.' — '.$item->name, $this->nonZero([
+            ['Stock Balances', FeedStockBalance::query()->where('feed_item_id', $item->id)->count(), 'Stock balances will be permanently deleted.'],
+            ['Stock Movements', FeedStockMovement::query()->where('feed_item_id', $item->id)->count(), 'Stock movements will be permanently deleted and related transactions marked incomplete.'],
+        ]));
+    }
+
+    public function feedBusinessTrackingUnit(FeedBusinessTrackingUnit $unit): DeletionPlan
+    {
+        return new DeletionPlan('Business Tracking Unit', $unit->code.' — '.$unit->name, $this->nonZero([
+            ['Transactions', Transaction::query()->where('tracking_unit_id', $unit->id)->count(), 'Tracking unit links will be cleared and transactions will become incomplete.'],
+            ['Stock Balances', FeedStockBalance::query()->where('tracking_unit_id', $unit->id)->count(), 'Stock balances will be permanently deleted.'],
+            ['Stock Movements', FeedStockMovement::query()->where('tracking_unit_id', $unit->id)->count(), 'Stock movements will be permanently deleted and related transactions marked incomplete.'],
+            ['Default Assignments', FeedBusinessTrackingDefaultAssignment::query()->where('tracking_unit_id', $unit->id)->count(), 'Default assignments will be permanently deleted.'],
+        ]));
+    }
+
+    public function feedWarehouse(FeedWarehouse $warehouse): DeletionPlan
+    {
+        return new DeletionPlan('Warehouse', $warehouse->code.' — '.$warehouse->name, $this->nonZero([
+            ['Default Assignments', FeedSetting::query()->where('default_tracking_unit_id', $warehouse->id)->count(), 'Default warehouse setting will be cleared.'],
+        ]));
     }
 
     /**

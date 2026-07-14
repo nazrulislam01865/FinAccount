@@ -10,6 +10,9 @@ use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
 use App\Models\TransactionHead;
+use App\Models\Feed\FeedItem;
+use App\Models\Feed\FeedBusinessTrackingUnit;
+use App\Models\Feed\FeedWarehouse;
 
 class SafeDeleteService
 {
@@ -26,6 +29,9 @@ class SafeDeleteService
     public function inspectTransaction(Transaction $record): DeletionPlan { return $this->inspector->transaction($record); }
     public function inspectAccountingOption(AccountingOption $record): DeletionPlan { return $this->inspector->accountingOption($record); }
     public function inspectVoucherSequence(DocumentSequence $record): DeletionPlan { return $this->inspector->voucherSequence($record); }
+    public function inspectFeedItem(FeedItem $record): DeletionPlan { return $this->inspector->feedItem($record); }
+    public function inspectFeedBusinessTrackingUnit(FeedBusinessTrackingUnit $record): DeletionPlan { return $this->inspector->feedBusinessTrackingUnit($record); }
+    public function inspectFeedWarehouse(FeedWarehouse $record): DeletionPlan { return $this->inspector->feedWarehouse($record); }
 
     public function deleteChartOfAccount(ChartOfAccount $record): void { $this->detacher->chartOfAccount($record); }
     public function deleteMoneyAccount(MoneyAccount $record): void { $this->detacher->moneyAccount($record); }
@@ -34,4 +40,7 @@ class SafeDeleteService
     public function deleteTransactionHead(TransactionHead $record): void { $this->detacher->transactionHead($record); }
     public function deleteAccountingOption(AccountingOption $record): void { $this->detacher->accountingOption($record); }
     public function deleteVoucherSequence(DocumentSequence $record): void { $this->detacher->voucherSequence($record); }
+    public function deleteFeedItem(FeedItem $record): void { $this->detacher->feedItem($record); }
+    public function deleteFeedBusinessTrackingUnit(FeedBusinessTrackingUnit $record): void { $this->detacher->feedBusinessTrackingUnit($record); }
+    public function deleteFeedWarehouse(FeedWarehouse $record): void { $this->detacher->feedWarehouse($record); }
 }

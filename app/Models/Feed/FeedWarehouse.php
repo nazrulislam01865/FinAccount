@@ -23,11 +23,11 @@ class FeedWarehouse extends Model
 
     public function balances(): HasMany
     {
-        return $this->hasMany(FeedStockBalance::class, 'warehouse_id');
+        return $this->hasMany(FeedStockBalance::class, 'tracking_unit_id');
     }
 
     public function documents(): HasMany
     {
-        return $this->hasMany(FeedDocument::class, 'warehouse_id');
+        return $this->hasMany(FeedDocument::class, 'tracking_unit_id');
     }
 }

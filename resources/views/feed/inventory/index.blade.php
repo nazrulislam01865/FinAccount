@@ -58,7 +58,7 @@
                         <span class="feed-search-icon">⌕</span>
                         <input class="feed-control" type="search" name="search" value="{{ $search }}" placeholder="Search item, code or brand">
                     </div>
-                    <select class="feed-control" name="warehouse_id" data-hg-searchable-ignore>
+                    <select class="feed-control" name="tracking_unit_id" data-hg-searchable-ignore>
                         <option value="">All warehouses</option>
                         @foreach($warehouses as $warehouse)
                             <option value="{{ $warehouse->id }}" @selected($warehouseId === $warehouse->id)>{{ $warehouse->name }}</option>

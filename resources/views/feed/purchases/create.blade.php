@@ -1,5 +1,5 @@
 @php
-    $defaultWarehouseId = old('warehouse_id', $settings->default_warehouse_id ?: $warehouses->first()?->id);
+    $defaultWarehouseId = old('tracking_unit_id', $settings->default_tracking_unit_id ?: $warehouses->first()?->id);
     $initialLines = old('lines', [[
         'item_id' => $items->first()?->id,
         'unit' => 'BAG',
@@ -74,8 +74,8 @@
                             <input class="feed-control" id="external_invoice_no" name="external_invoice_no" value="{{ old('external_invoice_no') }}" placeholder="Supplier invoice / challan">
                         </div>
                         <div class="feed-field">
-                            <label for="warehouse_id">Warehouse <span class="feed-req">*</span></label>
-                            <select class="feed-control" id="warehouse_id" name="warehouse_id" required data-feed-warehouse data-hg-searchable-ignore>
+                            <label for="tracking_unit_id">Warehouse <span class="feed-req">*</span></label>
+                            <select class="feed-control" id="tracking_unit_id" name="tracking_unit_id" required data-feed-warehouse data-hg-searchable-ignore>
                                 @foreach($warehouses as $warehouse)
                                     <option value="{{ $warehouse->id }}" @selected((string) $defaultWarehouseId === (string) $warehouse->id)>{{ $warehouse->code }} — {{ $warehouse->name }}</option>
                                 @endforeach
@@ -94,7 +94,7 @@
                         </div>
                         <div class="feed-field">
                             <label>Inventory Ledger</label>
-                            <input class="feed-control feed-readonly" value="{{ $settings->purchaseTransactionHead->postingAccount->code }} — {{ $settings->purchaseTransactionHead->postingAccount->name }}" readonly>
+                            <input class="feed-control feed-readonly" value="{{ $settings->purchaseTransactionHead?->postingAccount?->code ?? 'N/A' }} — {{ $settings->purchaseTransactionHead?->postingAccount?->name ?? 'Account not configured' }}" readonly>
                         </div>
                         <div class="feed-field">
                             <label for="reference">Reference</label>
@@ -222,7 +222,7 @@
                         <div class="feed-summary-label">Journal Preview</div>
                         <div class="feed-journal">
                             <div class="feed-journal-row feed-journal-head"><span>Account</span><span>Debit</span><span>Credit</span></div>
-                            <div class="feed-journal-row"><span>{{ $settings->purchaseTransactionHead->postingAccount->name }}</span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
+                            <div class="feed-journal-row"><span>{{ $settings->purchaseTransactionHead?->postingAccount?->name ?? 'Account not configured' }}</span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
                             <div class="feed-journal-row"><span data-feed-summary="money-name">Cash / Bank</span><span></span><span data-feed-summary="paid">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                             <div class="feed-journal-row"><span>Supplier Payable</span><span></span><span data-feed-summary="due">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                         </div>

@@ -28,13 +28,40 @@
     $hasSelectedTransactionDirection = $isEditing || $isDueSettlement || filled($activeTransactionDirection);
     $hasTransactionTypeForDirection = $hasSelectedTransactionDirection && $filteredTransactionCategories->isNotEmpty();
     $highlightTransactionDirection = $showTransactionTypeSelection && $hasSelectedTransactionDirection;
+    $transactionHeadsAreUnfiltered = $transactionHeadsAreUnfiltered ?? false;
+    $transactionHeadsAreDirectionFiltered = $transactionHeadsAreDirectionFiltered ?? false;
+    $transactionTypeLabels = $transactionTypeLabels ?? $transactionCategories->mapWithKeys(fn ($option) => [$option->value => $option->label])->all();
     $saleSellingTypeOptions = $saleSellingTypeOptions ?? \App\Support\SaleSellingTypes::labels();
-    $saleWarehouses = $saleWarehouses ?? collect();
-    $defaultSaleWarehouseId = $defaultSaleWarehouseId ?? null;
+    $saleTrackingUnits = $saleTrackingUnits ?? collect();
+    $defaultSaleTrackingUnitId = $defaultSaleTrackingUnitId ?? null;
     $isSalesTransaction = \App\Support\SaleSellingTypes::isSaleCategory($category);
-    $selectedSellingType = old('selling_type', $isEditing ? $transaction->selling_type : '');
-    $selectedWarehouseId = old('warehouse_id', $isEditing ? $transaction->warehouse_id : $defaultSaleWarehouseId);
+    $selectedSellingType = \App\Support\SaleSellingTypes::normalize(old('selling_type', $isEditing ? ($transaction->selling_type ?: \App\Support\SaleSellingTypes::OTHERS) : \App\Support\SaleSellingTypes::OTHERS));
+    $selectedTrackingUnitId = old('tracking_unit_id', $isEditing ? $transaction->tracking_unit_id : $defaultSaleTrackingUnitId);
     $showSaleWarehouse = \App\Support\SaleSellingTypes::requiresWarehouse($selectedSellingType);
+    $saleFeedModeSelected = $isSalesTransaction && ! \App\Support\SaleSellingTypes::isOthers($selectedSellingType);
+
+    $saleBusinessAreas = $saleBusinessAreas ?? collect();
+    $saleCustomers = $saleCustomers ?? collect();
+    $saleFeedItems = $saleFeedItems ?? collect();
+    $saleStockBalances = $saleStockBalances ?? collect();
+    $selectedSalePartyId = old('party_id', $isEditing ? $transaction->party_id : ($dueSettlementContext['party_id'] ?? ''));
+    $selectedSaleOtherCharges = old('other_charges', 0);
+    $saleInitialLines = old('lines', [[
+        'item_id' => $saleFeedItems->first()?->id,
+        'unit' => 'BAG',
+        'quantity' => 1,
+        'rate' => $saleFeedItems->first()?->default_sale_price ?? 0,
+        'discount' => 0,
+    ]]);
+    $saleFeedItemsForJs = $saleFeedItems->map(static fn ($item): array => [
+        'id' => $item->id,
+        'code' => $item->code,
+        'name' => $item->name,
+        'category' => $item->category,
+        'brand' => $item->brand,
+        'packSize' => (float) $item->pack_size,
+        'salePrice' => (float) $item->default_sale_price,
+    ])->values();
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
@@ -78,7 +105,9 @@
                 @else
                     <div class="hg-tabs hg-transaction-type-tabs" aria-label="Filtered Transaction Types">
                         @foreach ($filteredTransactionCategories as $categoryTab)
-                            @php($definition = \App\Support\TransactionTypes::definition($categoryTab->value))
+                            @php
+                                $definition = \App\Support\TransactionTypes::definition($categoryTab->value);
+                            @endphp
                             <a
                                 href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['direction' => $activeTransactionDirection, 'category' => $categoryTab->value]) }}"
                                 class="{{ strcasecmp((string) $category, (string) $categoryTab->value) === 0 ? 'active' : '' }}"
@@ -111,7 +140,7 @@
             <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid hg-transaction-entry-form" data-transaction-form data-default-allowed-settlements='@json($isDueSettlement ? [\App\Support\TransactionTypes::CASH] : ($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS))' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null && ! $isDueSettlement) ? '1' : '0' }}" data-due-settlement="{{ $isDueSettlement ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
                 @csrf
                 @if ($isEditing) @method('PUT') @else <input type="hidden" name="request_token" value="{{ $requestToken }}"> @endif
-                <input type="hidden" name="category" value="{{ $category }}">
+                <input type="hidden" name="category" value="{{ $category }}" data-transaction-category-input>
                 <input type="hidden" id="settlement_type" name="settlement_type" value="{{ $isDueSettlement ? \App\Support\TransactionTypes::CASH : $selectedSettlement }}">
                 @if($isDueSettlement)
                     <input type="hidden" name="due_settlement" value="1">
@@ -159,66 +188,165 @@
                         data-hg-search-placeholder="Search transaction head by name, code or ledger..."
                         data-hg-search-empty="No matching transaction head found"
                     >
-                        <option value="">{{ $transactionHeads->isEmpty() ? 'No active transaction head available' : 'Select transaction head' }}</option>
+                        <option value="">{{ $transactionHeads->isEmpty() ? 'No active transaction head available' : ($transactionHeadsAreUnfiltered ? 'Select transaction head from all types' : ($transactionHeadsAreDirectionFiltered ? 'Select transaction head for this direction' : 'Select transaction head')) }}</option>
                         @foreach ($transactionHeads as $head)
+                            @php
+                                $headCategory = (string) $head->category;
+                                $headCategoryMetadata = is_array($transactionCategories->firstWhere('value', $headCategory)?->metadata ?? null)
+                                    ? $transactionCategories->firstWhere('value', $headCategory)->metadata
+                                    : [];
+                                $headDefinition = \App\Support\TransactionTypes::configuredDefinition(
+                                    $headCategory,
+                                    $headCategoryMetadata,
+                                    $transactionTypeLabels[$headCategory] ?? $headCategory
+                                );
+                            @endphp
                             <option
                                 value="{{ $head->id }}"
-                                data-title="{{ $head->name }}"
+                                data-title="{{ $transactionHeadsAreUnfiltered ? (($transactionTypeLabels[$headCategory] ?? $headCategory).' — ') : '' }}{{ $head->name }}"
                                 data-meta="{{ $head->code }}{{ $head->postingAccount ? ' — '.$head->postingAccount->code.' '.$head->postingAccount->name : '' }}"
-                                data-search-keywords="{{ $head->category }} {{ implode(' ', $head->allowedSettlementCodes()) }}"
+                                data-search-keywords="{{ $headCategory }} {{ $transactionTypeLabels[$headCategory] ?? '' }} {{ implode(' ', $head->allowedSettlementCodes()) }}"
                                 data-allowed-settlements="{{ json_encode($head->allowedSettlementCodes()) }}"
-                                data-party-type="{{ $head->party_type ?: ($transactionTypeDefinition['party_type'] ?? 'Any') }}"
+                                data-category="{{ $headCategory }}"
+                                data-direction="{{ $transactionCategoryDirections[$headCategory] ?? ($headDefinition['flow'] ?? '') }}"
+                                data-party-type="{{ $head->party_type ?: ($headDefinition['party_type'] ?? ($transactionTypeDefinition['party_type'] ?? 'Any')) }}"
                                 @selected((string) $selectedHeadId === (string) $head->id)
-                            >{{ $head->name }}</option>
+                            >{{ $transactionHeadsAreUnfiltered ? (($transactionTypeLabels[$headCategory] ?? $headCategory).' — ') : '' }}{{ $head->name }}</option>
                         @endforeach
                     </select>
                     @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                     @if($transactionHeads->isEmpty() && ! $isDueSettlement)
-                        <small class="hg-field-error">No active Transaction Head is linked to {{ $transactionTypeLabel }}. Activate or create a matching head with an active posting account.</small>
+                        <small class="hg-field-error">{{ $transactionHeadsAreUnfiltered ? 'No active Transaction Head is available. Activate or create at least one head with an active posting account.' : 'No active Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching head with an active posting account.' }}</small>
+                    @elseif($transactionHeadsAreUnfiltered)
+                        <small class="hg-field-help">No transaction direction is selected, so all active transaction heads are shown. Selecting a direction or transaction type above will filter this list.</small>
+                    @elseif($transactionHeadsAreDirectionFiltered)
+                        <small class="hg-field-help">This list is filtered by the selected transaction direction. Choose a transaction type above to narrow it further.</small>
                     @endif
                 </div>
 
                 @if($isSalesTransaction && ! $isDueSettlement)
-                    <div class="hg-field">
+                    <div class="hg-field full">
                         <label for="selling_type">What are you selling? <span class="hg-required">*</span></label>
                         <select id="selling_type" name="selling_type" required data-sale-selling-type>
-                            <option value="">Select what you are selling</option>
                             @foreach($saleSellingTypeOptions as $sellingTypeValue => $sellingTypeLabel)
+                                @php
+                                    $isOtherSellingType = \App\Support\SaleSellingTypes::isOthers($sellingTypeValue);
+                                @endphp
                                 <option
                                     value="{{ $sellingTypeValue }}"
-                                    data-requires-warehouse="{{ \App\Support\SaleSellingTypes::requiresWarehouse($sellingTypeValue) ? '1' : '0' }}"
+                                    data-requires-warehouse="{{ $isOtherSellingType ? '0' : '1' }}"
+                                    data-feed-sale-mode="{{ $isOtherSellingType ? '0' : '1' }}"
                                     @selected((string) $selectedSellingType === (string) $sellingTypeValue)
                                 >{{ $sellingTypeLabel }}</option>
                             @endforeach
                         </select>
+                        <small class="hg-field-help">Select Others for the normal sales form. Select Fish, Cattle, Vegetables, or any custom business area to open the feed-item sales form.</small>
                         @error('selling_type')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
-                    <div class="hg-field {{ $showSaleWarehouse ? '' : 'hidden' }}" id="sale-warehouse-field" data-sale-warehouse-field>
-                        <label for="warehouse_id">Location / Godown <span class="hg-required">*</span></label>
-                        <select id="warehouse_id" name="warehouse_id" data-sale-warehouse @if(! $showSaleWarehouse) disabled @endif>
-                            <option value="">{{ $saleWarehouses->isEmpty() ? 'No active warehouse available' : 'Select location / godown' }}</option>
-                            @foreach($saleWarehouses as $warehouse)
-                                <option value="{{ $warehouse->id }}" @selected((string) $selectedWarehouseId === (string) $warehouse->id)>
-                                    {{ $warehouse->name }} ({{ $warehouse->code }}){{ filled($warehouse->location) ? ' — '.$warehouse->location : '' }}{{ ! $warehouse->is_active ? ' — Inactive' : '' }}
+                    <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" id="party-field" data-sale-customer-field>
+                        <label for="party_id"><span id="party-label">Customer</span> <span class="hg-required">*</span></label>
+                        <select
+                            id="party_id"
+                            name="party_id"
+                            data-sale-customer
+                            data-hg-searchable
+                            data-hg-search-placeholder="Search customer by name or code..."
+                            data-hg-search-empty="No matching customer found"
+                        >
+                            <option value="">{{ $saleCustomers->isEmpty() ? 'No active customer available' : 'Select customer' }}</option>
+                            @foreach ($saleCustomers as $customer)
+                                <option
+                                    value="{{ $customer->id }}"
+                                    data-title="{{ $customer->name }}"
+                                    data-meta="{{ $customer->code }}"
+                                    data-status="Customer"
+                                    data-search-keywords="Customer"
+                                    data-party-type="Customer"
+                                    @selected((string) $selectedSalePartyId === (string) $customer->id)
+                                >{{ $customer->code }} — {{ $customer->name }}</option>
+                            @endforeach
+                        </select>
+                        @if($saleCustomers->isEmpty())
+                            <small class="hg-field-error">Add an active Customer from Party Setup before posting sales.</small>
+                        @endif
+                        @error('party_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+
+                    <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" id="sale-warehouse-field" data-sale-warehouse-field data-sale-feed-only>
+                        <label for="tracking_unit_id">Warehouse / Location <span class="hg-required">*</span></label>
+                        <select id="tracking_unit_id" name="tracking_unit_id" data-sale-warehouse>
+                            <option value="">{{ $saleTrackingUnits->isEmpty() ? 'No active location available' : 'Select warehouse / location' }}</option>
+                            @foreach($saleTrackingUnits as $unit)
+                                <option value="{{ $unit->id }}" data-business-area="{{ $unit->business_area }}" @selected((string) $selectedTrackingUnitId === (string) $unit->id)>
+                                    {{ $unit->name }} ({{ $unit->code }}){{ filled($unit->location) ? ' — '.$unit->location : '' }}{{ ! $unit->is_active ? ' — Inactive' : '' }}
                                 </option>
                             @endforeach
                         </select>
-                        @if($saleWarehouses->isEmpty())
-                            <small class="hg-field-help">Add a warehouse from Feed Setup before posting Fish, Cattle, or Vegetable sales.</small>
+                        @if($saleTrackingUnits->isEmpty())
+                            <small class="hg-field-error">Add a tracking unit from Business Tracking Setup before posting sales.</small>
                         @else
-                            <small class="hg-field-help">This list comes from Feed Setup → Warehouses.</small>
+                            <small class="hg-field-help">This list comes from Configuration → Business Tracking.</small>
                         @endif
-                        @error('warehouse_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                        @error('tracking_unit_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+
+                    <div class="hg-field full hg-transaction-sale-feed-section {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-transaction-sale-feed data-sale-feed-only>
+                        <label>Feed Items <span class="hg-required">*</span></label>
+                        <div class="hg-sale-feed-lines-wrap">
+                            <div class="hg-table-wrap hg-feed-lines-wrap">
+                                <table class="hg-table hg-feed-lines-table hg-sale-feed-lines-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Feed Item</th>
+                                            <th>Available</th>
+                                            <th>Unit</th>
+                                            <th>Quantity</th>
+                                            <th>Sale Rate</th>
+                                            <th>Discount</th>
+                                            <th>Line Total</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody data-transaction-sale-feed-lines></tbody>
+                                </table>
+                            </div>
+                            <div class="hg-feed-line-actions">
+                                <button class="hg-btn hg-btn-small" type="button" data-transaction-sale-feed-add>+ Add Another Item</button>
+                                <span class="hg-muted">Posting is blocked when requested quantity is higher than available stock.</span>
+                            </div>
+                        </div>
+                        @if($saleFeedItems->isEmpty())
+                            <small class="hg-field-error">Add active feed items from Feed Setup before using feed-item sales.</small>
+                        @endif
+                        @error('lines')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+
+                    <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-sale-feed-only>
+                        <label for="sale_items_total">Total Amount ({{ \App\Support\CompanyContext::currencyCode() }})</label>
+                        <input id="sale_items_total" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" value="0" readonly data-sale-items-total class="hg-readonly-input">
+                        <small class="hg-field-help">This is calculated from the Feed Items section only.</small>
+                    </div>
+
+                    <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-sale-feed-only>
+                        <label for="other_charges">Other Charges ({{ \App\Support\CompanyContext::currencyCode() }})</label>
+                        <input id="other_charges" name="other_charges" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedSaleOtherCharges }}" data-sale-other-charges>
+                    </div>
+
+                    <div class="hg-field">
+                        <label for="amount"><span data-sale-total-bill-label>{{ $saleFeedModeSelected ? 'Total Bill' : 'Amount' }}</span> ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
+                        <input id="amount" name="amount" type="number" min="{{ \App\Support\CompanyContext::amountStep() }}" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedAmount }}" required data-sale-total-bill @readonly($saleFeedModeSelected) class="{{ $saleFeedModeSelected ? 'hg-readonly-input' : '' }}">
+                        <small class="hg-field-help" data-sale-total-bill-help>{{ $saleFeedModeSelected ? 'Total Bill = Total Amount + Other Charges.' : 'Enter the total sale amount for all other sales.' }}</small>
+                        @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+                @else
+                    <div class="hg-field">
+                        <label for="amount">{{ $isDueSettlement ? (($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Received Amount' : 'Payment Amount') : 'Amount' }} ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
+                        <input id="amount" name="amount" type="number" min="{{ \App\Support\CompanyContext::amountStep() }}" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedAmount }}" @if($isDueSettlement && filled($dueSettlementContext['amount'] ?? null)) max="{{ $dueSettlementContext['amount'] }}" @endif required>
+                        @if($isDueSettlement)<small class="hg-field-help">Enter the amount being {{ ($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'received from the customer' : 'paid to the supplier' }}. It cannot be more than the outstanding due.</small>@endif
+                        @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
                 @endif
-
-                <div class="hg-field">
-                    <label for="amount">{{ $isDueSettlement ? (($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Received Amount' : 'Payment Amount') : 'Amount' }} ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
-                    <input id="amount" name="amount" type="number" min="{{ \App\Support\CompanyContext::amountStep() }}" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ $selectedAmount }}" @if($isDueSettlement && filled($dueSettlementContext['amount'] ?? null)) max="{{ $dueSettlementContext['amount'] }}" @endif required>
-                    @if($isDueSettlement)<small class="hg-field-help">Enter the amount being {{ ($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'received from the customer' : 'paid to the supplier' }}. It cannot be more than the outstanding due.</small>@endif
-                    @error('amount')<small class="hg-field-error">{{ $message }}</small>@enderror
-                </div>
 
                 <div class="hg-field {{ $isDueSettlement ? 'hidden' : '' }}" id="paid-amount-field">
                     <label for="paid_amount"><span id="paid-amount-label">Paid/Received Now</span> ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="hg-required">*</span></label>
@@ -258,6 +386,7 @@
                     <input id="due_amount_preview" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('due_amount', $isEditing ? $transaction->due_amount : '') }}" readonly>
                 </div>
 
+                @unless($isSalesTransaction && ! $isDueSettlement)
                 <div class="hg-field hidden" id="party-field">
                     <label for="party_id"><span id="party-label">{{ $partyLabel }}</span> <span class="hg-required">*</span></label>
                     <select
@@ -282,6 +411,8 @@
                     </select>
                     @error('party_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
+
+                @endunless
 
                 <div class="hg-field hidden" id="auto-party-notice" aria-live="polite">
                     <div class="hg-notice" style="margin:0">
@@ -399,5 +530,18 @@
     </div>
 
     <template id="journal-preview-empty-template">@include('transactions.partials.preview-empty')</template>
+    @if($isSalesTransaction && ! $isDueSettlement)
+        @push('scripts')
+            <script>
+                window.HISEBGHOR_TRANSACTION_SALE = {
+                    currencyCode: @json(\App\Support\CompanyContext::currencyCode()),
+                    decimalPlaces: {{ \App\Support\CompanyContext::decimalPlaces() }},
+                    items: @json($saleFeedItemsForJs),
+                    initialLines: @json(array_values($saleInitialLines)),
+                    stock: @json($saleStockBalances),
+                };
+            </script>
+        @endpush
+    @endif
     @endif
 </x-layouts::accounting>

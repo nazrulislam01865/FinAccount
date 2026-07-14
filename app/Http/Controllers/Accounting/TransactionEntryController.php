@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Accounting\StoreTransactionRequest;
 use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
+use App\Models\Feed\FeedBusinessArea;
+use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
-use App\Models\Feed\FeedWarehouse;
+use App\Models\Feed\FeedStockBalance;
+use App\Models\Feed\FeedBusinessTrackingUnit;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\Transaction;
@@ -70,9 +73,10 @@ class TransactionEntryController extends Controller
 
         $requestedCategoryOption = $transactionCategories
             ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $requestedCategory) === 0);
-        $showTransactionTypeSelection = $dueSettlementContext['active']
+        $hasExplicitTransactionFilter = $dueSettlementContext['active']
             || $requestedDirection !== null
             || $requestedCategoryOption !== null;
+        $showTransactionTypeSelection = $hasExplicitTransactionFilter;
 
         $activeDirection = $requestedDirection
             ?? ($requestedCategoryOption ? $this->transactionCategoryDirection($requestedCategoryOption) : null);
@@ -101,16 +105,72 @@ class TransactionEntryController extends Controller
 
         $category = $categoryOption?->value ?? '';
         $categoryMetadata = is_array($categoryOption?->metadata) ? $categoryOption->metadata : [];
-        $saleWarehouses = SaleSellingTypes::isSaleCategory($category)
-            ? FeedWarehouse::query()
+        $isSaleCategory = SaleSellingTypes::isSaleCategory($category);
+        $saleBusinessAreas = $isSaleCategory
+            ? FeedBusinessArea::query()
                 ->where('company_id', $companyId)
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get()
             : collect();
-        $defaultSaleWarehouseId = SaleSellingTypes::isSaleCategory($category)
-            ? FeedSetting::query()->where('company_id', $companyId)->value('default_warehouse_id')
+        $saleSellingTypeOptions = [SaleSellingTypes::OTHERS => 'Others'] + $saleBusinessAreas
+            ->mapWithKeys(fn (FeedBusinessArea $area): array => [$area->code => $area->name])
+            ->all();
+        $saleTrackingUnits = $isSaleCategory
+            ? FeedBusinessTrackingUnit::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('business_area')
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $defaultSaleWarehouseId = $isSaleCategory
+            ? FeedSetting::query()->where('company_id', $companyId)->value('default_tracking_unit_id')
             : null;
+        $saleCustomers = $isSaleCategory
+            ? Party::query()
+                ->where('company_id', $companyId)
+                ->where('type', 'Customer')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $saleFeedItems = $isSaleCategory
+            ? FeedItem::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $saleStockBalances = $isSaleCategory
+            ? FeedStockBalance::query()
+                ->where('company_id', $companyId)
+                ->get()
+                ->groupBy('tracking_unit_id')
+                ->map(fn ($rows) => $rows->mapWithKeys(fn (FeedStockBalance $row): array => [(string) $row->feed_item_id => [
+                    'quantity' => (float) $row->quantity,
+                    'average_cost' => (float) $row->average_cost,
+                ]]))
+            : collect();
+
+        $transactionHeadsAreUnfiltered = ! $hasExplicitTransactionFilter;
+        $transactionHeadsAreDirectionFiltered = false;
+        if ($transactionHeadsAreUnfiltered) {
+            $transactionHeadsForEntry = $this->entryOptionService->allTransactionHeads($companyId);
+        } elseif ($requestedDirection !== null && $requestedCategoryOption === null) {
+            $directionCategories = $filteredTransactionCategories
+                ->pluck('value')
+                ->map(fn ($value): string => (string) $value)
+                ->all();
+            $transactionHeadsForEntry = $this->entryOptionService->allTransactionHeads($companyId)
+                ->filter(fn (TransactionHead $head): bool => in_array((string) $head->category, $directionCategories, true))
+                ->values();
+            $transactionHeadsAreDirectionFiltered = true;
+        } else {
+            $transactionHeadsForEntry = $category !== ''
+                ? $this->entryOptionService->transactionHeads($companyId, $category)
+                : collect();
+        }
 
         return view('transactions.create', [
             'category' => $category,
@@ -123,7 +183,9 @@ class TransactionEntryController extends Controller
             'transactionCategoryDirections' => $transactionCategories
                 ->mapWithKeys(fn (AccountingOption $option): array => [$option->value => $this->transactionCategoryDirection($option)])
                 ->all(),
-            'transactionHeads' => $category !== '' ? $this->entryOptionService->transactionHeads($companyId, $category) : collect(),
+            'transactionHeads' => $transactionHeadsForEntry,
+            'transactionHeadsAreUnfiltered' => $transactionHeadsAreUnfiltered,
+            'transactionHeadsAreDirectionFiltered' => $transactionHeadsAreDirectionFiltered,
             'moneyAccounts' => $this->entryOptionService->moneyAccounts($companyId),
             'moneyKindLabels' => $this->optionService->labels(AccountingOption::GROUP_MONEY_ACCOUNT_KIND),
             'parties' => $this->entryOptionService->parties($companyId),
@@ -136,9 +198,13 @@ class TransactionEntryController extends Controller
                 $categoryOption?->label,
             ),
             'dueSettlementContext' => $dueSettlementContext,
-            'saleSellingTypeOptions' => SaleSellingTypes::labels(),
-            'saleWarehouses' => $saleWarehouses,
-            'defaultSaleWarehouseId' => $defaultSaleWarehouseId,
+            'saleSellingTypeOptions' => $saleSellingTypeOptions,
+            'saleBusinessAreas' => $saleBusinessAreas,
+            'saleTrackingUnits' => $saleTrackingUnits,
+            'defaultSaleTrackingUnitId' => $defaultSaleWarehouseId,
+            'saleCustomers' => $saleCustomers,
+            'saleFeedItems' => $saleFeedItems,
+            'saleStockBalances' => $saleStockBalances,
         ]);
     }
 

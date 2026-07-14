@@ -16,13 +16,13 @@ class FeedInventoryController extends Controller
     {
         $companyId = (int) $request->user()->company_id;
         $search = trim($request->string('search')->toString());
-        $warehouseId = (int) $request->query('warehouse_id', 0);
+        $warehouseId = (int) $request->query('tracking_unit_id', 0);
         $status = $request->string('status')->toString();
 
         $balances = FeedStockBalance::query()
             ->with(['item', 'warehouse'])
             ->where('company_id', $companyId)
-            ->when($warehouseId > 0, fn (Builder $query) => $query->where('warehouse_id', $warehouseId))
+            ->when($warehouseId > 0, fn (Builder $query) => $query->where('tracking_unit_id', $warehouseId))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->whereHas('item', fn (Builder $itemQuery) => $itemQuery
                     ->where(fn (Builder $searchQuery) => $searchQuery
@@ -31,19 +31,19 @@ class FeedInventoryController extends Controller
                         ->orWhere('category', 'like', "%{$search}%")
                         ->orWhere('brand', 'like', "%{$search}%")));
             })
-            ->orderBy('warehouse_id')
+            ->orderBy('tracking_unit_id')
             ->orderBy('feed_item_id')
             ->get();
 
         $movementTotals = FeedStockMovement::query()
-            ->selectRaw('feed_item_id, warehouse_id, SUM(quantity_in) as purchased, SUM(quantity_out) as sold')
+            ->selectRaw('feed_item_id, tracking_unit_id, SUM(quantity_in) as purchased, SUM(quantity_out) as sold')
             ->where('company_id', $companyId)
-            ->groupBy('feed_item_id', 'warehouse_id')
+            ->groupBy('feed_item_id', 'tracking_unit_id')
             ->get()
-            ->keyBy(fn ($row): string => $row->feed_item_id.':'.$row->warehouse_id);
+            ->keyBy(fn ($row): string => $row->feed_item_id.':'.$row->tracking_unit_id);
 
         $rows = $balances->map(function (FeedStockBalance $balance) use ($movementTotals): array {
-            $totals = $movementTotals->get($balance->feed_item_id.':'.$balance->warehouse_id);
+            $totals = $movementTotals->get($balance->feed_item_id.':'.$balance->tracking_unit_id);
             $quantity = (float) $balance->quantity;
             $reorder = (float) $balance->item->reorder_level * (float) $balance->item->pack_size;
             $stockStatus = $quantity <= 0 ? 'out' : ($reorder > 0 && $quantity <= $reorder ? 'low' : 'in');
@@ -60,7 +60,7 @@ class FeedInventoryController extends Controller
         $recentMovements = FeedStockMovement::query()
             ->with(['item', 'warehouse', 'transaction.party'])
             ->where('company_id', $companyId)
-            ->when($warehouseId > 0, fn (Builder $query) => $query->where('warehouse_id', $warehouseId))
+            ->when($warehouseId > 0, fn (Builder $query) => $query->where('tracking_unit_id', $warehouseId))
             ->latest('id')
             ->limit(100)
             ->get();

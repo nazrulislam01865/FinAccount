@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Feed;
 
 use App\Http\Controllers\Controller;
+use App\Models\Feed\FeedBusinessArea;
 use App\Models\Feed\FeedBusinessTrackingDefaultAssignment;
 use App\Models\Feed\FeedBusinessTrackingSetting;
 use App\Models\Feed\FeedBusinessTrackingUnit;
@@ -14,9 +15,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Services\Accounting\SafeDelete\SafeDeleteService;
+use Illuminate\Http\JsonResponse;
 
 class FeedBusinessTrackingController extends Controller
 {
+    use PerformsSafeDelete;
+
+    public function __construct(
+        private readonly SafeDeleteService $safeDeleteService,
+    ) {}
     public function index(Request $request): View
     {
         $companyId = (int) $request->user()->company_id;
@@ -32,10 +41,17 @@ class FeedBusinessTrackingController extends Controller
             ]
         );
 
+        $businessAreaRecords = $this->businessAreaRecords($companyId, false);
+        $activeBusinessAreas = $businessAreaRecords->where('is_active', true)->values();
+        $businessAreas = $this->businessAreaMap($activeBusinessAreas);
+
+        $areaOrder = $businessAreaRecords->pluck('code')->values()->all();
+        $orderSql = $this->orderSqlForBusinessAreas($areaOrder);
+
         $units = FeedBusinessTrackingUnit::query()
             ->where('company_id', $companyId)
             ->with(['children' => fn ($query) => $query->orderByDesc('is_active')->orderBy('name')])
-            ->orderByRaw("CASE business_area WHEN 'cattle' THEN 1 WHEN 'fish' THEN 2 WHEN 'vegetables' THEN 3 ELSE 99 END")
+            ->when($orderSql !== '', fn ($query) => $query->orderByRaw($orderSql))
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
@@ -66,7 +82,8 @@ class FeedBusinessTrackingController extends Controller
         $assignmentSourceLabels = $this->assignmentSourceLabels($assignments, $items, $warehouses);
 
         return view('feed.business-tracking.index', [
-            'businessAreas' => FeedBusinessTrackingUnit::BUSINESS_AREAS,
+            'businessAreaRecords' => $businessAreaRecords,
+            'businessAreas' => $businessAreas,
             'settings' => $settings,
             'units' => $units,
             'businessGroups' => $businessGroups,
@@ -76,9 +93,11 @@ class FeedBusinessTrackingController extends Controller
             'warehouses' => $warehouses,
             'assignments' => $assignments,
             'assignmentSourceLabels' => $assignmentSourceLabels,
-            'businessConfigJson' => $this->businessConfigJson($parentOptions),
+            'businessConfigJson' => $this->businessConfigJson($activeBusinessAreas, $parentOptions),
         ]);
     }
+
+
 
     public function storeUnit(Request $request): RedirectResponse
     {
@@ -106,6 +125,19 @@ class FeedBusinessTrackingController extends Controller
         return redirect()->route('feed.business-tracking.index')->with('success', 'Tracking unit updated successfully.');
     }
 
+    public function destroyUnit(Request $request, FeedBusinessTrackingUnit $trackingUnit): JsonResponse|RedirectResponse
+    {
+        abort_unless((int) $trackingUnit->company_id === (int) $request->user()->company_id, 404);
+
+        return $this->performSafeDelete(
+            $request,
+            $this->safeDeleteService->inspectFeedBusinessTrackingUnit($trackingUnit),
+            fn () => $this->safeDeleteService->deleteFeedBusinessTrackingUnit($trackingUnit),
+            'feed.business-tracking.index',
+            'Business tracking unit deleted permanently.',
+        );
+    }
+
     public function saveRules(Request $request): RedirectResponse
     {
         $companyId = (int) $request->user()->company_id;
@@ -126,6 +158,7 @@ class FeedBusinessTrackingController extends Controller
     public function storeDefaultAssignment(Request $request): RedirectResponse
     {
         $companyId = (int) $request->user()->company_id;
+        $businessAreaKeys = $this->activeBusinessAreaKeys($companyId);
         $request->merge([
             'source_label' => trim((string) $request->input('source_label')),
         ]);
@@ -134,7 +167,7 @@ class FeedBusinessTrackingController extends Controller
             'source_type' => ['required', Rule::in(array_keys(FeedBusinessTrackingDefaultAssignment::SOURCE_TYPES))],
             'source_id' => ['nullable', 'integer'],
             'source_label' => ['nullable', 'string', 'max:255'],
-            'business_area' => ['required', Rule::in(FeedBusinessTrackingUnit::businessAreaKeys())],
+            'business_area' => ['required', Rule::in($businessAreaKeys)],
             'business_tracking_unit_id' => [
                 'nullable',
                 Rule::exists('feed_business_tracking_units', 'id')->where('company_id', $companyId),
@@ -170,24 +203,18 @@ class FeedBusinessTrackingController extends Controller
 
     private function validateUnit(Request $request, int $companyId, ?FeedBusinessTrackingUnit $trackingUnit = null): array
     {
+        $businessAreaKeys = $this->activeBusinessAreaKeys($companyId);
         $request->merge([
-            'code' => strtoupper(trim((string) $request->input('code'))),
             'name' => trim((string) $request->input('name')),
+            'location' => trim((string) $request->input('location')),
             'responsible_person' => trim((string) $request->input('responsible_person')),
         ]);
 
         $validated = $request->validate([
-            'business_area' => ['required', Rule::in(FeedBusinessTrackingUnit::businessAreaKeys())],
+            'business_area' => ['required', Rule::in($businessAreaKeys)],
             'unit_type' => ['required', 'string', 'max:80'],
-            'code' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('feed_business_tracking_units', 'code')
-                    ->where('company_id', $companyId)
-                    ->ignore($trackingUnit?->id),
-            ],
             'name' => ['required', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
             'parent_id' => [
                 'nullable',
                 Rule::exists('feed_business_tracking_units', 'id')->where('company_id', $companyId),
@@ -198,7 +225,7 @@ class FeedBusinessTrackingController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        if (! in_array($validated['unit_type'], FeedBusinessTrackingUnit::unitTypesFor($validated['business_area']), true)) {
+        if (! in_array($validated['unit_type'], $this->unitTypesForArea($companyId, $validated['business_area']), true)) {
             throw ValidationException::withMessages(['unit_type' => 'The selected unit type is not valid for this business area.']);
         }
 
@@ -213,8 +240,15 @@ class FeedBusinessTrackingController extends Controller
             }
         }
 
-        $validated['code'] = strtoupper(trim($validated['code']));
         $validated['name'] = trim($validated['name']);
+        $validated['location'] = filled($validated['location'] ?? null) ? trim($validated['location']) : null;
+        
+        if (!$trackingUnit) {
+            $prefix = strtoupper($validated['business_area']) . '-';
+            $validated['code'] = strtoupper(uniqid($prefix));
+        } else {
+            $validated['code'] = $trackingUnit->code;
+        }
         $validated['responsible_person'] = filled($validated['responsible_person'] ?? null) ? trim($validated['responsible_person']) : null;
         $validated['description'] = filled($validated['description'] ?? null) ? trim($validated['description']) : null;
         $validated['is_active'] = (bool) $validated['is_active'];
@@ -276,6 +310,19 @@ class FeedBusinessTrackingController extends Controller
             ]
         );
 
+        foreach (FeedBusinessArea::DEFAULT_AREAS as $code => $area) {
+            FeedBusinessArea::query()->firstOrCreate(
+                ['company_id' => $companyId, 'code' => $code],
+                [
+                    'company_id' => $companyId,
+                    'code' => $code,
+                    'name' => $area['name'],
+                    'unit_label' => $area['unit_label'],
+                    'is_active' => true,
+                ]
+            );
+        }
+
         $defaults = [
             ['business_area' => 'cattle', 'unit_type' => 'Shed', 'code' => 'CAT-S01', 'name' => 'Shed 01'],
             ['business_area' => 'cattle', 'unit_type' => 'Shed', 'code' => 'CAT-S02', 'name' => 'Shed 02'],
@@ -294,17 +341,50 @@ class FeedBusinessTrackingController extends Controller
         }
     }
 
-    private function businessConfigJson(Collection $parentOptions): array
+    private function businessAreaRecords(int $companyId, bool $activeOnly = true): Collection
+    {
+        return FeedBusinessArea::query()
+            ->where('company_id', $companyId)
+            ->when($activeOnly, fn ($query) => $query->where('is_active', true))
+            ->orderByRaw("CASE code WHEN 'cattle' THEN 1 WHEN 'fish' THEN 2 WHEN 'vegetables' THEN 3 ELSE 99 END")
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function businessAreaMap(Collection $businessAreaRecords): array
+    {
+        return $businessAreaRecords
+            ->mapWithKeys(fn (FeedBusinessArea $area): array => [$area->code => $area->toTrackingOption()])
+            ->all();
+    }
+
+    private function activeBusinessAreaKeys(int $companyId): array
+    {
+        return $this->businessAreaRecords($companyId)->pluck('code')->values()->all();
+    }
+
+    private function unitTypesForArea(int $companyId, string $businessArea): array
+    {
+        $area = FeedBusinessArea::query()
+            ->where('company_id', $companyId)
+            ->where('code', $businessArea)
+            ->first();
+
+        return $area?->unitTypes() ?? FeedBusinessTrackingUnit::unitTypesFor($businessArea);
+    }
+
+    private function businessConfigJson(Collection $businessAreaRecords, Collection $parentOptions): array
     {
         $config = [];
 
-        foreach (FeedBusinessTrackingUnit::BUSINESS_AREAS as $key => $meta) {
-            $config[$key] = [
-                'name' => $meta['name'],
-                'icon' => $meta['icon'],
-                'unitLabel' => $meta['unit_label'],
-                'unitTypes' => $meta['unit_types'],
-                'parents' => ($parentOptions->get($key) ?? collect())->map(fn (FeedBusinessTrackingUnit $unit): array => [
+        foreach ($businessAreaRecords as $area) {
+            $option = $area->toTrackingOption();
+            $config[$area->code] = [
+                'name' => $option['name'],
+                'icon' => $option['icon'],
+                'unitLabel' => $option['unit_label'],
+                'unitTypes' => $option['unit_types'],
+                'parents' => ($parentOptions->get($area->code) ?? collect())->map(fn (FeedBusinessTrackingUnit $unit): array => [
                     'id' => $unit->id,
                     'name' => $unit->name,
                 ])->values()->all(),
@@ -337,5 +417,19 @@ class FeedBusinessTrackingController extends Controller
         }
 
         return $labels;
+    }
+
+    private function orderSqlForBusinessAreas(array $codes): string
+    {
+        if ($codes === []) {
+            return '';
+        }
+
+        $cases = collect($codes)
+            ->values()
+            ->map(fn (string $code, int $index): string => "WHEN '".str_replace("'", "''", $code)."' THEN ".($index + 1))
+            ->implode(' ');
+
+        return "CASE business_area {$cases} ELSE 999 END";
     }
 }

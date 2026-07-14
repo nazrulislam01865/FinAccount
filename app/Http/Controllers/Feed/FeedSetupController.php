@@ -10,14 +10,20 @@ use App\Models\Feed\FeedWarehouse;
 use App\Services\Feed\FeedAccountingSetupService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Http\Controllers\Concerns\PerformsSafeDelete;
+use App\Services\Accounting\SafeDelete\SafeDeleteService;
 
 class FeedSetupController extends Controller
 {
+    use PerformsSafeDelete;
+
     public function __construct(
         private readonly FeedAccountingSetupService $accountingSetupService,
+        private readonly SafeDeleteService $safeDeleteService,
     ) {}
 
     public function index(Request $request): View
@@ -45,12 +51,10 @@ class FeedSetupController extends Controller
     {
         $companyId = (int) $request->user()->company_id;
         $request->merge([
-            'code' => strtoupper(trim((string) $request->input('code'))),
             'name' => trim((string) $request->input('name')),
         ]);
 
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('feed_items', 'code')->where('company_id', $companyId)],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:100'],
             'brand' => ['nullable', 'string', 'max:100'],
@@ -64,7 +68,7 @@ class FeedSetupController extends Controller
 
         FeedItem::query()->create([
             'company_id' => $companyId,
-            'code' => strtoupper(trim($validated['code'])),
+            'code' => strtoupper(uniqid('FI-')),
             'name' => trim($validated['name']),
             'category' => filled($validated['category'] ?? null) ? trim($validated['category']) : null,
             'brand' => filled($validated['brand'] ?? null) ? trim($validated['brand']) : null,
@@ -96,23 +100,34 @@ class FeedSetupController extends Controller
         return back()->with('success', 'Feed item status updated.');
     }
 
+    public function destroyItem(Request $request, FeedItem $feedItem): JsonResponse|RedirectResponse
+    {
+        abort_unless((int) $feedItem->company_id === (int) $request->user()->company_id, 404);
+
+        return $this->performSafeDelete(
+            $request,
+            $this->safeDeleteService->inspectFeedItem($feedItem),
+            fn () => $this->safeDeleteService->deleteFeedItem($feedItem),
+            'feed.setup',
+            'Feed item deleted permanently.',
+        );
+    }
+
     public function storeWarehouse(Request $request): RedirectResponse
     {
         $companyId = (int) $request->user()->company_id;
         $request->merge([
-            'code' => strtoupper(trim((string) $request->input('code'))),
             'name' => trim((string) $request->input('name')),
         ]);
 
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('feed_warehouses', 'code')->where('company_id', $companyId)],
             'name' => ['required', 'string', 'max:255', Rule::unique('feed_warehouses', 'name')->where('company_id', $companyId)],
             'location' => ['nullable', 'string', 'max:255'],
         ]);
 
         FeedWarehouse::query()->create([
             'company_id' => $companyId,
-            'code' => strtoupper(trim($validated['code'])),
+            'code' => strtoupper(uniqid('WH-')),
             'name' => trim($validated['name']),
             'location' => filled($validated['location'] ?? null) ? trim($validated['location']) : null,
             'is_active' => true,
@@ -135,7 +150,7 @@ class FeedSetupController extends Controller
         }
 
         $settings = $this->accountingSetupService->ensure($companyId);
-        $settings->update(['default_warehouse_id' => $feedWarehouse->id]);
+        $settings->update(['default_tracking_unit_id' => $feedWarehouse->id]);
 
         return back()->with('success', $feedWarehouse->name.' is now the default feed warehouse.');
     }
@@ -146,10 +161,10 @@ class FeedSetupController extends Controller
 
         $isDefault = FeedSetting::query()
             ->where('company_id', $request->user()->company_id)
-            ->where('default_warehouse_id', $feedWarehouse->id)
+            ->where('default_tracking_unit_id', $feedWarehouse->id)
             ->exists();
 
-        if ($feedWarehouse->is_active && FeedStockBalance::query()->where('warehouse_id', $feedWarehouse->id)->where('quantity', '>', 0)->exists()) {
+        if ($feedWarehouse->is_active && FeedStockBalance::query()->where('tracking_unit_id', $feedWarehouse->id)->where('quantity', '>', 0)->exists()) {
             throw ValidationException::withMessages([
                 'warehouse' => 'This warehouse still has stock. Move or sell the stock before making it inactive.',
             ]);
@@ -161,12 +176,25 @@ class FeedSetupController extends Controller
         if ($becomingInactive && $isDefault) {
             FeedSetting::query()
                 ->where('company_id', $request->user()->company_id)
-                ->where('default_warehouse_id', $feedWarehouse->id)
-                ->update(['default_warehouse_id' => null]);
+                ->where('default_tracking_unit_id', $feedWarehouse->id)
+                ->update(['default_tracking_unit_id' => null]);
         }
 
         $this->accountingSetupService->ensure((int) $request->user()->company_id);
 
         return back()->with('success', 'Feed warehouse status updated.');
+    }
+
+    public function destroyWarehouse(Request $request, FeedWarehouse $feedWarehouse): JsonResponse|RedirectResponse
+    {
+        abort_unless((int) $feedWarehouse->company_id === (int) $request->user()->company_id, 404);
+
+        return $this->performSafeDelete(
+            $request,
+            $this->safeDeleteService->inspectFeedWarehouse($feedWarehouse),
+            fn () => $this->safeDeleteService->deleteFeedWarehouse($feedWarehouse),
+            'feed.setup',
+            'Feed warehouse deleted permanently.',
+        );
     }
 }

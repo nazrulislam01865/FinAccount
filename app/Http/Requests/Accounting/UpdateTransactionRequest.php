@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Models\Feed\FeedBusinessArea;
 use App\Models\Transaction;
 use App\Support\CompanyContext;
 use App\Support\SaleSellingTypes;
@@ -29,9 +30,29 @@ class UpdateTransactionRequest extends FormRequest
             'selling_type' => [
                 Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
                 'nullable',
-                Rule::in(array_keys(SaleSellingTypes::labels())),
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                    if (! SaleSellingTypes::isSaleCategory($this->input('category'))) {
+                        return;
+                    }
+
+                    $sellingType = SaleSellingTypes::normalize($value);
+                    if ($sellingType === null || SaleSellingTypes::isOthers($sellingType)) {
+                        return;
+                    }
+
+                    $exists = FeedBusinessArea::query()
+                        ->where('company_id', $companyId)
+                        ->where('code', $sellingType)
+                        ->where('is_active', true)
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('The selected what are you selling is not an active business area.');
+                    }
+                },
             ],
-            'warehouse_id' => [
+            'tracking_unit_id' => [
                 Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))
                     && SaleSellingTypes::requiresWarehouse($this->input('selling_type'))),
                 'nullable',
@@ -42,8 +63,8 @@ class UpdateTransactionRequest extends FormRequest
                             $warehouseQuery->where('is_active', true);
 
                             $transaction = $this->route('transaction');
-                            if ($transaction instanceof Transaction && $transaction->warehouse_id) {
-                                $warehouseQuery->orWhere('id', $transaction->warehouse_id);
+                            if ($transaction instanceof Transaction && $transaction->tracking_unit_id) {
+                                $warehouseQuery->orWhere('id', $transaction->tracking_unit_id);
                             }
                         });
                 }),
@@ -67,10 +88,16 @@ class UpdateTransactionRequest extends FormRequest
                     ->whereNotNull('chart_of_account_id')),
             ],
             'party_id' => [
+                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
                 'nullable', 'integer',
-                Rule::exists('parties', 'id')->where(fn ($query) => $query
-                    ->where('company_id', $companyId)
-                    ->where('is_active', true)),
+                Rule::exists('parties', 'id')->where(function ($query) use ($companyId, $category): void {
+                    $query->where('company_id', $companyId)
+                        ->where('is_active', true);
+
+                    if (SaleSellingTypes::isSaleCategory($category)) {
+                        $query->where('type', 'Customer');
+                    }
+                }),
             ],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'lte:amount', 'decimal:0,'.CompanyContext::decimalPlaces()],
@@ -85,7 +112,7 @@ class UpdateTransactionRequest extends FormRequest
     {
         return [
             'selling_type' => 'what are you selling',
-            'warehouse_id' => 'location / godown',
+            'tracking_unit_id' => 'location / godown',
         ];
     }
 
@@ -102,8 +129,8 @@ class UpdateTransactionRequest extends FormRequest
         $this->merge([
             'category' => $category,
             'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
-            'warehouse_id' => $warehouseRequired && filled($this->input('warehouse_id'))
-                ? $this->input('warehouse_id')
+            'tracking_unit_id' => $warehouseRequired && filled($this->input('tracking_unit_id'))
+                ? $this->input('tracking_unit_id')
                 : null,
             'settlement_type' => filled($this->input('settlement_type'))
                 ? strtoupper(trim((string) $this->input('settlement_type')))

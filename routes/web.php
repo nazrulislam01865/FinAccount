@@ -142,12 +142,15 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
     Route::prefix('feed')->name('feed.')->group(function (): void {
         Route::get('/business-tracking', [FeedBusinessTrackingController::class, 'index'])
             ->middleware('accounting.permission:transactions.manage')->name('business-tracking.index');
+
         Route::post('/business-tracking/units', [FeedBusinessTrackingController::class, 'storeUnit'])
             ->middleware('accounting.permission:transactions.manage')->name('business-tracking.units.store');
         Route::put('/business-tracking/units/{trackingUnit}', [FeedBusinessTrackingController::class, 'updateUnit'])
             ->middleware('accounting.permission:transactions.manage')->name('business-tracking.units.update');
         Route::post('/business-tracking/rules', [FeedBusinessTrackingController::class, 'saveRules'])
             ->middleware('accounting.permission:transactions.manage')->name('business-tracking.rules.save');
+        Route::delete('/business-tracking/units/{trackingUnit}', [FeedBusinessTrackingController::class, 'destroyUnit'])
+            ->middleware(['accounting.permission:transactions.manage', 'accounting.permission:records.delete'])->name('business-tracking.units.destroy');
         Route::post('/business-tracking/default-assignments', [FeedBusinessTrackingController::class, 'storeDefaultAssignment'])
             ->middleware('accounting.permission:transactions.manage')->name('business-tracking.default-assignments.store');
         Route::delete('/business-tracking/default-assignments/{assignment}', [FeedBusinessTrackingController::class, 'deleteDefaultAssignment'])
@@ -174,6 +177,10 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
             ->middleware('accounting.permission:transactions.manage')->name('setup.warehouses.toggle');
         Route::patch('/setup/warehouses/{feedWarehouse}/default', [FeedSetupController::class, 'setDefaultWarehouse'])
             ->middleware('accounting.permission:transactions.manage')->name('setup.warehouses.default');
+        Route::delete('/setup/items/{feedItem}', [FeedSetupController::class, 'destroyItem'])
+            ->middleware(['accounting.permission:transactions.manage', 'accounting.permission:records.delete'])->name('setup.items.destroy');
+        Route::delete('/setup/warehouses/{feedWarehouse}', [FeedSetupController::class, 'destroyWarehouse'])
+            ->middleware(['accounting.permission:transactions.manage', 'accounting.permission:records.delete'])->name('setup.warehouses.destroy');
     });
 
     Route::get('/journal-entries', [JournalEntryController::class, 'index'])
@@ -273,6 +280,12 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
 
     Route::prefix('master')->name('master.')->group(function (): void {
         Route::get('/other-master-data', [MasterDataController::class, 'overview'])->name('overview');
+
+        Route::get('/business-areas', [\App\Http\Controllers\Feed\FeedBusinessAreaController::class, 'index'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-areas.index');
+        Route::post('/business-areas', [\App\Http\Controllers\Feed\FeedBusinessAreaController::class, 'store'])
+            ->middleware('accounting.permission:transactions.manage')->name('business-areas.store');
+
 
         Route::get('/business-types', [BusinessTypeController::class, 'index'])
             ->middleware('accounting.permission:business_types.view')->name('business-types.index');

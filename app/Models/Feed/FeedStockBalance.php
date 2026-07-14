@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FeedStockBalance extends Model
 {
-    protected $fillable = ['company_id', 'feed_item_id', 'warehouse_id', 'quantity', 'average_cost'];
+    protected $fillable = ['company_id', 'feed_item_id', 'tracking_unit_id', 'quantity', 'average_cost'];
 
     protected function casts(): array
     {
@@ -24,6 +24,6 @@ class FeedStockBalance extends Model
 
     public function warehouse(): BelongsTo
     {
-        return $this->belongsTo(FeedWarehouse::class, 'warehouse_id');
+        return $this->belongsTo(FeedWarehouse::class, 'tracking_unit_id');
     }
 }

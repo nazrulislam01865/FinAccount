@@ -4,6 +4,7 @@ namespace App\Http\Requests\Accounting;
 
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
+use App\Models\Feed\FeedBusinessArea;
 use App\Support\CompanyContext;
 use App\Support\SaleSellingTypes;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,9 +29,29 @@ class StoreTransactionRequest extends FormRequest
             'selling_type' => [
                 Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
                 'nullable',
-                Rule::in(array_keys(SaleSellingTypes::labels())),
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                    if (! SaleSellingTypes::isSaleCategory($this->input('category'))) {
+                        return;
+                    }
+
+                    $sellingType = SaleSellingTypes::normalize($value);
+                    if ($sellingType === null || SaleSellingTypes::isOthers($sellingType)) {
+                        return;
+                    }
+
+                    $exists = FeedBusinessArea::query()
+                        ->where('company_id', $companyId)
+                        ->where('code', $sellingType)
+                        ->where('is_active', true)
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('The selected what are you selling is not an active business area.');
+                    }
+                },
             ],
-            'warehouse_id' => [
+            'tracking_unit_id' => [
                 Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))
                     && SaleSellingTypes::requiresWarehouse($this->input('selling_type'))),
                 'nullable',
@@ -58,10 +79,16 @@ class StoreTransactionRequest extends FormRequest
                     ->whereNotNull('chart_of_account_id')),
             ],
             'party_id' => [
+                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
                 'nullable', 'integer',
-                Rule::exists('parties', 'id')->where(fn ($query) => $query
-                    ->where('company_id', $companyId)
-                    ->where('is_active', true)),
+                Rule::exists('parties', 'id')->where(function ($query) use ($companyId, $category): void {
+                    $query->where('company_id', $companyId)
+                        ->where('is_active', true);
+
+                    if (SaleSellingTypes::isSaleCategory($category)) {
+                        $query->where('type', 'Customer');
+                    }
+                }),
             ],
             'due_settlement' => ['nullable', 'boolean'],
             'due_type' => ['nullable', 'required_if:due_settlement,1', Rule::in(['Receivable', 'Payable'])],
@@ -93,7 +120,7 @@ class StoreTransactionRequest extends FormRequest
     {
         return [
             'selling_type' => 'what are you selling',
-            'warehouse_id' => 'location / godown',
+            'tracking_unit_id' => 'location / godown',
         ];
     }
 
@@ -111,8 +138,8 @@ class StoreTransactionRequest extends FormRequest
         $this->merge([
             'category' => $category,
             'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
-            'warehouse_id' => $warehouseRequired && filled($this->input('warehouse_id'))
-                ? $this->input('warehouse_id')
+            'tracking_unit_id' => $warehouseRequired && filled($this->input('tracking_unit_id'))
+                ? $this->input('tracking_unit_id')
                 : null,
             'settlement_type' => filled($this->input('settlement_type'))
                 ? strtoupper(trim((string) $this->input('settlement_type')))
