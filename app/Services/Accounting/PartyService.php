@@ -23,6 +23,7 @@ class PartyService
     public function pageData(int $companyId): array
     {
         $parties = Party::query()
+            ->with('creator:id,name')
             ->where('company_id', $companyId)
             ->orderBy('code')
             ->get();
@@ -284,6 +285,10 @@ class PartyService
 
         if (array_key_exists('profile_pic', $data)) {
             $normalized['profile_pic'] = $data['profile_pic'];
+        }
+
+        if (array_key_exists('created_by', $data)) {
+            $normalized['created_by'] = $data['created_by'] ?: null;
         }
 
         return $normalized;

@@ -19,6 +19,8 @@ use App\Models\Feed\FeedStockBalance;
 use App\Models\Feed\FeedStockMovement;
 use App\Models\Feed\FeedBusinessTrackingDefaultAssignment;
 use App\Models\Feed\FeedSetting;
+use App\Models\Feed\FeedDocument;
+use Illuminate\Support\Collection;
 
 class DependencyInspector
 {
@@ -129,11 +131,17 @@ class DependencyInspector
 
     public function feedBusinessTrackingUnit(FeedBusinessTrackingUnit $unit): DeletionPlan
     {
+        $unitIds = $this->feedBusinessTrackingUnitTreeIds($unit);
+        $childCount = max($unitIds->count() - 1, 0);
+
         return new DeletionPlan('Business Tracking Unit', $unit->code.' — '.$unit->name, $this->nonZero([
-            ['Transactions', Transaction::query()->where('tracking_unit_id', $unit->id)->count(), 'Tracking unit links will be cleared and transactions will become incomplete.'],
-            ['Stock Balances', FeedStockBalance::query()->where('tracking_unit_id', $unit->id)->count(), 'Stock balances will be permanently deleted.'],
-            ['Stock Movements', FeedStockMovement::query()->where('tracking_unit_id', $unit->id)->count(), 'Stock movements will be permanently deleted and related transactions marked incomplete.'],
-            ['Default Assignments', FeedBusinessTrackingDefaultAssignment::query()->where('tracking_unit_id', $unit->id)->count(), 'Default assignments will be permanently deleted.'],
+            ['Child Units', $childCount, 'Child tracking units under this record will also be permanently deleted.'],
+            ['Transactions', Transaction::query()->whereIn('tracking_unit_id', $unitIds)->count(), 'Tracking unit links will be cleared and transactions will become incomplete.'],
+            ['Feed Documents', FeedDocument::query()->whereIn('tracking_unit_id', $unitIds)->count(), 'Feed purchase/sale documents linked to this tracking unit will be permanently deleted.'],
+            ['Stock Balances', FeedStockBalance::query()->whereIn('tracking_unit_id', $unitIds)->count(), 'Stock balances will be permanently deleted.'],
+            ['Stock Movements', FeedStockMovement::query()->whereIn('tracking_unit_id', $unitIds)->count(), 'Stock movements will be permanently deleted and related transactions marked incomplete.'],
+            ['Default Assignments', FeedBusinessTrackingDefaultAssignment::query()->whereIn('business_tracking_unit_id', $unitIds)->count(), 'Default assignments will be permanently deleted.'],
+            ['Feed Settings', FeedSetting::query()->whereIn('default_tracking_unit_id', $unitIds)->count(), 'Default tracking unit setting will be cleared.'],
         ]));
     }
 
@@ -142,6 +150,31 @@ class DependencyInspector
         return new DeletionPlan('Warehouse', $warehouse->code.' — '.$warehouse->name, $this->nonZero([
             ['Default Assignments', FeedSetting::query()->where('default_tracking_unit_id', $warehouse->id)->count(), 'Default warehouse setting will be cleared.'],
         ]));
+    }
+
+    private function feedBusinessTrackingUnitTreeIds(FeedBusinessTrackingUnit $unit): Collection
+    {
+        $ids = collect([(int) $unit->id]);
+        $frontier = collect([(int) $unit->id]);
+
+        while ($frontier->isNotEmpty()) {
+            $children = FeedBusinessTrackingUnit::query()
+                ->where('company_id', $unit->company_id)
+                ->whereIn('parent_id', $frontier->all())
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->reject(fn (int $id): bool => $ids->contains($id))
+                ->values();
+
+            if ($children->isEmpty()) {
+                break;
+            }
+
+            $ids = $ids->merge($children)->unique()->values();
+            $frontier = $children;
+        }
+
+        return $ids;
     }
 
     /**

@@ -3,10 +3,9 @@ const config = window.HISEBGHOR_BUSINESS_TRACKING;
 if (config) {
     const unitForm = document.getElementById('businessTrackingUnitForm');
     const businessSelect = document.getElementById('trackingBusiness');
-    const unitTypeSelect = document.getElementById('trackingUnitType');
+    const unitTypeField = document.getElementById('trackingUnitType');
     const unitLocation = document.getElementById('trackingUnitLocation');
-    const unitName = document.getElementById('trackingUnitName');
-    const unitNameLabel = document.getElementById('trackingUnitNameLabel');
+    const unitNameField = document.getElementById('trackingUnitName');
 
     const responsiblePerson = document.getElementById('trackingResponsiblePerson');
     const startDate = document.getElementById('trackingStartDate');
@@ -32,17 +31,21 @@ if (config) {
         }).join('');
     };
 
-    const updateUnitFormLabels = (selectedType = '') => {
+    const updateGeneratedUnitFields = (selectedType = '', selectedName = '') => {
         if (!businessSelect) return;
 
         const businessKey = businessSelect.value || defaultBusinessArea;
         const business = getBusiness(businessKey);
-        const unitTypes = (business.unitTypes || []).map((unitType) => ({ value: unitType, label: unitType }));
+        const unitTypes = business.unitTypes || [];
+        const defaultType = unitTypes[0] || business.unitLabel || 'Unit';
 
-        fillOptions(unitTypeSelect, unitTypes, selectedType || unitTypeSelect?.dataset.oldValue || unitTypes[0]?.value || '');
+        if (unitTypeField) {
+            unitTypeField.value = selectedType || unitTypeField.dataset.oldValue || defaultType;
+        }
 
-        if (unitNameLabel) unitNameLabel.innerHTML = `${escapeHtml(business.unitLabel || 'Unit')} Name <span class="feed-req">*</span>`;
-        if (unitName) unitName.placeholder = `e.g. ${business.unitLabel || 'Unit'} ${businessKey === 'cattle' ? '03' : businessKey === 'fish' ? 'C' : 'Name'}`;
+        if (unitNameField) {
+            unitNameField.value = '';
+        }
     };
 
     const createItemRow = (value = '') => {
@@ -71,9 +74,9 @@ if (config) {
         unitForm.action = config.storeUrl;
         methodField.value = 'POST';
         businessSelect.value = defaultBusinessArea;
-        updateUnitFormLabels('');
+        updateGeneratedUnitFields('');
         if (unitLocation) unitLocation.value = '';
-        unitName.value = '';
+        if (unitNameField) unitNameField.value = '';
         responsiblePerson.value = '';
         startDate.value = new Date().toISOString().slice(0, 10);
         statusSelect.value = '1';
@@ -91,9 +94,9 @@ if (config) {
         unitForm.action = button.dataset.updateUrl;
         methodField.value = 'PUT';
         businessSelect.value = button.dataset.businessArea || defaultBusinessArea;
-        updateUnitFormLabels(button.dataset.unitType || '');
+        updateGeneratedUnitFields(button.dataset.unitType || '');
         if (unitLocation) unitLocation.value = button.dataset.location || '';
-        unitName.value = button.dataset.name || '';
+        if (unitNameField) unitNameField.value = '';
         responsiblePerson.value = button.dataset.responsiblePerson || '';
         startDate.value = button.dataset.startDate || '';
         statusSelect.value = button.dataset.isActive === '0' ? '0' : '1';
@@ -113,26 +116,26 @@ if (config) {
         }
         
         submitLabel.textContent = 'Update Tracking Unit';
-        unitName.focus();
+        unitLocation?.focus();
     };
 
-    businessSelect?.addEventListener('change', () => updateUnitFormLabels(''));
+    businessSelect?.addEventListener('change', () => updateGeneratedUnitFields(''));
     document.querySelectorAll('[data-clear-unit-form]').forEach((button) => button.addEventListener('click', resetUnitForm));
     document.querySelectorAll('[data-edit-unit]').forEach((button) => button.addEventListener('click', () => applyUnitEdit(button)));
-    document.querySelectorAll('[data-tracking-focus]').forEach((button) => button.addEventListener('click', () => unitName?.focus()));
+    document.querySelectorAll('[data-tracking-focus]').forEach((button) => button.addEventListener('click', () => unitLocation?.focus()));
     document.querySelectorAll('[data-prepare-tracking-unit]').forEach((button) => {
         button.addEventListener('click', () => {
             resetUnitForm();
             businessSelect.value = button.dataset.prepareTrackingUnit || defaultBusinessArea;
-            updateUnitFormLabels('');
-            unitName?.focus();
+            updateGeneratedUnitFields('');
+            unitLocation?.focus();
         });
     });
 
     if (businessSelect && config.oldBusinessArea) {
         businessSelect.value = config.oldBusinessArea;
     }
-    updateUnitFormLabels(config.oldUnitType || '');
+    updateGeneratedUnitFields(config.oldUnitType || '');
 
     const assignmentForm = document.querySelector('[data-default-assignment-form]');
     const sourceType = document.getElementById('assignmentSourceType');

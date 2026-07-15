@@ -129,6 +129,13 @@ class FeedBusinessTrackingController extends Controller
     {
         abort_unless((int) $trackingUnit->company_id === (int) $request->user()->company_id, 404);
 
+        // Business Tracking units are setup records. Allow the normal form submit to
+        // delete too, so deletion still works even when the safe-delete JavaScript
+        // modal is not loaded or the compiled assets are stale.
+        if (! $request->boolean('preview') && ! $request->boolean('confirmed')) {
+            $request->merge(['confirmed' => true]);
+        }
+
         return $this->performSafeDelete(
             $request,
             $this->safeDeleteService->inspectFeedBusinessTrackingUnit($trackingUnit),
@@ -212,8 +219,8 @@ class FeedBusinessTrackingController extends Controller
 
         $validated = $request->validate([
             'business_area' => ['required', Rule::in($businessAreaKeys)],
-            'unit_type' => ['required', 'string', 'max:80'],
-            'name' => ['required', 'string', 'max:255'],
+            'unit_type' => ['nullable', 'string', 'max:80'],
+            'name' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
             'parent_id' => [
                 'nullable',
@@ -227,10 +234,6 @@ class FeedBusinessTrackingController extends Controller
             'items.*' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if (! in_array($validated['unit_type'], $this->unitTypesForArea($companyId, $validated['business_area']), true)) {
-            throw ValidationException::withMessages(['unit_type' => 'The selected unit type is not valid for this business area.']);
-        }
-
         if (! empty($validated['parent_id'])) {
             $parent = FeedBusinessTrackingUnit::query()
                 ->where('company_id', $companyId)
@@ -242,24 +245,104 @@ class FeedBusinessTrackingController extends Controller
             }
         }
 
-        $validated['name'] = trim($validated['name']);
         $validated['location'] = filled($validated['location'] ?? null) ? trim($validated['location']) : null;
-        
+        $validated['responsible_person'] = filled($validated['responsible_person'] ?? null) ? trim($validated['responsible_person']) : null;
+        $validated['description'] = filled($validated['description'] ?? null) ? trim($validated['description']) : null;
+        $validated['is_active'] = (bool) $validated['is_active'];
+        $validated['parent_id'] = $validated['parent_id'] ?? null;
+
+        $items = array_filter(array_map('trim', $validated['items'] ?? []));
+        $validated['items'] = array_values($items);
+
+        $validated['unit_type'] = $this->resolveUnitType(
+            $companyId,
+            $validated['business_area'],
+            $validated['unit_type'] ?? null,
+            $trackingUnit,
+        );
+
+        $generatedName = $this->generateUnitName($companyId, $validated);
+        $currentName = trim((string) ($trackingUnit?->name ?? ''));
+
+        if ($trackingUnit
+            && $trackingUnit->business_area === $validated['business_area']
+            && $currentName !== ''
+            && ! $this->isGeneratedFromBusinessDetail(
+                $companyId,
+                (string) $trackingUnit->business_area,
+                $currentName,
+                $trackingUnit->location,
+                (array) ($trackingUnit->items ?? [])
+            )
+        ) {
+            $validated['name'] = $currentName;
+        } else {
+            $validated['name'] = $generatedName;
+        }
+
         if (!$trackingUnit) {
             $prefix = strtoupper($validated['business_area']) . '-';
             $validated['code'] = strtoupper(uniqid($prefix));
         } else {
             $validated['code'] = $trackingUnit->code;
         }
-        $validated['responsible_person'] = filled($validated['responsible_person'] ?? null) ? trim($validated['responsible_person']) : null;
-        $validated['description'] = filled($validated['description'] ?? null) ? trim($validated['description']) : null;
-        $validated['is_active'] = (bool) $validated['is_active'];
-        $validated['parent_id'] = $validated['parent_id'] ?? null;
-        
-        $items = array_filter(array_map('trim', $validated['items'] ?? []));
-        $validated['items'] = array_values($items);
 
         return $validated;
+    }
+
+    private function resolveUnitType(int $companyId, string $businessArea, ?string $requestedUnitType, ?FeedBusinessTrackingUnit $trackingUnit = null): string
+    {
+        $unitTypes = $this->unitTypesForArea($companyId, $businessArea);
+        $requestedUnitType = trim((string) $requestedUnitType);
+
+        if ($requestedUnitType !== '' && in_array($requestedUnitType, $unitTypes, true)) {
+            return $requestedUnitType;
+        }
+
+        if ($trackingUnit && $trackingUnit->business_area === $businessArea && in_array((string) $trackingUnit->unit_type, $unitTypes, true)) {
+            return (string) $trackingUnit->unit_type;
+        }
+
+        return $unitTypes[0] ?? (FeedBusinessArea::defaultMeta($businessArea)['unit_label'] ?? 'Unit');
+    }
+
+    private function generateUnitName(int $companyId, array $validated): string
+    {
+        $businessArea = (string) $validated['business_area'];
+        $area = FeedBusinessArea::query()
+            ->where('company_id', $companyId)
+            ->where('code', $businessArea)
+            ->first();
+
+        $meta = FeedBusinessArea::defaultMeta($businessArea);
+        $businessName = $area?->name ?: ($meta['name'] ?? ucfirst($businessArea));
+        return substr($businessName, 0, 255);
+    }
+
+    private function isGeneratedFromBusinessDetail(int $companyId, string $businessArea, string $name, ?string $location, array $items): bool
+    {
+        $area = FeedBusinessArea::query()
+            ->where('company_id', $companyId)
+            ->where('code', $businessArea)
+            ->first();
+
+        $meta = FeedBusinessArea::defaultMeta($businessArea);
+        $businessName = $area?->name ?: ($meta['name'] ?? ucfirst($businessArea));
+        $generatedNames = [];
+        $location = trim((string) $location);
+
+        if ($location !== '') {
+            $generatedNames[] = $businessName.' - '.$location;
+        }
+
+        foreach ($items as $item) {
+            $item = trim((string) $item);
+            if ($item !== '') {
+                $generatedNames[] = $businessName.' - '.$item;
+            }
+        }
+
+        return in_array($name, $generatedNames, true);
     }
 
     private function validateAssignmentSource(int $companyId, array $validated): void
@@ -328,22 +411,9 @@ class FeedBusinessTrackingController extends Controller
             );
         }
 
-        $defaults = [
-            ['business_area' => 'cattle', 'unit_type' => 'Shed', 'code' => 'CAT-S01', 'name' => 'Shed 01'],
-            ['business_area' => 'cattle', 'unit_type' => 'Shed', 'code' => 'CAT-S02', 'name' => 'Shed 02'],
-            ['business_area' => 'fish', 'unit_type' => 'Pond', 'code' => 'FIS-P01', 'name' => 'Pond A'],
-            ['business_area' => 'fish', 'unit_type' => 'Pond', 'code' => 'FIS-P02', 'name' => 'Pond B'],
-            ['business_area' => 'vegetables', 'unit_type' => 'Vegetable / Crop', 'code' => 'VEG-TOM', 'name' => 'Tomato'],
-            ['business_area' => 'vegetables', 'unit_type' => 'Vegetable / Crop', 'code' => 'VEG-BRI', 'name' => 'Brinjal'],
-            ['business_area' => 'vegetables', 'unit_type' => 'Vegetable / Crop', 'code' => 'VEG-CHI', 'name' => 'Green Chili'],
-        ];
-
-        foreach ($defaults as $default) {
-            FeedBusinessTrackingUnit::query()->firstOrCreate(
-                ['company_id' => $companyId, 'code' => $default['code']],
-                $default + ['company_id' => $companyId, 'is_active' => true]
-            );
-        }
+        // Do not auto-create sample sheds/ponds/crops here. Users must be able to
+        // delete every tracking unit from this page without the defaults being
+        // recreated on the next page load.
     }
 
     private function businessAreaRecords(int $companyId, bool $activeOnly = true): Collection

@@ -249,6 +249,8 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
         ->middleware('accounting.permission:parties.manage')->name('parties.store');
     Route::put('/parties/{party}', [PartyController::class, 'update'])
         ->middleware('accounting.permission:parties.manage')->name('parties.update');
+    Route::get('/parties/{party}/avatar', [PartyController::class, 'avatar'])
+        ->middleware('accounting.permission:parties.view')->name('parties.avatar');
     Route::delete('/parties/{party}', [PartyController::class, 'destroy'])
         ->middleware(['accounting.permission:parties.manage', 'accounting.permission:records.delete'])->name('parties.destroy');
 

@@ -30,7 +30,9 @@
                 <div class="feed-card-body">
                     <div class="business-tree">
                         @foreach($businessAreas as $key => $business)
-                            @php($groupUnits = $businessGroups->get($key, collect()))
+                            @php
+                                $groupUnits = $businessGroups->get($key, collect());
+                            @endphp
                             <div class="business-group">
                                 <div class="business-group-head">
                                     <div class="business-identity">
@@ -44,12 +46,39 @@
                                 </div>
                                 <div class="business-children">
                                     @forelse($groupUnits as $unit)
+                                        @php
+                                            $unitItems = collect($unit->items ?? [])->map(fn ($item) => trim((string) $item))->filter()->values();
+                                            $unitDisplayName = trim((string) $unit->name);
+                                            $unitBusinessName = $business['name'] ?? $unit->business_name;
+                                            $generatedNames = collect();
+                                            if (filled($unit->location)) {
+                                                $generatedNames->push($unitBusinessName.' - '.trim((string) $unit->location));
+                                            }
+                                            $unitItems->each(fn ($item) => $generatedNames->push($unitBusinessName.' - '.$item));
+                                            if ($unitDisplayName === '' || $generatedNames->contains($unitDisplayName)) {
+                                                $unitDisplayName = $unitBusinessName;
+                                            }
+                                        @endphp
                                         <div class="business-child {{ $unit->is_active ? '' : 'is-muted' }}">
                                             <div>
-                                                <span class="branch">└─</span><strong>{{ $unit->name }}</strong>
+                                                <span class="branch">└─</span><strong>{{ $unitDisplayName }}</strong>
                                                 <div class="unit-code">{{ $unit->code }}</div>
                                             </div>
-                                            <div>{{ $unit->unit_type }}</div>
+                                            <div class="business-location">{{ filled($unit->location) ? $unit->location : 'Location not set' }}</div>
+                                            <div class="business-items">
+                                                @if($unitItems->isNotEmpty())
+                                                    <div class="business-item-list">
+                                                        @foreach($unitItems->take(3) as $itemName)
+                                                            <span class="business-item-pill">{{ $itemName }}</span>
+                                                        @endforeach
+                                                        @if($unitItems->count() > 3)
+                                                            <span class="business-item-pill">+{{ $unitItems->count() - 3 }} more</span>
+                                                        @endif
+                                                    </div>
+                                                @else
+                                                    <span class="business-empty-text">No item added</span>
+                                                @endif
+                                            </div>
                                             <div>
                                                 @if($unit->children->count())
                                                     <span class="feed-badge">{{ $unit->children->count() }} cycle{{ $unit->children->count() === 1 ? '' : 's' }}</span>
@@ -59,7 +88,7 @@
                                                     <span class="feed-status feed-status-red">Inactive</span>
                                                 @endif
                                             </div>
-                                            <div style="display: flex; gap: 5px;">
+                                            <div class="business-actions">
                                                 <button
                                                     class="feed-btn feed-btn-sm"
                                                     type="button"
@@ -69,8 +98,7 @@
                                                     data-business-area="{{ $unit->business_area }}"
                                                     data-unit-type="{{ $unit->unit_type }}"
                                                     data-location="{{ $unit->location }}"
-                                                    data-name="{{ $unit->name }}"
-                                                    data-items="{{ json_encode($unit->items ?? []) }}"
+                                                    data-items='@json($unit->items ?? [])'
                                                     data-parent-id="{{ $unit->parent_id }}"
                                                     data-responsible-person="{{ $unit->responsible_person }}"
                                                     data-start-date="{{ optional($unit->start_date)->format('Y-m-d') }}"
@@ -80,6 +108,7 @@
                                                 @if(auth()->user()->canDeleteAccountingRecords())
                                                     <form method="POST" action="{{ route('feed.business-tracking.units.destroy', $unit) }}" data-safe-delete-form>
                                                         @csrf @method('DELETE')
+                                                        <input type="hidden" name="confirmed" value="1">
                                                         <button class="feed-btn feed-btn-sm feed-btn-red" type="submit">Delete</button>
                                                     </form>
                                                 @endif
@@ -87,14 +116,41 @@
                                         </div>
 
                                         @foreach($unit->children as $child)
+                                            @php
+                                                $childItems = collect($child->items ?? [])->map(fn ($item) => trim((string) $item))->filter()->values();
+                                                $childDisplayName = trim((string) $child->name);
+                                                $childBusinessName = $business['name'] ?? $child->business_name;
+                                                $childGeneratedNames = collect();
+                                                if (filled($child->location)) {
+                                                    $childGeneratedNames->push($childBusinessName.' - '.trim((string) $child->location));
+                                                }
+                                                $childItems->each(fn ($item) => $childGeneratedNames->push($childBusinessName.' - '.$item));
+                                                if ($childDisplayName === '' || $childGeneratedNames->contains($childDisplayName)) {
+                                                    $childDisplayName = $childBusinessName;
+                                                }
+                                            @endphp
                                             <div class="business-child business-child-nested {{ $child->is_active ? '' : 'is-muted' }}">
                                                 <div>
-                                                    <span class="branch">&nbsp;&nbsp;&nbsp;└─</span><strong>{{ $child->name }}</strong>
+                                                    <span class="branch">&nbsp;&nbsp;&nbsp;└─</span><strong>{{ $childDisplayName }}</strong>
                                                     <div class="unit-code">{{ $child->code }}</div>
                                                 </div>
-                                                <div>{{ $child->unit_type }}</div>
+                                                <div class="business-location">{{ filled($child->location) ? $child->location : 'Location not set' }}</div>
+                                                <div class="business-items">
+                                                    @if($childItems->isNotEmpty())
+                                                        <div class="business-item-list">
+                                                            @foreach($childItems->take(3) as $itemName)
+                                                                <span class="business-item-pill">{{ $itemName }}</span>
+                                                            @endforeach
+                                                            @if($childItems->count() > 3)
+                                                                <span class="business-item-pill">+{{ $childItems->count() - 3 }} more</span>
+                                                            @endif
+                                                        </div>
+                                                    @else
+                                                        <span class="business-empty-text">No item added</span>
+                                                    @endif
+                                                </div>
                                                 <div><span class="feed-status {{ $child->is_active ? 'feed-status-green' : 'feed-status-red' }}">{{ $child->is_active ? 'Active' : 'Inactive' }}</span></div>
-                                                <div style="display: flex; gap: 5px;">
+                                                <div class="business-actions">
                                                     <button
                                                         class="feed-btn feed-btn-sm"
                                                         type="button"
@@ -104,8 +160,7 @@
                                                         data-business-area="{{ $child->business_area }}"
                                                         data-unit-type="{{ $child->unit_type }}"
                                                         data-location="{{ $child->location }}"
-                                                        data-name="{{ $child->name }}"
-                                                        data-items="{{ json_encode($child->items ?? []) }}"
+                                                        data-items='@json($child->items ?? [])'
                                                         data-parent-id="{{ $child->parent_id }}"
                                                         data-responsible-person="{{ $child->responsible_person }}"
                                                         data-start-date="{{ optional($child->start_date)->format('Y-m-d') }}"
@@ -115,6 +170,7 @@
                                                     @if(auth()->user()->canDeleteAccountingRecords())
                                                         <form method="POST" action="{{ route('feed.business-tracking.units.destroy', $child) }}" data-safe-delete-form>
                                                             @csrf @method('DELETE')
+                                                            <input type="hidden" name="confirmed" value="1">
                                                             <button class="feed-btn feed-btn-sm feed-btn-red" type="submit">Delete</button>
                                                         </form>
                                                     @endif
@@ -135,13 +191,15 @@
                 <div class="feed-card-header">
                     <div>
                         <div class="feed-card-title">Add or Edit Tracking Unit</div>
-                        <div class="feed-card-sub">Labels change automatically for the selected business.</div>
+                        <div class="feed-card-sub">Unit type and internal title are generated automatically. Add the location and item names you want to track.</div>
                     </div>
                 </div>
                 <div class="feed-card-body">
                     <form id="businessTrackingUnitForm" method="POST" action="{{ route('feed.business-tracking.units.store') }}">
                         @csrf
                         <input type="hidden" name="_method" value="POST" data-form-method>
+                        <input id="trackingUnitType" type="hidden" name="unit_type" value="{{ old('unit_type') }}" data-old-value="{{ old('unit_type') }}">
+                        <input id="trackingUnitName" type="hidden" name="name" value="" data-old-value="">
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div class="feed-field">
                                 <label>Business Area <span class="feed-req">*</span></label>
@@ -152,22 +210,15 @@
                                 </select>
                             </div>
                             <div class="feed-field">
-                                <label>Unit Type <span class="feed-req">*</span></label>
-                                <select id="trackingUnitType" name="unit_type" class="feed-control" data-old-value="{{ old('unit_type') }}" required></select>
-                            </div>
-                            <div class="feed-field">
                                 <label>Location</label>
                                 <input id="trackingUnitLocation" class="feed-control" name="location" value="{{ old('location') }}" placeholder="e.g. Farm Side A">
                             </div>
                             <div class="feed-field">
-                                <label id="trackingUnitNameLabel">Unit Name <span class="feed-req">*</span></label>
-                                <input id="trackingUnitName" class="feed-control" name="name" value="{{ old('name') }}" placeholder="e.g. Shed 03" required>
-                            </div>
-
-                            <div class="feed-field">
-                                <label>Items (Optional)</label>
+                                <label>Items</label>
                                 <div id="trackingUnitItemsContainer">
-                                    <input type="text" class="feed-control" name="items[]" placeholder="Enter item name" style="margin-bottom: 8px;">
+                                    @foreach(collect(old('items', ['']))->map(fn ($item) => trim((string) $item))->whenEmpty(fn ($items) => $items->push('')) as $oldItem)
+                                        <input type="text" class="feed-control" name="items[]" value="{{ $oldItem }}" placeholder="Enter item name" style="margin-bottom: 8px;">
+                                    @endforeach
                                 </div>
                                 <button type="button" id="addTrackingUnitItemBtn" class="feed-btn feed-btn-sm feed-btn-soft" style="margin-top: 4px;">+ Add Item</button>
                             </div>

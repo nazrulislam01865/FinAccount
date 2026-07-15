@@ -23,6 +23,7 @@ use App\Models\Feed\FeedStockBalance;
 use App\Models\Feed\FeedStockMovement;
 use App\Models\Feed\FeedBusinessTrackingDefaultAssignment;
 use App\Models\Feed\FeedSetting;
+use App\Models\Feed\FeedDocument;
 
 class DependencyDetacher
 {
@@ -178,21 +179,46 @@ class DependencyDetacher
     {
         DB::transaction(function () use ($unit): void {
             $locked = FeedBusinessTrackingUnit::query()->lockForUpdate()->findOrFail($unit->id);
-            $transactionIds1 = Transaction::query()->where('tracking_unit_id', $locked->id)->pluck('id');
-            $transactionIds2 = FeedStockMovement::query()->where('tracking_unit_id', $locked->id)->pluck('transaction_id');
-            $transactionIds = $transactionIds1->merge($transactionIds2)->unique()->values();
+            $unitIds = $this->feedBusinessTrackingUnitTreeIds($locked);
+
+            FeedBusinessTrackingUnit::query()
+                ->whereIn('id', $unitIds->all())
+                ->lockForUpdate()
+                ->get();
+
+            $transactionIds1 = Transaction::query()->whereIn('tracking_unit_id', $unitIds)->pluck('id');
+            $transactionIds2 = FeedStockMovement::query()->whereIn('tracking_unit_id', $unitIds)->pluck('transaction_id');
+            $transactionIds3 = FeedDocument::query()->whereIn('tracking_unit_id', $unitIds)->pluck('transaction_id');
+            $transactionIds = $transactionIds1
+                ->merge($transactionIds2)
+                ->merge($transactionIds3)
+                ->unique()
+                ->values();
             
             $this->markTransactionsIncomplete($transactionIds);
             
-            Transaction::query()->where('tracking_unit_id', $locked->id)->update(['tracking_unit_id' => null]);
-            FeedStockMovement::query()->where('tracking_unit_id', $locked->id)->delete();
-            FeedStockBalance::query()->where('tracking_unit_id', $locked->id)->delete();
-            FeedBusinessTrackingDefaultAssignment::query()->where('tracking_unit_id', $locked->id)->delete();
+            Transaction::query()->whereIn('tracking_unit_id', $unitIds)->update(['tracking_unit_id' => null]);
+            FeedStockMovement::query()->whereIn('tracking_unit_id', $unitIds)->delete();
+            FeedStockBalance::query()->whereIn('tracking_unit_id', $unitIds)->delete();
+            FeedDocument::query()->whereIn('tracking_unit_id', $unitIds)->delete();
+            FeedBusinessTrackingDefaultAssignment::query()->whereIn('business_tracking_unit_id', $unitIds)->delete();
+            FeedSetting::query()->whereIn('default_tracking_unit_id', $unitIds)->update([
+                'default_tracking_unit_id' => null,
+            ]);
             
+            $this->assertNoReference(Transaction::query()->whereIn('tracking_unit_id', $unitIds), 'business tracking unit transactions');
+            $this->assertNoReference(FeedStockMovement::query()->whereIn('tracking_unit_id', $unitIds), 'business tracking unit stock movements');
+            $this->assertNoReference(FeedStockBalance::query()->whereIn('tracking_unit_id', $unitIds), 'business tracking unit stock balances');
+            $this->assertNoReference(FeedDocument::query()->whereIn('tracking_unit_id', $unitIds), 'business tracking unit feed documents');
+            $this->assertNoReference(FeedBusinessTrackingDefaultAssignment::query()->whereIn('business_tracking_unit_id', $unitIds), 'business tracking unit default assignments');
+            $this->assertNoReference(FeedSetting::query()->whereIn('default_tracking_unit_id', $unitIds), 'business tracking unit feed settings');
             $this->assertTransactionsIncomplete($transactionIds);
             
-            $locked->delete();
-            $this->assertDeleted(FeedBusinessTrackingUnit::class, $locked->id);
+            FeedBusinessTrackingUnit::query()->whereIn('id', $unitIds->all())->delete();
+
+            foreach ($unitIds as $unitId) {
+                $this->assertDeleted(FeedBusinessTrackingUnit::class, (int) $unitId);
+            }
         }, attempts: 5);
     }
 
@@ -354,6 +380,31 @@ class DependencyDetacher
             $locked->delete();
             $this->assertDeleted(DocumentSequence::class, $locked->id);
         }, attempts: 5);
+    }
+
+    private function feedBusinessTrackingUnitTreeIds(FeedBusinessTrackingUnit $unit): Collection
+    {
+        $ids = collect([(int) $unit->id]);
+        $frontier = collect([(int) $unit->id]);
+
+        while ($frontier->isNotEmpty()) {
+            $children = FeedBusinessTrackingUnit::query()
+                ->where('company_id', $unit->company_id)
+                ->whereIn('parent_id', $frontier->all())
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->reject(fn (int $id): bool => $ids->contains($id))
+                ->values();
+
+            if ($children->isEmpty()) {
+                break;
+            }
+
+            $ids = $ids->merge($children)->unique()->values();
+            $frontier = $children;
+        }
+
+        return $ids;
     }
 
     private function assertNoReference(Builder $query, string $relationship): void

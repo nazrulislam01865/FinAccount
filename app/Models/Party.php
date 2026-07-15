@@ -10,7 +10,7 @@ class Party extends Model
 {
     protected $fillable = [
         'company_id', 'code', 'name', 'type', 'receivable_account_id',
-        'payable_account_id', 'is_active', 'phone', 'email', 'address', 'profile_pic',
+        'payable_account_id', 'is_active', 'phone', 'email', 'address', 'profile_pic', 'created_by',
     ];
 
     protected function casts(): array
@@ -26,6 +26,11 @@ class Party extends Model
     public function payableAccount(): BelongsTo
     {
         return $this->belongsTo(ChartOfAccount::class, 'payable_account_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function transactions(): HasMany

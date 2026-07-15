@@ -73,6 +73,13 @@ class TransactionEntryController extends Controller
             ? $requestedDirection
             : null;
 
+        // First-time transaction entry should open the normal expense form by default.
+        // Users can still change the direction or transaction type from the tabs.
+        if (! $dueSettlementContext['active'] && $requestedDirection === null && $requestedCategory === '') {
+            $requestedDirection = TransactionTypes::FLOW_OUTGOING;
+            $requestedCategory = TransactionTypes::EXPENSE;
+        }
+
         $requestedCategoryOption = $transactionCategories
             ->first(fn (AccountingOption $option): bool => strcasecmp($option->value, $requestedCategory) === 0);
         $hasExplicitTransactionFilter = $dueSettlementContext['active']
@@ -163,7 +170,13 @@ class TransactionEntryController extends Controller
         $transactionHeadsAreDirectionFiltered = false;
         if ($transactionHeadsAreUnfiltered) {
             $transactionHeadsForEntry = $this->entryOptionService->allTransactionHeads($companyId);
-        } elseif ($requestedDirection !== null && $requestedCategoryOption === null) {
+        } elseif ($categoryOption !== null && $category !== '') {
+            // When a direction is selected, the page automatically activates the first
+            // Transaction Type tab in that direction. The head dropdown must follow
+            // that active Transaction Type, not the wider direction, otherwise heads
+            // from other types appear under the selected tab.
+            $transactionHeadsForEntry = $this->entryOptionService->transactionHeads($companyId, $category);
+        } elseif ($requestedDirection !== null) {
             $directionCategories = $filteredTransactionCategories
                 ->pluck('value')
                 ->map(fn ($value): string => (string) $value)
@@ -173,9 +186,7 @@ class TransactionEntryController extends Controller
                 ->values();
             $transactionHeadsAreDirectionFiltered = true;
         } else {
-            $transactionHeadsForEntry = $category !== ''
-                ? $this->entryOptionService->transactionHeads($companyId, $category)
-                : collect();
+            $transactionHeadsForEntry = collect();
         }
 
         return view('transactions.create', [

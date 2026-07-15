@@ -14,6 +14,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PartyController extends Controller
 {
@@ -39,6 +40,7 @@ class PartyController extends Controller
     public function store(StorePartyRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $data['created_by'] = $request->user()->id;
         if ($request->hasFile('profile_pic')) {
             $data['profile_pic'] = $request->file('profile_pic')->store('parties', 'public');
         }
@@ -55,7 +57,7 @@ class PartyController extends Controller
         $data = $request->validated();
         if ($request->hasFile('profile_pic')) {
             if ($party->profile_pic) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($party->profile_pic);
+                Storage::disk('public')->delete($this->partyProfilePicPath($party->profile_pic));
             }
             $data['profile_pic'] = $request->file('profile_pic')->store('parties', 'public');
         }
@@ -63,6 +65,23 @@ class PartyController extends Controller
         $this->service->update($party, $data);
 
         return $this->redirectAfterAccountingSave($request, 'parties.view', 'parties.index', 'Record saved');
+    }
+
+    public function avatar(Request $request, Party $party)
+    {
+        $this->ensureCompany($request, $party);
+
+        $path = $this->partyProfilePicPath($party->profile_pic);
+
+        abort_if($path === '' || ! Storage::disk('public')->exists($path), 404);
+
+        $fullPath = Storage::disk('public')->path($path);
+        $mimeType = Storage::disk('public')->mimeType($path) ?: 'image/jpeg';
+
+        return response()->file($fullPath, [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'public, max-age=604800',
+        ]);
     }
 
     public function destroy(Request $request, Party $party): JsonResponse|RedirectResponse
@@ -77,6 +96,26 @@ class PartyController extends Controller
             'parties.index',
             'Party deleted permanently.',
         );
+    }
+
+    private function partyProfilePicPath(?string $path): string
+    {
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return '';
+        }
+
+        $path = str_replace('\\', '/', $path);
+        $path = ltrim($path, '/');
+
+        foreach (['storage/', 'public/'] as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                $path = substr($path, strlen($prefix));
+            }
+        }
+
+        return $path;
     }
 
     private function ensureCompany(Request $request, Party $party): void
