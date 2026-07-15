@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Feed;
 
 use App\Support\CompanyContext;
+use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,6 +21,13 @@ class StoreFeedPurchaseRequest extends FormRequest
 
         return [
             'transaction_date' => ['required', 'date'],
+            'transaction_head_id' => [
+                'required', 'integer',
+                Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->whereRaw('LOWER(category) = ?', [strtolower(TransactionTypes::PURCHASE)])
+                    ->where('is_active', true)),
+            ],
             'party_id' => [
                 'required', 'integer',
                 Rule::exists('parties', 'id')->where(fn ($query) => $query

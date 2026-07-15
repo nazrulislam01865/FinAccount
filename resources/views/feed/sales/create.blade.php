@@ -1,4 +1,7 @@
 @php
+    $defaultTransactionHeadId = old('transaction_head_id', $settings->sale_transaction_head_id ?: $transactionHeads->first()?->id);
+    $defaultTransactionHead = $transactionHeads->firstWhere('id', (int) $defaultTransactionHeadId) ?: $transactionHeads->first();
+    $defaultPostingAccountName = $defaultTransactionHead?->postingAccount?->name ?? 'Account not configured';
     $defaultWarehouseId = old('tracking_unit_id', $settings->default_tracking_unit_id ?: $warehouses->first()?->id);
     $initialLines = old('lines', [[
         'item_id' => $items->first()?->id,
@@ -51,7 +54,18 @@
                     @csrf
                     <input type="hidden" name="request_token" value="{{ $requestToken }}">
 
-                    <div class="feed-grid-4">
+                    <div class="feed-grid-1">
+                        <div class="feed-field">
+                            <label for="transaction_head_id">Transaction Head <span class="feed-req">*</span></label>
+                            <select class="feed-control" id="transaction_head_id" name="transaction_head_id" required data-feed-transaction-head data-hg-searchable-ignore>
+                                <option value="">Select transaction head</option>
+                                @foreach($transactionHeads as $head)
+                                    <option value="{{ $head->id }}" @selected((string) $defaultTransactionHeadId === (string) $head->id) data-account-name="{{ $head->postingAccount?->name }}" data-account-code="{{ $head->postingAccount?->code }}">{{ $head->code }} — {{ $head->name }} @if($head->postingAccount) ({{ $head->postingAccount->code }} — {{ $head->postingAccount->name }}) @endif</option>
+                                @endforeach
+                            </select>
+                            <div class="feed-help">This head decides the accounting rule and sales income account for this feed sale.</div>
+                            @if($transactionHeads->isEmpty())<div class="feed-warning-text">Add an active Sale transaction head linked with a level-3 Income account before posting.</div>@endif
+                        </div>
                         <div class="feed-field">
                             <label for="transaction_date">Date <span class="feed-req">*</span></label>
                             <input class="feed-control" id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $transactionDateContext['default']) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
@@ -68,10 +82,6 @@
                             @if($customers->isEmpty())<div class="feed-warning-text">Add an active Customer in Parties before posting.</div>@endif
                         </div>
                         <div class="feed-field">
-                            <label>Sale Invoice</label>
-                            <input class="feed-control feed-readonly" value="Generated automatically after posting" readonly>
-                        </div>
-                        <div class="feed-field">
                             <label for="tracking_unit_id">Warehouse <span class="feed-req">*</span></label>
                             <select class="feed-control" id="tracking_unit_id" name="tracking_unit_id" required data-feed-warehouse data-hg-searchable-ignore>
                                 @foreach($warehouses as $warehouse)
@@ -79,24 +89,10 @@
                                 @endforeach
                             </select>
                         </div>
-                    </div>
-
-                    <div class="feed-grid-4 feed-section-gap">
-                        <div class="feed-field">
-                            <label>Posting Mode</label>
-                            <input class="feed-control feed-readonly" value="Direct to Feed Ledger" readonly>
-                        </div>
-                        <div class="feed-field">
-                            <label>Sale Type</label>
-                            <input class="feed-control feed-readonly" value="Regular Sale" readonly>
-                        </div>
-                        <div class="feed-field">
-                            <label>Delivery Method</label>
-                            <input class="feed-control feed-readonly" value="Customer pickup / business delivery" readonly>
-                        </div>
                         <div class="feed-field">
                             <label for="reference">Reference</label>
                             <input class="feed-control" id="reference" name="reference" value="{{ old('reference') }}" placeholder="Order / delivery / payment reference">
+                            <div class="feed-help">Sale invoice will be generated automatically after posting.</div>
                         </div>
                     </div>
 
@@ -125,7 +121,7 @@
                     </div>
 
                     <div class="feed-divider"></div>
-                    <div class="feed-grid-3">
+                    <div class="feed-grid-1">
                         <div class="feed-field">
                             <label for="delivery_charge">Delivery Charge</label>
                             <input class="feed-control" id="delivery_charge" name="delivery_charge" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('delivery_charge', 0) }}" data-feed-money-input>
@@ -135,13 +131,13 @@
                             <input class="feed-control" id="overall_discount" name="overall_discount" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('overall_discount', 0) }}" data-feed-money-input>
                         </div>
                         <div class="feed-field">
-                            <label>Price Mode</label>
-                            <input class="feed-control feed-readonly" value="Custom price by item line" readonly>
+                            <label for="calculated_total_sale">Total Sale</label>
+                            <input class="feed-control feed-readonly" id="calculated_total_sale" data-feed-calculated-total readonly>
                         </div>
                     </div>
 
                     <div class="feed-divider"></div>
-                    <div class="feed-grid-3">
+                    <div class="feed-grid-1">
                         <div class="feed-field">
                             <label for="paid_amount">Received Now ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="feed-req">*</span></label>
                             <input class="feed-control" id="paid_amount" name="paid_amount" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('paid_amount', 0) }}" required data-feed-money-input>
@@ -162,7 +158,7 @@
                         </div>
                     </div>
 
-                    <div class="feed-grid-2 feed-section-gap">
+                    <div class="feed-grid-1 feed-section-gap">
                         <div class="feed-field">
                             <label for="transaction_attachments">Attachment</label>
                             <div class="feed-upload">
@@ -178,7 +174,7 @@
 
                     <div class="feed-action-bar">
                         <div class="feed-left-actions"><a class="feed-btn" href="{{ route('feed.sales.create') }}">Clear</a></div>
-                        <div class="feed-right-actions"><button class="feed-btn feed-btn-primary" type="submit" @disabled($customers->isEmpty())>Post Sale</button></div>
+                        <div class="feed-right-actions"><button class="feed-btn feed-btn-primary" type="submit" @disabled($customers->isEmpty() || $transactionHeads->isEmpty())>Post Sale</button></div>
                     </div>
                 </form>
             </section>
@@ -215,7 +211,7 @@
                             <div class="feed-journal-row feed-journal-head"><span>Account</span><span>Debit</span><span>Credit</span></div>
                             <div class="feed-journal-row"><span data-feed-summary="money-name">Cash / Bank</span><span data-feed-summary="paid">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
                             <div class="feed-journal-row"><span>Accounts Receivable</span><span data-feed-summary="due">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
-                            <div class="feed-journal-row"><span>{{ $settings->saleTransactionHead?->postingAccount?->name ?? 'Account not configured' }}</span><span></span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span></div>
+                            <div class="feed-journal-row"><span data-feed-summary="posting-account">{{ $defaultPostingAccountName }}</span><span></span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                             <div class="feed-journal-row"><span>{{ $settings->cogsAccount?->name ?? 'Account not configured' }}</span><span data-feed-summary="cogs">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
                             <div class="feed-journal-row"><span>{{ $settings->purchaseTransactionHead?->postingAccount?->name ?? 'Account not configured' }}</span><span></span><span data-feed-summary="cogs">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                         </div>
@@ -225,6 +221,18 @@
         </div>
     </div>
 
+    @php
+        $transactionHeadsForJs = $transactionHeads->map(function ($head) {
+            return [
+                'id' => $head->id,
+                'name' => $head->name,
+                'code' => $head->code,
+                'accountName' => $head->postingAccount?->name,
+                'accountCode' => $head->postingAccount?->code,
+            ];
+        })->values();
+    @endphp
+
     @push('scripts')
         <script>
             window.HISEBGHOR_FEED_PAGE = {
@@ -233,6 +241,7 @@
                 decimalPlaces: {{ \App\Support\CompanyContext::decimalPlaces() }},
                 items: @json($feedItemsForJs),
                 initialLines: @json(array_values($initialLines)),
+                transactionHeads: @json($transactionHeadsForJs),
                 stock: @json($stockBalances)
             };
         </script>

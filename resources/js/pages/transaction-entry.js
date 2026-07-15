@@ -74,6 +74,7 @@ if (page) {
 
     let rememberedWarehouseId = saleWarehouse?.value || '';
     let recalculateSaleFeed = () => {};
+    let refreshSaleBusinessItems = () => {};
 
     const isCurrentSaleCategory = () => String(categoryInput?.value || '').toUpperCase() === 'SALE';
 
@@ -162,7 +163,10 @@ if (page) {
             form.dataset.saleHasFeedLine = feedMode ? form.dataset.saleHasFeedLine || '0' : '0';
         }
 
-        if (feedMode) recalculateSaleFeed();
+        if (feedMode) {
+            refreshSaleBusinessItems();
+            recalculateSaleFeed();
+        }
     };
 
     const syncSaleWarehouseField = syncSaleMode;
@@ -467,6 +471,7 @@ if (page) {
     });
     sellingType?.addEventListener('change', () => {
         syncSaleMode();
+        refreshSaleBusinessItems();
         updatePaidAmountCopy();
         schedulePreview();
     });
@@ -482,7 +487,6 @@ if (page) {
         const itemsTotalInput = form?.querySelector('[data-sale-items-total]');
         const otherChargesInput = form?.querySelector('[data-sale-other-charges]');
         const totalBillInput = form?.querySelector('[data-sale-total-bill]');
-        const itemsById = new Map(saleFeedConfig.items.map((item) => [String(item.id), item]));
         const scale = Number.isInteger(saleFeedConfig.decimalPlaces) ? saleFeedConfig.decimalPlaces : 2;
         const numberValue = (value) => {
             const parsed = Number.parseFloat(value ?? 0);
@@ -504,73 +508,64 @@ if (page) {
             maximumFractionDigits: scale,
         })}`.trim();
 
-        const stockFor = (itemId) => {
-            const warehouseId = String(saleWarehouse?.value ?? '');
-            const stock = saleFeedConfig.stock?.[warehouseId]?.[String(itemId)] ?? {};
-            return {
-                quantity: numberValue(stock.quantity),
-                averageCost: numberValue(stock.average_cost),
-            };
+        const selectedBusinessArea = () => String(sellingType?.value || '').toLowerCase();
+
+        const itemsForSelectedArea = () => {
+            const area = selectedBusinessArea();
+            return saleFeedConfig.items.filter((item) => String(item.businessArea || '').toLowerCase() === area);
         };
 
-        const itemOptions = (selectedId) => {
-            const first = '<option value="">Select feed item</option>';
-            return first + saleFeedConfig.items.map((item) => {
-                const selected = String(item.id) === String(selectedId ?? '') ? ' selected' : '';
-                const meta = [item.code, item.brand, item.category].filter(Boolean).join(' · ');
-                return `<option value="${escapeHtml(item.id)}"${selected}>${escapeHtml(item.name)}${meta ? ` — ${escapeHtml(meta)}` : ''}</option>`;
+        const defaultItemName = () => itemsForSelectedArea()[0]?.name ?? '';
+
+        const itemOptions = (selectedName) => {
+            const first = '<option value="">Select item</option>';
+            return first + itemsForSelectedArea().map((item) => {
+                const selected = String(item.name) === String(selectedName ?? '') ? ' selected' : '';
+                const meta = [item.businessUnit, item.location].filter(Boolean).join(' · ');
+                return `<option value="${escapeHtml(item.name)}" data-meta="${escapeHtml(meta)}"${selected}>${escapeHtml(item.name)}</option>`;
             }).join('');
         };
 
-        const defaultItemId = () => saleFeedConfig.items[0]?.id ?? '';
-        const defaultRate = (item, unit) => {
-            if (!item) return 0;
-            const bagPrice = numberValue(item.salePrice);
-            return unit === 'KG' && numberValue(item.packSize) > 0 ? bagPrice / numberValue(item.packSize) : bagPrice;
-        };
-
-        const syncRowItem = (row, resetRate = true) => {
+        const syncRowItem = (row, resetRate = false) => {
             const itemSelect = row.querySelector('[data-sale-feed-item]');
-            const unitSelect = row.querySelector('[data-sale-feed-unit]');
             const rateInput = row.querySelector('[data-sale-feed-rate]');
-            const item = itemsById.get(String(itemSelect?.value ?? ''));
-            const unit = unitSelect?.value ?? 'BAG';
             const meta = row.querySelector('[data-sale-feed-meta]');
+            const selected = itemSelect?.selectedOptions?.[0];
 
             if (meta) {
-                meta.textContent = item
-                    ? `${item.code} · ${numberValue(item.packSize).toFixed(2)} KG/bag${item.brand ? ` · ${item.brand}` : ''}`
-                    : '';
+                meta.textContent = selected?.dataset?.meta || '';
             }
 
-            if (resetRate && rateInput && item) {
-                rateInput.value = defaultRate(item, unit).toFixed(2);
+            if (resetRate && rateInput) {
+                const item = itemsForSelectedArea().find((candidate) => String(candidate.name) === String(itemSelect?.value || ''));
+                if (item && item.salePrice !== undefined) {
+                    rateInput.value = numberValue(item.salePrice).toFixed(2);
+                }
             }
         };
 
         const lineMarkup = (index, values = {}) => {
-            const selectedItemId = values.item_id ?? defaultItemId();
-            const item = itemsById.get(String(selectedItemId));
-            const unit = String(values.unit ?? 'BAG').toUpperCase() === 'KG' ? 'KG' : 'BAG';
+            const selectedItemName = values.item_name ?? values.item_id ?? defaultItemName();
+            const item = itemsForSelectedArea().find((candidate) => String(candidate.name) === String(selectedItemName));
             const rate = values.rate !== undefined && values.rate !== null && values.rate !== ''
                 ? numberValue(values.rate)
-                : defaultRate(item, unit);
+                : numberValue(item?.salePrice ?? 0);
             const quantity = values.quantity ?? 1;
             const discount = values.discount ?? 0;
+            const unit = values.unit ?? 'Unit';
 
             return `
                 <tr data-sale-feed-line>
                     <td class="hg-feed-item-cell">
-                        <select name="lines[${index}][item_id]" data-sale-feed-item required data-hg-searchable-ignore>${itemOptions(selectedItemId)}</select>
+                        <select name="lines[${index}][item_name]" data-sale-feed-item required data-hg-searchable-ignore>${itemOptions(selectedItemName)}</select>
                         <small data-sale-feed-meta></small>
                     </td>
-                    <td class="right"><strong data-sale-feed-available>0.0000 KG</strong></td>
-                    <td><select name="lines[${index}][unit]" data-sale-feed-unit data-hg-searchable-ignore><option value="BAG"${unit === 'BAG' ? ' selected' : ''}>Bag</option><option value="KG"${unit === 'KG' ? ' selected' : ''}>KG</option></select></td>
+                    <td><input name="lines[${index}][unit]" data-sale-feed-unit type="text" value="${escapeHtml(unit)}" placeholder="Unit"></td>
                     <td><input class="right" name="lines[${index}][quantity]" data-sale-feed-quantity type="number" min="0.0001" step="0.0001" value="${escapeHtml(quantity)}" required></td>
                     <td><input class="right" name="lines[${index}][rate]" data-sale-feed-rate type="number" min="0" step="0.01" value="${escapeHtml(rate.toFixed(2))}" required></td>
                     <td><input class="right" name="lines[${index}][discount]" data-sale-feed-discount type="number" min="0" step="0.01" value="${escapeHtml(discount)}"></td>
-                    <td class="right"><strong data-sale-feed-line-total>${moneyText(0)}</strong><small data-sale-feed-base-qty></small></td>
-                    <td><button class="hg-btn hg-btn-small hg-btn-danger" type="button" data-sale-feed-remove aria-label="Remove feed item">×</button></td>
+                    <td class="right"><strong data-sale-feed-line-total>${moneyText(0)}</strong></td>
+                    <td><button class="hg-btn hg-btn-small hg-btn-danger" type="button" data-sale-feed-remove aria-label="Remove item">×</button></td>
                 </tr>`;
         };
 
@@ -596,32 +591,20 @@ if (page) {
             }
 
             let subtotal = 0;
-            let hasStockError = false;
             let hasValidLine = false;
 
             rowsContainer.querySelectorAll('[data-sale-feed-line]').forEach((row) => {
-                const itemId = row.querySelector('[data-sale-feed-item]')?.value;
-                const item = itemsById.get(String(itemId ?? ''));
-                const unit = row.querySelector('[data-sale-feed-unit]')?.value ?? 'BAG';
+                const itemName = row.querySelector('[data-sale-feed-item]')?.value;
                 const quantity = Math.max(0, numberValue(row.querySelector('[data-sale-feed-quantity]')?.value));
                 const rate = Math.max(0, numberValue(row.querySelector('[data-sale-feed-rate]')?.value));
                 const discount = Math.max(0, numberValue(row.querySelector('[data-sale-feed-discount]')?.value));
                 const lineTotal = Math.max(0, (quantity * rate) - discount);
-                const baseQuantity = unit === 'BAG' ? quantity * numberValue(item?.packSize) : quantity;
-                const stock = stockFor(itemId);
-                const insufficient = Boolean(itemId) && baseQuantity > stock.quantity + 0.00005;
 
                 subtotal += lineTotal;
-                hasStockError ||= insufficient;
-                hasValidLine ||= Boolean(itemId) && quantity > 0;
+                hasValidLine ||= Boolean(itemName) && quantity > 0;
 
-                row.classList.toggle('hg-feed-stock-error', insufficient);
-                const available = row.querySelector('[data-sale-feed-available]');
                 const total = row.querySelector('[data-sale-feed-line-total]');
-                const base = row.querySelector('[data-sale-feed-base-qty]');
-                if (available) available.textContent = `${stock.quantity.toFixed(4)} KG${insufficient ? ' — insufficient' : ''}`;
                 if (total) total.textContent = moneyText(lineTotal);
-                if (base) base.textContent = `${baseQuantity.toFixed(4)} KG`;
             });
 
             const otherCharges = Math.max(0, numberValue(otherChargesInput?.value));
@@ -629,22 +612,40 @@ if (page) {
 
             if (itemsTotalInput) itemsTotalInput.value = subtotal.toFixed(scale);
             setTotalBill(totalBill);
-            form.dataset.saleStockInvalid = hasStockError ? '1' : '0';
+            form.dataset.saleStockInvalid = '0';
             form.dataset.saleHasFeedLine = hasValidLine ? '1' : '0';
         };
 
         recalculateSaleFeed = calculateSaleFeed;
+        refreshSaleBusinessItems = () => {
+            rowsContainer.querySelectorAll('[data-sale-feed-line]').forEach((row) => {
+                const select = row.querySelector('[data-sale-feed-item]');
+                if (!select) return;
+
+                const current = select.value;
+                select.innerHTML = itemOptions(current);
+                if (current && !select.value) {
+                    select.value = defaultItemName();
+                }
+                if (!select.value) {
+                    select.value = defaultItemName();
+                }
+                syncRowItem(row, true);
+            });
+            calculateSaleFeed();
+        };
 
         const initialLines = Array.isArray(saleFeedConfig.initialLines) && saleFeedConfig.initialLines.length
             ? saleFeedConfig.initialLines
-            : [{ item_id: defaultItemId(), unit: 'BAG', quantity: 1, rate: saleFeedConfig.items[0]?.salePrice ?? 0, discount: 0 }];
+            : [{ item_name: defaultItemName(), unit: 'Unit', quantity: 1, rate: 0, discount: 0 }];
         initialLines.forEach((line) => addLine(line));
+        refreshSaleBusinessItems();
 
         addButton.addEventListener('click', () => addLine({
-            item_id: defaultItemId(),
-            unit: 'BAG',
+            item_name: defaultItemName(),
+            unit: 'Unit',
             quantity: 1,
-            rate: saleFeedConfig.items[0]?.salePrice ?? 0,
+            rate: 0,
             discount: 0,
         }));
 
@@ -658,7 +659,7 @@ if (page) {
             const row = event.target.closest('[data-sale-feed-line]');
             if (!row) return;
 
-            if (event.target.matches('[data-sale-feed-item], [data-sale-feed-unit]')) {
+            if (event.target.matches('[data-sale-feed-item]')) {
                 syncRowItem(row, true);
             }
             calculateSaleFeed();
@@ -674,7 +675,6 @@ if (page) {
         });
 
         otherChargesInput?.addEventListener('input', calculateSaleFeed);
-        saleWarehouse?.addEventListener('change', calculateSaleFeed);
 
         form?.addEventListener('submit', (event) => {
             if (!isFeedSaleMode()) return;
@@ -683,13 +683,7 @@ if (page) {
 
             if (form.dataset.saleHasFeedLine !== '1') {
                 event.preventDefault();
-                window.alert('Add at least one feed item before posting the sale.');
-                return;
-            }
-
-            if (form.dataset.saleStockInvalid === '1') {
-                event.preventDefault();
-                window.alert('One or more sale lines are greater than the available stock in the selected warehouse.');
+                window.alert('Add at least one item before posting the sale.');
             }
         });
 

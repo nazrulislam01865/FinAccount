@@ -77,6 +77,12 @@ class Transaction extends Model
         return $this->hasOne(\App\Models\Feed\FeedDocument::class);
     }
 
+
+    public function saleLines(): HasMany
+    {
+        return $this->hasMany(TransactionSaleLine::class)->orderBy('sequence');
+    }
+
     public function attachments(): HasMany
     {
         return $this->hasMany(TransactionAttachment::class);

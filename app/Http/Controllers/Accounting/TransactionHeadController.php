@@ -74,6 +74,14 @@ class TransactionHeadController extends Controller
 
         if ($action === 'delete') {
             $this->ensureBulkDeletePermission($request);
+
+            // Let a normal form submit delete records too when the safe-delete
+            // JavaScript/modal is stale or did not load. Preview requests still
+            // return the dependency plan and are not auto-confirmed.
+            if (! $request->boolean('preview') && ! $request->boolean('confirmed')) {
+                $request->merge(['confirmed' => true]);
+            }
+
             $plan = $this->buildBulkDeletionPlan(
                 $heads,
                 fn (TransactionHead $head) => $this->safeDeleteService->inspectTransactionHead($head),
@@ -124,6 +132,13 @@ class TransactionHeadController extends Controller
     public function destroy(Request $request, TransactionHead $transactionHead): JsonResponse|RedirectResponse
     {
         $this->ensureCompany($request, $transactionHead);
+
+        // Delete must still work from a normal form submit if the safe-delete
+        // modal script is not available. Preview requests remain previews.
+        if (! $request->boolean('preview') && ! $request->boolean('confirmed')) {
+            $request->merge(['confirmed' => true]);
+        }
+
         $plan = $this->safeDeleteService->inspectTransactionHead($transactionHead);
 
         return $this->performSafeDelete(

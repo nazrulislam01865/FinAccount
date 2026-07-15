@@ -1,4 +1,7 @@
 @php
+    $defaultTransactionHeadId = old('transaction_head_id', $settings->purchase_transaction_head_id ?: $transactionHeads->first()?->id);
+    $defaultTransactionHead = $transactionHeads->firstWhere('id', (int) $defaultTransactionHeadId) ?: $transactionHeads->first();
+    $defaultPostingAccountName = $defaultTransactionHead?->postingAccount?->name ?? 'Account not configured';
     $defaultWarehouseId = old('tracking_unit_id', $settings->default_tracking_unit_id ?: $warehouses->first()?->id);
     $initialLines = old('lines', [[
         'item_id' => $items->first()?->id,
@@ -53,7 +56,18 @@
                     @csrf
                     <input type="hidden" name="request_token" value="{{ $requestToken }}">
 
-                    <div class="feed-grid-3">
+                    <div class="feed-grid-1">
+                        <div class="feed-field">
+                            <label for="transaction_head_id">Transaction Head <span class="feed-req">*</span></label>
+                            <select class="feed-control" id="transaction_head_id" name="transaction_head_id" required data-feed-transaction-head data-hg-searchable-ignore>
+                                <option value="">Select transaction head</option>
+                                @foreach($transactionHeads as $head)
+                                    <option value="{{ $head->id }}" @selected((string) $defaultTransactionHeadId === (string) $head->id) data-account-name="{{ $head->postingAccount?->name }}" data-account-code="{{ $head->postingAccount?->code }}">{{ $head->code }} — {{ $head->name }} @if($head->postingAccount) ({{ $head->postingAccount->code }} — {{ $head->postingAccount->name }}) @endif</option>
+                                @endforeach
+                            </select>
+                            <div class="feed-help">This head decides the accounting rule and inventory account for this feed purchase.</div>
+                            @if($transactionHeads->isEmpty())<div class="feed-warning-text">Add an active Purchase transaction head linked with a level-3 Asset account before posting.</div>@endif
+                        </div>
                         <div class="feed-field">
                             <label for="transaction_date">Date <span class="feed-req">*</span></label>
                             <input class="feed-control" id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $transactionDateContext['default']) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
@@ -106,19 +120,19 @@
                     </div>
 
                     <div class="feed-divider"></div>
-                    <div class="feed-grid-2">
+                    <div class="feed-grid-1">
                         <div class="feed-field">
                             <label for="other_cost">Other Cost (Transport, etc.)</label>
                             <input class="feed-control" id="other_cost" name="other_cost" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('other_cost', 0) }}" data-feed-money-input>
                         </div>
                         <div class="feed-field">
                             <label for="calculated_total_cost">Total Cost</label>
-                            <input class="feed-control feed-readonly" id="calculated_total_cost" readonly>
+                            <input class="feed-control feed-readonly" id="calculated_total_cost" data-feed-calculated-total readonly>
                         </div>
                     </div>
 
                     <div class="feed-divider"></div>
-                    <div class="feed-grid-3">
+                    <div class="feed-grid-1">
                         <div class="feed-field">
                             <label for="paid_amount">Paid Now ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="feed-req">*</span></label>
                             <input class="feed-control" id="paid_amount" name="paid_amount" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('paid_amount', 0) }}" required data-feed-money-input>
@@ -139,7 +153,7 @@
                         </div>
                     </div>
 
-                    <div class="feed-grid-2 feed-section-gap">
+                    <div class="feed-grid-1 feed-section-gap">
                         <div class="feed-field">
                             <label for="transaction_attachments">Attachment</label>
                             <div class="feed-upload">
@@ -158,7 +172,7 @@
                             <a class="feed-btn" href="{{ route('feed.purchases.create') }}">Clear</a>
                         </div>
                         <div class="feed-right-actions">
-                            <button class="feed-btn feed-btn-primary" type="submit" @disabled($suppliers->isEmpty())>Post Purchase</button>
+                            <button class="feed-btn feed-btn-primary" type="submit" @disabled($suppliers->isEmpty() || $transactionHeads->isEmpty())>Post Purchase</button>
                         </div>
                     </div>
                 </form>
@@ -193,7 +207,7 @@
                         <div class="feed-summary-label">Journal Preview</div>
                         <div class="feed-journal">
                             <div class="feed-journal-row feed-journal-head"><span>Account</span><span>Debit</span><span>Credit</span></div>
-                            <div class="feed-journal-row"><span>{{ $settings->purchaseTransactionHead?->postingAccount?->name ?? 'Account not configured' }}</span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
+                            <div class="feed-journal-row"><span data-feed-summary="posting-account">{{ $defaultPostingAccountName }}</span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
                             <div class="feed-journal-row"><span data-feed-summary="money-name">Cash / Bank</span><span></span><span data-feed-summary="paid">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                             <div class="feed-journal-row"><span>Supplier Payable</span><span></span><span data-feed-summary="due">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                         </div>
@@ -203,6 +217,18 @@
         </div>
     </div>
 
+    @php
+        $transactionHeadsForJs = $transactionHeads->map(function ($head) {
+            return [
+                'id' => $head->id,
+                'name' => $head->name,
+                'code' => $head->code,
+                'accountName' => $head->postingAccount?->name,
+                'accountCode' => $head->postingAccount?->code,
+            ];
+        })->values();
+    @endphp
+
     @push('scripts')
         <script>
             window.HISEBGHOR_FEED_PAGE = {
@@ -211,6 +237,7 @@
                 decimalPlaces: {{ \App\Support\CompanyContext::decimalPlaces() }},
                 items: @json($feedItemsForJs),
                 initialLines: @json(array_values($initialLines)),
+                transactionHeads: @json($transactionHeadsForJs),
                 stock: {}
             };
         </script>

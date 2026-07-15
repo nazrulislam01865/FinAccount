@@ -41,6 +41,7 @@
                                             @if(auth()->user()->canDeleteAccountingRecords())
                                                 <form method="POST" action="{{ route('feed.setup.items.destroy', $item) }}" data-safe-delete-form>
                                                     @csrf @method('DELETE')
+                                                    <input type="hidden" name="confirmed" value="1">
                                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                                 </form>
                                             @endif
@@ -111,6 +112,7 @@
                                             @if(auth()->user()->canDeleteAccountingRecords())
                                                 <form method="POST" action="{{ route('feed.setup.warehouses.destroy', $warehouse) }}" data-safe-delete-form>
                                                     @csrf @method('DELETE')
+                                                    <input type="hidden" name="confirmed" value="1">
                                                     <button class="hg-btn hg-btn-small hg-btn-danger" type="submit">Delete</button>
                                                 </form>
                                             @endif

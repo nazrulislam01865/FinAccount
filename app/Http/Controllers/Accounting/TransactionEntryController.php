@@ -7,6 +7,7 @@ use App\Http\Requests\Accounting\StoreTransactionRequest;
 use App\Models\AccountingOption;
 use App\Models\ChartOfAccount;
 use App\Models\Feed\FeedBusinessArea;
+use App\Models\Feed\FeedBusinessTrackingUnit;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
 use App\Models\Feed\FeedStockBalance;
@@ -33,6 +34,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -122,13 +125,13 @@ class TransactionEntryController extends Controller
                 ->orderBy('name')
                 ->get()
             : collect();
-        // Keep the Sales transaction entry behavior stable: normal sales use Others,
-        // and feed-item sales are opened only by selecting Feed. Business areas are
-        // managed in Business Tracking; they must not replace this Sales dropdown.
-        $saleSellingTypeOptions = [
-            SaleSellingTypes::OTHERS => 'Others',
-            SaleSellingTypes::FEED => 'Feed',
-        ];
+        // Sales transaction entry now starts with the Business Area selector.
+        // Active Business Areas come from Business Tracking setup; Others remains
+        // available for plain sales without item lines.
+        $saleSellingTypeOptions = $saleBusinessAreas
+            ->mapWithKeys(fn (FeedBusinessArea $area): array => [$area->code => $area->name])
+            ->all();
+        $saleSellingTypeOptions[SaleSellingTypes::OTHERS] = 'Others';
 
         $saleTrackingUnits = $isSaleCategory
             ? FeedWarehouse::query()
@@ -154,6 +157,9 @@ class TransactionEntryController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get()
+            : collect();
+        $saleBusinessItems = $isSaleCategory
+            ? $this->saleBusinessItems($companyId)
             : collect();
         $saleStockBalances = $isSaleCategory
             ? FeedStockBalance::query()
@@ -221,8 +227,40 @@ class TransactionEntryController extends Controller
             'defaultSaleTrackingUnitId' => $defaultSaleWarehouseId,
             'saleCustomers' => $saleCustomers,
             'saleFeedItems' => $saleFeedItems,
+            'saleBusinessItemsForJs' => $saleBusinessItems,
             'saleStockBalances' => $saleStockBalances,
         ]);
+    }
+
+    private function saleBusinessItems(int $companyId): \Illuminate\Support\Collection
+    {
+        return FeedBusinessTrackingUnit::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNotNull('items')
+            ->orderBy('business_area')
+            ->orderBy('name')
+            ->get()
+            ->flatMap(function (FeedBusinessTrackingUnit $unit): array {
+                $items = is_array($unit->items) ? $unit->items : [];
+
+                return collect($items)
+                    ->map(fn (mixed $item): string => trim((string) $item))
+                    ->filter()
+                    ->unique()
+                    ->map(fn (string $item): array => [
+                        'id' => $unit->business_area.'::'.$item,
+                        'name' => $item,
+                        'businessArea' => (string) $unit->business_area,
+                        'businessUnit' => (string) $unit->name,
+                        'location' => (string) ($unit->location ?? ''),
+                        'salePrice' => 0.0,
+                    ])
+                    ->values()
+                    ->all();
+            })
+            ->unique(fn (array $item): string => strtolower($item['businessArea'].'|'.$item['name']))
+            ->values();
     }
 
     public function preview(Request $request): JsonResponse
@@ -395,6 +433,10 @@ class TransactionEntryController extends Controller
             $validated['paid_amount'] = $validated['amount'];
         }
 
+        if ($this->shouldPostAsBusinessAreaSale($validated)) {
+            $validated = $this->prepareBusinessAreaSalePayload($validated, (int) $request->user()->company_id);
+        }
+
         if ($this->shouldPostAsFeedSale($validated)) {
             $document = $this->feedPostingService->postSale($this->feedSalePayload($validated), $request->user());
             $transaction = $document->transaction;
@@ -412,6 +454,7 @@ class TransactionEntryController extends Controller
         }
 
         $transaction = $this->transactionPostingService->post($validated, $request->user());
+        $this->storeBusinessSaleLines($transaction, $validated['business_sale_lines'] ?? []);
         $this->transactionAttachmentService->storeUploaded(
             $transaction,
             $request->file('transaction_attachments'),
@@ -452,10 +495,169 @@ class TransactionEntryController extends Controller
     private function shouldPostAsFeedSale(array $data): bool
     {
         $sellingType = SaleSellingTypes::normalize($data['selling_type'] ?? null);
+        $lines = collect($data['lines'] ?? []);
+
+        return SaleSellingTypes::isSaleCategory($data['category'] ?? null)
+            && $sellingType === SaleSellingTypes::FEED
+            && filled($data['tracking_unit_id'] ?? null)
+            && $lines->isNotEmpty()
+            && $lines->every(fn (mixed $line): bool => is_array($line) && is_numeric($line['item_id'] ?? null));
+    }
+
+    /** @param array<string, mixed> $data */
+    private function shouldPostAsBusinessAreaSale(array $data): bool
+    {
+        $sellingType = SaleSellingTypes::normalize($data['selling_type'] ?? null);
 
         return SaleSellingTypes::isSaleCategory($data['category'] ?? null)
             && filled($sellingType)
-            && ! SaleSellingTypes::isOthers($sellingType);
+            && ! SaleSellingTypes::isOthers($sellingType)
+            && ! $this->shouldPostAsFeedSale($data);
+    }
+
+    /** @param array<string, mixed> $data @return array<string, mixed> */
+    private function prepareBusinessAreaSalePayload(array $data, int $companyId): array
+    {
+        $businessArea = SaleSellingTypes::normalize($data['selling_type'] ?? null);
+        $validItems = $this->validBusinessSaleItems($companyId, (string) $businessArea);
+
+        if ($validItems === []) {
+            throw ValidationException::withMessages([
+                'lines' => 'No active items are configured for the selected business area. Add items in Business Tracking Setup first.',
+            ]);
+        }
+
+        $preparedLines = [];
+        $subtotal = 0.0;
+
+        foreach ((array) ($data['lines'] ?? []) as $index => $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $itemName = trim((string) ($line['item_name'] ?? $line['item_id'] ?? ''));
+            $itemKey = mb_strtolower($itemName);
+
+            if ($itemName === '' || ! isset($validItems[$itemKey])) {
+                throw ValidationException::withMessages([
+                    'lines.'.$index.'.item_name' => 'The selected item is not configured under the selected business area.',
+                ]);
+            }
+
+            $quantity = round((float) ($line['quantity'] ?? 0), 4);
+            $rate = round((float) ($line['rate'] ?? 0), 2);
+            $discount = round((float) ($line['discount'] ?? 0), 2);
+            $gross = round($quantity * $rate, 2);
+
+            if ($quantity <= 0) {
+                throw ValidationException::withMessages(['lines.'.$index.'.quantity' => 'Quantity must be greater than zero.']);
+            }
+
+            if ($discount > $gross) {
+                throw ValidationException::withMessages(['lines.'.$index.'.discount' => 'Discount cannot be greater than the line gross amount.']);
+            }
+
+            $lineTotal = round($gross - $discount, 2);
+            $subtotal = round($subtotal + $lineTotal, 2);
+
+            $preparedLines[] = [
+                'business_area' => (string) $businessArea,
+                'item_name' => $validItems[$itemKey],
+                'unit' => trim((string) ($line['unit'] ?? 'Unit')) ?: 'Unit',
+                'quantity' => $quantity,
+                'rate' => $rate,
+                'discount' => $discount,
+                'line_total' => $lineTotal,
+            ];
+        }
+
+        if ($preparedLines === []) {
+            throw ValidationException::withMessages(['lines' => 'Add at least one item before posting the sale.']);
+        }
+
+        $otherCharges = round((float) ($data['other_charges'] ?? 0), 2);
+        $total = round($subtotal + $otherCharges, 2);
+
+        if ($total <= 0) {
+            throw ValidationException::withMessages(['amount' => 'The sale total must be greater than zero.']);
+        }
+
+        $itemSummary = collect($preparedLines)
+            ->map(fn (array $line): string => $line['item_name'].' × '.$line['quantity'].' @ '.number_format($line['rate'], 2, '.', '').' = '.number_format($line['line_total'], 2, '.', ''))
+            ->implode('; ');
+        $areaName = FeedBusinessArea::query()
+            ->where('company_id', $companyId)
+            ->where('code', $businessArea)
+            ->value('name') ?: ucfirst((string) $businessArea);
+        $description = trim((string) ($data['description'] ?? ''));
+        $autoDescription = $areaName.' sale items: '.$itemSummary;
+        if ($otherCharges > 0) {
+            $autoDescription .= '; Other charges: '.number_format($otherCharges, 2, '.', '');
+        }
+
+        $data['amount'] = number_format($total, 2, '.', '');
+        $data['tracking_unit_id'] = null;
+        $data['business_sale_lines'] = $preparedLines;
+        $data['description'] = $description !== '' ? $description."
+".$autoDescription : $autoDescription;
+
+        return $data;
+    }
+
+    /** @return array<string, string> */
+    private function validBusinessSaleItems(int $companyId, string $businessArea): array
+    {
+        $activeArea = FeedBusinessArea::query()
+            ->where('company_id', $companyId)
+            ->where('code', $businessArea)
+            ->where('is_active', true)
+            ->exists();
+
+        if (! $activeArea) {
+            return [];
+        }
+
+        return FeedBusinessTrackingUnit::query()
+            ->where('company_id', $companyId)
+            ->where('business_area', $businessArea)
+            ->where('is_active', true)
+            ->whereNotNull('items')
+            ->get()
+            ->flatMap(fn (FeedBusinessTrackingUnit $unit) => is_array($unit->items) ? $unit->items : [])
+            ->map(fn (mixed $item): string => trim((string) $item))
+            ->filter()
+            ->unique(fn (string $item): string => mb_strtolower($item))
+            ->mapWithKeys(fn (string $item): array => [mb_strtolower($item) => $item])
+            ->all();
+    }
+
+    /** @param array<int, array<string, mixed>> $lines */
+    private function storeBusinessSaleLines(Transaction $transaction, array $lines): void
+    {
+        if ($lines === [] || ! Schema::hasTable('transaction_sale_lines')) {
+            return;
+        }
+
+        DB::table('transaction_sale_lines')
+            ->where('transaction_id', $transaction->id)
+            ->delete();
+
+        foreach (array_values($lines) as $index => $line) {
+            DB::table('transaction_sale_lines')->insert([
+                'company_id' => $transaction->company_id,
+                'transaction_id' => $transaction->id,
+                'business_area' => $line['business_area'],
+                'item_name' => $line['item_name'],
+                'unit' => $line['unit'],
+                'quantity' => $line['quantity'],
+                'rate' => $line['rate'],
+                'discount' => $line['discount'],
+                'line_total' => $line['line_total'],
+                'sequence' => $index + 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     /** @param array<string, mixed> $data */

@@ -63,16 +63,30 @@ class FeedAccountingSetupService
                         ? $existing->cogsAccount
                         : $this->ensureSystemAccount($companyId, self::COGS_CODE, 'Feed Cost of Goods Sold', 'Expense', 'Debit', [$inventoryAccount->id]);
 
-                $purchaseHead = $this->usableHead($existing->purchaseTransactionHead, $companyId, TransactionTypes::PURCHASE, $inventoryAccount->id)
-                    ? $existing->purchaseTransactionHead
-                    : $this->ensureSystemHead($companyId, self::PURCHASE_HEAD_CODE, 'Feed Purchase', TransactionTypes::PURCHASE, 'Supplier', $inventoryAccount);
+                // If a feed head was deleted, SafeDelete clears the ID in
+                // feed_settings. A NULL ID means the user intentionally removed
+                // that transaction head; do not silently recreate it on the next
+                // feed page load. Recreate only when a stored ID exists but the
+                // linked head needs repair.
+                $purchaseHead = $existing->purchase_transaction_head_id === null
+                    ? null
+                    : ($this->usableHead($existing->purchaseTransactionHead, $companyId, TransactionTypes::PURCHASE, $inventoryAccount->id)
+                        ? $existing->purchaseTransactionHead
+                        : $this->ensureSystemHead($companyId, self::PURCHASE_HEAD_CODE, 'Feed Purchase', TransactionTypes::PURCHASE, 'Supplier', $inventoryAccount));
 
-                $saleHead = $this->usableHead($existing->saleTransactionHead, $companyId, TransactionTypes::SALE, $salesAccount->id)
-                    ? $existing->saleTransactionHead
-                    : $this->ensureSystemHead($companyId, self::SALE_HEAD_CODE, 'Feed Sale', TransactionTypes::SALE, 'Customer', $salesAccount);
+                $saleHead = $existing->sale_transaction_head_id === null
+                    ? null
+                    : ($this->usableHead($existing->saleTransactionHead, $companyId, TransactionTypes::SALE, $salesAccount->id)
+                        ? $existing->saleTransactionHead
+                        : $this->ensureSystemHead($companyId, self::SALE_HEAD_CODE, 'Feed Sale', TransactionTypes::SALE, 'Customer', $salesAccount));
 
-                $this->ensureHeadRules($purchaseHead, 'Supplier', false, 'PUR');
-                $this->ensureHeadRules($saleHead, 'Customer', true, 'SAL');
+                if ($purchaseHead) {
+                    $this->ensureHeadRules($purchaseHead, 'Supplier', false, 'PUR');
+                }
+
+                if ($saleHead) {
+                    $this->ensureHeadRules($saleHead, 'Customer', true, 'SAL');
+                }
 
                 $defaultWarehouseId = $existing->defaultWarehouse
                     && (int) $existing->defaultWarehouse->company_id === $companyId
@@ -85,8 +99,8 @@ class FeedAccountingSetupService
                             ->value('id');
 
                 $existing->update([
-                    'purchase_transaction_head_id' => $purchaseHead->id,
-                    'sale_transaction_head_id' => $saleHead->id,
+                    'purchase_transaction_head_id' => $purchaseHead?->id,
+                    'sale_transaction_head_id' => $saleHead?->id,
                     'cogs_account_id' => $cogsAccount->id,
                     'default_tracking_unit_id' => $defaultWarehouseId,
                 ]);

@@ -84,6 +84,7 @@
                     <th>Head</th>
                     <th>Transaction Type</th>
                     <th>Linked Account</th>
+                    <th>Accounting Rule</th>
                     <th>Allowed Payment Types</th>
                     <th>Party Type</th>
                     <th>Status</th>
@@ -93,6 +94,18 @@
                 <tbody>
                 @foreach ($transactionHeads as $head)
                     @php
+                        $totalRuleCount = (int) ($head->applicable_accounting_rules_count ?? 0);
+                        $displayActiveRuleCount = (int) ($head->active_applicable_accounting_rules_count ?? 0);
+                        $headSpecificRuleCount = (int) ($head->head_specific_accounting_rules_count ?? 0);
+                        $templateRuleCount = (int) ($head->template_accounting_rules_count ?? 0);
+                        $hasAccountingRule = $totalRuleCount > 0;
+                        $ruleScopeLabel = match (true) {
+                            $headSpecificRuleCount > 0 && $templateRuleCount > 0 => 'Head-specific + template fallback',
+                            $headSpecificRuleCount > 0 => 'Head-specific',
+                            $templateRuleCount > 0 => 'Type/payment template',
+                            default => 'Not assigned',
+                        };
+
                         $editValues = [
                             'record_id' => $head->id,
                             'code' => $head->code,
@@ -120,6 +133,16 @@
                         <td><strong>{{ $head->code }}</strong><br>{{ $head->name }}</td>
                         <td>{{ $categoryLabels[$head->category] ?? $head->category }}</td>
                         <td>{{ $head->postingAccount ? ($head->postingAccount->code.' — '.$head->postingAccount->name) : 'Not linked' }}</td>
+                        <td>
+                            @if($hasAccountingRule)
+                                <span class="hg-badge {{ $displayActiveRuleCount > 0 ? 'on' : 'off' }}">{{ $displayActiveRuleCount > 0 ? 'Linked' : 'Inactive Rule' }}</span><br>
+                                <small class="hg-muted">{{ $displayActiveRuleCount }} active / {{ $totalRuleCount }} total</small><br>
+                                <small class="hg-muted">{{ $ruleScopeLabel }}</small>
+                            @else
+                                <span class="hg-badge off">No Rule</span><br>
+                                <small class="hg-muted">Not assigned</small>
+                            @endif
+                        </td>
                         <td>{{ collect($head->allowedSettlementCodes())->map(fn($value) => $settlementLabels[$value] ?? $value)->join(', ') ?: 'Not configured' }}</td>
                         <td>{{ $partyTypeLabels[$head->party_type] ?? ($head->party_type ?: 'Any') }}</td>
                         <td><span class="hg-badge {{ $head->is_active ? 'on' : 'off' }}">{{ $head->is_active ? 'Active' : 'Inactive' }}</span></td>
@@ -144,6 +167,7 @@
                         <td><strong>{{ $fields['code'] ?? 'Draft' }}</strong><br>{{ $fields['name'] ?? 'Draft Transaction Head' }}</td>
                         <td>{{ $categoryLabels[$fields['category'] ?? ''] ?? ($fields['category'] ?? '—') }}</td>
                         <td>{{ filled($fields['posting_account_id'] ?? null) ? 'COA ID #'.$fields['posting_account_id'] : 'Not selected' }}</td>
+                        <td><span class="hg-badge draft">Draft</span><br><small class="hg-muted">Not checked yet</small></td>
                         <td>{{ collect((array) ($fields['allowed_settlements'] ?? []))->map(fn($value) => $settlementLabels[$value] ?? $value)->join(', ') ?: 'Not selected' }}</td>
                         <td>{{ $partyTypeLabels[$fields['party_type'] ?? ''] ?? ($fields['party_type'] ?? 'Any') }}</td>
                         <td><span class="hg-badge draft">Draft</span></td>

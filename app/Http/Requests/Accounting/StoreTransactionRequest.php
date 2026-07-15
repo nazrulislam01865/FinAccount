@@ -5,6 +5,7 @@ namespace App\Http\Requests\Accounting;
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
 use App\Models\Feed\FeedBusinessArea;
+use App\Models\Feed\FeedBusinessTrackingUnit;
 use App\Support\CompanyContext;
 use App\Support\SaleSellingTypes;
 use Illuminate\Foundation\Http\FormRequest;
@@ -26,7 +27,7 @@ class StoreTransactionRequest extends FormRequest
         return [
             'category' => ['required', $this->activeAccountingOption(AccountingOption::GROUP_TRANSACTION_CATEGORY)],
             'selling_type' => [
-                Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()),
+                Rule::requiredIf(fn (): bool => SaleSellingTypes::isSaleCategory($this->input('category'))),
                 'nullable',
                 'string',
                 function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
@@ -39,29 +40,18 @@ class StoreTransactionRequest extends FormRequest
                         return;
                     }
 
-                    $hasActiveBusinessAreas = FeedBusinessArea::query()
-                        ->where('company_id', $companyId)
-                        ->where('is_active', true)
-                        ->exists();
-
                     $exists = FeedBusinessArea::query()
                         ->where('company_id', $companyId)
                         ->where('code', $sellingType)
                         ->where('is_active', true)
                         ->exists();
 
-                    $isBuiltInFeed = $sellingType === SaleSellingTypes::FEED;
-                    $isBuiltInFallback = ! $hasActiveBusinessAreas
-                        && array_key_exists($sellingType, SaleSellingTypes::labels())
-                        && ! SaleSellingTypes::isOthers($sellingType);
-
-                    if (! $exists && ! $isBuiltInFeed && ! $isBuiltInFallback) {
+                    if (! $exists) {
                         $fail('The selected what are you selling is not an active business area.');
                     }
                 },
             ],
             'tracking_unit_id' => [
-                Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()),
                 'nullable',
                 'integer',
                 Rule::exists('feed_warehouses', 'id')->where(fn ($query) => $query
@@ -118,13 +108,34 @@ class StoreTransactionRequest extends FormRequest
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'lte:amount', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'other_charges' => [Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()), 'nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'lines' => [Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()), 'nullable', 'array', 'min:1', 'max:100'],
-            'lines.*.item_id' => [
-                'required_with:lines', 'integer',
-                Rule::exists('feed_items', 'id')->where(fn ($query) => $query
-                    ->where('company_id', $companyId)
-                    ->where('is_active', true)),
+            'lines.*.item_name' => [
+                'required_with:lines',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                    if (! $this->isFeedSaleSelected()) {
+                        return;
+                    }
+
+                    $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
+                    $itemName = trim((string) $value);
+                    $exists = FeedBusinessTrackingUnit::query()
+                        ->where('company_id', $companyId)
+                        ->where('business_area', $sellingType)
+                        ->where('is_active', true)
+                        ->whereNotNull('items')
+                        ->get()
+                        ->flatMap(fn (FeedBusinessTrackingUnit $unit) => is_array($unit->items) ? $unit->items : [])
+                        ->map(fn (mixed $item): string => mb_strtolower(trim((string) $item)))
+                        ->contains(mb_strtolower($itemName));
+
+                    if (! $exists) {
+                        $fail('The selected item is not configured under the selected business area.');
+                    }
+                },
             ],
-            'lines.*.unit' => ['required_with:lines', Rule::in(['BAG', 'KG'])],
+            'lines.*.item_id' => ['nullable'],
+            'lines.*.unit' => ['nullable', 'string', 'max:50'],
             'lines.*.quantity' => ['required_with:lines', 'numeric', 'gt:0', 'decimal:0,4'],
             'lines.*.rate' => ['required_with:lines', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
@@ -151,6 +162,7 @@ class StoreTransactionRequest extends FormRequest
         return [
             'selling_type' => 'what are you selling',
             'tracking_unit_id' => 'location / godown',
+            'lines.*.item_name' => 'item',
         ];
     }
 
@@ -163,7 +175,8 @@ class StoreTransactionRequest extends FormRequest
         );
         $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
         $warehouseRequired = SaleSellingTypes::isSaleCategory($category)
-            && SaleSellingTypes::requiresWarehouse($sellingType);
+            && $sellingType === SaleSellingTypes::FEED
+            && filled($this->input('tracking_unit_id'));
 
         $this->merge([
             'category' => $category,

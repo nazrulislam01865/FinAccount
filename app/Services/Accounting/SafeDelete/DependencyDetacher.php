@@ -24,6 +24,7 @@ use App\Models\Feed\FeedStockMovement;
 use App\Models\Feed\FeedBusinessTrackingDefaultAssignment;
 use App\Models\Feed\FeedSetting;
 use App\Models\Feed\FeedDocument;
+use App\Models\Feed\FeedDocumentLine;
 
 class DependencyDetacher
 {
@@ -157,19 +158,36 @@ class DependencyDetacher
     {
         DB::transaction(function () use ($item): void {
             $locked = FeedItem::query()->lockForUpdate()->findOrFail($item->id);
+
+            $documentIds = FeedDocumentLine::query()
+                ->where('feed_item_id', $locked->id)
+                ->pluck('feed_document_id')
+                ->unique()
+                ->values();
+
             $transactionIds = FeedStockMovement::query()
                 ->where('feed_item_id', $locked->id)
                 ->pluck('transaction_id')
+                ->merge(
+                    FeedDocument::query()
+                        ->whereIn('id', $documentIds)
+                        ->pluck('transaction_id')
+                )
                 ->unique()
                 ->values();
-            
+
             $this->markTransactionsIncomplete($transactionIds);
-            
+
+            FeedDocument::query()->whereIn('id', $documentIds)->delete();
             FeedStockMovement::query()->where('feed_item_id', $locked->id)->delete();
             FeedStockBalance::query()->where('feed_item_id', $locked->id)->delete();
-            
+            FeedDocumentLine::query()->where('feed_item_id', $locked->id)->delete();
+
+            $this->assertNoReference(FeedDocumentLine::query()->where('feed_item_id', $locked->id), 'feed item document lines');
+            $this->assertNoReference(FeedStockMovement::query()->where('feed_item_id', $locked->id), 'feed item stock movements');
+            $this->assertNoReference(FeedStockBalance::query()->where('feed_item_id', $locked->id), 'feed item stock balances');
             $this->assertTransactionsIncomplete($transactionIds);
-            
+
             $locked->delete();
             $this->assertDeleted(FeedItem::class, $locked->id);
         }, attempts: 5);
@@ -226,11 +244,46 @@ class DependencyDetacher
     {
         DB::transaction(function () use ($warehouse): void {
             $locked = FeedWarehouse::query()->lockForUpdate()->findOrFail($warehouse->id);
-            
+
+            $documentIds = FeedDocument::query()
+                ->where('tracking_unit_id', $locked->id)
+                ->pluck('id')
+                ->unique()
+                ->values();
+
+            $transactionIds = Transaction::query()
+                ->where('tracking_unit_id', $locked->id)
+                ->pluck('id')
+                ->merge(
+                    FeedDocument::query()
+                        ->whereIn('id', $documentIds)
+                        ->pluck('transaction_id')
+                )
+                ->merge(
+                    FeedStockMovement::query()
+                        ->where('tracking_unit_id', $locked->id)
+                        ->pluck('transaction_id')
+                )
+                ->unique()
+                ->values();
+
+            $this->markTransactionsIncomplete($transactionIds);
+
+            Transaction::query()->where('tracking_unit_id', $locked->id)->update(['tracking_unit_id' => null]);
+            FeedDocument::query()->whereIn('id', $documentIds)->delete();
+            FeedStockMovement::query()->where('tracking_unit_id', $locked->id)->delete();
+            FeedStockBalance::query()->where('tracking_unit_id', $locked->id)->delete();
             FeedSetting::query()->where('default_tracking_unit_id', $locked->id)->update([
-                'default_tracking_unit_id' => null
+                'default_tracking_unit_id' => null,
             ]);
-            
+
+            $this->assertNoReference(Transaction::query()->where('tracking_unit_id', $locked->id), 'warehouse transactions');
+            $this->assertNoReference(FeedDocument::query()->where('tracking_unit_id', $locked->id), 'warehouse feed documents');
+            $this->assertNoReference(FeedStockMovement::query()->where('tracking_unit_id', $locked->id), 'warehouse stock movements');
+            $this->assertNoReference(FeedStockBalance::query()->where('tracking_unit_id', $locked->id), 'warehouse stock balances');
+            $this->assertNoReference(FeedSetting::query()->where('default_tracking_unit_id', $locked->id), 'warehouse feed settings');
+            $this->assertTransactionsIncomplete($transactionIds);
+
             $locked->delete();
             $this->assertDeleted(FeedWarehouse::class, $locked->id);
         }, attempts: 5);
@@ -260,8 +313,18 @@ class DependencyDetacher
         DB::transaction(function () use ($head): void {
             $locked = TransactionHead::query()->lockForUpdate()->findOrFail($head->id);
             $transactionIds = Transaction::query()->where('transaction_head_id', $locked->id)->pluck('id');
+            $ruleIds = AccountingRule::query()->where('transaction_head_id', $locked->id)->pluck('id');
+
             $this->markTransactionsIncomplete($transactionIds);
             Transaction::query()->where('transaction_head_id', $locked->id)->update(['transaction_head_id' => null]);
+
+            if ($ruleIds->isNotEmpty()) {
+                AccountingRule::query()->whereIn('id', $ruleIds)->delete();
+            }
+
+            // Clear the legacy single-rule pointer before deleting the head so
+            // old databases with stricter constraints cannot block deletion.
+            $locked->forceFill(['accounting_rule_id' => null])->save();
             
             FeedSetting::query()->where('purchase_transaction_head_id', $locked->id)->update([
                 'purchase_transaction_head_id' => null,
@@ -270,6 +333,10 @@ class DependencyDetacher
                 'sale_transaction_head_id' => null,
             ]);
 
+            $this->assertNoReference(AccountingRule::query()->where('transaction_head_id', $locked->id), 'transaction head accounting rules');
+            foreach ($ruleIds as $ruleId) {
+                $this->assertDeleted(AccountingRule::class, (int) $ruleId);
+            }
             $this->assertNoReference(Transaction::query()->where('transaction_head_id', $locked->id), 'transaction head');
             $this->assertTransactionsIncomplete($transactionIds);
             $locked->delete();

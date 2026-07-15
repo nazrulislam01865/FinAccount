@@ -35,33 +35,30 @@
     $saleTrackingUnits = $saleTrackingUnits ?? collect();
     $defaultSaleTrackingUnitId = $defaultSaleTrackingUnitId ?? null;
     $isSalesTransaction = \App\Support\SaleSellingTypes::isSaleCategory($category);
-    $selectedSellingType = \App\Support\SaleSellingTypes::normalize(old('selling_type', $isEditing ? ($transaction->selling_type ?: \App\Support\SaleSellingTypes::OTHERS) : \App\Support\SaleSellingTypes::OTHERS));
+    $saleBusinessAreas = $saleBusinessAreas ?? collect();
+    $saleBusinessItemsForJs = $saleBusinessItemsForJs ?? collect();
+    $defaultSellingType = $saleBusinessAreas->first()?->code ?: \App\Support\SaleSellingTypes::OTHERS;
+    $selectedSellingType = \App\Support\SaleSellingTypes::normalize(old('selling_type', $isEditing ? ($transaction->selling_type ?: $defaultSellingType) : $defaultSellingType));
     $selectedTrackingUnitId = old('tracking_unit_id', $isEditing ? $transaction->tracking_unit_id : $defaultSaleTrackingUnitId);
-    $showSaleWarehouse = \App\Support\SaleSellingTypes::requiresWarehouse($selectedSellingType);
+    $showSaleWarehouse = false;
     $saleFeedModeSelected = $isSalesTransaction && ! \App\Support\SaleSellingTypes::isOthers($selectedSellingType);
 
-    $saleBusinessAreas = $saleBusinessAreas ?? collect();
     $saleCustomers = $saleCustomers ?? collect();
     $saleFeedItems = $saleFeedItems ?? collect();
     $saleStockBalances = $saleStockBalances ?? collect();
     $selectedSalePartyId = old('party_id', $isEditing ? $transaction->party_id : ($dueSettlementContext['party_id'] ?? ''));
     $selectedSaleOtherCharges = old('other_charges', 0);
+    $defaultSaleBusinessItem = $saleBusinessItemsForJs
+        ->first(fn ($item) => ($item['businessArea'] ?? null) === $selectedSellingType)
+        ?? $saleBusinessItemsForJs->first();
     $saleInitialLines = old('lines', [[
-        'item_id' => $saleFeedItems->first()?->id,
-        'unit' => 'BAG',
+        'item_name' => data_get($defaultSaleBusinessItem, 'name', ''),
+        'unit' => 'Unit',
         'quantity' => 1,
-        'rate' => $saleFeedItems->first()?->default_sale_price ?? 0,
+        'rate' => data_get($defaultSaleBusinessItem, 'salePrice', 0),
         'discount' => 0,
     ]]);
-    $saleFeedItemsForJs = $saleFeedItems->map(static fn ($item): array => [
-        'id' => $item->id,
-        'code' => $item->code,
-        'name' => $item->name,
-        'category' => $item->category,
-        'brand' => $item->brand,
-        'packSize' => (float) $item->pack_size,
-        'salePrice' => (float) $item->default_sale_price,
-    ])->values();
+    $saleFeedItemsForJs = $saleBusinessItemsForJs;
 @endphp
 
 <x-layouts::accounting title="Transaction Entry">
@@ -178,6 +175,28 @@
                     @error('transaction_date')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
+                @if($isSalesTransaction && ! $isDueSettlement)
+                    <div class="hg-field full">
+                        <label for="selling_type">What are you selling? <span class="hg-required">*</span></label>
+                        <select id="selling_type" name="selling_type" required data-sale-selling-type>
+                            @foreach($saleSellingTypeOptions as $sellingTypeValue => $sellingTypeLabel)
+                                @php
+                                    $isOtherSellingType = \App\Support\SaleSellingTypes::isOthers($sellingTypeValue);
+                                @endphp
+                                <option
+                                    value="{{ $sellingTypeValue }}"
+                                    data-business-area="{{ $isOtherSellingType ? '' : $sellingTypeValue }}"
+                                    data-requires-warehouse="0"
+                                    data-feed-sale-mode="{{ $isOtherSellingType ? '0' : '1' }}"
+                                    @selected((string) $selectedSellingType === (string) $sellingTypeValue)
+                                >{{ $sellingTypeLabel }}</option>
+                            @endforeach
+                        </select>
+                        <small class="hg-field-help">Business areas come from Business Tracking Setup. Select Others for a normal sale without item lines.</small>
+                        @error('selling_type')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+                @endif
+
                 <div class="hg-field {{ $isDueSettlement ? 'hidden' : '' }}">
                     <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
                     <select
@@ -225,25 +244,6 @@
                 </div>
 
                 @if($isSalesTransaction && ! $isDueSettlement)
-                    <div class="hg-field full">
-                        <label for="selling_type">What are you selling? <span class="hg-required">*</span></label>
-                        <select id="selling_type" name="selling_type" required data-sale-selling-type>
-                            @foreach($saleSellingTypeOptions as $sellingTypeValue => $sellingTypeLabel)
-                                @php
-                                    $isOtherSellingType = \App\Support\SaleSellingTypes::isOthers($sellingTypeValue);
-                                @endphp
-                                <option
-                                    value="{{ $sellingTypeValue }}"
-                                    data-requires-warehouse="{{ $isOtherSellingType ? '0' : '1' }}"
-                                    data-feed-sale-mode="{{ $isOtherSellingType ? '0' : '1' }}"
-                                    @selected((string) $selectedSellingType === (string) $sellingTypeValue)
-                                >{{ $sellingTypeLabel }}</option>
-                            @endforeach
-                        </select>
-                        <small class="hg-field-help">Select Others for the normal sales form. Select Feed to open the feed-item sales form.</small>
-                        @error('selling_type')<small class="hg-field-error">{{ $message }}</small>@enderror
-                    </div>
-
                     <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" id="party-field" data-sale-customer-field>
                         <label for="party_id"><span id="party-label">Customer</span> <span class="hg-required">*</span></label>
                         <select
@@ -273,33 +273,14 @@
                         @error('party_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
 
-                    <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" id="sale-warehouse-field" data-sale-warehouse-field data-sale-feed-only>
-                        <label for="tracking_unit_id">Warehouse / Location <span class="hg-required">*</span></label>
-                        <select id="tracking_unit_id" name="tracking_unit_id" data-sale-warehouse>
-                            <option value="">{{ $saleTrackingUnits->isEmpty() ? 'No active location available' : 'Select warehouse / location' }}</option>
-                            @foreach($saleTrackingUnits as $unit)
-                                <option value="{{ $unit->id }}" data-business-area="" @selected((string) $selectedTrackingUnitId === (string) $unit->id)>
-                                    {{ $unit->name }} ({{ $unit->code }}){{ filled($unit->location) ? ' — '.$unit->location : '' }}{{ ! $unit->is_active ? ' — Inactive' : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @if($saleTrackingUnits->isEmpty())
-                            <small class="hg-field-error">Add an active warehouse from Feed Setup before posting feed sales.</small>
-                        @else
-                            <small class="hg-field-help">This list comes from Feed Setup → Warehouses.</small>
-                        @endif
-                        @error('tracking_unit_id')<small class="hg-field-error">{{ $message }}</small>@enderror
-                    </div>
-
                     <div class="hg-field full hg-transaction-sale-feed-section {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-transaction-sale-feed data-sale-feed-only>
-                        <label>Feed Items <span class="hg-required">*</span></label>
+                        <label>Items <span class="hg-required">*</span></label>
                         <div class="hg-sale-feed-lines-wrap">
                             <div class="hg-table-wrap hg-feed-lines-wrap">
                                 <table class="hg-table hg-feed-lines-table hg-sale-feed-lines-table">
                                     <thead>
                                         <tr>
-                                            <th>Feed Item</th>
-                                            <th>Available</th>
+                                            <th>Item</th>
                                             <th>Unit</th>
                                             <th>Quantity</th>
                                             <th>Sale Rate</th>
@@ -313,11 +294,11 @@
                             </div>
                             <div class="hg-feed-line-actions">
                                 <button class="hg-btn hg-btn-small" type="button" data-transaction-sale-feed-add>+ Add Another Item</button>
-                                <span class="hg-muted">Posting is blocked when requested quantity is higher than available stock.</span>
+                                <span class="hg-muted">Items are loaded from the selected Business Area.</span>
                             </div>
                         </div>
-                        @if($saleFeedItems->isEmpty())
-                            <small class="hg-field-error">Add active feed items from Feed Setup before using feed-item sales.</small>
+                        @if($saleBusinessItemsForJs->isEmpty())
+                            <small class="hg-field-error">Add active items in Business Tracking Setup before using business-area sales.</small>
                         @endif
                         @error('lines')<small class="hg-field-error">{{ $message }}</small>@enderror
                     </div>
@@ -325,7 +306,7 @@
                     <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-sale-feed-only>
                         <label for="sale_items_total">Total Amount ({{ \App\Support\CompanyContext::currencyCode() }})</label>
                         <input id="sale_items_total" type="number" step="{{ \App\Support\CompanyContext::amountStep() }}" value="0" readonly data-sale-items-total class="hg-readonly-input">
-                        <small class="hg-field-help">This is calculated from the Feed Items section only.</small>
+                        <small class="hg-field-help">This is calculated from the Items section only.</small>
                     </div>
 
                     <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-sale-feed-only>

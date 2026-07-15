@@ -20,6 +20,7 @@ use App\Models\Feed\FeedStockMovement;
 use App\Models\Feed\FeedBusinessTrackingDefaultAssignment;
 use App\Models\Feed\FeedSetting;
 use App\Models\Feed\FeedDocument;
+use App\Models\Feed\FeedDocumentLine;
 use Illuminate\Support\Collection;
 
 class DependencyInspector
@@ -67,7 +68,10 @@ class DependencyInspector
 
     public function transactionHead(TransactionHead $head): DeletionPlan
     {
+        $legacyRuleCount = $head->accounting_rule_id ? 1 : 0;
+
         return new DeletionPlan('Transaction Head', $head->code.' — '.$head->name, $this->nonZero([
+            ['Accounting Rules', $head->accountingRules()->count() + $legacyRuleCount, 'Head-specific accounting rules will be deleted and legacy rule links will be cleared.'],
             ['Transactions', $head->transactions()->count(), 'Transaction-head links will be cleared and transactions/journals will become incomplete.'],
             ['Feed Settings', FeedSetting::query()->where('purchase_transaction_head_id', $head->id)->orWhere('sale_transaction_head_id', $head->id)->count(), 'The Feed purchase or sale transaction head configuration will be cleared.'],
         ]));
@@ -123,7 +127,15 @@ class DependencyInspector
 
     public function feedItem(FeedItem $item): DeletionPlan
     {
+        $documentIds = FeedDocumentLine::query()
+            ->where('feed_item_id', $item->id)
+            ->pluck('feed_document_id')
+            ->unique()
+            ->values();
+
         return new DeletionPlan('Feed Item', $item->code.' — '.$item->name, $this->nonZero([
+            ['Feed Document Lines', FeedDocumentLine::query()->where('feed_item_id', $item->id)->count(), 'Purchase/sale lines that use this item will be permanently deleted.'],
+            ['Feed Documents', $documentIds->count(), 'Feed purchase/sale documents using this item will be permanently deleted and their transactions will become incomplete.'],
             ['Stock Balances', FeedStockBalance::query()->where('feed_item_id', $item->id)->count(), 'Stock balances will be permanently deleted.'],
             ['Stock Movements', FeedStockMovement::query()->where('feed_item_id', $item->id)->count(), 'Stock movements will be permanently deleted and related transactions marked incomplete.'],
         ]));
@@ -148,7 +160,11 @@ class DependencyInspector
     public function feedWarehouse(FeedWarehouse $warehouse): DeletionPlan
     {
         return new DeletionPlan('Warehouse', $warehouse->code.' — '.$warehouse->name, $this->nonZero([
-            ['Default Assignments', FeedSetting::query()->where('default_tracking_unit_id', $warehouse->id)->count(), 'Default warehouse setting will be cleared.'],
+            ['Transactions', Transaction::query()->where('tracking_unit_id', $warehouse->id)->count(), 'Warehouse links will be cleared and transactions will become incomplete.'],
+            ['Feed Documents', FeedDocument::query()->where('tracking_unit_id', $warehouse->id)->count(), 'Feed purchase/sale documents linked to this warehouse will be permanently deleted.'],
+            ['Stock Balances', FeedStockBalance::query()->where('tracking_unit_id', $warehouse->id)->count(), 'Stock balances will be permanently deleted.'],
+            ['Stock Movements', FeedStockMovement::query()->where('tracking_unit_id', $warehouse->id)->count(), 'Stock movements will be permanently deleted and related transactions marked incomplete.'],
+            ['Feed Settings', FeedSetting::query()->where('default_tracking_unit_id', $warehouse->id)->count(), 'Default warehouse setting will be cleared.'],
         ]));
     }
 

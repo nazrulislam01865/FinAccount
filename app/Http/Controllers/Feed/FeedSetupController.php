@@ -104,11 +104,17 @@ class FeedSetupController extends Controller
     {
         abort_unless((int) $feedItem->company_id === (int) $request->user()->company_id, 404);
 
+        // Feed setup records should still delete with a normal form submit if the
+        // safe-delete modal JavaScript is stale or not loaded.
+        if (! $request->boolean('preview') && ! $request->boolean('confirmed')) {
+            $request->merge(['confirmed' => true]);
+        }
+
         return $this->performSafeDelete(
             $request,
             $this->safeDeleteService->inspectFeedItem($feedItem),
             fn () => $this->safeDeleteService->deleteFeedItem($feedItem),
-            'feed.setup',
+            'feed.setup.index',
             'Feed item deleted permanently.',
         );
     }
@@ -189,11 +195,17 @@ class FeedSetupController extends Controller
     {
         abort_unless((int) $feedWarehouse->company_id === (int) $request->user()->company_id, 404);
 
+        // Feed setup records should still delete with a normal form submit if the
+        // safe-delete modal JavaScript is stale or not loaded.
+        if (! $request->boolean('preview') && ! $request->boolean('confirmed')) {
+            $request->merge(['confirmed' => true]);
+        }
+
         return $this->performSafeDelete(
             $request,
             $this->safeDeleteService->inspectFeedWarehouse($feedWarehouse),
             fn () => $this->safeDeleteService->deleteFeedWarehouse($feedWarehouse),
-            'feed.setup',
+            'feed.setup.index',
             'Feed warehouse deleted permanently.',
         );
     }

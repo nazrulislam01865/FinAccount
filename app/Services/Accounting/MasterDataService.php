@@ -303,54 +303,17 @@ class MasterDataService
     private function updateTransactionCategory(AccountingOption $option, array $data): AccountingOption
     {
         $newValue = trim((string) $data['value']);
-        $isCore = $this->isCoreTransactionCategory($option);
         $isChangingValue = $newValue !== $option->value;
-        $isDeactivating = $option->is_active && ! (bool) $data['is_active'];
-        $usage = $this->usageFor($option);
         $newPrefix = strtoupper(trim((string) $data['voucher_prefix']));
         $currentMetadata = is_array($option->metadata) ? $option->metadata : [];
-        $oldPrefix = strtoupper(trim((string) ($currentMetadata['voucher_prefix'] ?? '')));
-        $isChangingPrefix = $newPrefix !== $oldPrefix;
-        $currentFlow = TransactionTypes::flow($option->value, $currentMetadata);
-        $newFlow = $isCore
-            ? TransactionTypes::flow($option->value)
-            : (string) $data['flow'];
-        $isChangingFlow = $newFlow !== $currentFlow;
-        $data['flow'] = $newFlow;
+        $data['flow'] = (string) $data['flow'];
 
         $this->assertVoucherPrefixAvailable($newPrefix, $option->id);
 
-        if ($isChangingPrefix && DocumentSequence::query()->where('category', $option->value)->exists()) {
-            throw ValidationException::withMessages([
-                'voucher_prefix' => 'The voucher prefix cannot be changed after Voucher Numbering exists for this category.',
-            ]);
-        }
-
-        if ($isChangingFlow && AccountingRule::query()->where('category', $option->value)->exists()) {
-            throw ValidationException::withMessages([
-                'flow' => 'The transaction direction cannot be changed after accounting rules exist for this transaction type.',
-            ]);
-        }
-
-
-
-        if (! $isCore && ($isChangingValue || $isDeactivating) && $usage['count'] > 0) {
-            throw ValidationException::withMessages([
-                $isChangingValue ? 'value' : 'is_active' => 'This category is already used by '.$usage['summary'].'. Change those records first.',
-            ]);
-        }
-
-        if ($isDeactivating && $this->activeCount($option->option_group) <= 1) {
-            throw ValidationException::withMessages([
-                'is_active' => 'At least one active transaction type must remain.',
-            ]);
-        }
-
-        if ($isChangingValue && DocumentSequence::query()->where('category', $newValue)->exists()) {
-            throw ValidationException::withMessages([
-                'value' => 'Voucher numbering already exists for the new internal value.',
-            ]);
-        }
+        // Transaction Types must stay fully editable even after they are used.
+        // When the internal value, direction, status, or voucher prefix changes,
+        // related setup and transaction records are updated below instead of
+        // blocking the edit.
 
         return DB::transaction(function () use ($option, $data, $newValue, $newPrefix, $isChangingValue): AccountingOption {
             $oldValue = $option->value;
@@ -369,10 +332,17 @@ class MasterDataService
                 'is_active' => (bool) $data['is_active'],
             ]);
 
-            if ($isChangingValue) {
-                DocumentSequence::query()
-                    ->where('category', $oldValue)
-                    ->update(['category' => $newValue]);
+            // Keep linked records usable when a linked/system Transaction Type is edited.
+            AccountingRule::query()->where('category', $oldValue)->update(['category' => $newValue]);
+            TransactionHead::query()->where('category', $oldValue)->update(['category' => $newValue]);
+            Transaction::query()->where('category', $oldValue)->update(['category' => $newValue]);
+            DocumentSequence::query()->where('category', $oldValue)->update([
+                'category' => $newValue,
+                'prefix' => $newPrefix,
+            ]);
+
+            if (! $isChangingValue) {
+                DocumentSequence::query()->where('category', $newValue)->update(['prefix' => $newPrefix]);
             }
 
             return $option->refresh();

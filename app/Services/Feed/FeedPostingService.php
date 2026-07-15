@@ -3,6 +3,7 @@
 namespace App\Services\Feed;
 
 use App\Models\AccountingRule;
+use App\Models\ChartOfAccount;
 use App\Models\Feed\FeedDocument;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedSetting;
@@ -11,6 +12,7 @@ use App\Models\Feed\FeedStockMovement;
 use App\Models\Feed\FeedWarehouse;
 use App\Models\JournalEntry;
 use App\Models\Transaction;
+use App\Models\TransactionHead;
 use App\Models\User;
 use App\Support\TransactionTypes;
 use Illuminate\Database\QueryException;
@@ -45,6 +47,8 @@ class FeedPostingService
 
             $transaction = $this->ledgerPostingService->postPurchase([
                 'transaction_date' => $data['transaction_date'],
+                'transaction_head_id' => $data['transaction_head_id'] ?? null,
+                'transaction_head_id' => $data['transaction_head_id'] ?? null,
                 'money_account_id' => $data['money_account_id'] ?? null,
                 'party_id' => $data['party_id'],
                 'amount' => $this->money($total),
@@ -314,7 +318,7 @@ class FeedPostingService
             return;
         }
 
-        $inventoryAccount = $settings->purchaseTransactionHead?->postingAccount;
+        $inventoryAccount = $this->inventoryAccountForCogs($settings, (int) $transaction->company_id);
         $cogsAccount = $settings->cogsAccount;
 
         if (! $inventoryAccount || ! $cogsAccount) {
@@ -375,53 +379,52 @@ class FeedPostingService
         }
 
         $settings = $query->firstOrFail();
-        $purchaseHead = $settings->purchaseTransactionHead;
-        $saleHead = $settings->saleTransactionHead;
-        $inventoryAccount = $purchaseHead?->postingAccount;
-        $salesAccount = $saleHead?->postingAccount;
         $cogsAccount = $settings->cogsAccount;
-        $purchaseRuleSettlements = $purchaseHead
-            ? AccountingRule::query()
-                ->where('company_id', $companyId)
-                ->where('transaction_head_id', $purchaseHead->id)
-                ->whereRaw('LOWER(category) = ?', [strtolower(TransactionTypes::PURCHASE)])
-                ->where('is_active', true)
-                ->pluck('settlement_type')
-                ->all()
-            : [];
-        $saleRuleSettlements = $saleHead
-            ? AccountingRule::query()
-                ->where('company_id', $companyId)
-                ->where('transaction_head_id', $saleHead->id)
-                ->whereRaw('LOWER(category) = ?', [strtolower(TransactionTypes::SALE)])
-                ->where('is_active', true)
-                ->pluck('settlement_type')
-                ->all()
-            : [];
 
         if (
-            ! $purchaseHead || (int) $purchaseHead->company_id !== $companyId
-            || ! $purchaseHead->is_active
-            || strcasecmp((string) $purchaseHead->category, TransactionTypes::PURCHASE) !== 0
-            || ! $inventoryAccount || (int) $inventoryAccount->company_id !== $companyId
-            || ! $inventoryAccount->is_active || $inventoryAccount->type !== 'Asset' || (int) $inventoryAccount->level !== 3
-            || ! $saleHead || (int) $saleHead->company_id !== $companyId
-            || ! $saleHead->is_active
-            || strcasecmp((string) $saleHead->category, TransactionTypes::SALE) !== 0
-            || ! $salesAccount || (int) $salesAccount->company_id !== $companyId
-            || ! $salesAccount->is_active || $salesAccount->type !== 'Income' || (int) $salesAccount->level !== 3
-            || ! $cogsAccount || (int) $cogsAccount->company_id !== $companyId
-            || ! $cogsAccount->is_active || $cogsAccount->type !== 'Expense' || (int) $cogsAccount->level !== 3
-            || $inventoryAccount->is($cogsAccount)
-            || array_diff(TransactionTypes::ALL_SETTLEMENTS, $purchaseRuleSettlements) !== []
-            || array_diff(TransactionTypes::ALL_SETTLEMENTS, $saleRuleSettlements) !== []
+            ! $cogsAccount
+            || (int) $cogsAccount->company_id !== $companyId
+            || ! $cogsAccount->is_active
+            || $cogsAccount->type !== 'Expense'
+            || (int) $cogsAccount->level !== 3
         ) {
             throw ValidationException::withMessages([
-                'feed_setup' => 'Feed accounting setup is incomplete. Check the Feed Purchase and Feed Sale heads, their linked COA accounts, and all three head-specific accounting rules.',
+                'feed_setup' => 'Feed Cost of Goods Sold account is missing or inactive. Repair the Feed setup before posting.',
             ]);
         }
 
         return $settings;
+    }
+
+    private function inventoryAccountForCogs(FeedSetting $settings, int $companyId): ?ChartOfAccount
+    {
+        $account = $settings->purchaseTransactionHead?->postingAccount;
+
+        if (
+            $account
+            && (int) $account->company_id === $companyId
+            && $account->is_active
+            && $account->type === 'Asset'
+            && (int) $account->level === 3
+        ) {
+            return $account;
+        }
+
+        $fallbackHead = TransactionHead::query()
+            ->with('postingAccount')
+            ->where('company_id', $companyId)
+            ->whereRaw('LOWER(category) = ?', [strtolower(TransactionTypes::PURCHASE)])
+            ->where('is_active', true)
+            ->whereHas('postingAccount', fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->where('type', 'Asset')
+                ->where('level', 3))
+            ->orderByRaw("CASE WHEN code LIKE 'SYS-FEED-%' THEN 0 ELSE 1 END")
+            ->orderBy('id')
+            ->first();
+
+        return $fallbackHead?->postingAccount;
     }
 
     private function warehouse(int $companyId, int $warehouseId): FeedWarehouse

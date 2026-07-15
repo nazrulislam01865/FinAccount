@@ -3,6 +3,7 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingOption;
+use App\Models\AccountingRule;
 use App\Models\ChartOfAccount;
 use App\Models\TransactionHead;
 use App\Support\TransactionTypes;
@@ -22,13 +23,68 @@ class TransactionHeadService
     {
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
 
+        $transactionHeads = TransactionHead::query()
+            ->with(['postingAccount', 'accountingRule'])
+            ->where('company_id', $companyId)
+            ->orderBy('category')
+            ->orderBy('code')
+            ->get();
+
+        $accountingRules = AccountingRule::query()
+            ->where('company_id', $companyId)
+            ->get(['id', 'transaction_head_id', 'code', 'name', 'category', 'settlement_type', 'is_active']);
+
+        $rulesByHead = $accountingRules
+            ->whereNotNull('transaction_head_id')
+            ->groupBy(fn (AccountingRule $rule): int => (int) $rule->transaction_head_id);
+
+        $templateRulesByScope = $accountingRules
+            ->whereNull('transaction_head_id')
+            ->groupBy(fn (AccountingRule $rule): string => $this->ruleScopeKey($rule->category, $rule->settlement_type));
+
+        $transactionHeads->each(function (TransactionHead $head) use ($rulesByHead, $templateRulesByScope): void {
+            $allowedSettlementCodes = $head->allowedSettlementCodes();
+            $headSpecificRules = collect($rulesByHead->get((int) $head->id, []))->values();
+            $headSpecificBySettlement = $headSpecificRules
+                ->groupBy(fn (AccountingRule $rule): string => strtoupper((string) $rule->settlement_type));
+            $templateRules = collect();
+            $applicableRules = collect();
+
+            foreach ($allowedSettlementCodes as $settlementType) {
+                $settlementKey = strtoupper((string) $settlementType);
+                $specificRulesForSettlement = collect($headSpecificBySettlement->get($settlementKey, []));
+
+                if ($specificRulesForSettlement->isNotEmpty()) {
+                    $applicableRules = $applicableRules->merge($specificRulesForSettlement);
+                    continue;
+                }
+
+                $rulesForSettlement = collect(
+                    $templateRulesByScope->get($this->ruleScopeKey($head->category, $settlementType), [])
+                );
+
+                $templateRules = $templateRules->merge($rulesForSettlement);
+                $applicableRules = $applicableRules->merge($rulesForSettlement);
+            }
+
+            if ($head->accountingRule) {
+                $applicableRules->push($head->accountingRule);
+                $headSpecificRules->push($head->accountingRule);
+            }
+
+            $applicableRules = $applicableRules->unique('id')->values();
+            $headSpecificRules = $headSpecificRules->unique('id')->values();
+            $templateRules = $templateRules->unique('id')->values();
+
+            $head->setRelation('applicableAccountingRules', $applicableRules);
+            $head->setAttribute('applicable_accounting_rules_count', $applicableRules->count());
+            $head->setAttribute('active_applicable_accounting_rules_count', $applicableRules->where('is_active', true)->count());
+            $head->setAttribute('head_specific_accounting_rules_count', $headSpecificRules->count());
+            $head->setAttribute('template_accounting_rules_count', $templateRules->count());
+        });
+
         return [
-            'transactionHeads' => TransactionHead::query()
-                ->with('postingAccount')
-                ->where('company_id', $companyId)
-                ->orderBy('category')
-                ->orderBy('code')
-                ->get(),
+            'transactionHeads' => $transactionHeads,
             'postingAccounts' => ChartOfAccount::query()
                 ->where('company_id', $companyId)
                 ->where('level', 3)
@@ -48,6 +104,11 @@ class TransactionHeadService
             'partyTypes' => $this->optionService->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE),
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE),
         ];
+    }
+
+    private function ruleScopeKey(string|null $category, string|null $settlementType): string
+    {
+        return strtolower((string) $category).'|'.strtoupper((string) $settlementType);
     }
 
     /** @param array<string, mixed> $data */

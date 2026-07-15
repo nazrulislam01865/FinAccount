@@ -9,6 +9,7 @@ use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedStockBalance;
 use App\Models\Feed\FeedWarehouse;
 use App\Models\Party;
+use App\Models\TransactionHead;
 use App\Services\Accounting\AccountingOptionService;
 use App\Services\Accounting\TransactionAttachmentService;
 use App\Services\Accounting\TransactionEntryOptionService;
@@ -18,6 +19,7 @@ use App\Services\Feed\FeedPostingService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Support\TransactionTypes;
 use Illuminate\Support\Str;
 
 class FeedSaleController extends Controller
@@ -39,6 +41,8 @@ class FeedSaleController extends Controller
 
         $settings = $this->accountingSetupService->ensure($companyId);
 
+        $transactionHeads = $this->transactionHeads($companyId, TransactionTypes::SALE, 'Income');
+
         $items = FeedItem::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
         $warehouses = FeedWarehouse::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
         $customers = Party::query()->where('company_id', $companyId)->where('type', 'Customer')->where('is_active', true)->orderBy('name')->get();
@@ -57,6 +61,7 @@ class FeedSaleController extends Controller
 
         return view('feed.sales.create', [
             'settings' => $settings,
+            'transactionHeads' => $transactionHeads,
             'items' => $items,
             'warehouses' => $warehouses,
             'customers' => $customers,
@@ -66,6 +71,25 @@ class FeedSaleController extends Controller
             'transactionDateContext' => $this->accountingPeriodService->transactionDateContext($company),
             'requestToken' => old('request_token', (string) Str::uuid()),
         ]);
+    }
+
+
+    private function transactionHeads(int $companyId, string $category, string $postingAccountType): \Illuminate\Support\Collection
+    {
+        return TransactionHead::query()
+            ->with('postingAccount')
+            ->where('company_id', $companyId)
+            ->whereRaw('LOWER(category) = ?', [strtolower($category)])
+            ->where('is_active', true)
+            ->whereNotNull('posting_account_id')
+            ->whereHas('postingAccount', fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->where('type', $postingAccountType)
+                ->where('level', 3))
+            ->orderByRaw("CASE WHEN code LIKE 'SYS-FEED-%' THEN 0 ELSE 1 END")
+            ->orderBy('name')
+            ->get();
     }
 
     public function store(StoreFeedSaleRequest $request): RedirectResponse

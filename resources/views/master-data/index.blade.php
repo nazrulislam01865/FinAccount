@@ -138,7 +138,7 @@
                                 >Edit</button>
                                 @endif
 
-                                @if ($configuration['deletable'] && ! $isCoreCategory)
+                                @if ($configuration['deletable'])
                                     @if($canDelete)
                                     <form
                                         method="POST"

@@ -23,6 +23,7 @@ const initFeedModule = () => {
     const addButton = root.querySelector('[data-feed-add-line]');
     const warehouseSelect = root.querySelector('[data-feed-warehouse]');
     const moneyAccount = root.querySelector('[data-feed-money-account]');
+    const transactionHeadSelect = root.querySelector('[data-feed-transaction-head]');
     const paidInput = root.querySelector('#paid_amount');
     const itemsById = new Map(config.items.map((item) => [String(item.id), item]));
     let rowCounter = 0;
@@ -171,6 +172,13 @@ const initFeedModule = () => {
         });
     };
 
+    const syncTransactionHeadSummary = () => {
+        const selected = transactionHeadSelect?.selectedOptions?.[0];
+        const accountName = selected?.dataset?.accountName || 'Account not configured';
+        const accountCode = selected?.dataset?.accountCode || '';
+        summary('posting-account', accountCode ? `${accountCode} — ${accountName}` : accountName);
+    };
+
     const calculate = () => {
         let subtotal = 0;
         let totalBaseQuantity = 0;
@@ -229,12 +237,16 @@ const initFeedModule = () => {
         summary('subtotal', money(subtotal));
         summary('extra', money(extra));
         summary('total', money(total));
+        root.querySelectorAll('[data-feed-calculated-total]').forEach((element) => {
+            element.value = money(total);
+        });
         summary('paid', money(paid));
         summary('due', money(due));
         summary('status', status);
         summary('quantity', `${totalBaseQuantity.toFixed(4)} KG`);
         summary('cogs', money(cogs));
         summary('profit', money(total - cogs));
+        syncTransactionHeadSummary();
 
         const selectedMoneyText = moneyAccount?.selectedOptions?.[0]?.textContent?.trim();
         summary('money-name', moneyAccount?.value ? selectedMoneyText : 'Selected money account / Party due');
@@ -287,6 +299,7 @@ const initFeedModule = () => {
 
     root.querySelectorAll('[data-feed-money-input]').forEach((input) => input.addEventListener('input', calculate));
     moneyAccount?.addEventListener('change', calculate);
+    transactionHeadSelect?.addEventListener('change', calculate);
     warehouseSelect?.addEventListener('change', () => {
         rowsContainer.querySelectorAll('[data-feed-line]').forEach(updateAvailable);
         calculate();

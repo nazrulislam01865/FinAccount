@@ -107,18 +107,17 @@ class MasterDataController extends Controller
         AccountingOption $accountingOption,
     ): JsonResponse|RedirectResponse {
         $this->service->assertSafeDeletable($section, $accountingOption);
+
+        // Normal form submits must still delete when the safe-delete modal JS is
+        // stale or unavailable. Preview requests remain previews for the modal.
+        if (! $request->boolean('preview') && ! $request->boolean('confirmed')) {
+            $request->merge(['confirmed' => true]);
+        }
+
         $plan = $this->safeDeleteService->inspectAccountingOption($accountingOption);
 
         if ($request->boolean('preview')) {
             return response()->json(['success' => true, 'preview' => true, 'plan' => $plan]);
-        }
-
-        if (! $request->boolean('confirmed')) {
-            $message = 'Deletion was not completed because explicit confirmation is required.';
-
-            return $request->expectsJson()
-                ? response()->json(['success' => false, 'message' => $message, 'plan' => $plan], 409)
-                : redirect()->route('master.index', $section)->with('error', $message);
         }
 
         $this->safeDeleteService->deleteAccountingOption($accountingOption);
