@@ -52,11 +52,26 @@ class StoreTransactionRequest extends FormRequest
                 },
             ],
             'tracking_unit_id' => [
+                Rule::requiredIf(fn (): bool => $this->isFeedSaleSelected()),
                 'nullable',
                 'integer',
-                Rule::exists('feed_warehouses', 'id')->where(fn ($query) => $query
-                    ->where('company_id', $companyId)
-                    ->where('is_active', true)),
+                function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                    if (! $this->isFeedSaleSelected() || ! filled($value)) {
+                        return;
+                    }
+
+                    $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
+                    $exists = FeedBusinessTrackingUnit::query()
+                        ->where('company_id', $companyId)
+                        ->where('business_area', $sellingType)
+                        ->where('is_active', true)
+                        ->whereKey((int) $value)
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('The selected location is not active for this business area.');
+                    }
+                },
             ],
             'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
@@ -138,7 +153,6 @@ class StoreTransactionRequest extends FormRequest
             'lines.*.unit' => ['nullable', 'string', 'max:50'],
             'lines.*.quantity' => ['required_with:lines', 'numeric', 'gt:0', 'decimal:0,4'],
             'lines.*.rate' => ['required_with:lines', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
-            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.CompanyContext::decimalPlaces()],
             'reference' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
             'transaction_attachments' => ['nullable', 'array', 'max:5'],
@@ -174,14 +188,14 @@ class StoreTransactionRequest extends FormRequest
             $this->input('category'),
         );
         $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
-        $warehouseRequired = SaleSellingTypes::isSaleCategory($category)
-            && $sellingType === SaleSellingTypes::FEED
-            && filled($this->input('tracking_unit_id'));
+        $locationRequired = SaleSellingTypes::isSaleCategory($category)
+            && filled($sellingType)
+            && ! SaleSellingTypes::isOthers($sellingType);
 
-        $this->merge([
+        $payload = [
             'category' => $category,
             'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
-            'tracking_unit_id' => $warehouseRequired && filled($this->input('tracking_unit_id'))
+            'tracking_unit_id' => $locationRequired && filled($this->input('tracking_unit_id'))
                 ? $this->input('tracking_unit_id')
                 : null,
             'settlement_type' => filled($this->input('settlement_type'))
@@ -196,6 +210,9 @@ class StoreTransactionRequest extends FormRequest
             'other_charges' => $this->input('other_charges', 0),
             'reference' => filled($this->input('reference')) ? trim((string) $this->input('reference')) : null,
             'description' => filled($this->input('description')) ? trim((string) $this->input('description')) : null,
-        ]);
+        ];
+
+        $this->merge($payload);
     }
+
 }

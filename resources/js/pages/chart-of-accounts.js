@@ -290,3 +290,87 @@ if (bulkForm) {
 
     syncBulkState();
 }
+
+const coaFilterForm = document.querySelector('[data-coa-filter-form]');
+
+if (coaFilterForm) {
+    const searchInput = coaFilterForm.querySelector('[data-coa-filter-search]');
+    const levelSelect = coaFilterForm.querySelector('[data-coa-filter-level]');
+    const clearButton = coaFilterForm.querySelector('[data-coa-filter-clear]');
+    const rows = Array.from(document.querySelectorAll('[data-coa-row]'));
+    const emptyRow = document.querySelector('[data-coa-search-empty]');
+    const draftRows = Array.from(document.querySelectorAll('.hg-table-draft-row'));
+
+    const normalize = (value) => String(value || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const keywordsFor = (value) => {
+        const normalized = normalize(value);
+        const extras = [];
+        if (normalized.includes('rent')) extras.push('rental lease payable expense bill');
+        if (normalized.includes('payable')) extras.push('due liability creditor supplier bill outstanding');
+        if (normalized.includes('receivable')) extras.push('due asset debtor customer collection outstanding');
+        if (normalized.includes('asset')) extras.push('assets assest cash bank receivable inventory stock');
+        if (normalized.includes('liability')) extras.push('liabilities payable due loan creditor');
+        if (normalized.includes('equity')) extras.push('oe owner capital owners equity');
+        return normalize([normalized, ...extras].join(' '));
+    };
+
+    const applyCoaFilter = () => {
+        const query = normalize(searchInput?.value || '');
+        const queryCompact = query.replace(/\s+/g, '');
+        const tokens = query.split(' ').filter(Boolean);
+        const level = String(levelSelect?.value || '0');
+        let visibleCount = 0;
+        const filterActive = query !== '' || level !== '0';
+
+        rows.forEach((row) => {
+            const haystack = keywordsFor(row.dataset.search || row.textContent || '');
+            const haystackCompact = haystack.replace(/\s+/g, '');
+            const rowLevel = String(row.dataset.level || '0');
+            const levelMatches = level === '0' || rowLevel === level;
+            const searchMatches = query === ''
+                || haystack.includes(query)
+                || (queryCompact !== '' && haystackCompact.includes(queryCompact))
+                || tokens.every((token) => haystack.includes(token));
+            const show = levelMatches && searchMatches;
+
+            row.hidden = !show;
+            if (show) visibleCount += 1;
+        });
+
+        if (emptyRow) {
+            emptyRow.hidden = visibleCount > 0;
+        }
+
+        draftRows.forEach((row) => {
+            row.hidden = filterActive;
+        });
+
+        if (clearButton) {
+            clearButton.hidden = !filterActive;
+        }
+    };
+
+    coaFilterForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        applyCoaFilter();
+    });
+
+    searchInput?.addEventListener('input', applyCoaFilter);
+    levelSelect?.addEventListener('change', applyCoaFilter);
+    clearButton?.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (searchInput) searchInput.value = '';
+        if (levelSelect) levelSelect.value = '0';
+        applyCoaFilter();
+        if (window.history?.replaceState) {
+            window.history.replaceState({}, '', clearButton.href || window.location.pathname);
+        }
+    });
+
+    applyCoaFilter();
+}

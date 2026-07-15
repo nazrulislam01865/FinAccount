@@ -8,7 +8,17 @@
     $defaultPartyType = $transactionTypeDefinitions[$defaultCategory]['party_type'] ?? 'Any';
     $canManage = auth()->user()?->canAccounting('transaction_heads.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
+    $filters = $transactionHeadFilters ?? ['search' => '', 'transaction_type' => '', 'coa_type' => '', 'party_type' => '', 'accounting_rule' => ''];
+    $hasHeadFilters = collect($filters)->filter(fn ($value) => filled($value))->isNotEmpty();
     $draftRows = \App\Support\VisibleFormDrafts::forBase('transaction-heads');
+    $visibleDraftRows = $hasHeadFilters ? collect() : $draftRows;
+    $coaTypeLabels = [
+        'Asset' => 'Asset',
+        'Liability' => 'Liability',
+        'Income' => 'Income',
+        'Expense' => 'Expense',
+        'Equity' => 'OE',
+    ];
     $defaultHeadValues = [
         'record_id' => '',
         'category' => $defaultCategory,
@@ -73,8 +83,63 @@
         </div>
     @endif
 
-    @if ($transactionHeads->isEmpty() && $draftRows->isEmpty())
-        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No transaction heads found.' }}</div>
+    @if(! $addOnlyMode)
+        <form method="GET" action="{{ route('transaction-heads.index') }}" class="hg-toolbar hg-transaction-head-filters" id="transaction-head-filter-form">
+            <input
+                class="hg-search"
+                type="search"
+                name="search"
+                value="{{ $filters['search'] ?? '' }}"
+                placeholder="Search code, head, COA, rule, or payment type..."
+                aria-label="Search transaction heads"
+            >
+
+            <select class="hg-filter-select" name="transaction_type" aria-label="Filter by transaction type">
+                <option value="">All transaction types</option>
+                @foreach ($transactionCategories as $categoryOption)
+                    <option value="{{ $categoryOption->value }}" @selected(($filters['transaction_type'] ?? '') === $categoryOption->value)>{{ $categoryOption->label }}</option>
+                @endforeach
+            </select>
+
+            <select class="hg-filter-select" name="coa_type" aria-label="Filter by COA type">
+                <option value="">All COA types</option>
+                @foreach ($coaTypeOptions as $coaTypeOption)
+                    <option value="{{ $coaTypeOption }}" @selected(($filters['coa_type'] ?? '') === $coaTypeOption)>{{ $coaTypeLabels[$coaTypeOption] ?? $coaTypeOption }}</option>
+                @endforeach
+            </select>
+
+            <select class="hg-filter-select" name="party_type" aria-label="Filter by party type">
+                <option value="">All party types</option>
+                @foreach ($partyTypes as $partyTypeOption)
+                    <option value="{{ $partyTypeOption->value }}" @selected(($filters['party_type'] ?? '') === $partyTypeOption->value)>{{ $partyTypeOption->label }}</option>
+                @endforeach
+            </select>
+
+            <select class="hg-filter-select" name="accounting_rule" aria-label="Filter by accounting rule">
+                <option value="">All accounting rules</option>
+                <option value="__with_rule" @selected(($filters['accounting_rule'] ?? '') === '__with_rule')>Has accounting rule</option>
+                <option value="__without_rule" @selected(($filters['accounting_rule'] ?? '') === '__without_rule')>No accounting rule</option>
+                <option value="__active_rule" @selected(($filters['accounting_rule'] ?? '') === '__active_rule')>Has active rule</option>
+                <option value="__inactive_rule" @selected(($filters['accounting_rule'] ?? '') === '__inactive_rule')>Only inactive / missing active rule</option>
+                @foreach ($accountingRules as $rule)
+                    <option value="{{ $rule->id }}" @selected(($filters['accounting_rule'] ?? '') === (string) $rule->id)>{{ $rule->code }} — {{ $rule->name }} @if(! $rule->is_active) (Inactive) @endif</option>
+                @endforeach
+            </select>
+
+            <div class="hg-filter-actions">
+                <button class="hg-btn hg-btn-primary" type="submit">Apply Filters</button>
+                @if($hasHeadFilters)
+                    <a class="hg-btn" href="{{ route('transaction-heads.index') }}">Clear</a>
+                @endif
+            </div>
+            @if($hasHeadFilters)
+                <span class="hg-muted hg-filter-count">Showing {{ number_format($filteredTransactionHeadsCount ?? $transactionHeads->count()) }} of {{ number_format($allTransactionHeadsCount ?? $transactionHeads->count()) }}</span>
+            @endif
+        </form>
+    @endif
+
+    @if ($transactionHeads->isEmpty() && $visibleDraftRows->isEmpty())
+        <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : ($hasHeadFilters ? 'No transaction heads match the selected filters.' : 'No transaction heads found.') }}</div>
     @else
         <div class="hg-table-wrap">
             <table class="hg-table">
@@ -159,7 +224,7 @@
                     </tr>
                 @endforeach
 
-                @foreach ($draftRows as $draft)
+                @foreach ($visibleDraftRows as $draft)
                     @php($fields = \App\Support\VisibleFormDrafts::fields($draft))
                     @php($isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft))
                     <tr class="hg-table-draft-row">

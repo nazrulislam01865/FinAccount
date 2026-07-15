@@ -37,10 +37,11 @@ class FeedPostingService
             $preparedLines = $this->prepareLines((int) $user->company_id, (array) $data['lines']);
 
             $subtotal = round($preparedLines->sum('line_total'), 2);
+            $commission = $this->overallCommission($subtotal, $data['overall_discount'] ?? 0);
             $transport = round((float) ($data['transport_cost'] ?? 0), 2);
             $other = round((float) ($data['other_cost'] ?? 0), 2);
             $extra = round($transport + $other, 2);
-            $total = round($subtotal + $extra, 2);
+            $total = round($subtotal - $commission + $extra, 2);
             $paid = round((float) ($data['paid_amount'] ?? 0), 2);
 
             $this->assertPaymentAmount($total, $paid);
@@ -78,16 +79,18 @@ class FeedPostingService
                 'transport_cost' => $this->money($transport),
                 'other_cost' => $this->money($other),
                 'delivery_charge' => '0.00',
-                'overall_discount' => '0.00',
+                'overall_discount' => $this->money($commission),
                 'total_amount' => $this->money($total),
                 'cogs_total' => '0.00',
             ]);
 
             $allocations = $this->allocateExtraCost($preparedLines, $extra, (string) ($data['cost_allocation'] ?? 'value'));
+            $commissionAllocations = $this->allocateExtraCost($preparedLines, $commission, 'value');
 
             foreach ($preparedLines->values() as $index => $line) {
                 $allocatedCost = $allocations[$index] ?? 0.0;
-                $inventoryValue = round((float) $line['line_total'] + $allocatedCost, 2);
+                $allocatedCommission = $commissionAllocations[$index] ?? 0.0;
+                $inventoryValue = round(max(0, (float) $line['line_total'] - $allocatedCommission) + $allocatedCost, 2);
                 $unitCost = $line['base_quantity'] > 0
                     ? round($inventoryValue / $line['base_quantity'], 6)
                     : 0.0;
@@ -153,16 +156,12 @@ class FeedPostingService
             $preparedLines = $this->prepareLines((int) $user->company_id, (array) $data['lines']);
 
             $subtotal = round($preparedLines->sum('line_total'), 2);
-            $delivery = round((float) ($data['delivery_charge'] ?? 0), 2);
-            $overallDiscount = round((float) ($data['overall_discount'] ?? 0), 2);
-            $total = round($subtotal + $delivery - $overallDiscount, 2);
+            $commission = $this->overallCommission($subtotal, $data['overall_discount'] ?? 0);
+            $transport = round((float) ($data['transport_cost'] ?? 0), 2);
+            $other = round((float) ($data['other_cost'] ?? 0), 2);
+            $extra = round($transport + $other, 2);
+            $total = round($subtotal - $commission + $extra, 2);
             $paid = round((float) ($data['paid_amount'] ?? 0), 2);
-
-            if ($overallDiscount > $subtotal + $delivery) {
-                throw ValidationException::withMessages([
-                    'overall_discount' => 'Overall discount cannot be greater than the sale value plus delivery charge.',
-                ]);
-            }
 
             $this->assertPaymentAmount($total, $paid);
 
@@ -196,10 +195,10 @@ class FeedPostingService
                 'reference' => $data['reference'] ?? null,
                 'cost_allocation' => null,
                 'subtotal' => $this->money($subtotal),
-                'transport_cost' => '0.00',
-                'other_cost' => '0.00',
-                'delivery_charge' => $this->money($delivery),
-                'overall_discount' => $this->money($overallDiscount),
+                'transport_cost' => $this->money($transport),
+                'other_cost' => $this->money($other),
+                'delivery_charge' => '0.00',
+                'overall_discount' => $this->money($commission),
                 'total_amount' => $this->money($total),
                 'cogs_total' => '0.00',
             ]);
@@ -455,14 +454,7 @@ class FeedPostingService
             $item = $items->get((int) $line['item_id']);
             $quantity = round((float) $line['quantity'], 4);
             $rate = round((float) $line['rate'], 2);
-            $discount = round((float) ($line['discount'] ?? 0), 2);
             $gross = round($quantity * $rate, 2);
-
-            if ($discount > $gross) {
-                throw ValidationException::withMessages([
-                    'lines.'.$index.'.discount' => 'Discount cannot be greater than the line gross amount.',
-                ]);
-            }
 
             $unit = strtoupper((string) $line['unit']);
             $baseQuantity = $unit === 'BAG'
@@ -481,8 +473,8 @@ class FeedPostingService
                 'unit' => $unit,
                 'base_quantity' => $baseQuantity,
                 'rate' => $rate,
-                'discount' => $discount,
-                'line_total' => round($gross - $discount, 2),
+                'discount' => 0.0,
+                'line_total' => $gross,
                 'batch_no' => filled($line['batch_no'] ?? null) ? trim((string) $line['batch_no']) : null,
                 'expiry_date' => filled($line['expiry_date'] ?? null) ? (string) $line['expiry_date'] : null,
             ];
@@ -561,6 +553,20 @@ class FeedPostingService
             ->firstOrFail();
     }
 
+    private function overallCommission(float $subtotal, mixed $value): float
+    {
+        $commissionPercent = $this->percentage($value);
+        $commission = round($subtotal * ($commissionPercent / 100), 2);
+
+        if ($commission > $subtotal) {
+            throw ValidationException::withMessages([
+                'overall_discount' => 'Overall commission percentage cannot be greater than 100%.',
+            ]);
+        }
+
+        return $commission;
+    }
+
     private function assertPaymentAmount(float $total, float $paid): void
     {
         if ($total <= 0) {
@@ -570,6 +576,17 @@ class FeedPostingService
         if ($paid > $total + 0.005) {
             throw ValidationException::withMessages(['paid_amount' => 'Paid/received amount cannot be greater than the transaction total.']);
         }
+    }
+
+    private function percentage(mixed $value): float
+    {
+        if ($value === null || $value === '') {
+            return 0.0;
+        }
+
+        $normalized = trim(str_replace(['%', ','], '', (string) $value));
+
+        return max(0.0, round((float) $normalized, 4));
     }
 
     private function money(float|int|string $value): string

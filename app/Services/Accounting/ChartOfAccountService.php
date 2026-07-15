@@ -31,31 +31,7 @@ class ChartOfAccountService
             ->orderBy('code')
             ->get();
 
-        $accounts = $search === '' && $levelFilter === 0
-            ? $this->hierarchicalAccounts($allAccounts)
-            : $allAccounts
-                ->filter(function (ChartOfAccount $account) use ($search, $levelFilter): bool {
-                    if ($levelFilter > 0 && (int) $account->level !== $levelFilter) {
-                        return false;
-                    }
-
-                    if ($search === '') {
-                        return true;
-                    }
-
-                    $haystack = strtolower(implode(' ', [
-                        $account->code,
-                        $account->name,
-                        $account->type,
-                        $account->parent?->code,
-                        $account->parent?->name,
-                        'level '.$account->level,
-                    ]));
-
-                    return str_contains($haystack, strtolower($search));
-                })
-                ->sortBy(fn (ChartOfAccount $account): string => sprintf('%d-%020s', $account->level, $account->code))
-                ->values();
+        $accounts = $this->filteredAccounts($allAccounts, $search, $levelFilter);
 
         $parentOptions = $this->hierarchicalAccounts($allAccounts)
             ->filter(fn (ChartOfAccount $account): bool => (int) $account->level < 3 && $account->is_active)
@@ -88,6 +64,136 @@ class ChartOfAccountService
             'normalBalances' => $this->optionService->forGroup(AccountingOption::GROUP_NORMAL_BALANCE),
             'nextCodes' => $nextCodes,
         ];
+    }
+
+    /**
+     * @param Collection<int, ChartOfAccount> $allAccounts
+     * @return Collection<int, ChartOfAccount>
+     */
+    private function filteredAccounts(Collection $allAccounts, string $search, int $levelFilter): Collection
+    {
+        if ($search === '' && $levelFilter === 0) {
+            return $this->hierarchicalAccounts($allAccounts);
+        }
+
+        $matchedIds = [];
+
+        foreach ($allAccounts as $account) {
+            $levelMatches = $levelFilter === 0 || (int) $account->level === $levelFilter;
+            $searchMatches = $search === '' || $this->accountMatchesSearch($account, $search);
+
+            if ($levelMatches && $searchMatches) {
+                $matchedIds[(int) $account->id] = true;
+            }
+        }
+
+        if ($search !== '' && $levelFilter === 0) {
+            $accountsById = $allAccounts->keyBy('id');
+
+            foreach (array_keys($matchedIds) as $id) {
+                $account = $accountsById->get($id);
+
+                while ($account?->parent_id) {
+                    $parent = $accountsById->get((int) $account->parent_id);
+                    if (! $parent) {
+                        break;
+                    }
+
+                    $matchedIds[(int) $parent->id] = true;
+                    $account = $parent;
+                }
+            }
+        }
+
+        return $this->hierarchicalAccounts(
+            $allAccounts->filter(fn (ChartOfAccount $account): bool => isset($matchedIds[(int) $account->id]))
+        );
+    }
+
+    private function accountMatchesSearch(ChartOfAccount $account, string $search): bool
+    {
+        $rawSearch = trim($search);
+        $normalizedSearch = $this->searchText($rawSearch);
+        $compactSearch = str_replace(' ', '', $normalizedSearch);
+        $tokens = collect(explode(' ', $normalizedSearch))
+            ->filter(fn (string $token): bool => $token !== '')
+            ->values();
+
+        if ($normalizedSearch === '') {
+            return true;
+        }
+
+        $levelText = 'level '.$account->level.' level'.$account->level.' l'.$account->level;
+        $statusText = $account->is_active ? 'active enabled' : 'inactive disabled';
+        $postingText = $account->is_posting ? 'posting ledger ledger' : 'group category';
+        $partyText = $account->is_party_control ? 'party control receivable payable customer supplier due collection payment bill invoice' : '';
+        $typeAliases = match (mb_strtolower((string) $account->type)) {
+            'asset' => 'assets assest current asset non current asset cash bank receivable inventory stock',
+            'liability' => 'liabilities payable due loan creditor supplier payable rent payable bills payable',
+            'income' => 'income revenue sales sale earning commission',
+            'expense' => 'expenses cost cogs purchase direct cost rent salary transport other cost',
+            'equity' => 'equity oe owner capital owners equity retained earnings',
+            default => '',
+        };
+        $nameAliases = $this->accountSearchAliases((string) $account->name);
+
+        $haystack = $this->searchText(implode(' ', array_filter([
+            $account->code,
+            $account->name,
+            $account->type,
+            $account->normal_balance,
+            $account->report_section,
+            $account->cash_flow_section,
+            $account->parent?->code,
+            $account->parent?->name,
+            $account->parent?->type,
+            $levelText,
+            $statusText,
+            $postingText,
+            $partyText,
+            $typeAliases,
+            $nameAliases,
+        ], static fn ($value): bool => filled($value))));
+        $compactHaystack = str_replace(' ', '', $haystack);
+
+        if (str_contains($haystack, $normalizedSearch) || ($compactSearch !== '' && str_contains($compactHaystack, $compactSearch))) {
+            return true;
+        }
+
+        return $tokens->isNotEmpty()
+            && $tokens->every(fn (string $token): bool => str_contains($haystack, $token));
+    }
+
+    private function accountSearchAliases(string $name): string
+    {
+        $normalized = $this->searchText($name);
+        $aliases = [];
+
+        if (str_contains($normalized, 'rent')) {
+            $aliases[] = 'rent rental house office shop lease payable expense bill';
+        }
+
+        if (str_contains($normalized, 'payable')) {
+            $aliases[] = 'payable due liability creditor supplier bill owing outstanding';
+        }
+
+        if (str_contains($normalized, 'receivable')) {
+            $aliases[] = 'receivable due asset debtor customer collection outstanding';
+        }
+
+        if (str_contains($normalized, 'cash') || str_contains($normalized, 'bank')) {
+            $aliases[] = 'money account payment collection receive pay';
+        }
+
+        return implode(' ', $aliases);
+    }
+
+    private function searchText(string $value): string
+    {
+        $value = mb_strtolower($value);
+        $value = preg_replace('/[^\pL\pN]+/u', ' ', $value) ?: '';
+
+        return trim(preg_replace('/\s+/', ' ', $value) ?: '');
     }
 
     /** @param array<string, mixed> $data */

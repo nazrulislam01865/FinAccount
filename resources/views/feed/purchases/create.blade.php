@@ -8,7 +8,6 @@
         'unit' => 'BAG',
         'quantity' => 1,
         'rate' => $items->first()?->default_purchase_price ?? 0,
-        'discount' => 0,
         'batch_no' => '',
         'expiry_date' => '',
     ]]);
@@ -105,7 +104,6 @@
                                     <th>Unit</th>
                                     <th>Quantity</th>
                                     <th>Rate ({{ \App\Support\CompanyContext::currencyCode() }})</th>
-                                    <th>Discount</th>
                                     <th>Line Total</th>
                                     <th>Batch / Expiry</th>
                                     <th></th>
@@ -120,13 +118,28 @@
                     </div>
 
                     <div class="feed-divider"></div>
+                    <div class="feed-grid-2">
+                        <div class="feed-field">
+                            <label for="overall_discount">Overall Commission (%)</label>
+                            <input class="feed-control" id="overall_discount" name="overall_discount" type="text" inputmode="decimal" value="{{ old('overall_discount', 0) }}" placeholder="0 or 0%" data-feed-money-input>
+                            <div class="feed-help">Enter percentage with or without %. It is calculated from items subtotal.</div>
+                        </div>
+                        <div class="feed-field">
+                            <label for="commission_amount_purchase">Commission Amount ({{ \App\Support\CompanyContext::currencyCode() }})</label>
+                            <input class="feed-control feed-readonly" id="commission_amount_purchase" data-feed-commission-output readonly>
+                        </div>
+                    </div>
                     <div class="feed-grid-1">
                         <div class="feed-field">
-                            <label for="other_cost">Other Cost (Transport, etc.)</label>
+                            <label for="transport_cost">Transportation Cost</label>
+                            <input class="feed-control" id="transport_cost" name="transport_cost" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('transport_cost', 0) }}" data-feed-money-input>
+                        </div>
+                        <div class="feed-field">
+                            <label for="other_cost">Other Cost</label>
                             <input class="feed-control" id="other_cost" name="other_cost" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('other_cost', 0) }}" data-feed-money-input>
                         </div>
                         <div class="feed-field">
-                            <label for="calculated_total_cost">Total Cost</label>
+                            <label for="calculated_total_cost">Total Purchase</label>
                             <input class="feed-control feed-readonly" id="calculated_total_cost" data-feed-calculated-total readonly>
                         </div>
                     </div>
@@ -186,7 +199,9 @@
                     <div class="feed-summary-group">
                         <div class="feed-summary-label">Purchase Value</div>
                         <div class="feed-summary-row"><span>Items subtotal</span><b data-feed-summary="subtotal">{{ \App\Support\CompanyContext::money(0) }}</b></div>
-                        <div class="feed-summary-row"><span>Transport & other cost</span><b data-feed-summary="extra">{{ \App\Support\CompanyContext::money(0) }}</b></div>
+                        <div class="feed-summary-row"><span>Commission amount</span><b data-feed-summary="commission">{{ \App\Support\CompanyContext::money(0) }}</b></div>
+                        <div class="feed-summary-row"><span>Transportation cost</span><b data-feed-summary="transport">{{ \App\Support\CompanyContext::money(0) }}</b></div>
+                        <div class="feed-summary-row"><span>Other cost</span><b data-feed-summary="other">{{ \App\Support\CompanyContext::money(0) }}</b></div>
                         <div class="feed-summary-row feed-grand"><span>Total purchase</span><b data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</b></div>
                     </div>
 

@@ -37,9 +37,11 @@
     $isSalesTransaction = \App\Support\SaleSellingTypes::isSaleCategory($category);
     $saleBusinessAreas = $saleBusinessAreas ?? collect();
     $saleBusinessItemsForJs = $saleBusinessItemsForJs ?? collect();
+    $saleBusinessLocations = $saleBusinessLocations ?? collect();
     $defaultSellingType = $saleBusinessAreas->first()?->code ?: \App\Support\SaleSellingTypes::OTHERS;
     $selectedSellingType = \App\Support\SaleSellingTypes::normalize(old('selling_type', $isEditing ? ($transaction->selling_type ?: $defaultSellingType) : $defaultSellingType));
-    $selectedTrackingUnitId = old('tracking_unit_id', $isEditing ? $transaction->tracking_unit_id : $defaultSaleTrackingUnitId);
+    $defaultBusinessLocationId = $saleBusinessLocations->firstWhere('business_area', $selectedSellingType)?->id;
+    $selectedTrackingUnitId = old('tracking_unit_id', $isEditing ? $transaction->tracking_unit_id : $defaultBusinessLocationId);
     $showSaleWarehouse = false;
     $saleFeedModeSelected = $isSalesTransaction && ! \App\Support\SaleSellingTypes::isOthers($selectedSellingType);
 
@@ -244,6 +246,39 @@
                 </div>
 
                 @if($isSalesTransaction && ! $isDueSettlement)
+                    <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-sale-warehouse-field>
+                        <label for="tracking_unit_id">Location <span class="hg-required">*</span></label>
+                        <select
+                            id="tracking_unit_id"
+                            name="tracking_unit_id"
+                            data-sale-warehouse
+                            data-hg-searchable
+                            data-hg-search-placeholder="Search location by name or area..."
+                            data-hg-search-empty="No location found for this business area"
+                        >
+                            <option value="">Select location</option>
+                            @foreach($saleBusinessLocations as $location)
+                                @php
+                                    $locationLabel = trim((string) ($location->location ?: $location->name));
+                                    $locationMeta = trim((string) ($location->name.($location->location ? ' — '.$location->location : '')));
+                                @endphp
+                                <option
+                                    value="{{ $location->id }}"
+                                    data-business-area="{{ $location->business_area }}"
+                                    data-title="{{ $locationLabel }}"
+                                    data-meta="{{ $locationMeta }}"
+                                    data-search-keywords="{{ $location->business_area }} {{ $location->name }} {{ $location->location }}"
+                                    @selected((string) $selectedTrackingUnitId === (string) $location->id)
+                                >{{ $locationLabel }} @if($location->name && $location->location) — {{ $location->name }} @endif</option>
+                            @endforeach
+                        </select>
+                        <small class="hg-field-help">Locations come from Business Tracking Setup for the selected business area.</small>
+                        @if($saleBusinessLocations->isEmpty())
+                            <small class="hg-field-error">Add an active location/unit in Business Tracking Setup before posting business-area sales.</small>
+                        @endif
+                        @error('tracking_unit_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                    </div>
+
                     <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" id="party-field" data-sale-customer-field>
                         <label for="party_id"><span id="party-label">Customer</span> <span class="hg-required">*</span></label>
                         <select
@@ -284,7 +319,6 @@
                                             <th>Unit</th>
                                             <th>Quantity</th>
                                             <th>Sale Rate</th>
-                                            <th>Discount</th>
                                             <th>Line Total</th>
                                             <th></th>
                                         </tr>

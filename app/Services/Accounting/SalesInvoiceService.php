@@ -136,6 +136,7 @@ class SalesInvoiceService
             'tin' => $company->tin,
             'bin_vat_registration_no' => $company->bin_vat_registration_no,
             'logo_path' => $company->logo_path,
+            'currency_code' => $company->currency_code,
         ];
     }
 

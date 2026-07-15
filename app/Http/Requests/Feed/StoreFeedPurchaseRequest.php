@@ -48,6 +48,8 @@ class StoreFeedPurchaseRequest extends FormRequest
                     ->where('is_active', true)),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
+            'overall_discount' => ['nullable', 'numeric', 'min:0', 'max:100', 'decimal:0,4'],
+            'transport_cost' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'other_cost' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'cost_allocation' => ['nullable', Rule::in(['value', 'quantity'])],
             'paid_amount' => ['required', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
@@ -62,7 +64,6 @@ class StoreFeedPurchaseRequest extends FormRequest
             'lines.*.unit' => ['required', Rule::in(['BAG', 'KG'])],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0', 'decimal:0,4'],
             'lines.*.rate' => ['required', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
-            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'lines.*.batch_no' => ['nullable', 'string', 'max:100'],
             'lines.*.expiry_date' => ['nullable', 'date'],
             'transaction_attachments' => ['nullable', 'array', 'max:5'],
@@ -74,8 +75,19 @@ class StoreFeedPurchaseRequest extends FormRequest
     {
         $this->merge([
             'description' => $this->filled('description') ? trim((string) $this->input('description')) : null,
+            'overall_discount' => $this->sanitizePercentageInput($this->input('overall_discount', 0)),
+            'transport_cost' => $this->input('transport_cost', 0),
             'other_cost' => $this->input('other_cost', 0),
             'cost_allocation' => $this->input('cost_allocation', 'value'),
         ]);
+    }
+
+    private function sanitizePercentageInput(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        return trim(str_replace(['%', ','], '', (string) $value));
     }
 }

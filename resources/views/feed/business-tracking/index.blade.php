@@ -1,7 +1,5 @@
 <x-layouts::accounting title="Business Tracking Setup">
     <div class="feed-ui">
-        @include('feed.partials.tabs')
-
         <div class="feed-page-heading">
             <div>
                 <h1>Business Tracking Setup</h1>

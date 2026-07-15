@@ -161,6 +161,14 @@ class TransactionEntryController extends Controller
         $saleBusinessItems = $isSaleCategory
             ? $this->saleBusinessItems($companyId)
             : collect();
+        $saleBusinessLocations = $isSaleCategory
+            ? FeedBusinessTrackingUnit::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('business_area')
+                ->orderBy('name')
+                ->get()
+            : collect();
         $saleStockBalances = $isSaleCategory
             ? FeedStockBalance::query()
                 ->where('company_id', $companyId)
@@ -228,6 +236,7 @@ class TransactionEntryController extends Controller
             'saleCustomers' => $saleCustomers,
             'saleFeedItems' => $saleFeedItems,
             'saleBusinessItemsForJs' => $saleBusinessItems,
+            'saleBusinessLocations' => $saleBusinessLocations,
             'saleStockBalances' => $saleStockBalances,
         ]);
     }
@@ -546,18 +555,13 @@ class TransactionEntryController extends Controller
 
             $quantity = round((float) ($line['quantity'] ?? 0), 4);
             $rate = round((float) ($line['rate'] ?? 0), 2);
-            $discount = round((float) ($line['discount'] ?? 0), 2);
             $gross = round($quantity * $rate, 2);
 
             if ($quantity <= 0) {
                 throw ValidationException::withMessages(['lines.'.$index.'.quantity' => 'Quantity must be greater than zero.']);
             }
 
-            if ($discount > $gross) {
-                throw ValidationException::withMessages(['lines.'.$index.'.discount' => 'Discount cannot be greater than the line gross amount.']);
-            }
-
-            $lineTotal = round($gross - $discount, 2);
+            $lineTotal = $gross;
             $subtotal = round($subtotal + $lineTotal, 2);
 
             $preparedLines[] = [
@@ -566,7 +570,7 @@ class TransactionEntryController extends Controller
                 'unit' => trim((string) ($line['unit'] ?? 'Unit')) ?: 'Unit',
                 'quantity' => $quantity,
                 'rate' => $rate,
-                'discount' => $discount,
+                'discount' => 0.0,
                 'line_total' => $lineTotal,
             ];
         }
@@ -595,8 +599,16 @@ class TransactionEntryController extends Controller
             $autoDescription .= '; Other charges: '.number_format($otherCharges, 2, '.', '');
         }
 
+        $locationLabel = FeedBusinessTrackingUnit::query()
+            ->where('company_id', $companyId)
+            ->where('business_area', $businessArea)
+            ->where('id', (int) ($data['tracking_unit_id'] ?? 0))
+            ->value('location');
+        if (filled($locationLabel)) {
+            $autoDescription .= '; Location: '.$locationLabel;
+        }
+
         $data['amount'] = number_format($total, 2, '.', '');
-        $data['tracking_unit_id'] = null;
         $data['business_sale_lines'] = $preparedLines;
         $data['description'] = $description !== '' ? $description."
 ".$autoDescription : $autoDescription;

@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -128,6 +129,37 @@ class UserManagementController extends Controller
         return $this->redirectAfterAccountingSave($request, 'users.view', 'system.users.index', 'User details, role and account status updated successfully.');
     }
 
+
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless((int) $user->company_id === (int) $actor->company_id, 404);
+        abort_if((int) $actor->id === (int) $user->id, 422, 'You cannot delete your own user account.');
+        abort_if($user->accountingRole?->isSuperAdmin() && ! $actor->isSystemAdmin(), 403, 'Only a Super Admin may delete another Super Admin account.');
+
+        if ($this->wouldRemoveLastActiveSuperAdminByDeleting($user)) {
+            throw ValidationException::withMessages(['user' => 'At least one active Super Admin account must remain.']);
+        }
+
+        DB::transaction(function () use ($actor, $user): void {
+            $this->detachUserReferencesBeforeDelete($actor, $user);
+            $this->revokeSessions(request(), $actor, $user);
+
+            if (Schema::hasTable('password_reset_tokens')) {
+                DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+            }
+
+            $profilePhoto = $user->profile_photo_path;
+            $user->delete();
+
+            if ($profilePhoto) {
+                Storage::disk('public')->delete($profilePhoto);
+            }
+        });
+
+        return $this->redirectAfterAccountingSave($request, 'users.view', 'system.users.index', "User {$user->name} deleted successfully.");
+    }
+
     private function assignableRoles(User $actor, ?User $editing = null)
     {
         $query = AccountingRole::query()->where('company_id', $actor->company_id)->where('is_active', true)->orderBy('sort_order')->orderBy('name');
@@ -155,6 +187,58 @@ class UserManagementController extends Controller
         }
 
         app(ActiveLoginSession::class)->clearForUser($user);
+    }
+
+
+    private function detachUserReferencesBeforeDelete(User $actor, User $user): void
+    {
+        $actorId = (int) $actor->id;
+        $userId = (int) $user->id;
+
+        foreach ([
+            ['transactions', 'created_by', $actorId],
+            ['journal_entries', 'posted_by', $actorId],
+            ['feed_documents', 'created_by', $actorId],
+            ['company_profiles', 'created_by', null],
+            ['company_profiles', 'updated_by', null],
+            ['companies', 'updated_by', null],
+            ['landing_pages', 'updated_by_id', null],
+            ['opening_balances', 'created_by', null],
+            ['opening_balances', 'updated_by', null],
+            ['parties', 'created_by', null],
+            ['audit_logs', 'user_id', null],
+        ] as [$table, $column, $replacement]) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, $column)) {
+                DB::table($table)->where($column, $userId)->update([$column => $replacement]);
+            }
+        }
+
+        foreach (['accounting_user_permissions', 'form_drafts', 'accounting_notification_deliveries', 'passkeys', 'sessions'] as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'user_id')) {
+                DB::table($table)->where('user_id', $userId)->delete();
+            }
+        }
+
+        if (Schema::hasTable('notifications')) {
+            DB::table('notifications')
+                ->where('notifiable_id', $userId)
+                ->where('notifiable_type', User::class)
+                ->delete();
+        }
+    }
+
+    private function wouldRemoveLastActiveSuperAdminByDeleting(User $user): bool
+    {
+        if (! $user->accountingRole?->isSuperAdmin() || ! $user->isAccountActive()) {
+            return false;
+        }
+
+        return User::query()
+            ->where('company_id', $user->company_id)
+            ->where('account_status', User::ACCOUNT_STATUS_ACTIVE)
+            ->where('id', '!=', $user->id)
+            ->whereHas('accountingRole', fn ($q) => $q->where('slug', 'super_admin'))
+            ->count() < 1;
     }
 
     private function wouldRemoveLastActiveSuperAdmin(User $user, AccountingRole $newRole, string $newStatus): bool

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Accounting;
 use App\Http\Controllers\Controller;
 use App\Models\SalesInvoice;
 use App\Models\Transaction;
+use App\Services\Accounting\SalesInvoicePdfService;
 use App\Services\Accounting\SalesInvoiceService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -13,7 +14,10 @@ use Illuminate\Http\Response;
 
 class SalesInvoiceController extends Controller
 {
-    public function __construct(private readonly SalesInvoiceService $salesInvoiceService) {}
+    public function __construct(
+        private readonly SalesInvoiceService $salesInvoiceService,
+        private readonly SalesInvoicePdfService $salesInvoicePdfService,
+    ) {}
 
     public function show(Request $request, SalesInvoice $salesInvoice): View
     {
@@ -39,18 +43,18 @@ class SalesInvoiceController extends Controller
             'transaction.transactionHead',
             'transaction.moneyAccount',
             'transaction.party',
+            'transaction.saleLines',
             'company',
+            'party',
         ]);
 
-        $html = view('sales-invoices.download', [
-            'invoice' => $salesInvoice,
-        ])->render();
+        $pdf = $this->salesInvoicePdfService->render($salesInvoice);
+        $filename = preg_replace('/[^A-Za-z0-9_\-]/', '-', $salesInvoice->invoice_no).'.pdf';
 
-        $filename = preg_replace('/[^A-Za-z0-9_\-]/', '-', $salesInvoice->invoice_no).'.html';
-
-        return response($html, 200, [
-            'Content-Type' => 'text/html; charset=UTF-8',
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
         ]);
     }
 

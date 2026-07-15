@@ -19,9 +19,13 @@ class TransactionHeadService
     ) {}
 
     /** @return array<string, mixed> */
-    public function pageData(int $companyId): array
+    public function pageData(int $companyId, array $filters = []): array
     {
+        $filters = $this->normaliseFilters($filters);
         $transactionCategories = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY);
+        $categoryLabels = $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY);
+        $partyTypeLabels = $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE);
+        $settlementLabels = $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE);
 
         $transactionHeads = TransactionHead::query()
             ->with(['postingAccount', 'accountingRule'])
@@ -32,6 +36,8 @@ class TransactionHeadService
 
         $accountingRules = AccountingRule::query()
             ->where('company_id', $companyId)
+            ->orderBy('category')
+            ->orderBy('code')
             ->get(['id', 'transaction_head_id', 'code', 'name', 'category', 'settlement_type', 'is_active']);
 
         $rulesByHead = $accountingRules
@@ -83,17 +89,45 @@ class TransactionHeadService
             $head->setAttribute('template_accounting_rules_count', $templateRules->count());
         });
 
+        $allTransactionHeadsCount = $transactionHeads->count();
+        $transactionHeads = $this->filterTransactionHeads(
+            $transactionHeads,
+            $filters,
+            $categoryLabels,
+            $partyTypeLabels,
+            $settlementLabels,
+        );
+
+        $coaTypeOptions = ChartOfAccount::query()
+            ->where('company_id', $companyId)
+            ->where('level', 3)
+            ->whereNotNull('type')
+            ->distinct()
+            ->orderBy('type')
+            ->pluck('type')
+            ->filter()
+            ->values()
+            ->all();
+        $coaTypeOptions = collect(['Asset', 'Liability', 'Income', 'Expense', 'Equity', ...$coaTypeOptions])
+            ->unique()
+            ->values();
+
         return [
             'transactionHeads' => $transactionHeads,
+            'allTransactionHeadsCount' => $allTransactionHeadsCount,
+            'filteredTransactionHeadsCount' => $transactionHeads->count(),
+            'transactionHeadFilters' => $filters,
+            'coaTypeOptions' => $coaTypeOptions,
+            'accountingRules' => $accountingRules,
             'postingAccounts' => ChartOfAccount::query()
                 ->where('company_id', $companyId)
                 ->where('level', 3)
                 ->orderBy('code')
                 ->get(),
             'transactionCategories' => $transactionCategories,
-            'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
+            'categoryLabels' => $categoryLabels,
             'settlementTypes' => $this->optionService->forGroup(AccountingOption::GROUP_SETTLEMENT_TYPE),
-            'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'settlementLabels' => $settlementLabels,
             'transactionTypeDefinitions' => $transactionCategories->mapWithKeys(fn (AccountingOption $option): array => [
                 $option->value => TransactionTypes::configuredDefinition(
                     $option->value,
@@ -102,8 +136,116 @@ class TransactionHeadService
                 ),
             ])->all(),
             'partyTypes' => $this->optionService->forGroup(AccountingOption::GROUP_RULE_PARTY_TYPE),
-            'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE),
+            'partyTypeLabels' => $partyTypeLabels,
         ];
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function normaliseFilters(array $filters): array
+    {
+        return [
+            'search' => trim((string) ($filters['search'] ?? '')),
+            'transaction_type' => trim((string) ($filters['transaction_type'] ?? '')),
+            'coa_type' => trim((string) ($filters['coa_type'] ?? '')),
+            'party_type' => trim((string) ($filters['party_type'] ?? '')),
+            'accounting_rule' => trim((string) ($filters['accounting_rule'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param Collection<int, TransactionHead> $transactionHeads
+     * @param array<string, string> $filters
+     * @param array<string, string> $categoryLabels
+     * @param array<string, string> $partyTypeLabels
+     * @param array<string, string> $settlementLabels
+     * @return Collection<int, TransactionHead>
+     */
+    private function filterTransactionHeads(
+        Collection $transactionHeads,
+        array $filters,
+        array $categoryLabels,
+        array $partyTypeLabels,
+        array $settlementLabels,
+    ): Collection {
+        $search = strtolower($filters['search'] ?? '');
+        $transactionType = $filters['transaction_type'] ?? '';
+        $coaType = $filters['coa_type'] ?? '';
+        $partyType = $filters['party_type'] ?? '';
+        $accountingRule = $filters['accounting_rule'] ?? '';
+
+        return $transactionHeads
+            ->filter(function (TransactionHead $head) use (
+                $search,
+                $transactionType,
+                $coaType,
+                $partyType,
+                $accountingRule,
+                $categoryLabels,
+                $partyTypeLabels,
+                $settlementLabels,
+            ): bool {
+                if ($transactionType !== '' && (string) $head->category !== $transactionType) {
+                    return false;
+                }
+
+                if ($coaType !== '' && (string) ($head->postingAccount?->type ?? '') !== $coaType) {
+                    return false;
+                }
+
+                $headPartyType = (string) ($head->party_type ?: 'Any');
+                if ($partyType !== '' && $headPartyType !== $partyType) {
+                    return false;
+                }
+
+                $rules = collect($head->getRelation('applicableAccountingRules') ?? []);
+                if ($accountingRule !== '') {
+                    $activeRuleCount = (int) ($head->active_applicable_accounting_rules_count ?? 0);
+                    $totalRuleCount = (int) ($head->applicable_accounting_rules_count ?? 0);
+
+                    if ($accountingRule === '__with_rule' && $totalRuleCount < 1) {
+                        return false;
+                    }
+
+                    if ($accountingRule === '__without_rule' && $totalRuleCount > 0) {
+                        return false;
+                    }
+
+                    if ($accountingRule === '__active_rule' && $activeRuleCount < 1) {
+                        return false;
+                    }
+
+                    if ($accountingRule === '__inactive_rule' && ! ($totalRuleCount > 0 && $activeRuleCount < 1)) {
+                        return false;
+                    }
+
+                    if (ctype_digit($accountingRule) && ! $rules->contains(fn (AccountingRule $rule): bool => (int) $rule->id === (int) $accountingRule)) {
+                        return false;
+                    }
+                }
+
+                if ($search === '') {
+                    return true;
+                }
+
+                $searchableParts = [
+                    $head->code,
+                    $head->name,
+                    $head->category,
+                    $categoryLabels[(string) $head->category] ?? '',
+                    $head->postingAccount?->code,
+                    $head->postingAccount?->name,
+                    $head->postingAccount?->type,
+                    $headPartyType,
+                    $partyTypeLabels[$headPartyType] ?? '',
+                    collect($head->allowedSettlementCodes())->map(fn (string $value): string => $settlementLabels[$value] ?? $value)->join(' '),
+                    $rules->map(fn (AccountingRule $rule): string => trim($rule->code.' '.$rule->name.' '.$rule->category.' '.$rule->settlement_type))->join(' '),
+                ];
+
+                $haystack = strtolower(implode(' ', array_filter($searchableParts, static fn ($value): bool => filled($value))));
+
+                return str_contains($haystack, $search);
+            })
+            ->values();
     }
 
     private function ruleScopeKey(string|null $category, string|null $settlementType): string

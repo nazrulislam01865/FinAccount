@@ -51,7 +51,18 @@
                                         'url' => route('system.users.update', $user),
                                     ];
                                 @endphp
-                                <button type="button" class="hg-btn hg-btn-small" data-draft-edit-key="system-users.edit.{{ $user->id }}" data-user-edit='@json($userEditPayload)'>Edit</button>
+                                <div class="hg-actions">
+                                    <button type="button" class="hg-btn hg-btn-small" data-draft-edit-key="system-users.edit.{{ $user->id }}" data-user-edit='@json($userEditPayload)'>Edit</button>
+                                    @if(auth()->id() === $user->id)
+                                        <span class="hg-muted">No self delete</span>
+                                    @else
+                                        <form method="POST" action="{{ route('system.users.destroy', $user) }}" onsubmit="return confirm('Delete this user? Related sessions, drafts and permissions will be removed. Existing accounting records will be kept under your user account.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="hg-btn hg-btn-small hg-btn-danger">Delete</button>
+                                        </form>
+                                    @endif
+                                </div>
                             @else
                                 <span class="hg-muted">Protected</span>
                             @endif
@@ -85,21 +96,65 @@
 
     @if($canManageUsers)
     <div class="hg-modal" id="userEditModal" aria-hidden="true">
-        <div class="hg-modal-card hg-user-modal-card">
-            <div class="hg-modal-head"><div><h3>Edit User</h3><p id="editUserSubtitle">Update details, role and account status.</p></div><button type="button" class="hg-modal-close" data-user-edit-close>×</button></div>
+        <div class="hg-modal-box hg-user-modal-card" role="dialog" aria-modal="true" aria-labelledby="editUserTitle">
+            <div class="hg-user-modal-head">
+                <div>
+                    <span class="hg-modal-eyebrow">User access</span>
+                    <h3 id="editUserTitle">Edit User</h3>
+                    <p id="editUserSubtitle">Update profile details, access role, status, or password.</p>
+                </div>
+                <button type="button" class="hg-modal-close hg-user-modal-close" data-user-edit-close aria-label="Close edit user modal">×</button>
+            </div>
             <form id="editUserForm" method="POST" action="" data-draft-form data-draft-defer data-draft-key-base="system-users" data-draft-key="system-users.edit" data-draft-title="Edit User">
                 @csrf @method('PUT')
-                <div class="hg-form-grid">
-                    <div class="hg-field"><label>Name <span class="hg-required">*</span></label><input id="editUserName" name="name" required></div>
-                    <div class="hg-field"><label>Email <span class="hg-required">*</span></label><input id="editUserEmail" name="email" type="email" required></div>
-                    <div class="hg-field"><label>Role <span class="hg-required">*</span></label><select id="editUserRole" name="accounting_role_id" required>@foreach($roleOptions as $role)<option value="{{ $role->id }}">{{ $role->name }}</option>@endforeach</select></div>
-                    <div class="hg-field"><label>Status <span class="hg-required">*</span></label><select id="editUserStatus" name="account_status" required>@foreach($accountStatusOptions as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></div>
+                <div class="hg-user-modal-body">
+                    <div class="hg-user-edit-summary">
+                        <div class="hg-user-avatar" id="editUserAvatarInitial">U</div>
+                        <div>
+                            <strong id="editUserSummaryName">Selected user</strong>
+                            <span id="editUserSummaryEmail">Open a user record to edit.</span>
+                        </div>
+                        <span class="hg-user-status-pill" id="editUserSummaryBadge">Active</span>
+                    </div>
+
+                    <div class="hg-user-form-section">
+                        <div class="hg-user-section-title">
+                            <strong>Basic information</strong>
+                            <small>Name and login email used by the user.</small>
+                        </div>
+                        <div class="hg-user-edit-grid">
+                            <div class="hg-field"><label for="editUserName">Name <span class="hg-required">*</span></label><input id="editUserName" name="name" required maxlength="255" autocomplete="name"></div>
+                            <div class="hg-field"><label for="editUserEmail">Email <span class="hg-required">*</span></label><input id="editUserEmail" name="email" type="email" required maxlength="255" autocomplete="email"></div>
+                        </div>
+                    </div>
+
+                    <div class="hg-user-form-section">
+                        <div class="hg-user-section-title">
+                            <strong>Role and status</strong>
+                            <small>Role controls permissions. Status controls whether this account can sign in.</small>
+                        </div>
+                        <div class="hg-user-edit-grid">
+                            <div class="hg-field"><label for="editUserRole">Role <span class="hg-required">*</span></label><select id="editUserRole" name="accounting_role_id" required>@foreach($roleOptions as $role)<option value="{{ $role->id }}">{{ $role->name }}</option>@endforeach</select></div>
+                            <div class="hg-field"><label for="editUserStatus">Status <span class="hg-required">*</span></label><select id="editUserStatus" name="account_status" required>@foreach($accountStatusOptions as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></div>
+                        </div>
+                        <div class="hg-user-self-notice" id="editSelfNotice" hidden>You are editing your own account, so role and active status are locked for safety.</div>
+                    </div>
+
                     @if($canChangePasswords)
-                    <div class="hg-field"><label>New Password</label><input name="password" type="password" minlength="8" autocomplete="new-password"></div>
-                    <div class="hg-field"><label>Confirm New Password</label><input name="password_confirmation" type="password" minlength="8" autocomplete="new-password"></div>
+                    <div class="hg-user-form-section">
+                        <div class="hg-user-section-title">
+                            <strong>Password update</strong>
+                            <small>Leave both fields empty if you do not want to change the password.</small>
+                        </div>
+                        <div class="hg-user-edit-grid">
+                            <div class="hg-field"><label for="editUserPassword">New Password</label><input id="editUserPassword" name="password" type="password" minlength="8" autocomplete="new-password"><span class="hg-field-help">Minimum 8 characters.</span></div>
+                            <div class="hg-field"><label for="editUserPasswordConfirmation">Confirm New Password</label><input id="editUserPasswordConfirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password"></div>
+                        </div>
+                    </div>
                     @endif
-                    <div class="hg-field full hg-info" id="editSelfNotice" hidden>You cannot change your own role or active status.</div>
-                    <div class="hg-field full"><x-accounting.form-actions submit-label="Save User Changes"><button type="button" class="hg-btn" data-user-edit-close>Cancel</button></x-accounting.form-actions></div>
+                </div>
+                <div class="hg-user-modal-footer">
+                    <x-accounting.form-actions submit-label="Save User Changes"><button type="button" class="hg-btn" data-user-edit-close>Cancel</button></x-accounting.form-actions>
                 </div>
             </form>
         </div>
@@ -131,14 +186,21 @@
                 const statusHidden = document.createElement('input'); statusHidden.type='hidden'; statusHidden.name='account_status'; statusHidden.value=data.status; statusHidden.dataset.selfHidden='1'; form.appendChild(statusHidden);
             }
             document.getElementById('editUserSubtitle').textContent = `Editing ${data.name || 'user'} (${data.email || ''})`;
+            document.getElementById('editUserSummaryName').textContent = data.name || 'Selected user';
+            document.getElementById('editUserSummaryEmail').textContent = data.email || 'No email set';
+            document.getElementById('editUserAvatarInitial').textContent = (data.name || data.email || 'U').trim().charAt(0).toUpperCase();
+            const summaryBadge = document.getElementById('editUserSummaryBadge');
+            const selectedStatus = status.selectedOptions?.[0]?.textContent?.trim() || data.status || 'Active';
+            summaryBadge.textContent = selectedStatus;
+            summaryBadge.classList.toggle('is-inactive', data.status !== 'active');
             const draftKey = `system-users.edit.${data.id}`;
             form.dataset.draftKey = draftKey;
-            modal.classList.add('show'); modal.setAttribute('aria-hidden','false');
+            modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); document.body.classList.add('hg-modal-open');
             form.dispatchEvent(new CustomEvent('hisebghor:draft-context', {
                 detail: { key: draftKey, title: `Edit User: ${data.name || data.email || data.id}` },
             }));
         }));
-        const close = () => { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); form.querySelectorAll('[data-self-hidden]').forEach(el=>el.remove()); document.getElementById('editUserRole').disabled=false; document.getElementById('editUserStatus').disabled=false; };
+        const close = () => { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); document.body.classList.remove('hg-modal-open'); form.querySelectorAll('[data-self-hidden]').forEach(el=>el.remove()); document.getElementById('editUserRole').disabled=false; document.getElementById('editUserStatus').disabled=false; };
         modal.querySelectorAll('[data-user-edit-close]').forEach(button => button.addEventListener('click', close));
         modal.addEventListener('click', event => { if (event.target === modal) close(); });
     })();

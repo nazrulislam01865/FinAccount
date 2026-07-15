@@ -5,6 +5,7 @@ namespace App\Http\Requests\Accounting;
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
 use App\Models\Feed\FeedBusinessArea;
+use App\Models\Feed\FeedBusinessTrackingUnit;
 use App\Models\Transaction;
 use App\Support\CompanyContext;
 use App\Support\SaleSellingTypes;
@@ -67,17 +68,30 @@ class UpdateTransactionRequest extends FormRequest
                     && SaleSellingTypes::requiresWarehouse($this->input('selling_type'))),
                 'nullable',
                 'integer',
-                Rule::exists('feed_warehouses', 'id')->where(function ($query) use ($companyId): void {
-                    $query->where('company_id', $companyId)
-                        ->where(function ($warehouseQuery): void {
-                            $warehouseQuery->where('is_active', true);
+                function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                    $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
+                    if (! SaleSellingTypes::isSaleCategory($this->input('category')) || SaleSellingTypes::isOthers($sellingType) || ! filled($value)) {
+                        return;
+                    }
+
+                    $exists = FeedBusinessTrackingUnit::query()
+                        ->where('company_id', $companyId)
+                        ->where('business_area', $sellingType)
+                        ->whereKey((int) $value)
+                        ->where(function ($query): void {
+                            $query->where('is_active', true);
 
                             $transaction = $this->route('transaction');
                             if ($transaction instanceof Transaction && $transaction->tracking_unit_id) {
-                                $warehouseQuery->orWhere('id', $transaction->tracking_unit_id);
+                                $query->orWhere('id', $transaction->tracking_unit_id);
                             }
-                        });
-                }),
+                        })
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('The selected location is not active for this business area.');
+                    }
+                },
             ],
             'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
@@ -133,13 +147,13 @@ class UpdateTransactionRequest extends FormRequest
             $this->input('category'),
         );
         $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
-        $warehouseRequired = SaleSellingTypes::isSaleCategory($category)
+        $locationRequired = SaleSellingTypes::isSaleCategory($category)
             && SaleSellingTypes::requiresWarehouse($sellingType);
 
         $this->merge([
             'category' => $category,
             'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
-            'tracking_unit_id' => $warehouseRequired && filled($this->input('tracking_unit_id'))
+            'tracking_unit_id' => $locationRequired && filled($this->input('tracking_unit_id'))
                 ? $this->input('tracking_unit_id')
                 : null,
             'settlement_type' => filled($this->input('settlement_type'))

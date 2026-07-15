@@ -1,7 +1,11 @@
 const numberValue = (value) => {
-    const parsed = Number.parseFloat(value ?? 0);
+    const parsed = Number.parseFloat(String(value ?? 0).replaceAll(',', ''));
     return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const percentageValue = (value) => Math.max(0, numberValue(String(value ?? 0).replace('%', '')));
+
+const commissionAmount = (gross, percentage) => Math.max(0, numberValue(gross) * (percentageValue(percentage) / 100));
 
 const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -69,7 +73,6 @@ const initFeedModule = () => {
             ? numberValue(values.rate)
             : defaultRate(item, unit);
         const quantity = values.quantity ?? 1;
-        const discount = values.discount ?? 0;
 
         if (config.type === 'purchase') {
             return `
@@ -81,7 +84,6 @@ const initFeedModule = () => {
                     <td><select name="lines[${index}][unit]" data-feed-unit data-hg-searchable-ignore><option value="BAG"${unit === 'BAG' ? ' selected' : ''}>Bag</option><option value="KG"${unit === 'KG' ? ' selected' : ''}>KG</option></select></td>
                     <td><input class="right" name="lines[${index}][quantity]" data-feed-quantity type="number" min="0.0001" step="0.0001" value="${escapeHtml(quantity)}" required></td>
                     <td><input class="right" name="lines[${index}][rate]" data-feed-rate type="number" min="0" step="0.01" value="${escapeHtml(rate.toFixed(2))}" required></td>
-                    <td><input class="right" name="lines[${index}][discount]" data-feed-discount type="number" min="0" step="0.01" value="${escapeHtml(discount)}"></td>
                     <td class="right"><strong data-feed-line-total>${money(0)}</strong><small data-feed-base-qty></small></td>
                     <td class="hg-feed-batch-cell">
                         <input name="lines[${index}][batch_no]" data-feed-batch placeholder="Batch no." value="${escapeHtml(values.batch_no ?? '')}">
@@ -101,7 +103,6 @@ const initFeedModule = () => {
                 <td><select name="lines[${index}][unit]" data-feed-unit data-hg-searchable-ignore><option value="BAG"${unit === 'BAG' ? ' selected' : ''}>Bag</option><option value="KG"${unit === 'KG' ? ' selected' : ''}>KG</option></select></td>
                 <td><input class="right" name="lines[${index}][quantity]" data-feed-quantity type="number" min="0.0001" step="0.0001" value="${escapeHtml(quantity)}" required></td>
                 <td><input class="right" name="lines[${index}][rate]" data-feed-rate type="number" min="0" step="0.01" value="${escapeHtml(rate.toFixed(2))}" required></td>
-                <td><input class="right" name="lines[${index}][discount]" data-feed-discount type="number" min="0" step="0.01" value="${escapeHtml(discount)}"></td>
                 <td class="right"><strong data-feed-line-total>${money(0)}</strong><small data-feed-base-qty></small></td>
                 <td><button class="feed-icon-btn" type="button" data-feed-remove-line aria-label="Remove feed item">×</button></td>
             </tr>`;
@@ -191,8 +192,7 @@ const initFeedModule = () => {
             const unit = row.querySelector('[data-feed-unit]')?.value ?? 'BAG';
             const quantity = Math.max(0, numberValue(row.querySelector('[data-feed-quantity]')?.value));
             const rate = Math.max(0, numberValue(row.querySelector('[data-feed-rate]')?.value));
-            const discount = Math.max(0, numberValue(row.querySelector('[data-feed-discount]')?.value));
-            const lineTotal = Math.max(0, (quantity * rate) - discount);
+            const lineTotal = quantity * rate;
             const baseQuantity = unit === 'BAG' ? quantity * numberValue(item?.packSize) : quantity;
             const totalElement = row.querySelector('[data-feed-line-total]');
             const baseElement = row.querySelector('[data-feed-base-qty]');
@@ -216,16 +216,11 @@ const initFeedModule = () => {
             }
         });
 
-        let extra = 0;
-        let total = subtotal;
-
-        if (config.type === 'purchase') {
-            extra = numberValue(root.querySelector('#transport_cost')?.value) + numberValue(root.querySelector('#other_cost')?.value);
-            total += extra;
-        } else {
-            extra = numberValue(root.querySelector('#delivery_charge')?.value) - numberValue(root.querySelector('#overall_discount')?.value);
-            total += extra;
-        }
+        const totalCommission = commissionAmount(subtotal, root.querySelector('#overall_discount')?.value);
+        const transport = numberValue(root.querySelector('#transport_cost')?.value);
+        const other = numberValue(root.querySelector('#other_cost')?.value);
+        const extra = transport + other;
+        let total = subtotal - totalCommission + extra;
 
         total = Math.max(0, total);
         const paid = Math.max(0, numberValue(paidInput?.value));
@@ -235,6 +230,12 @@ const initFeedModule = () => {
             : (paid >= total - 0.005 ? 'Fully paid/received' : 'Partially paid/received');
 
         summary('subtotal', money(subtotal));
+        summary('commission', money(totalCommission));
+        root.querySelectorAll('[data-feed-commission-output]').forEach((element) => {
+            element.value = money(totalCommission);
+        });
+        summary('transport', money(transport));
+        summary('other', money(other));
         summary('extra', money(extra));
         summary('total', money(total));
         root.querySelectorAll('[data-feed-calculated-total]').forEach((element) => {
@@ -266,11 +267,10 @@ const initFeedModule = () => {
         unit: 'BAG',
         quantity: 1,
         rate: config.type === 'purchase' ? config.items[0]?.purchasePrice : config.items[0]?.salePrice,
-        discount: 0,
     }));
 
     rowsContainer.addEventListener('input', (event) => {
-        if (event.target.matches('[data-feed-quantity], [data-feed-rate], [data-feed-discount]')) {
+        if (event.target.matches('[data-feed-quantity], [data-feed-rate]')) {
             calculate();
         }
     });

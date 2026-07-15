@@ -144,6 +144,8 @@ if (page) {
                 if (saleWarehouse.value) rememberedWarehouseId = saleWarehouse.value;
                 saleWarehouse.value = '';
             }
+
+            refreshSearchable(saleWarehouse);
         }
 
         if (amount) {
@@ -489,7 +491,7 @@ if (page) {
         const totalBillInput = form?.querySelector('[data-sale-total-bill]');
         const scale = Number.isInteger(saleFeedConfig.decimalPlaces) ? saleFeedConfig.decimalPlaces : 2;
         const numberValue = (value) => {
-            const parsed = Number.parseFloat(value ?? 0);
+            const parsed = Number.parseFloat(String(value ?? 0).replaceAll(',', ''));
             return Number.isFinite(parsed) ? parsed : 0;
         };
         let rowCounter = 0;
@@ -551,7 +553,6 @@ if (page) {
                 ? numberValue(values.rate)
                 : numberValue(item?.salePrice ?? 0);
             const quantity = values.quantity ?? 1;
-            const discount = values.discount ?? 0;
             const unit = values.unit ?? 'Unit';
 
             return `
@@ -563,7 +564,6 @@ if (page) {
                     <td><input name="lines[${index}][unit]" data-sale-feed-unit type="text" value="${escapeHtml(unit)}" placeholder="Unit"></td>
                     <td><input class="right" name="lines[${index}][quantity]" data-sale-feed-quantity type="number" min="0.0001" step="0.0001" value="${escapeHtml(quantity)}" required></td>
                     <td><input class="right" name="lines[${index}][rate]" data-sale-feed-rate type="number" min="0" step="0.01" value="${escapeHtml(rate.toFixed(2))}" required></td>
-                    <td><input class="right" name="lines[${index}][discount]" data-sale-feed-discount type="number" min="0" step="0.01" value="${escapeHtml(discount)}"></td>
                     <td class="right"><strong data-sale-feed-line-total>${moneyText(0)}</strong></td>
                     <td><button class="hg-btn hg-btn-small hg-btn-danger" type="button" data-sale-feed-remove aria-label="Remove item">×</button></td>
                 </tr>`;
@@ -597,8 +597,7 @@ if (page) {
                 const itemName = row.querySelector('[data-sale-feed-item]')?.value;
                 const quantity = Math.max(0, numberValue(row.querySelector('[data-sale-feed-quantity]')?.value));
                 const rate = Math.max(0, numberValue(row.querySelector('[data-sale-feed-rate]')?.value));
-                const discount = Math.max(0, numberValue(row.querySelector('[data-sale-feed-discount]')?.value));
-                const lineTotal = Math.max(0, (quantity * rate) - discount);
+                const lineTotal = quantity * rate;
 
                 subtotal += lineTotal;
                 hasValidLine ||= Boolean(itemName) && quantity > 0;
@@ -637,7 +636,7 @@ if (page) {
 
         const initialLines = Array.isArray(saleFeedConfig.initialLines) && saleFeedConfig.initialLines.length
             ? saleFeedConfig.initialLines
-            : [{ item_name: defaultItemName(), unit: 'Unit', quantity: 1, rate: 0, discount: 0 }];
+            : [{ item_name: defaultItemName(), unit: 'Unit', quantity: 1, rate: 0 }];
         initialLines.forEach((line) => addLine(line));
         refreshSaleBusinessItems();
 
@@ -646,11 +645,10 @@ if (page) {
             unit: 'Unit',
             quantity: 1,
             rate: 0,
-            discount: 0,
         }));
 
         rowsContainer.addEventListener('input', (event) => {
-            if (event.target.matches('[data-sale-feed-quantity], [data-sale-feed-rate], [data-sale-feed-discount]')) {
+            if (event.target.matches('[data-sale-feed-quantity], [data-sale-feed-rate]')) {
                 calculateSaleFeed();
             }
         });

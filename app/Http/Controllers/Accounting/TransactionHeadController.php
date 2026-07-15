@@ -31,7 +31,13 @@ class TransactionHeadController extends Controller
 
     public function index(Request $request): View
     {
-        $data = $this->service->pageData($request->user()->company_id);
+        $data = $this->service->pageData($request->user()->company_id, $request->only([
+            'search',
+            'transaction_type',
+            'coa_type',
+            'party_type',
+            'accounting_rule',
+        ]));
         $data['addOnlyMode'] = ! $request->user()->canAccounting('transaction_heads.view');
         if ($data['addOnlyMode']) {
             $data['transactionHeads'] = collect();

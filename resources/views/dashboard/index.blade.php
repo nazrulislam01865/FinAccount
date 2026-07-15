@@ -1,15 +1,6 @@
 <x-layouts::accounting title="Dashboard">
     <x-slot:topbar>
         <div class="hg-topbar-title">Dashboard</div>
-        <form class="hg-dashboard-period" method="GET" action="{{ route('dashboard') }}">
-            <label for="dashboard-period">Period</label>
-            <select id="dashboard-period" name="period" onchange="this.form.submit()">
-                @foreach ($periodOptions as $value => $label)
-                    <option value="{{ $value }}" @selected($period === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-            <button type="button" onclick="window.print()">Print Dashboard</button>
-        </form>
     </x-slot:topbar>
 
     <section class="hg-dashboard">

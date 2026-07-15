@@ -355,6 +355,8 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
             ->middleware('accounting.permission:users.manage')->name('users.store');
         Route::put('/users/{user}', [UserManagementController::class, 'update'])
             ->middleware('accounting.permission:users.manage')->name('users.update');
+        Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
+            ->middleware('accounting.permission:users.manage')->name('users.destroy');
 
         Route::get('/role-matrix', [RoleMatrixController::class, 'index'])
             ->middleware('accounting.permission:role_matrix.view')->name('role-matrix.index');

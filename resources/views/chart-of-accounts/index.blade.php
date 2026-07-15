@@ -10,6 +10,7 @@
     $canManage = auth()->user()?->canAccounting('chart_of_accounts.manage') ?? false;
     $canDelete = $canManage && (auth()->user()?->canDeleteAccountingRecords() ?? false);
     $draftRows = \App\Support\VisibleFormDrafts::forBase('chart-of-accounts');
+    $tableColspan = $canDelete ? 9 : 8;
 @endphp
 
 <x-layouts::accounting title="Chart of Accounts">
@@ -46,7 +47,7 @@
         @endforeach
     </div>
 
-    <form method="GET" action="{{ route('chart-of-accounts.index') }}" class="hg-toolbar">
+    <form method="GET" action="{{ route('chart-of-accounts.index') }}" class="hg-toolbar hg-coa-filter-form" data-coa-filter-form>
         <input
             class="hg-search"
             type="search"
@@ -54,16 +55,17 @@
             value="{{ $search }}"
             placeholder="Search code, account, parent, type, or level..."
             aria-label="Search chart of accounts"
+            autocomplete="off"
+            data-coa-filter-search
         >
-        <select class="hg-filter-select" name="level" aria-label="Filter chart of accounts by level" onchange="this.form.submit()">
+        <select class="hg-filter-select" name="level" aria-label="Filter chart of accounts by level" data-coa-filter-level data-hg-searchable-ignore>
             <option value="0">All Levels</option>
             <option value="1" @selected($levelFilter === 1)>Level 1 — Main Groups</option>
             <option value="2" @selected($levelFilter === 2)>Level 2 — Categories</option>
             <option value="3" @selected($levelFilter === 3)>Level 3 — Posting Ledgers</option>
         </select>
-        @if($search !== '' || $levelFilter !== 0)
-            <a class="hg-btn" href="{{ route('chart-of-accounts.index') }}">Clear</a>
-        @endif
+        <button class="hg-btn hg-btn-primary" type="submit">Search</button>
+        <a class="hg-btn" href="{{ route('chart-of-accounts.index') }}" data-coa-filter-clear @if($search === '' && $levelFilter === 0) hidden @endif>Clear</a>
     </form>
 
     @if($canDelete)
@@ -94,7 +96,7 @@
         <div class="hg-empty">{{ $addOnlyMode ? 'You may add records, but your role is not allowed to view this list.' : 'No records found.' }}</div>
     @else
         <div class="hg-table-wrap">
-            <table class="hg-table hg-coa-table">
+            <table class="hg-table hg-coa-table" data-coa-table>
                 <thead>
                     <tr>
                         @if($canDelete)<th class="hg-checkbox-col"><input type="checkbox" data-coa-bulk-master aria-label="Select all chart of accounts"></th>@endif
@@ -110,7 +112,25 @@
                 </thead>
                 <tbody>
                     @foreach ($accounts as $account)
-                        <tr class="hg-coa-row hg-coa-row-level-{{ $account->level }}">
+                        @php
+                            $rowSearch = collect([
+                                $account->code,
+                                $account->name,
+                                $account->type,
+                                $account->normal_balance,
+                                $account->report_section,
+                                $account->cash_flow_section,
+                                $account->parent?->code,
+                                $account->parent?->name,
+                                $account->parent?->type,
+                                'level '.$account->level,
+                                'level'.$account->level,
+                                $account->is_active ? 'active enabled' : 'inactive disabled',
+                                $account->is_posting ? 'posting ledger ledger' : 'group category',
+                                $account->is_party_control ? 'party control receivable payable customer supplier due' : '',
+                            ])->filter()->implode(' ');
+                        @endphp
+                        <tr class="hg-coa-row hg-coa-row-level-{{ $account->level }}" data-coa-row data-level="{{ $account->level }}" data-search="{{ e($rowSearch) }}">
                             @if($canDelete)
                                 <td class="hg-checkbox-col">
                                     <input
@@ -191,6 +211,10 @@
                             </td>
                         </tr>
                     @endforeach
+
+                    <tr data-coa-search-empty hidden>
+                        <td colspan="{{ $tableColspan }}" class="hg-empty">No chart of account records match this search.</td>
+                    </tr>
 
                     @foreach ($draftRows as $draft)
                         @php

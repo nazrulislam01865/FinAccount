@@ -184,12 +184,7 @@
                 <input type="hidden" name="setup_modal" value="accounting-rule">
                 <input type="hidden" name="record_id" value="{{ old('record_id') }}">
 
-                <div class="hg-field">
-                    <label for="rule-code">Code <span class="hg-required">*</span></label>
-                    <input id="rule-code" name="code" value="{{ old('code', $editingRule?->code) }}" maxlength="50" readonly>
-                    <small class="hg-muted">Generated automatically from the Name field.</small>
-                    @error('code')<small class="hg-field-error">{{ $message }}</small>@enderror
-                </div>
+                <input type="hidden" id="rule-code" name="code" value="{{ old('code', $editingRule?->code) }}">
                 <div class="hg-field">
                     <label for="rule-name">Name <span class="hg-required">*</span></label>
                     <input id="rule-name" name="name" value="{{ old('name', $editingRule?->name) }}" required maxlength="120">

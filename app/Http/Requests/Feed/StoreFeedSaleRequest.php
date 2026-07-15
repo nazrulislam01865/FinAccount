@@ -49,8 +49,9 @@ class StoreFeedSaleRequest extends FormRequest
             ],
             'reference' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'delivery_charge' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
-            'overall_discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
+            'overall_discount' => ['nullable', 'numeric', 'min:0', 'max:100', 'decimal:0,4'],
+            'transport_cost' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
+            'other_cost' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'paid_amount' => ['required', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'request_token' => ['required', 'uuid'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
@@ -63,7 +64,6 @@ class StoreFeedSaleRequest extends FormRequest
             'lines.*.unit' => ['required', Rule::in(['BAG', 'KG'])],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0', 'decimal:0,4'],
             'lines.*.rate' => ['required', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
-            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,'.$decimalPlaces],
             'transaction_attachments' => ['nullable', 'array', 'max:5'],
             'transaction_attachments.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,csv,txt'],
         ];
@@ -74,8 +74,18 @@ class StoreFeedSaleRequest extends FormRequest
         $this->merge([
             'reference' => $this->filled('reference') ? trim((string) $this->input('reference')) : null,
             'description' => $this->filled('description') ? trim((string) $this->input('description')) : null,
-            'delivery_charge' => $this->input('delivery_charge', 0),
-            'overall_discount' => $this->input('overall_discount', 0),
+            'overall_discount' => $this->sanitizePercentageInput($this->input('overall_discount', 0)),
+            'transport_cost' => $this->input('transport_cost', 0),
+            'other_cost' => $this->input('other_cost', 0),
         ]);
+    }
+
+    private function sanitizePercentageInput(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        return trim(str_replace(['%', ','], '', (string) $value));
     }
 }
