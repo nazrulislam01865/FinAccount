@@ -58,7 +58,7 @@ class FeedInventoryController extends Controller
         })->when(in_array($status, ['in', 'low', 'out'], true), fn ($collection) => $collection->where('status', $status))->values();
 
         $recentMovements = FeedStockMovement::query()
-            ->with(['item', 'warehouse', 'transaction.party'])
+            ->with(['item', 'warehouse', 'transaction.party', 'document'])
             ->where('company_id', $companyId)
             ->when($warehouseId > 0, fn (Builder $query) => $query->where('tracking_unit_id', $warehouseId))
             ->latest('id')

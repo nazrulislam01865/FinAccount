@@ -20,6 +20,13 @@
 
         @include('feed.partials.tabs')
 
+        @if(session('feed_receipt_url'))
+            <div class="feed-info-banner feed-info-blue feed-section-gap">
+                <strong>Feed purchase receipt is ready.</strong>
+                <a class="feed-btn feed-btn-primary" href="{{ session('feed_receipt_url') }}" target="_blank" rel="noopener">Print Receipt</a>
+            </div>
+        @endif
+
         <div class="feed-metric-grid">
             <div class="feed-metric">
                 <div class="feed-metric-icon">▦</div>
@@ -219,6 +226,7 @@
                                     <th>Quantity Out</th>
                                     <th>Running Balance</th>
                                     <th>Cost Value</th>
+                                    <th>Receipt</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -234,6 +242,13 @@
                                         <td>{{ (float) $movement->quantity_out > 0 ? number_format((float) $movement->quantity_out, 2).' KG' : '—' }}</td>
                                         <td><strong>{{ number_format((float) $movement->quantity_after, 2) }} KG</strong></td>
                                         <td>{{ \App\Support\CompanyContext::money((float) $movement->total_value) }}</td>
+                                        <td>
+                                            @if($movement->movement_type === \App\Models\Feed\FeedStockMovement::TYPE_PURCHASE && $movement->document)
+                                                <a class="feed-btn feed-btn-sm" href="{{ route('feed.purchases.receipt', $movement->document) }}" target="_blank" rel="noopener">Print</a>
+                                            @else
+                                                —
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>

@@ -40,8 +40,8 @@ class FeedPostingService
             $commission = $this->overallCommission($subtotal, $data['overall_discount'] ?? 0);
             $transport = round((float) ($data['transport_cost'] ?? 0), 2);
             $other = round((float) ($data['other_cost'] ?? 0), 2);
-            $extra = round($transport + $other, 2);
-            $total = round($subtotal - $commission + $extra, 2);
+            $extra = round($other - $transport, 2);
+            $total = round($subtotal - $commission - $transport + $other, 2);
             $paid = round((float) ($data['paid_amount'] ?? 0), 2);
 
             $this->assertPaymentAmount($total, $paid);
@@ -84,13 +84,14 @@ class FeedPostingService
                 'cogs_total' => '0.00',
             ]);
 
-            $allocations = $this->allocateExtraCost($preparedLines, $extra, (string) ($data['cost_allocation'] ?? 'value'));
+            $otherCostAllocations = $this->allocateExtraCost($preparedLines, $other, (string) ($data['cost_allocation'] ?? 'value'));
+            $transportDeductions = $this->allocateExtraCost($preparedLines, $transport, 'value');
             $commissionAllocations = $this->allocateExtraCost($preparedLines, $commission, 'value');
 
             foreach ($preparedLines->values() as $index => $line) {
-                $allocatedCost = $allocations[$index] ?? 0.0;
+                $allocatedCost = ($otherCostAllocations[$index] ?? 0.0) - ($transportDeductions[$index] ?? 0.0);
                 $allocatedCommission = $commissionAllocations[$index] ?? 0.0;
-                $inventoryValue = round(max(0, (float) $line['line_total'] - $allocatedCommission) + $allocatedCost, 2);
+                $inventoryValue = round(max(0, (float) $line['line_total'] - $allocatedCommission + $allocatedCost), 2);
                 $unitCost = $line['base_quantity'] > 0
                     ? round($inventoryValue / $line['base_quantity'], 6)
                     : 0.0;

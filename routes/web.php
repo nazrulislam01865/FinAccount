@@ -159,6 +159,8 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
             ->middleware('accounting.permission:transactions.manage')->name('purchases.create');
         Route::post('/purchase', [FeedPurchaseController::class, 'store'])
             ->middleware('accounting.permission:transactions.manage')->name('purchases.store');
+        Route::get('/purchase/{feedDocument}/receipt', [FeedPurchaseController::class, 'receipt'])
+            ->middleware('accounting.permission:transactions.view')->name('purchases.receipt');
         Route::get('/sale', [FeedSaleController::class, 'create'])
             ->middleware('accounting.permission:transactions.manage')->name('sales.create');
         Route::post('/sale', [FeedSaleController::class, 'store'])

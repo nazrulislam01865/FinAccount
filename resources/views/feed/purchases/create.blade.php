@@ -131,8 +131,9 @@
                     </div>
                     <div class="feed-grid-1">
                         <div class="feed-field">
-                            <label for="transport_cost">Transportation Cost</label>
+                            <label for="transport_cost">Transportation Cost <span class="feed-negative">(-)</span></label>
                             <input class="feed-control" id="transport_cost" name="transport_cost" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('transport_cost', 0) }}" data-feed-money-input>
+                            <div class="feed-help">This amount is deducted from the purchase total.</div>
                         </div>
                         <div class="feed-field">
                             <label for="other_cost">Other Cost</label>
@@ -199,8 +200,8 @@
                     <div class="feed-summary-group">
                         <div class="feed-summary-label">Purchase Value</div>
                         <div class="feed-summary-row"><span>Items subtotal</span><b data-feed-summary="subtotal">{{ \App\Support\CompanyContext::money(0) }}</b></div>
-                        <div class="feed-summary-row"><span>Commission amount</span><b data-feed-summary="commission">{{ \App\Support\CompanyContext::money(0) }}</b></div>
-                        <div class="feed-summary-row"><span>Transportation cost</span><b data-feed-summary="transport">{{ \App\Support\CompanyContext::money(0) }}</b></div>
+                        <div class="feed-summary-row"><span>Commission amount</span><b class="feed-negative" data-feed-summary="commission">(-) {{ \App\Support\CompanyContext::money(0) }}</b></div>
+                        <div class="feed-summary-row"><span>Transportation cost</span><b class="feed-negative" data-feed-summary="transport">(-) {{ \App\Support\CompanyContext::money(0) }}</b></div>
                         <div class="feed-summary-row"><span>Other cost</span><b data-feed-summary="other">{{ \App\Support\CompanyContext::money(0) }}</b></div>
                         <div class="feed-summary-row feed-grand"><span>Total purchase</span><b data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</b></div>
                     </div>

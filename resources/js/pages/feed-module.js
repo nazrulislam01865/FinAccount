@@ -40,6 +40,8 @@ const initFeedModule = () => {
         })}`.trim();
     };
 
+    const deductionMoney = (value) => `(-) ${money(value)}`;
+
     const selectedStock = (itemId) => {
         const warehouseId = String(warehouseSelect?.value ?? '');
         const stock = config.stock?.[warehouseId]?.[String(itemId)] ?? {};
@@ -219,7 +221,8 @@ const initFeedModule = () => {
         const totalCommission = commissionAmount(subtotal, root.querySelector('#overall_discount')?.value);
         const transport = numberValue(root.querySelector('#transport_cost')?.value);
         const other = numberValue(root.querySelector('#other_cost')?.value);
-        const extra = transport + other;
+        const transportEffect = config.type === 'purchase' ? -transport : transport;
+        const extra = transportEffect + other;
         let total = subtotal - totalCommission + extra;
 
         total = Math.max(0, total);
@@ -230,11 +233,14 @@ const initFeedModule = () => {
             : (paid >= total - 0.005 ? 'Fully paid/received' : 'Partially paid/received');
 
         summary('subtotal', money(subtotal));
-        summary('commission', money(totalCommission));
+        const formattedCommission = config.type === 'purchase' ? deductionMoney(totalCommission) : money(totalCommission);
+        const formattedTransport = config.type === 'purchase' ? deductionMoney(transport) : money(transport);
+
+        summary('commission', formattedCommission);
         root.querySelectorAll('[data-feed-commission-output]').forEach((element) => {
-            element.value = money(totalCommission);
+            element.value = formattedCommission;
         });
-        summary('transport', money(transport));
+        summary('transport', formattedTransport);
         summary('other', money(other));
         summary('extra', money(extra));
         summary('total', money(total));

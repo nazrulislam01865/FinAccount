@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Feed;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Feed\StoreFeedPurchaseRequest;
 use App\Models\AccountingOption;
+use App\Models\Feed\FeedDocument;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedWarehouse;
 use App\Models\Party;
@@ -91,9 +92,27 @@ class FeedPurchaseController extends Controller
             $request->user(),
         );
 
-        return redirect()->route('feed.inventory.index')->with(
-            'success',
-            'Feed purchase '.$document->transaction->voucher_no.' posted. Stock and the accounting journal were updated together.',
-        );
+        return redirect()->route('feed.inventory.index')
+            ->with('success', 'Feed purchase '.$document->transaction->voucher_no.' posted. Stock and the accounting journal were updated together.')
+            ->with('feed_receipt_url', route('feed.purchases.receipt', $document));
+    }
+
+    public function receipt(Request $request, FeedDocument $feedDocument): View
+    {
+        abort_unless((int) $feedDocument->company_id === (int) $request->user()->company_id, 403);
+        abort_unless($feedDocument->document_type === FeedDocument::TYPE_PURCHASE, 404);
+
+        $feedDocument->load([
+            'transaction.moneyAccount',
+            'transaction.transactionHead',
+            'warehouse',
+            'party',
+            'creator',
+            'lines.item',
+        ]);
+
+        return view('feed.purchases.receipt', [
+            'document' => $feedDocument,
+        ]);
     }
 }
