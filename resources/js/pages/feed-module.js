@@ -26,11 +26,17 @@ const initFeedModule = () => {
     const rowsContainer = root.querySelector('[data-feed-lines]');
     const addButton = root.querySelector('[data-feed-add-line]');
     const warehouseSelect = root.querySelector('[data-feed-warehouse]');
-    const moneyAccount = root.querySelector('[data-feed-money-account]');
+    const paymentsContainer = root.querySelector('[data-feed-payments]');
+    const addPaymentButton = root.querySelector('[data-feed-add-payment]');
+    const paymentJournal = root.querySelector('[data-feed-payment-journal]');
+    const paymentTotalOutput = root.querySelector('[data-feed-payment-total]');
+    const primaryMoneyInput = root.querySelector('#money_account_id');
     const transactionHeadSelect = root.querySelector('[data-feed-transaction-head]');
     const paidInput = root.querySelector('#paid_amount');
     const itemsById = new Map(config.items.map((item) => [String(item.id), item]));
+    const moneyAccountsById = new Map((config.moneyAccounts ?? []).map((account) => [String(account.id), account]));
     let rowCounter = 0;
+    let paymentCounter = 0;
 
     const money = (value) => {
         const places = Number.isInteger(config.decimalPlaces) ? config.decimalPlaces : 2;
@@ -58,6 +64,112 @@ const initFeedModule = () => {
             const meta = [item.code, item.brand, item.category].filter(Boolean).join(' · ');
             return `<option value="${escapeHtml(item.id)}"${selected}>${escapeHtml(item.name)}${meta ? ` — ${escapeHtml(meta)}` : ''}</option>`;
         }).join('');
+    };
+
+    const paymentOptions = (selectedId) => {
+        const empty = `<option value="">Select ${config.type === 'purchase' ? 'payment' : 'receive'} account</option>`;
+        return empty + (config.moneyAccounts ?? []).map((account) => {
+            const selected = String(account.id) === String(selectedId ?? '') ? ' selected' : '';
+            return `<option value="${escapeHtml(account.id)}"${selected}>${escapeHtml(account.name)} — ${escapeHtml(account.kind)}</option>`;
+        }).join('');
+    };
+
+    const paymentAccountMeta = (account) => account?.meta
+        || [account?.accountCode, account?.name].filter(Boolean).join(' — ');
+
+    const paymentMarkup = (index, values = {}) => `
+        <div class="feed-payment-row" data-feed-payment-row>
+            <div class="feed-field">
+                <label>${config.type === 'purchase' ? 'Payment Account' : 'Receive Account'}</label>
+                <select name="payments[${index}][money_account_id]" data-feed-payment-account data-hg-searchable-ignore>
+                    ${paymentOptions(values.money_account_id)}
+                </select>
+                <small data-feed-payment-account-meta>${escapeHtml(paymentAccountMeta(moneyAccountsById.get(String(values.money_account_id ?? ''))))}</small>
+            </div>
+            <div class="feed-field">
+                <label>Reference</label>
+                <input name="payments[${index}][reference]" data-feed-payment-reference maxlength="100" value="${escapeHtml(values.reference ?? '')}" placeholder="CHQ / TXN / note">
+            </div>
+            <div class="feed-field">
+                <label>Amount (${escapeHtml(config.currencyCode ?? '')})</label>
+                <input name="payments[${index}][amount]" data-feed-payment-amount type="number" min="0" step="${Number(config.decimalPlaces) > 0 ? '0.01' : '1'}" value="${escapeHtml(values.amount ?? '')}" placeholder="0.00">
+            </div>
+            <button class="feed-icon-btn" type="button" data-feed-remove-payment aria-label="Remove payment method">×</button>
+        </div>`;
+
+    const paymentIndexesInDom = () => Array.from(paymentsContainer?.querySelectorAll('[data-feed-payment-account]') ?? [])
+        .map((select) => String(select.getAttribute('name') ?? '').match(/^payments\[(\d+)\]\[money_account_id\]$/)?.[1])
+        .filter((index) => index !== undefined)
+        .map((index) => Number.parseInt(index, 10))
+        .filter((index) => Number.isInteger(index));
+
+    const syncPaymentCounterFromDom = () => {
+        const indexes = paymentIndexesInDom();
+        paymentCounter = indexes.length ? Math.max(...indexes) + 1 : paymentCounter;
+    };
+
+    const updatePaymentControls = () => {
+        const rows = Array.from(paymentsContainer?.querySelectorAll('[data-feed-payment-row]') ?? []);
+        rows.forEach((row) => {
+            const button = row.querySelector('[data-feed-remove-payment]');
+            if (!button) return;
+            button.hidden = rows.length <= 1;
+            button.disabled = rows.length <= 1;
+        });
+        if (addPaymentButton) {
+            addPaymentButton.disabled = rows.length >= 10;
+        }
+    };
+
+    const addPayment = (values = {}) => {
+        if (!paymentsContainer || paymentsContainer.querySelectorAll('[data-feed-payment-row]').length >= 10) return;
+        paymentsContainer.insertAdjacentHTML('beforeend', paymentMarkup(paymentCounter++, values));
+        updatePaymentControls();
+    };
+
+    const paymentRows = () => Array.from(paymentsContainer?.querySelectorAll('[data-feed-payment-row]') ?? []).map((row) => {
+        const accountId = String(row.querySelector('[data-feed-payment-account]')?.value ?? '');
+        const amount = Math.max(0, numberValue(row.querySelector('[data-feed-payment-amount]')?.value));
+        const reference = String(row.querySelector('[data-feed-payment-reference]')?.value ?? '').trim();
+        return { row, accountId, account: moneyAccountsById.get(accountId), reference, amount };
+    });
+
+    const syncPaymentSummary = () => {
+        const rows = paymentRows();
+        const active = rows.filter((payment) => payment.amount > 0);
+        const total = active.reduce((sum, payment) => sum + payment.amount, 0);
+        const accountIds = active.map((payment) => payment.accountId).filter(Boolean);
+        const duplicates = accountIds.length !== new Set(accountIds).size;
+
+        const incomplete = rows.some((payment) => ((payment.amount > 0 || payment.reference) && !payment.accountId)
+            || ((payment.accountId || payment.reference) && payment.amount <= 0));
+        rows.forEach((payment) => payment.row.classList.toggle(
+            'hg-feed-payment-error',
+            ((payment.amount > 0 || payment.reference) && !payment.accountId)
+                || ((payment.accountId || payment.reference) && payment.amount <= 0),
+        ));
+
+        if (paidInput) paidInput.value = total.toFixed(Number.isInteger(config.decimalPlaces) ? config.decimalPlaces : 2);
+        if (primaryMoneyInput) primaryMoneyInput.value = active[0]?.accountId ?? '';
+        if (paymentTotalOutput) paymentTotalOutput.textContent = money(total);
+
+        if (paymentJournal) {
+            const debitPayment = config.type === 'sale';
+            const journalRows = active.length ? active : [{ account: null, amount: 0 }];
+            paymentJournal.innerHTML = journalRows.map((payment) => `
+                <div class="feed-journal-row">
+                    <span>${escapeHtml(payment.account?.name ?? 'Cash / Bank / Digital')}</span>
+                    <span>${debitPayment ? money(payment.amount) : ''}</span>
+                    <span>${debitPayment ? '' : money(payment.amount)}</span>
+                </div>`).join('');
+        }
+
+        if (form) {
+            form.dataset.feedPaymentDuplicate = duplicates ? '1' : '0';
+            form.dataset.feedPaymentIncomplete = incomplete ? '1' : '0';
+        }
+
+        return total;
     };
 
     const defaultRate = (item, unit) => {
@@ -226,7 +338,7 @@ const initFeedModule = () => {
         let total = subtotal - totalCommission + extra;
 
         total = Math.max(0, total);
-        const paid = Math.max(0, numberValue(paidInput?.value));
+        const paid = syncPaymentSummary();
         const due = Math.max(0, total - paid);
         const status = paid <= 0.00001
             ? 'Fully due'
@@ -255,13 +367,22 @@ const initFeedModule = () => {
         summary('profit', money(total - cogs));
         syncTransactionHeadSummary();
 
-        const selectedMoneyText = moneyAccount?.selectedOptions?.[0]?.textContent?.trim();
-        summary('money-name', moneyAccount?.value ? selectedMoneyText : 'Selected money account / Party due');
-
         if (form) {
             form.dataset.feedStockInvalid = hasStockError ? '1' : '0';
+            form.dataset.feedPaymentInvalid = paid > total + 0.005 ? '1' : '0';
         }
+        paymentTotalOutput?.classList.toggle('feed-negative', paid > total + 0.005);
     };
+
+    if (paymentsContainer?.querySelector('[data-feed-payment-row]')) {
+        syncPaymentCounterFromDom();
+        updatePaymentControls();
+    } else {
+        const initialPayments = Array.isArray(config.initialPayments) && config.initialPayments.length
+            ? config.initialPayments
+            : [{}];
+        initialPayments.slice(0, 10).forEach((payment) => addPayment(payment));
+    }
 
     const initialLines = Array.isArray(config.initialLines) && config.initialLines.length
         ? config.initialLines
@@ -274,6 +395,36 @@ const initFeedModule = () => {
         quantity: 1,
         rate: config.type === 'purchase' ? config.items[0]?.purchasePrice : config.items[0]?.salePrice,
     }));
+
+    addPaymentButton?.addEventListener('click', () => {
+        addPayment();
+        calculate();
+    });
+
+    paymentsContainer?.addEventListener('input', (event) => {
+        if (event.target.matches('[data-feed-payment-amount], [data-feed-payment-reference]')) calculate();
+    });
+
+    paymentsContainer?.addEventListener('change', (event) => {
+        if (event.target.matches('[data-feed-payment-account]')) {
+            const row = event.target.closest('[data-feed-payment-row]');
+            const account = moneyAccountsById.get(String(event.target.value ?? ''));
+            const meta = row?.querySelector('[data-feed-payment-account-meta]');
+            if (meta) {
+                meta.textContent = paymentAccountMeta(account);
+            }
+            calculate();
+        }
+    });
+
+    paymentsContainer?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-feed-remove-payment]');
+        if (!button) return;
+        if ((paymentsContainer?.querySelectorAll('[data-feed-payment-row]').length ?? 0) <= 1) return;
+        button.closest('[data-feed-payment-row]')?.remove();
+        updatePaymentControls();
+        calculate();
+    });
 
     rowsContainer.addEventListener('input', (event) => {
         if (event.target.matches('[data-feed-quantity], [data-feed-rate]')) {
@@ -304,7 +455,6 @@ const initFeedModule = () => {
     });
 
     root.querySelectorAll('[data-feed-money-input]').forEach((input) => input.addEventListener('input', calculate));
-    moneyAccount?.addEventListener('change', calculate);
     transactionHeadSelect?.addEventListener('change', calculate);
     warehouseSelect?.addEventListener('change', () => {
         rowsContainer.querySelectorAll('[data-feed-line]').forEach(updateAvailable);
@@ -316,6 +466,24 @@ const initFeedModule = () => {
         if (config.type === 'sale' && form.dataset.feedStockInvalid === '1') {
             event.preventDefault();
             window.alert('One or more sale lines are greater than the available stock in the selected warehouse.');
+            return;
+        }
+
+        if (form.dataset.feedPaymentInvalid === '1') {
+            event.preventDefault();
+            window.alert(`Total ${config.type === 'purchase' ? 'paid' : 'received'} cannot be greater than the transaction total.`);
+            return;
+        }
+
+        if (form.dataset.feedPaymentDuplicate === '1') {
+            event.preventDefault();
+            window.alert(`Use each ${config.type === 'purchase' ? 'payment' : 'receive'} account only once.`);
+            return;
+        }
+
+        if (form.dataset.feedPaymentIncomplete === '1') {
+            event.preventDefault();
+            window.alert(`Complete or remove each ${config.type === 'purchase' ? 'payment' : 'receive'} row.`);
             return;
         }
 

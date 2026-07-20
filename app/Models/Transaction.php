@@ -46,6 +46,11 @@ class Transaction extends Model
         return $this->belongsTo(MoneyAccount::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(TransactionPayment::class)->orderBy('sequence');
+    }
+
     public function party(): BelongsTo
     {
         return $this->belongsTo(Party::class);

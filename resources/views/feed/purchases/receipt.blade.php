@@ -2,6 +2,7 @@
     use App\Support\CompanyContext;
 
     $transaction = $document->transaction;
+    $payments = $transaction?->payments ?? collect();
     $currencyCode = CompanyContext::currencyCode();
     $currencySymbol = $currencyCode === 'BDT' ? 'Tk' : CompanyContext::currencySymbol();
     $formatAmount = static function (mixed $amount) use ($currencySymbol): string {
@@ -77,7 +78,7 @@
                     <div class="feed-receipt-meta-item"><span>Date</span><strong>{{ $transaction?->transaction_date?->format('Y-m-d') ?? $document->created_at?->format('Y-m-d') }}</strong></div>
                     <div class="feed-receipt-meta-item"><span>Supplier</span><strong>{{ $document->party?->name ?? '—' }}</strong></div>
                     <div class="feed-receipt-meta-item"><span>Warehouse</span><strong>{{ $document->warehouse?->name ?? '—' }}</strong></div>
-                    <div class="feed-receipt-meta-item"><span>Payment</span><strong>{{ $transaction?->moneyAccount?->name ?? 'Supplier Payable' }}</strong></div>
+                    <div class="feed-receipt-meta-item"><span>Payment</span><strong>{{ $payments->count() > 1 ? $payments->count().' payment methods' : ($payments->first()?->moneyAccount?->name ?? 'Supplier Payable') }}</strong></div>
                 </div>
 
                 <table class="feed-receipt-table">
@@ -121,6 +122,9 @@
                     <div class="feed-receipt-total-row"><span>Transportation cost</span><strong class="feed-receipt-deduction">{{ $formatDeduction($document->transport_cost) }}</strong></div>
                     <div class="feed-receipt-total-row"><span>Other cost</span><strong>{{ $formatAmount($document->other_cost) }}</strong></div>
                     <div class="feed-receipt-total-row feed-receipt-grand"><span>Total purchase</span><strong>{{ $formatAmount($document->total_amount) }}</strong></div>
+                    @foreach($payments as $payment)
+                        <div class="feed-receipt-total-row"><span>Paid via {{ $payment->moneyAccount?->name ?? 'Money account' }} @if($payment->reference) ({{ $payment->reference }}) @endif</span><strong>{{ $formatAmount($payment->amount) }}</strong></div>
+                    @endforeach
                     <div class="feed-receipt-total-row"><span>Paid now</span><strong>{{ $formatAmount($transaction?->paid_amount ?? 0) }}</strong></div>
                     <div class="feed-receipt-total-row"><span>Supplier payable</span><strong>{{ $formatAmount($transaction?->due_amount ?? 0) }}</strong></div>
                 </div>

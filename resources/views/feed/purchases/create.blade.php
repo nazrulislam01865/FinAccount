@@ -11,6 +11,13 @@
         'batch_no' => '',
         'expiry_date' => '',
     ]]);
+    $initialPayments = old('payments');
+    if (! is_array($initialPayments) || $initialPayments === []) {
+        $initialPayments = [[
+            'money_account_id' => old('money_account_id', ''),
+            'amount' => old('paid_amount', ''),
+        ]];
+    }
 
     $feedItemsForJs = $items->map(static fn ($item): array => [
         'id' => $item->id,
@@ -23,6 +30,14 @@
         'salePrice' => (float) $item->default_sale_price,
         'trackBatch' => (bool) $item->track_batch,
         'trackExpiry' => (bool) $item->track_expiry,
+    ])->values();
+    $moneyAccountsForJs = $moneyAccounts->map(fn ($account): array => [
+        'id' => $account->id,
+        'name' => $account->name,
+        'kind' => $moneyKindLabels[$account->kind] ?? $account->kind,
+        'accountCode' => $account->chartOfAccount?->code,
+        'accountName' => $account->chartOfAccount?->name,
+        'meta' => trim(($account->chartOfAccount?->code ? $account->chartOfAccount->code.' — ' : '').$account->name),
     ])->values();
 @endphp
 
@@ -146,21 +161,63 @@
                     </div>
 
                     <div class="feed-divider"></div>
-                    <div class="feed-grid-1">
-                        <div class="feed-field">
-                            <label for="paid_amount">Paid Now ({{ \App\Support\CompanyContext::currencyCode() }}) <span class="feed-req">*</span></label>
-                            <input class="feed-control" id="paid_amount" name="paid_amount" type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ old('paid_amount', 0) }}" required data-feed-money-input>
-                            <div class="feed-help">0 = fully due; between 0 and total = partially paid; total = fully paid.</div>
+                    <input id="paid_amount" name="paid_amount" type="hidden" value="{{ old('paid_amount', 0) }}">
+                    <input id="money_account_id" name="money_account_id" type="hidden" value="{{ old('money_account_id') }}">
+                    <div class="feed-payment-panel">
+                        <div class="feed-payment-table">
+                            <div class="feed-payment-table-head">
+                                <span>Payment Account</span>
+                                <span>Reference</span>
+                                <span>Amount</span>
+                                <span></span>
+                            </div>
+                            <div class="feed-payment-list" data-feed-payments>
+                            @foreach(array_values($initialPayments) as $paymentIndex => $payment)
+                                @php
+                                    $selectedMoneyAccountId = data_get($payment, 'money_account_id', '');
+                                    $selectedMoneyAccount = $moneyAccounts->firstWhere('id', (int) $selectedMoneyAccountId);
+                                    $selectedMoneyAccountMeta = $selectedMoneyAccount
+                                        ? trim(($selectedMoneyAccount->chartOfAccount?->code ? $selectedMoneyAccount->chartOfAccount->code.' — ' : '').$selectedMoneyAccount->name)
+                                        : '';
+                                @endphp
+                                <div class="feed-payment-row" data-feed-payment-row>
+                                    <div class="feed-field">
+                                        <label>Payment Account</label>
+                                        <select name="payments[{{ $paymentIndex }}][money_account_id]" data-feed-payment-account data-hg-searchable-ignore>
+                                            <option value="">Select payment account</option>
+                                            @foreach($moneyAccounts as $moneyAccount)
+                                                <option value="{{ $moneyAccount->id }}" @selected((string) $moneyAccount->id === (string) $selectedMoneyAccountId)>
+                                                    {{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <small data-feed-payment-account-meta>{{ $selectedMoneyAccountMeta }}</small>
+                                    </div>
+                                    <div class="feed-field">
+                                        <label>Reference</label>
+                                        <input name="payments[{{ $paymentIndex }}][reference]" data-feed-payment-reference maxlength="100" value="{{ data_get($payment, 'reference', '') }}" placeholder="CHQ / TXN / note">
+                                    </div>
+                                    <div class="feed-field">
+                                        <label>Amount ({{ \App\Support\CompanyContext::currencyCode() }})</label>
+                                        <input name="payments[{{ $paymentIndex }}][amount]" data-feed-payment-amount type="number" min="0" step="{{ \App\Support\CompanyContext::amountStep() }}" value="{{ data_get($payment, 'amount', '') }}" placeholder="0.00">
+                                    </div>
+                                    <button class="feed-icon-btn" type="button" data-feed-remove-payment aria-label="Remove payment method">×</button>
+                                </div>
+                            @endforeach
+                            </div>
                         </div>
-                        <div class="feed-field">
-                            <label for="money_account_id">Payment Account</label>
-                            <select class="feed-control" id="money_account_id" name="money_account_id" data-feed-money-account data-hg-searchable-ignore>
-                                <option value="">Select when money is paid now</option>
-                                @foreach($moneyAccounts as $account)
-                                    <option value="{{ $account->id }}" @selected((string) old('money_account_id') === (string) $account->id) data-title="{{ $account->name }}" data-meta="{{ $moneyKindLabels[$account->kind] ?? $account->kind }}">{{ $account->name }} — {{ $moneyKindLabels[$account->kind] ?? $account->kind }}</option>
-                                @endforeach
-                            </select>
+                        <div class="feed-payment-footer">
+                            <button class="feed-payment-add-row" type="button" data-feed-add-payment>＋ Add another bank/cash/mobile row</button>
+                            <span>Total paid can be full, partial, or zero due.</span>
                         </div>
+                        <div class="feed-payment-total"><span>Total paid now</span><strong data-feed-payment-total>{{ \App\Support\CompanyContext::money(0) }}</strong></div>
+                        @if($errors->has('payments') || $errors->has('payments.*.money_account_id') || $errors->has('payments.*.amount'))
+                            <div class="feed-warning-text">{{ $errors->first('payments') ?: ($errors->first('payments.*.money_account_id') ?: $errors->first('payments.*.amount')) }}</div>
+                        @endif
+                        @error('paid_amount')<div class="feed-warning-text">{{ $message }}</div>@enderror
+                        @error('money_account_id')<div class="feed-warning-text">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="feed-grid-1 feed-section-gap">
                         <div class="feed-field">
                             <label for="description">Description</label>
                             <textarea class="feed-control" id="description" name="description" placeholder="Purchase purpose or note">{{ old('description') }}</textarea>
@@ -224,7 +281,7 @@
                         <div class="feed-journal">
                             <div class="feed-journal-row feed-journal-head"><span>Account</span><span>Debit</span><span>Credit</span></div>
                             <div class="feed-journal-row"><span data-feed-summary="posting-account">{{ $defaultPostingAccountName }}</span><span data-feed-summary="total">{{ \App\Support\CompanyContext::money(0) }}</span><span></span></div>
-                            <div class="feed-journal-row"><span data-feed-summary="money-name">Cash / Bank</span><span></span><span data-feed-summary="paid">{{ \App\Support\CompanyContext::money(0) }}</span></div>
+                            <div data-feed-payment-journal></div>
                             <div class="feed-journal-row"><span>Supplier Payable</span><span></span><span data-feed-summary="due">{{ \App\Support\CompanyContext::money(0) }}</span></div>
                         </div>
                     </div>
@@ -253,6 +310,8 @@
                 decimalPlaces: {{ \App\Support\CompanyContext::decimalPlaces() }},
                 items: @json($feedItemsForJs),
                 initialLines: @json(array_values($initialLines)),
+                moneyAccounts: @json($moneyAccountsForJs),
+                initialPayments: @json(array_values($initialPayments)),
                 transactionHeads: @json($transactionHeadsForJs),
                 stock: {}
             };

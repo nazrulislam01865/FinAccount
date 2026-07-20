@@ -104,6 +104,7 @@ class FeedPurchaseController extends Controller
 
         $feedDocument->load([
             'transaction.moneyAccount',
+            'transaction.payments.moneyAccount',
             'transaction.transactionHead',
             'warehouse',
             'party',

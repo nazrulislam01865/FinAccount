@@ -29,4 +29,9 @@ class MoneyAccount extends Model
     {
         return $this->hasMany(Transaction::class);
     }
+
+    public function transactionPayments(): HasMany
+    {
+        return $this->hasMany(TransactionPayment::class);
+    }
 }

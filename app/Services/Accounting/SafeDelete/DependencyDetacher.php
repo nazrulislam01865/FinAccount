@@ -12,6 +12,7 @@ use App\Models\MoneyAccount;
 use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\Transaction;
+use App\Models\TransactionPayment;
 use App\Models\TransactionHead;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -122,14 +123,21 @@ class DependencyDetacher
     {
         DB::transaction(function () use ($account): void {
             $locked = MoneyAccount::query()->lockForUpdate()->findOrFail($account->id);
-            $transactionIds = Transaction::query()->where('money_account_id', $locked->id)->pluck('id');
+            $transactionIds = Transaction::query()
+                ->where('money_account_id', $locked->id)
+                ->pluck('id')
+                ->merge(TransactionPayment::query()->where('money_account_id', $locked->id)->pluck('transaction_id'))
+                ->unique()
+                ->values();
             $this->markTransactionsIncomplete($transactionIds);
-            Transaction::query()->where('money_account_id', $locked->id)->update(['money_account_id' => null]);
+            Transaction::query()->whereIn('id', $transactionIds)->update(['money_account_id' => null]);
             JournalLine::query()->where('money_account_id', $locked->id)->update(['money_account_id' => null]);
             OpeningBalance::query()->where('money_account_id', $locked->id)->update(['money_account_id' => null]);
+            TransactionPayment::query()->whereIn('transaction_id', $transactionIds)->delete();
             $this->assertNoReference(Transaction::query()->where('money_account_id', $locked->id), 'transaction money account');
             $this->assertNoReference(JournalLine::query()->where('money_account_id', $locked->id), 'journal line money account');
             $this->assertNoReference(OpeningBalance::query()->where('money_account_id', $locked->id), 'opening balance money account');
+            $this->assertNoReference(TransactionPayment::query()->where('money_account_id', $locked->id), 'transaction payment money account');
             $this->assertTransactionsIncomplete($transactionIds);
             $locked->delete();
             $this->assertDeleted(MoneyAccount::class, $locked->id);

@@ -62,7 +62,7 @@ class MoneyAccountService
         if (
             $moneyAccount->chart_of_account_id !== null
             && $moneyAccount->chart_of_account_id !== (int) $data['chart_of_account_id']
-            && $moneyAccount->transactions()->exists()
+            && ($moneyAccount->transactions()->exists() || $moneyAccount->transactionPayments()->exists())
         ) {
             throw ValidationException::withMessages([
                 'chart_of_account_id' => 'The mapped COA cannot be changed because this money account is already used by transactions.',
@@ -76,7 +76,7 @@ class MoneyAccountService
 
     public function delete(MoneyAccount $moneyAccount): void
     {
-        if ($moneyAccount->transactions()->exists()) {
+        if ($moneyAccount->transactions()->exists() || $moneyAccount->transactionPayments()->exists()) {
             throw ValidationException::withMessages([
                 'money_account' => 'Cannot delete. Used by transaction.',
             ]);

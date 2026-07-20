@@ -11,6 +11,7 @@ use App\Models\MoneyAccount;
 use App\Models\OpeningBalance;
 use App\Models\Party;
 use App\Models\Transaction;
+use App\Models\TransactionPayment;
 use App\Models\TransactionHead;
 use App\Models\Feed\FeedItem;
 use App\Models\Feed\FeedBusinessTrackingUnit;
@@ -42,6 +43,7 @@ class DependencyInspector
     {
         return new DeletionPlan('Money Account', $account->name, $this->nonZero([
             ['Transactions', $account->transactions()->count(), 'Money-account links will be cleared and transactions will become incomplete.'],
+            ['Payment Splits', TransactionPayment::query()->where('money_account_id', $account->id)->count(), 'Payment-breakdown rows will be removed and affected transactions will become incomplete.'],
             ['Journal Lines', JournalLine::query()->where('money_account_id', $account->id)->count(), 'Money-account links will be cleared.'],
             ['Opening Balances', OpeningBalance::query()->where('money_account_id', $account->id)->count(), 'Money-account link will be cleared from opening rows.'],
         ]));
@@ -110,6 +112,7 @@ class DependencyInspector
             $this->nonZero([
                 ['Generated Journal Entry', $journalEntry ? 1 : 0, 'The generated journal entry will be permanently deleted with the transaction.'],
                 ['Generated Journal Lines', (int) ($journalEntry?->lines_count ?? 0), 'The generated debit/credit lines will be permanently deleted with the transaction.'],
+                ['Payment Breakdown Rows', $transaction->payments()->count(), 'The stored payment-method breakdown will be permanently deleted with the transaction.'],
                 ['Generated Sales Invoice', $transaction->salesInvoice()->exists() ? 1 : 0, 'The customer-facing invoice generated from this sales transaction will also be deleted.'],
                 ['Feed Inventory Document', $transaction->feedDocument()->exists() ? 1 : 0, 'Feed item lines and stock movements will be reversed before deletion. A feed transaction can only be deleted when no later stock movement depends on it.'],
             ]),

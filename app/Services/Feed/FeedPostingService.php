@@ -26,6 +26,7 @@ class FeedPostingService
     public function __construct(
         private readonly FeedLedgerPostingService $ledgerPostingService,
         private readonly FeedAccountingSetupService $accountingSetupService,
+        private readonly FeedPaymentService $paymentService,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -42,15 +43,16 @@ class FeedPostingService
             $other = round((float) ($data['other_cost'] ?? 0), 2);
             $extra = round($other - $transport, 2);
             $total = round($subtotal - $commission - $transport + $other, 2);
-            $paid = round((float) ($data['paid_amount'] ?? 0), 2);
+            $payments = $this->paymentService->prepare((array) ($data['payments'] ?? []), (int) $user->company_id);
+            $paid = round((float) $payments->sum('amount'), 2);
 
             $this->assertPaymentAmount($total, $paid);
+            $primaryPayment = $payments->first();
 
             $transaction = $this->ledgerPostingService->postPurchase([
                 'transaction_date' => $data['transaction_date'],
                 'transaction_head_id' => $data['transaction_head_id'] ?? null,
-                'transaction_head_id' => $data['transaction_head_id'] ?? null,
-                'money_account_id' => $data['money_account_id'] ?? null,
+                'money_account_id' => $primaryPayment ? $primaryPayment['money_account']->id : null,
                 'party_id' => $data['party_id'],
                 'amount' => $this->money($total),
                 'paid_amount' => $this->money($paid),
@@ -58,6 +60,8 @@ class FeedPostingService
                 'description' => $data['description'] ?? 'Feed purchase',
                 'request_token' => $data['request_token'],
             ], $user, $settings);
+
+            $this->paymentService->apply($transaction, $payments);
 
             $existing = FeedDocument::query()->where('transaction_id', $transaction->id)->first();
             if ($existing) {
@@ -162,13 +166,16 @@ class FeedPostingService
             $other = round((float) ($data['other_cost'] ?? 0), 2);
             $extra = round($transport + $other, 2);
             $total = round($subtotal - $commission + $extra, 2);
-            $paid = round((float) ($data['paid_amount'] ?? 0), 2);
+            $payments = $this->paymentService->prepare((array) ($data['payments'] ?? []), (int) $user->company_id);
+            $paid = round((float) $payments->sum('amount'), 2);
 
             $this->assertPaymentAmount($total, $paid);
+            $primaryPayment = $payments->first();
 
             $transaction = $this->ledgerPostingService->postSale([
                 'transaction_date' => $data['transaction_date'],
-                'money_account_id' => $data['money_account_id'] ?? null,
+                'transaction_head_id' => $data['transaction_head_id'] ?? null,
+                'money_account_id' => $primaryPayment ? $primaryPayment['money_account']->id : null,
                 'party_id' => $data['party_id'],
                 'amount' => $this->money($total),
                 'paid_amount' => $this->money($paid),
@@ -178,6 +185,8 @@ class FeedPostingService
                 'selling_type' => $data['selling_type'] ?? null,
                 'tracking_unit_id' => $warehouse->id,
             ], $user, $settings);
+
+            $this->paymentService->apply($transaction, $payments);
 
             $existing = FeedDocument::query()->where('transaction_id', $transaction->id)->first();
             if ($existing) {

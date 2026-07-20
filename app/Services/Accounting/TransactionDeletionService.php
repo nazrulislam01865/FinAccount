@@ -35,6 +35,7 @@ class TransactionDeletionService
 
             $lockedTransaction->salesInvoice()->delete();
             $lockedTransaction->attachments()->get()->each->delete();
+            $lockedTransaction->payments()->delete();
 
             if ($journalEntry) {
                 $journalEntry->delete();
