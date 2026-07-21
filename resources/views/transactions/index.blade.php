@@ -67,6 +67,11 @@
                 </thead>
                 <tbody>
                     @foreach ($transactions as $transaction)
+                        @php
+                            $rowCategoryOption = $transactionCategories->firstWhere('value', $transaction->category);
+                            $rowCategoryMetadata = is_array($rowCategoryOption?->metadata ?? null) ? $rowCategoryOption->metadata : [];
+                            $isTransferRow = \App\Support\TransactionTypes::flow((string) $transaction->category, $rowCategoryMetadata) === \App\Support\TransactionTypes::FLOW_TRANSFER;
+                        @endphp
                         <tr>
                             <td>
                                 <strong>{{ $transaction->voucher_no }}</strong><br>
@@ -78,7 +83,7 @@
                                 </span>
                                 <br><small class="hg-muted">{{ $settlementLabels[$transaction->settlement_type] ?? $transaction->settlement_type }}</small>
                             </td>
-                            <td>{{ $transaction->transactionHead?->name ?? '-' }}</td>
+                            <td>{{ $transaction->displayHeadName($isTransferRow ? 'Money Transfer' : '-') }}</td>
                             <td>
                                 {{ $transaction->moneyAccount?->name ?? '-' }}
                                 @if($transaction->transferToMoneyAccount)
@@ -154,7 +159,7 @@
                         <tr class="hg-table-draft-row">
                             <td><strong>Draft</strong><br><span class="hg-muted">{{ $fields['transaction_date'] ?? 'No date selected' }}</span></td>
                             <td><span class="hg-badge {{ strtolower($draftCategory) }}">{{ $categoryLabels[$draftCategory] ?? ($draftCategory ?: 'Draft') }}</span></td>
-                            <td>{{ filled($fields['transaction_head_id'] ?? null) ? 'Head ID #'.$fields['transaction_head_id'] : 'Not selected' }}</td>
+                            <td>{{ filled($fields['transaction_head_id'] ?? null) ? 'Head ID #'.$fields['transaction_head_id'] : (($fields['transfer_to_money_account_id'] ?? null) ? 'Money Transfer' : 'Not selected') }}</td>
                             <td>
                                 {{ filled($fields['money_account_id'] ?? null) ? 'Money ID #'.$fields['money_account_id'] : '-' }}
                                 @if(filled($fields['transfer_to_money_account_id'] ?? null))

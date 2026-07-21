@@ -68,7 +68,7 @@
             <div class="box">
                 <h3>Transaction</h3>
                 <p><strong>Voucher:</strong> {{ $transaction?->voucher_no }}</p>
-                <p><strong>Head:</strong> {{ $transaction?->transactionHead?->name ?? '-' }}</p>
+                <p><strong>Head:</strong> {{ $transaction?->displayHeadName('-') ?? '-' }}</p>
                 <p><strong>Money Account:</strong> {{ $transaction?->moneyAccount?->name ?? '-' }}</p>
                 @if($transaction?->reference)<p><strong>Reference:</strong> {{ $transaction->reference }}</p>@endif
             </div>
@@ -84,7 +84,7 @@
             <tbody>
                 <tr>
                     <td>
-                        <strong>{{ $transaction?->transactionHead?->name ?? 'Sales' }}</strong>
+                        <strong>{{ $transaction?->displayHeadName('Sales') ?? 'Sales' }}</strong>
                         @if($transaction?->description)<br><small>{{ $transaction->description }}</small>@endif
                     </td>
                     <td class="right">{{ \App\Support\CompanyContext::money((float) $invoice->subtotal) }}</td>

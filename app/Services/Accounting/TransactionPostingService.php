@@ -73,29 +73,29 @@ class TransactionPostingService
             $this->accountingPeriodService->assertPostingAllowed($company, (string) $data['transaction_date']);
 
             $transactionType = (string) $data['category'];
-            $headId = $trustedHead?->id ?? ($data['transaction_head_id'] ?? null);
             $isTransfer = $this->isTransferTransactionType((int) $user->company_id, $transactionType);
+            $head = null;
 
-            $head = TransactionHead::query()
-                ->with('postingAccount')
-                ->where('company_id', $user->company_id)
-                ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
-                ->where('is_active', true)
-                ->when(! $allowInternalHead, fn ($query) => $query->where('code', 'not like', 'SYS-FEED-%'))
-                ->when(! $isTransfer, fn ($query) => $query
+            if (! $isTransfer) {
+                $headId = $trustedHead?->id ?? ($data['transaction_head_id'] ?? null);
+                $head = TransactionHead::query()
+                    ->with('postingAccount')
+                    ->where('company_id', $user->company_id)
+                    ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
+                    ->where('is_active', true)
+                    ->when(! $allowInternalHead, fn ($query) => $query->where('code', 'not like', 'SYS-FEED-%'))
                     ->whereNotNull('posting_account_id')
                     ->whereHas('postingAccount', fn ($query) => $query
                         ->where('company_id', $user->company_id)
-                        ->where('is_active', true)))
-                ->findOrFail($headId);
+                        ->where('is_active', true))
+                    ->findOrFail($headId);
 
-            if ($trustedHead && (int) $trustedHead->id !== (int) $head->id) {
-                throw ValidationException::withMessages([
-                    'transaction_head_id' => 'The requested module transaction head is no longer available.',
-                ]);
-            }
+                if ($trustedHead && (int) $trustedHead->id !== (int) $head->id) {
+                    throw ValidationException::withMessages([
+                        'transaction_head_id' => 'The requested module transaction head is no longer available.',
+                    ]);
+                }
 
-            if (! $isTransfer) {
                 $this->validateHeadNature($head, $transactionType);
             }
 
@@ -105,7 +105,7 @@ class TransactionPostingService
                 ->first();
 
             if ($existing) {
-                return $this->matchingExistingTransaction($existing, $head, $transactionType);
+                return $this->matchingExistingTransaction($existing, $head, $transactionType, $isTransfer);
             }
 
             $moneyAccount = filled($data['money_account_id'] ?? null)
@@ -124,13 +124,6 @@ class TransactionPostingService
             $settlement = $this->settlementService->prepare($amount, $data, $scale);
             $settlementType = $settlement['settlement_type'];
 
-            if (! $isTransfer && ! $head->allowsSettlement($settlementType)) {
-                throw ValidationException::withMessages([
-                    'paid_amount' => 'The amount entered creates a payment type that is not allowed for this transaction head.',
-                ]);
-            }
-
-            $rule = null;
             $requiresMoney = true;
             $requiresParty = false;
             $party = null;
@@ -150,6 +143,12 @@ class TransactionPostingService
 
                 $lines = $this->journalBuilder->buildTransfer($moneyAccount, $transferToMoneyAccount, $amount);
             } else {
+                if (! $head->allowsSettlement($settlementType)) {
+                    throw ValidationException::withMessages([
+                        'paid_amount' => 'The amount entered creates a payment type that is not allowed for this transaction head.',
+                    ]);
+                }
+
                 $rule = $this->ruleMatcher->match(
                     (int) $user->company_id,
                     $transactionType,
@@ -193,32 +192,32 @@ class TransactionPostingService
                 ->first();
 
             if ($existing) {
-                return $this->matchingExistingTransaction($existing, $head, $transactionType);
+                return $this->matchingExistingTransaction($existing, $head, $transactionType, $isTransfer);
             }
 
             $voucherNo = $this->voucherNumberService->issue($sequence);
             $now = now();
             $description = filled($data['description'] ?? null)
                 ? (string) $data['description']
-                : $head->name;
+                : ($isTransfer ? 'Money Transfer' : $head->name);
 
             $transaction = Transaction::query()->create([
                 'uuid' => (string) Str::uuid(),
                 'company_id' => $user->company_id,
-                'transaction_head_id' => $head->id,
+                'transaction_head_id' => $isTransfer ? null : $head->id,
                 'money_account_id' => $requiresMoney ? $moneyAccount?->id : null,
                 'transfer_to_money_account_id' => $isTransfer ? $transferToMoneyAccount?->id : null,
                 'party_id' => $requiresParty ? $party?->id : null,
                 'created_by' => $user->id,
                 'voucher_no' => $voucherNo,
                 'category' => $transactionType,
-                'selling_type' => SaleSellingTypes::isSaleCategory($transactionType)
+                'selling_type' => $isTransfer ? null : (SaleSellingTypes::isSaleCategory($transactionType)
                     ? ($data['selling_type'] ?? null)
-                    : null,
-                'tracking_unit_id' => SaleSellingTypes::isSaleCategory($transactionType)
+                    : null),
+                'tracking_unit_id' => $isTransfer ? null : (SaleSellingTypes::isSaleCategory($transactionType)
                     && filled($data['tracking_unit_id'] ?? null)
                         ? ($data['tracking_unit_id'] ?? null)
-                        : null,
+                        : null),
                 'transaction_date' => $data['transaction_date'],
                 'amount' => $amount,
                 'settlement_type' => $settlement['settlement_type'],
@@ -298,11 +297,16 @@ class TransactionPostingService
 
     private function matchingExistingTransaction(
         Transaction $transaction,
-        TransactionHead $head,
+        ?TransactionHead $head,
         string $transactionType,
+        bool $isTransfer,
     ): Transaction {
+        $headMatches = $isTransfer
+            ? $transaction->transaction_head_id === null
+            : ($head && (int) $transaction->transaction_head_id === (int) $head->id);
+
         if (
-            (int) $transaction->transaction_head_id !== (int) $head->id
+            ! $headMatches
             || strcasecmp((string) $transaction->category, $transactionType) !== 0
             || $transaction->status !== 'posted'
         ) {

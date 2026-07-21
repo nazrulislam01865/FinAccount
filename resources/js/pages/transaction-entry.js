@@ -195,6 +195,7 @@ if (page) {
     };
 
     const selectedAllowedSettlements = () => {
+        if (isTransferMode()) return ['CASH'];
         const fromHead = parseJson(head?.selectedOptions[0]?.dataset.allowedSettlements, []);
         return fromHead.length > 0
             ? fromHead
@@ -379,10 +380,10 @@ if (page) {
         }
 
         if (isTransferMode()) {
-            moneyField?.classList.toggle('hidden', !hasSelectedHead);
-            transferToField?.classList.toggle('hidden', !hasSelectedHead);
-            if (money) money.required = hasSelectedHead;
-            if (transferToMoney) transferToMoney.required = hasSelectedHead;
+            moneyField?.classList.remove('hidden');
+            transferToField?.classList.remove('hidden');
+            if (money) money.required = true;
+            if (transferToMoney) transferToMoney.required = true;
             if (moneyLabel) moneyLabel.textContent = 'Pay From';
             if (transferToLabel) transferToLabel.textContent = 'Pay To';
             partyField?.classList.add('hidden');
@@ -419,7 +420,7 @@ if (page) {
         setPreliminaryRequirements(type);
         updatePaidAmountCopy();
 
-        if (!head?.value || !settlement?.value) {
+        if ((!isTransferMode() && !head?.value) || !settlement?.value) {
             if (preview && emptyPreviewTemplate) preview.innerHTML = emptyPreviewTemplate.innerHTML;
             return;
         }
@@ -427,7 +428,7 @@ if (page) {
         const params = new URLSearchParams({
             category: form?.querySelector('[name="category"]')?.value || '',
             settlement_type: settlement.value,
-            transaction_head_id: head.value,
+            transaction_head_id: isTransferMode() ? '' : (head?.value || ''),
             money_account_id: money?.value || '',
             transfer_to_money_account_id: transferToMoney?.value || '',
             party_id: party?.value || '',
@@ -453,7 +454,7 @@ if (page) {
 
             const totalEntered = numericValue(amount) > 0;
             const allowed = selectedAllowedSettlements();
-            const showMoneyBeforeAmount = Boolean(head?.value)
+            const showMoneyBeforeAmount = (isTransferMode() || Boolean(head?.value))
                 && !totalEntered
                 && (allowed.includes('CASH') || allowed.includes('PARTIAL'));
             const transferRequired = Boolean(data.transferRequired);

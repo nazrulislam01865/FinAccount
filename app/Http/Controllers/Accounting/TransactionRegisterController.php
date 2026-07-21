@@ -271,7 +271,11 @@ class TransactionRegisterController extends Controller
             ->oldest('id')
             ->get();
 
-        return response()->streamDownload(function () use ($transactions): void {
+        $categoryFlows = $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->mapWithKeys(fn (AccountingOption $option): array => [$option->value => $this->transactionCategoryDirection($option)])
+            ->all();
+
+        return response()->streamDownload(function () use ($transactions, $categoryFlows): void {
             $stream = fopen('php://output', 'wb');
 
             fputcsv($stream, [
@@ -298,7 +302,7 @@ class TransactionRegisterController extends Controller
                     $transaction->transaction_date->format('Y-m-d'),
                     $transaction->voucher_no,
                     $transaction->category,
-                    $transaction->transactionHead?->name,
+                    $transaction->displayHeadName(($categoryFlows[$transaction->category] ?? null) === TransactionTypes::FLOW_TRANSFER ? 'Money Transfer' : null),
                     $transaction->moneyAccount?->name,
                     $transaction->transferToMoneyAccount?->name,
                     $transaction->party?->name,
@@ -348,6 +352,10 @@ class TransactionRegisterController extends Controller
                         ->orWhereHas('party', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('moneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('transferToMoneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"));
+
+                    if (str_contains('money transfer', mb_strtolower($search)) || str_contains(mb_strtolower($search), 'transfer')) {
+                        $query->orWhereNotNull('transfer_to_money_account_id');
+                    }
                 });
             });
     }

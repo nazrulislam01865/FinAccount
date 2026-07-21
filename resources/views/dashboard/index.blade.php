@@ -182,7 +182,7 @@
                                     </td>
                                     <td><span class="hg-dashboard-badge {{ strtolower($transaction->category) }}">{{ $categoryLabels[$transaction->category] ?? $transaction->category }}</span></td>
                                     <td>
-                                        {{ $transaction->transactionHead?->name }}
+                                        {{ $transaction->displayHeadName('—') }}
                                         @if ($transaction->party)
                                             — {{ $transaction->party->name }}
                                         @endif

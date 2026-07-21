@@ -97,4 +97,15 @@ class Transaction extends Model
     {
         return $this->hasMany(TransactionAttachment::class);
     }
+
+    public function isMoneyTransfer(): bool
+    {
+        return filled($this->transfer_to_money_account_id);
+    }
+
+    public function displayHeadName(?string $fallback = '-'): ?string
+    {
+        return $this->transactionHead?->name
+            ?? ($this->isMoneyTransfer() ? 'Money Transfer' : $fallback);
+    }
 }

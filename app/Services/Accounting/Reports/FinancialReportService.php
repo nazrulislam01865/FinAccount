@@ -6,6 +6,7 @@ use App\Models\ChartOfAccount;
 use App\Models\JournalLine;
 use App\Models\OpeningBalance;
 use App\Models\Party;
+use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -371,10 +372,17 @@ class FinancialReportService
             ->when($selectedParty, fn ($query) => $query->where('journal_lines.party_id', $selectedParty->id))
             ->when($search !== '', function ($query) use ($search): void {
                 $needle = '%'.$search.'%';
-                $query->where(function ($where) use ($needle): void {
+                $isTransferSearch = str_contains('money transfer', $search) || str_contains($search, 'transfer');
+
+                $query->where(function ($where) use ($needle, $isTransferSearch): void {
                     $where->whereRaw('LOWER(journal_entries.voucher_no) LIKE ?', [$needle])
                         ->orWhereRaw('LOWER(COALESCE(journal_entries.narration, "")) LIKE ?', [$needle])
-                        ->orWhereRaw('LOWER(COALESCE(journal_lines.description, "")) LIKE ?', [$needle]);
+                        ->orWhereRaw('LOWER(COALESCE(journal_lines.description, "")) LIKE ?', [$needle])
+                        ->orWhereHas('moneyAccount', fn ($query) => $query->whereRaw('LOWER(name) LIKE ?', [$needle]));
+
+                    if ($isTransferSearch) {
+                        $where->orWhereHas('journalEntry.transaction', fn ($query) => $query->whereNotNull('transfer_to_money_account_id'));
+                    }
                 });
             })
             ->orderBy('journal_entries.entry_date')
@@ -393,7 +401,7 @@ class FinancialReportService
             return [
                 'date' => $entry?->entry_date?->toDateString() ?? (string) $line->ledger_entry_date,
                 'voucher_no' => $entry?->voucher_no ?? (string) $line->ledger_voucher_no,
-                'transaction_head' => $entry?->transaction?->transactionHead?->name,
+                'transaction_head' => $this->transactionHeadLabel($entry?->transaction),
                 'party' => $line->party?->code ? $line->party->code.' — '.$line->party->name : null,
                 'money_account' => $line->moneyAccount?->name,
                 'description' => $line->description ?: ($entry?->narration ?? (string) $line->ledger_narration),
@@ -482,6 +490,11 @@ class FinancialReportService
                 'days_90_plus' => round((float) $rows->sum('days_90_plus'), 2),
             ],
         ];
+    }
+
+    private function transactionHeadLabel(?Transaction $transaction): ?string
+    {
+        return $transaction?->displayHeadName(null);
     }
 
     /** @param Collection<int, ChartOfAccount> $accounts @return array<int, float> */

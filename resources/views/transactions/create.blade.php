@@ -201,51 +201,53 @@
                     </div>
                 @endif
 
-                <div class="hg-field {{ $isDueSettlement ? 'hidden' : '' }}">
-                    <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
-                    <select
-                        id="transaction_head_id"
-                        name="transaction_head_id"
-                        required
-                        data-hg-searchable
-                        data-hg-search-placeholder="Search transaction head by name, code or ledger..."
-                        data-hg-search-empty="No matching transaction head found"
-                    >
-                        <option value="">{{ $transactionHeads->isEmpty() ? 'No active transaction head available' : ($transactionHeadsAreUnfiltered ? 'Select transaction head from all types' : ($transactionHeadsAreDirectionFiltered ? 'Select transaction head for this direction' : 'Select transaction head')) }}</option>
-                        @foreach ($transactionHeads as $head)
-                            @php
-                                $headCategory = (string) $head->category;
-                                $headCategoryMetadata = is_array($transactionCategories->firstWhere('value', $headCategory)?->metadata ?? null)
-                                    ? $transactionCategories->firstWhere('value', $headCategory)->metadata
-                                    : [];
-                                $headDefinition = \App\Support\TransactionTypes::configuredDefinition(
-                                    $headCategory,
-                                    $headCategoryMetadata,
-                                    $transactionTypeLabels[$headCategory] ?? $headCategory
-                                );
-                            @endphp
-                            <option
-                                value="{{ $head->id }}"
-                                data-title="{{ $transactionHeadsAreUnfiltered ? (($transactionTypeLabels[$headCategory] ?? $headCategory).' — ') : '' }}{{ $head->name }}"
-                                data-meta="{{ $head->code }}{{ $head->postingAccount ? ' — '.$head->postingAccount->code.' '.$head->postingAccount->name : '' }}"
-                                data-search-keywords="{{ $headCategory }} {{ $transactionTypeLabels[$headCategory] ?? '' }} {{ implode(' ', $head->allowedSettlementCodes()) }}"
-                                data-allowed-settlements="{{ json_encode($head->allowedSettlementCodes()) }}"
-                                data-category="{{ $headCategory }}"
-                                data-direction="{{ $transactionCategoryDirections[$headCategory] ?? ($headDefinition['flow'] ?? '') }}"
-                                data-party-type="{{ $head->party_type ?: ($headDefinition['party_type'] ?? ($transactionTypeDefinition['party_type'] ?? 'Any')) }}"
-                                @selected((string) $selectedHeadId === (string) $head->id)
-                            >{{ $transactionHeadsAreUnfiltered ? (($transactionTypeLabels[$headCategory] ?? $headCategory).' — ') : '' }}{{ $head->name }}</option>
-                        @endforeach
-                    </select>
-                    @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
-                    @if($transactionHeads->isEmpty() && ! $isDueSettlement)
-                        <small class="hg-field-error">{{ $isTransferTransaction ? 'No active Transfer Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching transfer head.' : ($transactionHeadsAreUnfiltered ? 'No active Transaction Head is available. Activate or create at least one head with an active posting account.' : 'No active Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching head with an active posting account.') }}</small>
-                    @elseif($transactionHeadsAreUnfiltered)
-                        <small class="hg-field-help">No transaction direction is selected, so all active transaction heads are shown. Selecting a direction or transaction type above will filter this list.</small>
-                    @elseif($transactionHeadsAreDirectionFiltered)
-                        <small class="hg-field-help">This list is filtered by the selected transaction direction. Choose a transaction type above to narrow it further.</small>
-                    @endif
-                </div>
+                @if(! $isTransferTransaction)
+                    <div class="hg-field {{ $isDueSettlement ? 'hidden' : '' }}">
+                        <label for="transaction_head_id">Transaction Head <span class="hg-required">*</span></label>
+                        <select
+                            id="transaction_head_id"
+                            name="transaction_head_id"
+                            required
+                            data-hg-searchable
+                            data-hg-search-placeholder="Search transaction head by name, code or ledger..."
+                            data-hg-search-empty="No matching transaction head found"
+                        >
+                            <option value="">{{ $transactionHeads->isEmpty() ? 'No active transaction head available' : ($transactionHeadsAreUnfiltered ? 'Select transaction head from all types' : ($transactionHeadsAreDirectionFiltered ? 'Select transaction head for this direction' : 'Select transaction head')) }}</option>
+                            @foreach ($transactionHeads as $head)
+                                @php
+                                    $headCategory = (string) $head->category;
+                                    $headCategoryMetadata = is_array($transactionCategories->firstWhere('value', $headCategory)?->metadata ?? null)
+                                        ? $transactionCategories->firstWhere('value', $headCategory)->metadata
+                                        : [];
+                                    $headDefinition = \App\Support\TransactionTypes::configuredDefinition(
+                                        $headCategory,
+                                        $headCategoryMetadata,
+                                        $transactionTypeLabels[$headCategory] ?? $headCategory
+                                    );
+                                @endphp
+                                <option
+                                    value="{{ $head->id }}"
+                                    data-title="{{ $transactionHeadsAreUnfiltered ? (($transactionTypeLabels[$headCategory] ?? $headCategory).' — ') : '' }}{{ $head->name }}"
+                                    data-meta="{{ $head->code }}{{ $head->postingAccount ? ' — '.$head->postingAccount->code.' '.$head->postingAccount->name : '' }}"
+                                    data-search-keywords="{{ $headCategory }} {{ $transactionTypeLabels[$headCategory] ?? '' }} {{ implode(' ', $head->allowedSettlementCodes()) }}"
+                                    data-allowed-settlements="{{ json_encode($head->allowedSettlementCodes()) }}"
+                                    data-category="{{ $headCategory }}"
+                                    data-direction="{{ $transactionCategoryDirections[$headCategory] ?? ($headDefinition['flow'] ?? '') }}"
+                                    data-party-type="{{ $head->party_type ?: ($headDefinition['party_type'] ?? ($transactionTypeDefinition['party_type'] ?? 'Any')) }}"
+                                    @selected((string) $selectedHeadId === (string) $head->id)
+                                >{{ $transactionHeadsAreUnfiltered ? (($transactionTypeLabels[$headCategory] ?? $headCategory).' — ') : '' }}{{ $head->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                        @if($transactionHeads->isEmpty() && ! $isDueSettlement)
+                            <small class="hg-field-error">{{ $transactionHeadsAreUnfiltered ? 'No active Transaction Head is available. Activate or create at least one head with an active posting account.' : 'No active Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching head with an active posting account.' }}</small>
+                        @elseif($transactionHeadsAreUnfiltered)
+                            <small class="hg-field-help">No transaction direction is selected, so all active transaction heads are shown. Selecting a direction or transaction type above will filter this list.</small>
+                        @elseif($transactionHeadsAreDirectionFiltered)
+                            <small class="hg-field-help">This list is filtered by the selected transaction direction. Choose a transaction type above to narrow it further.</small>
+                        @endif
+                    </div>
+                @endif
 
                 @if($isSalesTransaction && ! $isDueSettlement)
                     <div class="hg-field {{ $saleFeedModeSelected ? '' : 'hidden' }}" data-sale-warehouse-field>
@@ -418,7 +420,7 @@
                             >{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
                         @endforeach
                     </select>
-                    <small class="hg-field-help">Transfer entry will debit Pay To and credit Pay From. Different money accounts may share one COA ledger; their money account balances will still move separately.</small>
+                    <small class="hg-field-help">Transfer entry will debit Pay To and credit Pay From.</small>
                     @error('transfer_to_money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 

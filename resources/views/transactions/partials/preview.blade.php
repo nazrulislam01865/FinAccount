@@ -6,10 +6,11 @@
     $totalDebit = collect($lines ?? [])->sum(fn ($line) => (float) ($line['debit'] ?? 0));
     $totalCredit = collect($lines ?? [])->sum(fn ($line) => (float) ($line['credit'] ?? 0));
     $isBalanced = abs($totalDebit - $totalCredit) < 0.01;
+    $headLabel = $head?->name ?? 'Money Transfer';
 @endphp
 
 <div class="hg-notice">
-    <strong>{{ $transactionTypeLabel }} — {{ $head->name }}</strong><br>
+    <strong>{{ $transactionTypeLabel }} — {{ $headLabel }}</strong><br>
     Payment: {{ $settlementLabels[$settlementType] ?? $settlementType }}<br>
     Total: {{ \App\Support\CompanyContext::money($total) }}
     @if($settlementType === \App\Support\TransactionTypes::PARTIAL)

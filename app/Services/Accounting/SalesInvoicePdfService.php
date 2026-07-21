@@ -105,7 +105,7 @@ class SalesInvoicePdfService
 
         $content[] = $this->sectionTitle(360, 680, 'Transaction');
         $content[] = $this->text(360, 662, 'Voucher: '.($transaction?->voucher_no ?: '-'), 9, 'F1', '0.37 0.44 0.55');
-        $content[] = $this->text(360, 648, 'Head: '.($transaction?->transactionHead?->name ?: '-'), 9, 'F1', '0.37 0.44 0.55');
+        $content[] = $this->text(360, 648, 'Head: '.($transaction?->displayHeadName('-') ?: '-'), 9, 'F1', '0.37 0.44 0.55');
         $content[] = $this->text(360, 634, 'Status: '.ucfirst((string) $invoice->status), 9, 'F2', '0.05 0.45 0.28');
 
         $tableTop = 600.0;
@@ -205,7 +205,7 @@ class SalesInvoicePdfService
         }
 
         return [[
-            'description' => (string) ($transaction?->transactionHead?->name ?: 'Sales'),
+            'description' => (string) ($transaction?->displayHeadName('Sales') ?: 'Sales'),
             'quantity' => '1',
             'rate' => number_format((float) $invoice->subtotal, 2, '.', ''),
             'amount' => (float) $invoice->subtotal,

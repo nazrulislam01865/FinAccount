@@ -92,13 +92,6 @@ class JournalBuilder
                 'money_account_id' => 'Both selected money accounts must be mapped to active COA ledgers.',
             ]);
         }
-
-        // Two different money accounts may intentionally share one COA ledger
-        // (for example multiple bank accounts under Cash at Bank). Keep the
-        // transfer valid in that case because journal_lines stores
-        // money_account_id, so operational balances still move from Pay From to
-        // Pay To while the shared COA has zero net movement.
-
         return [
             [
                 'account' => $toLedger,

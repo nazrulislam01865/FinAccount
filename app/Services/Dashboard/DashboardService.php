@@ -124,6 +124,7 @@ class DashboardService
                 ->with([
                     'transactionHead',
                     'moneyAccount',
+                    'transferToMoneyAccount',
                     'party',
                     'journalEntry.lines.chartOfAccount',
                 ])

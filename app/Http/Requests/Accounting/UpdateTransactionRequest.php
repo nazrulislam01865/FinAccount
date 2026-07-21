@@ -97,13 +97,14 @@ class UpdateTransactionRequest extends FormRequest
             'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
             'transaction_head_id' => [
-                'required', 'integer',
+                Rule::requiredIf(fn (): bool => ! $this->isTransferCategory()),
+                'nullable', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                     ->where('is_active', true)
                     ->where('code', 'not like', 'SYS-FEED-%')
-                    ->when(! $this->isTransferCategory(), fn ($query) => $query->whereNotNull('posting_account_id'))),
+                    ->whereNotNull('posting_account_id')),
             ],
             'money_account_id' => [
                 Rule::requiredIf(fn (): bool => $this->isTransferCategory()),
@@ -159,11 +160,28 @@ class UpdateTransactionRequest extends FormRequest
         return TransactionTypes::flow($category, $metadata) === TransactionTypes::FLOW_TRANSFER;
     }
 
+    private function categoryIsTransfer(?string $category): bool
+    {
+        if (! filled($category)) {
+            return false;
+        }
+
+        $option = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $category)
+            ->first();
+
+        $metadata = is_array($option?->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow((string) $category, $metadata) === TransactionTypes::FLOW_TRANSFER;
+    }
+
     public function attributes(): array
     {
         return [
             'selling_type' => 'what are you selling',
             'tracking_unit_id' => 'location / godown',
+            'transaction_head_id' => 'transaction head',
             'money_account_id' => 'pay from account',
             'transfer_to_money_account_id' => 'pay to account',
         ];
@@ -179,7 +197,7 @@ class UpdateTransactionRequest extends FormRequest
         $locationRequired = SaleSellingTypes::isSaleCategory($category)
             && SaleSellingTypes::requiresWarehouse($sellingType);
 
-        $this->merge([
+        $payload = [
             'category' => $category,
             'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
             'tracking_unit_id' => $locationRequired && filled($this->input('tracking_unit_id'))
@@ -190,6 +208,17 @@ class UpdateTransactionRequest extends FormRequest
                 : null,
             'reference' => filled($this->input('reference')) ? trim((string) $this->input('reference')) : null,
             'description' => filled($this->input('description')) ? trim((string) $this->input('description')) : null,
-        ]);
+        ];
+
+        if ($this->categoryIsTransfer($category)) {
+            $payload['transaction_head_id'] = null;
+            $payload['party_id'] = null;
+            $payload['selling_type'] = null;
+            $payload['tracking_unit_id'] = null;
+            $payload['settlement_type'] = TransactionTypes::CASH;
+            $payload['paid_amount'] = $this->input('amount');
+        }
+
+        $this->merge($payload);
     }
 }

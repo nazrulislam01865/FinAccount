@@ -296,13 +296,14 @@ class TransactionEntryController extends Controller
                     ->where('is_active', true)),
             ],
             'transaction_head_id' => [
-                'required', 'integer',
+                Rule::requiredIf(fn (): bool => ! $isTransfer),
+                'nullable', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                     ->where('is_active', true)
                     ->where('code', 'not like', 'SYS-FEED-%')
-                    ->when(! $isTransfer, fn ($query) => $query->whereNotNull('posting_account_id'))),
+                    ->whereNotNull('posting_account_id')),
             ],
             'money_account_id' => [
                 'nullable', 'integer',
@@ -328,18 +329,20 @@ class TransactionEntryController extends Controller
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $head = TransactionHead::query()
-            ->with('postingAccount')
-            ->where('company_id', $companyId)
-            ->whereRaw('LOWER(category) = ?', [strtolower($category)])
-            ->where('is_active', true)
-            ->where('code', 'not like', 'SYS-FEED-%')
-            ->when(! $isTransfer, fn ($query) => $query
+        $head = null;
+        if (! $isTransfer) {
+            $head = TransactionHead::query()
+                ->with('postingAccount')
+                ->where('company_id', $companyId)
+                ->whereRaw('LOWER(category) = ?', [strtolower($category)])
+                ->where('is_active', true)
+                ->where('code', 'not like', 'SYS-FEED-%')
                 ->whereNotNull('posting_account_id')
                 ->whereHas('postingAccount', fn ($query) => $query
                     ->where('company_id', $companyId)
-                    ->where('is_active', true)))
-            ->findOrFail($validated['transaction_head_id']);
+                    ->where('is_active', true))
+                ->findOrFail($validated['transaction_head_id']);
+        }
 
         $moneyAccount = filled($validated['money_account_id'] ?? null)
             ? MoneyAccount::query()
@@ -378,7 +381,7 @@ class TransactionEntryController extends Controller
         $rule = null;
         $requiresMoney = false;
         $requiresParty = false;
-        $expectedPartyType = $head->party_type ?: TransactionTypes::partyType($category);
+        $expectedPartyType = $isTransfer ? 'Any' : ($head->party_type ?: TransactionTypes::partyType($category));
 
         try {
             if ($isTransfer) {
@@ -459,6 +462,7 @@ class TransactionEntryController extends Controller
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_RULE_PARTY_TYPE),
             'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
             'transactionTypeLabel' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY)[$category] ?? $category,
+            'isTransfer' => $isTransfer,
         ])->render();
 
         return response()->json([
@@ -471,7 +475,7 @@ class TransactionEntryController extends Controller
             'partyType' => $expectedPartyType,
             'autoSelectedPartyId' => $requiresParty && $party ? $party->id : null,
             'autoSelectedPartyLabel' => $requiresParty && $party ? $party->code.' — '.$party->name : null,
-            'allowedSettlements' => $head->allowedSettlementCodes(),
+            'allowedSettlements' => $isTransfer ? [TransactionTypes::CASH] : $head->allowedSettlementCodes(),
             'moneyLabel' => $isTransfer ? 'Pay From' : TransactionTypes::moneyLabel($category),
             'transferRequired' => $isTransfer,
             'transferToLabel' => 'Pay To',
