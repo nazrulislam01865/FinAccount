@@ -35,6 +35,20 @@ class UnifiedDocumentPdfService
     public function render(array $document): string
     {
         $company = (array) ($document['company'] ?? []);
+
+        // Use one fixed company header for every generated PDF. The logo path
+        // remains supplied by the current company, while all printed letters
+        // are controlled from config/document_company.php.
+        $printedCompany = (array) config('document_company', []);
+        $company = array_merge($company, array_filter([
+            'name' => $printedCompany['name'] ?? 'BASHIR AGRO',
+            'short_name' => $printedCompany['short_name'] ?? 'BA',
+            'address' => $printedCompany['address'] ?? 'Mymensingh, Bangladesh',
+            'phone' => $printedCompany['phone'] ?? '+8801700000000',
+            'email' => $printedCompany['email'] ?? 'info@bashiragro.com',
+            'website' => $printedCompany['website'] ?? 'www.Bashiragro.com',
+        ], static fn ($value): bool => $value !== null && $value !== ''));
+
         $logo = $this->logoData($company['logo_path'] ?? null);
 
         $this->objects = [];

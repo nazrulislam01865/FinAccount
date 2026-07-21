@@ -1,4 +1,16 @@
 @php
+    // Keep one fixed company header across every receipt and invoice.
+    // Edit config/document_company.php to change these printed values.
+    $printedCompany = (array) config('document_company', []);
+    $company = array_merge((array) ($company ?? []), array_filter([
+        'name' => $printedCompany['name'] ?? 'BASHIR AGRO',
+        'short_name' => $printedCompany['short_name'] ?? 'BA',
+        'address' => $printedCompany['address'] ?? 'Mymensingh, Bangladesh',
+        'phone' => $printedCompany['phone'] ?? '+8801700000000',
+        'email' => $printedCompany['email'] ?? 'info@bashiragro.com',
+        'website' => $printedCompany['website'] ?? 'www.Bashiragro.com',
+    ], static fn ($value) => $value !== null && $value !== ''));
+
     $documentLines = collect($documentLines ?? []);
     $lineCount = $documentLines->count();
     $densityClass = $lineCount > 10 ? 'ba-u-doc--compact' : ($lineCount > 6 ? 'ba-u-doc--dense' : '');
