@@ -12,7 +12,7 @@ return new class extends Migration
             return;
         }
 
-        // Transfer transactions are now posted directly from Pay From / Pay To
+        // Transfer transactions are now posted directly from From account / To account
         // money-account COA mappings, so transaction_head_id must be optional.
         DB::statement('ALTER TABLE transactions MODIFY transaction_head_id BIGINT UNSIGNED NULL');
 

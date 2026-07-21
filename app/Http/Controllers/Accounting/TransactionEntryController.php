@@ -405,13 +405,13 @@ class TransactionEntryController extends Controller
 
                 if (! $moneyAccount) {
                     throw ValidationException::withMessages([
-                        'money_account_id' => 'Pay From account is required.',
+                        'money_account_id' => 'From account is required.',
                     ]);
                 }
 
                 if (! $transferToMoneyAccount) {
                     throw ValidationException::withMessages([
-                        'transfer_to_money_account_id' => 'Pay To account is required.',
+                        'transfer_to_money_account_id' => 'To account is required.',
                     ]);
                 }
 
@@ -476,9 +476,9 @@ class TransactionEntryController extends Controller
             'autoSelectedPartyId' => $requiresParty && $party ? $party->id : null,
             'autoSelectedPartyLabel' => $requiresParty && $party ? $party->code.' — '.$party->name : null,
             'allowedSettlements' => $isTransfer ? [TransactionTypes::CASH] : $head->allowedSettlementCodes(),
-            'moneyLabel' => $isTransfer ? 'Pay From' : TransactionTypes::moneyLabel($category),
+            'moneyLabel' => $isTransfer ? 'From account' : TransactionTypes::moneyLabel($category),
             'transferRequired' => $isTransfer,
-            'transferToLabel' => 'Pay To',
+            'transferToLabel' => 'To account',
             'paidAmountLocked' => $isTransfer,
             'partyLabel' => TransactionTypes::partyLabel($category),
         ]);

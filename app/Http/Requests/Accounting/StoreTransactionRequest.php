@@ -221,8 +221,8 @@ class StoreTransactionRequest extends FormRequest
             'selling_type' => 'what are you selling',
             'tracking_unit_id' => 'location / godown',
             'transaction_head_id' => 'transaction head',
-            'money_account_id' => 'pay from account',
-            'transfer_to_money_account_id' => 'pay to account',
+            'money_account_id' => 'from account',
+            'transfer_to_money_account_id' => 'to account',
             'lines.*.item_name' => 'item',
         ];
     }

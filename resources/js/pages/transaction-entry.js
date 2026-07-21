@@ -384,8 +384,8 @@ if (page) {
             transferToField?.classList.remove('hidden');
             if (money) money.required = true;
             if (transferToMoney) transferToMoney.required = true;
-            if (moneyLabel) moneyLabel.textContent = 'Pay From';
-            if (transferToLabel) transferToLabel.textContent = 'Pay To';
+            if (moneyLabel) moneyLabel.textContent = 'From account';
+            if (transferToLabel) transferToLabel.textContent = 'To account';
             partyField?.classList.add('hidden');
             autoPartyNotice?.classList.add('hidden');
             if (party) party.required = false;
@@ -735,7 +735,7 @@ if (page) {
         if (!isTransferMode()) return;
         if (money?.value && transferToMoney?.value && money.value === transferToMoney.value) {
             event.preventDefault();
-            window.alert('Pay From and Pay To must be different accounts.');
+            window.alert('From account and To account must be different accounts.');
         }
     });
 

@@ -23,7 +23,7 @@
     $pageTransactionLabel = filled($category)
         ? ($category === \App\Support\TransactionTypes::SALE ? 'Sales' : $transactionTypeLabel)
         : 'Transaction';
-    $moneyLabel = $isTransferTransaction ? 'Pay From' : ($transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account');
+    $moneyLabel = $isTransferTransaction ? 'From account' : ($transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account');
     $partyLabel = $transactionTypeDefinition['party_label'] ?? 'Party';
     $showTransactionTypeSelection = $showTransactionTypeSelection ?? ($isEditing || $isDueSettlement || request()->filled('direction') || request()->filled('category'));
     $hasSelectedTransactionDirection = $isEditing || $isDueSettlement || filled($activeTransactionDirection);
@@ -400,7 +400,7 @@
                 </div>
 
                 <div class="hg-field hidden" id="transfer-to-field">
-                    <label for="transfer_to_money_account_id"><span id="transfer-to-label">Pay To</span> <span class="hg-required">*</span></label>
+                    <label for="transfer_to_money_account_id"><span id="transfer-to-label">To account</span> <span class="hg-required">*</span></label>
                     <select
                         id="transfer_to_money_account_id"
                         name="transfer_to_money_account_id"
@@ -420,7 +420,7 @@
                             >{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
                         @endforeach
                     </select>
-                    <small class="hg-field-help">Transfer entry will debit Pay To and credit Pay From.</small>
+                    <small class="hg-field-help">Transfer entry will debit To account and credit From account.</small>
                     @error('transfer_to_money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 

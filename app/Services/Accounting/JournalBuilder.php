@@ -69,7 +69,7 @@ class JournalBuilder
     /**
      * Build a direct transfer between two selected money accounts.
      *
-     * The user-selected Pay To account is debited and the user-selected Pay From
+     * The user-selected To account is debited and the user-selected From account
      * account is credited. The Transaction Head posting account is intentionally
      * ignored for transfers so users can transfer between any two active money
      * accounts without creating one head per route.
@@ -80,7 +80,7 @@ class JournalBuilder
     {
         if ((int) $fromAccount->id === (int) $toAccount->id) {
             throw ValidationException::withMessages([
-                'transfer_to_money_account_id' => 'Pay From and Pay To must be different money accounts.',
+                'transfer_to_money_account_id' => 'From account and To account must be different money accounts.',
             ]);
         }
 

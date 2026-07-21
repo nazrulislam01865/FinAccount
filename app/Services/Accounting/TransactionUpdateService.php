@@ -100,13 +100,13 @@ class TransactionUpdateService
             if ($isTransfer) {
                 if (! $moneyAccount) {
                     throw ValidationException::withMessages([
-                        'money_account_id' => 'Pay From is required for transfer transactions.',
+                        'money_account_id' => 'From account is required for transfer transactions.',
                     ]);
                 }
 
                 if (! $transferToMoneyAccount) {
                     throw ValidationException::withMessages([
-                        'transfer_to_money_account_id' => 'Pay To is required for transfer transactions.',
+                        'transfer_to_money_account_id' => 'To account is required for transfer transactions.',
                     ]);
                 }
 
