@@ -27,7 +27,12 @@
                     <tr>
                         <td><strong>{{ $line->journalEntry?->voucher_no }}</strong><br><span class="hg-muted">{{ $line->journalEntry?->entry_date?->format('Y-m-d') }}</span></td>
                         <td><span class="hg-badge {{ strtolower($transaction?->category ?? '') }}">{{ $categoryLabels[$transaction?->category] ?? $transaction?->category }}</span></td>
-                        <td>{{ $line->chartOfAccount?->code }} — {{ $line->chartOfAccount?->name }}</td>
+                        <td>
+                            {{ $line->chartOfAccount?->code }} — {{ $line->chartOfAccount?->name }}
+                            @if($line->moneyAccount)
+                                <br><small class="hg-muted">Money Account: {{ $line->moneyAccount->name }}</small>
+                            @endif
+                        </td>
                         <td class="right">{{ \App\Support\CompanyContext::money((float) $line->debit) }}</td>
                         <td class="right">{{ \App\Support\CompanyContext::money((float) $line->credit) }}</td>
                     </tr>

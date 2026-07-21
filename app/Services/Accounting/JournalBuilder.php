@@ -93,11 +93,11 @@ class JournalBuilder
             ]);
         }
 
-        if ((int) $fromLedger->id === (int) $toLedger->id) {
-            throw ValidationException::withMessages([
-                'transfer_to_money_account_id' => 'Pay From and Pay To cannot resolve to the same COA ledger.',
-            ]);
-        }
+        // Two different money accounts may intentionally share one COA ledger
+        // (for example multiple bank accounts under Cash at Bank). Keep the
+        // transfer valid in that case because journal_lines stores
+        // money_account_id, so operational balances still move from Pay From to
+        // Pay To while the shared COA has zero net movement.
 
         return [
             [

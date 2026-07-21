@@ -418,7 +418,7 @@
                             >{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
                         @endforeach
                     </select>
-                    <small class="hg-field-help">Transfer entry will debit Pay To and credit Pay From.</small>
+                    <small class="hg-field-help">Transfer entry will debit Pay To and credit Pay From. Different money accounts may share one COA ledger; their money account balances will still move separately.</small>
                     @error('transfer_to_money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 

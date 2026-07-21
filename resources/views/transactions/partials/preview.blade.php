@@ -55,6 +55,9 @@
                         <td>
                             <strong>{{ $line['account']->code }}</strong>
                             <span class="hg-muted">— {{ $line['account']->name }}</span>
+                            @if(isset($line['money_account']) && $line['money_account'])
+                                <br><small class="hg-muted">Money Account: {{ $line['money_account']->name }}</small>
+                            @endif
                         </td>
                         <td class="right">{{ $lineDebit > 0 ? \App\Support\CompanyContext::money($lineDebit) : '—' }}</td>
                         <td class="right">{{ $lineCredit > 0 ? \App\Support\CompanyContext::money($lineCredit) : '—' }}</td>

@@ -13,6 +13,7 @@ class JournalEntryService
         return JournalLine::query()
             ->with([
                 'chartOfAccount',
+                'moneyAccount',
                 'journalEntry.transaction',
             ])
             ->where('journal_lines.company_id', $companyId)
