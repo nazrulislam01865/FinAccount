@@ -65,6 +65,58 @@ class JournalBuilder
         ];
     }
 
+
+    /**
+     * Build a direct transfer between two selected money accounts.
+     *
+     * The user-selected Pay To account is debited and the user-selected Pay From
+     * account is credited. The Transaction Head posting account is intentionally
+     * ignored for transfers so users can transfer between any two active money
+     * accounts without creating one head per route.
+     *
+     * @return array<int, array{account: ChartOfAccount, money_account: MoneyAccount, source: string, debit: string, credit: string}>
+     */
+    public function buildTransfer(MoneyAccount $fromAccount, MoneyAccount $toAccount, string $amount): array
+    {
+        if ((int) $fromAccount->id === (int) $toAccount->id) {
+            throw ValidationException::withMessages([
+                'transfer_to_money_account_id' => 'Pay From and Pay To must be different money accounts.',
+            ]);
+        }
+
+        $fromLedger = $fromAccount->chartOfAccount;
+        $toLedger = $toAccount->chartOfAccount;
+
+        if (! $fromLedger || ! $toLedger) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'Both selected money accounts must be mapped to active COA ledgers.',
+            ]);
+        }
+
+        if ((int) $fromLedger->id === (int) $toLedger->id) {
+            throw ValidationException::withMessages([
+                'transfer_to_money_account_id' => 'Pay From and Pay To cannot resolve to the same COA ledger.',
+            ]);
+        }
+
+        return [
+            [
+                'account' => $toLedger,
+                'money_account' => $toAccount,
+                'source' => 'transfer_to_money',
+                'debit' => $amount,
+                'credit' => '0.00',
+            ],
+            [
+                'account' => $fromLedger,
+                'money_account' => $fromAccount,
+                'source' => 'transfer_from_money',
+                'debit' => '0.00',
+                'credit' => $amount,
+            ],
+        ];
+    }
+
     /**
      * Build the journal directly from accounting rule lines.
      *

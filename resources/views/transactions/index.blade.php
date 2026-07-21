@@ -79,7 +79,12 @@
                                 <br><small class="hg-muted">{{ $settlementLabels[$transaction->settlement_type] ?? $transaction->settlement_type }}</small>
                             </td>
                             <td>{{ $transaction->transactionHead?->name ?? '-' }}</td>
-                            <td>{{ $transaction->moneyAccount?->name ?? '-' }}</td>
+                            <td>
+                                {{ $transaction->moneyAccount?->name ?? '-' }}
+                                @if($transaction->transferToMoneyAccount)
+                                    <br><small class="hg-muted">To: {{ $transaction->transferToMoneyAccount?->name }}</small>
+                                @endif
+                            </td>
                             <td>{{ $transaction->party?->name ?? '-' }}</td>
                             <td>{{ $transaction->reference ?: '-' }}</td>
                             <td>
@@ -150,7 +155,12 @@
                             <td><strong>Draft</strong><br><span class="hg-muted">{{ $fields['transaction_date'] ?? 'No date selected' }}</span></td>
                             <td><span class="hg-badge {{ strtolower($draftCategory) }}">{{ $categoryLabels[$draftCategory] ?? ($draftCategory ?: 'Draft') }}</span></td>
                             <td>{{ filled($fields['transaction_head_id'] ?? null) ? 'Head ID #'.$fields['transaction_head_id'] : 'Not selected' }}</td>
-                            <td>{{ filled($fields['money_account_id'] ?? null) ? 'Money ID #'.$fields['money_account_id'] : '-' }}</td>
+                            <td>
+                                {{ filled($fields['money_account_id'] ?? null) ? 'Money ID #'.$fields['money_account_id'] : '-' }}
+                                @if(filled($fields['transfer_to_money_account_id'] ?? null))
+                                    <br><small class="hg-muted">To ID #{{ $fields['transfer_to_money_account_id'] }}</small>
+                                @endif
+                            </td>
                             <td>{{ filled($fields['party_id'] ?? null) ? 'Party ID #'.$fields['party_id'] : '-' }}</td>
                             <td>{{ $fields['reference'] ?? '-' }}</td>
                             <td><span class="hg-muted">Attach after final save</span></td>

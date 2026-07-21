@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingOption;
 use App\Models\MoneyAccount;
 use App\Models\Party;
 use App\Models\TransactionHead;
@@ -14,6 +15,7 @@ class TransactionEntryOptionService
     public function transactionHeads(int $companyId, string $category): Collection
     {
         $postingTypes = TransactionTypes::postingTypes($category);
+        $isTransfer = $this->isTransferCategory($category);
 
         return TransactionHead::query()
             ->with('postingAccount')
@@ -21,11 +23,12 @@ class TransactionEntryOptionService
             ->whereRaw('LOWER(category) = ?', [strtolower($category)])
             ->where('is_active', true)
             ->where('code', 'not like', 'SYS-FEED-%')
-            ->whereNotNull('posting_account_id')
-            ->whereHas('postingAccount', fn ($query) => $query
-                ->where('company_id', $companyId)
-                ->where('is_active', true)
-                ->when($postingTypes !== [], fn ($query) => $query->whereIn('type', $postingTypes)))
+            ->when(! $isTransfer, fn ($query) => $query
+                ->whereNotNull('posting_account_id')
+                ->whereHas('postingAccount', fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)
+                    ->when($postingTypes !== [], fn ($query) => $query->whereIn('type', $postingTypes))))
             ->orderBy('name')
             ->get();
     }
@@ -45,6 +48,18 @@ class TransactionEntryOptionService
             ->orderBy('category')
             ->orderBy('name')
             ->get();
+    }
+
+    private function isTransferCategory(string $category): bool
+    {
+        $option = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $category)
+            ->first();
+
+        $metadata = is_array($option?->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow($category, $metadata) === TransactionTypes::FLOW_TRANSFER;
     }
 
     /** @return Collection<int, MoneyAccount> */

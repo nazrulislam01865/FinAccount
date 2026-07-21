@@ -280,6 +280,7 @@ class TransactionEntryController extends Controller
             (string) $request->input('category'),
         ) ?? trim((string) $request->input('category'));
         $request->merge(['category' => $category]);
+        $isTransfer = $this->isTransferCategory($category);
 
         $validated = $request->validate([
             'category' => [
@@ -301,10 +302,17 @@ class TransactionEntryController extends Controller
                     ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                     ->where('is_active', true)
                     ->where('code', 'not like', 'SYS-FEED-%')
-                    ->whereNotNull('posting_account_id')),
+                    ->when(! $isTransfer, fn ($query) => $query->whereNotNull('posting_account_id'))),
             ],
             'money_account_id' => [
                 'nullable', 'integer',
+                Rule::exists('money_accounts', 'id')->where(fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)
+                    ->whereNotNull('chart_of_account_id')),
+            ],
+            'transfer_to_money_account_id' => [
+                'nullable', 'integer', 'different:money_account_id',
                 Rule::exists('money_accounts', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->where('is_active', true)
@@ -326,10 +334,11 @@ class TransactionEntryController extends Controller
             ->whereRaw('LOWER(category) = ?', [strtolower($category)])
             ->where('is_active', true)
             ->where('code', 'not like', 'SYS-FEED-%')
-            ->whereNotNull('posting_account_id')
-            ->whereHas('postingAccount', fn ($query) => $query
-                ->where('company_id', $companyId)
-                ->where('is_active', true))
+            ->when(! $isTransfer, fn ($query) => $query
+                ->whereNotNull('posting_account_id')
+                ->whereHas('postingAccount', fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)))
             ->findOrFail($validated['transaction_head_id']);
 
         $moneyAccount = filled($validated['money_account_id'] ?? null)
@@ -341,6 +350,17 @@ class TransactionEntryController extends Controller
                     ->where('company_id', $companyId)
                     ->where('is_active', true))
                 ->find($validated['money_account_id'])
+            : null;
+
+        $transferToMoneyAccount = filled($validated['transfer_to_money_account_id'] ?? null)
+            ? MoneyAccount::query()
+                ->with('chartOfAccount')
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->whereHas('chartOfAccount', fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true))
+                ->find($validated['transfer_to_money_account_id'])
             : null;
 
         $party = null;
@@ -361,43 +381,68 @@ class TransactionEntryController extends Controller
         $expectedPartyType = $head->party_type ?: TransactionTypes::partyType($category);
 
         try {
+            if ($isTransfer) {
+                $validated['settlement_type'] = TransactionTypes::CASH;
+                $validated['paid_amount'] = $amount;
+            }
+
             $settlement = $this->settlementService->prepare($amount, $validated, $scale);
             $settlementType = $settlement['settlement_type'];
 
-            if (! $head->allowsSettlement($settlementType)) {
+            if (! $isTransfer && ! $head->allowsSettlement($settlementType)) {
                 throw ValidationException::withMessages([
                     'paid_amount' => 'The amount entered creates a payment type that is not allowed for this transaction head.',
                 ]);
             }
 
-            $rule = $this->ruleMatcher->match($companyId, $category, $settlementType, $head);
-            $requiresMoney = $this->settlementService->requiresMoney($rule);
-            $requiresParty = $this->settlementService->requiresParty($rule);
-            $expectedPartyType = $this->partyResolver->expectedPartyType($head, $rule);
-            $party = $requiresParty
-                ? $this->partyResolver->resolveRequired(
-                    $companyId,
+            if ($isTransfer) {
+                $requiresMoney = true;
+                $requiresParty = false;
+                $expectedPartyType = 'Any';
+
+                if (! $moneyAccount) {
+                    throw ValidationException::withMessages([
+                        'money_account_id' => 'Pay From account is required.',
+                    ]);
+                }
+
+                if (! $transferToMoneyAccount) {
+                    throw ValidationException::withMessages([
+                        'transfer_to_money_account_id' => 'Pay To account is required.',
+                    ]);
+                }
+
+                $lines = $this->journalBuilder->buildTransfer($moneyAccount, $transferToMoneyAccount, $amount);
+            } else {
+                $rule = $this->ruleMatcher->match($companyId, $category, $settlementType, $head);
+                $requiresMoney = $this->settlementService->requiresMoney($rule);
+                $requiresParty = $this->settlementService->requiresParty($rule);
+                $expectedPartyType = $this->partyResolver->expectedPartyType($head, $rule);
+                $party = $requiresParty
+                    ? $this->partyResolver->resolveRequired(
+                        $companyId,
+                        $head,
+                        $rule,
+                        $validated['party_id'] ?? null,
+                    )
+                    : null;
+
+                if ($requiresMoney && ! $moneyAccount) {
+                    throw ValidationException::withMessages([
+                        'money_account_id' => TransactionTypes::moneyLabel($category).' is required.',
+                    ]);
+                }
+
+                $lines = $this->journalBuilder->buildFromRule(
                     $head,
+                    $moneyAccount,
+                    $party,
+                    $amount,
+                    $settlement['paid_amount'],
+                    $settlement['due_amount'],
                     $rule,
-                    $validated['party_id'] ?? null,
-                )
-                : null;
-
-            if ($requiresMoney && ! $moneyAccount) {
-                throw ValidationException::withMessages([
-                    'money_account_id' => TransactionTypes::moneyLabel($category).' is required.',
-                ]);
+                );
             }
-
-            $lines = $this->journalBuilder->buildFromRule(
-                $head,
-                $moneyAccount,
-                $party,
-                $amount,
-                $settlement['paid_amount'],
-                $settlement['due_amount'],
-                $rule,
-            );
         } catch (ValidationException $exception) {
             $previewError = collect($exception->errors())->flatten()->first();
         }
@@ -427,7 +472,10 @@ class TransactionEntryController extends Controller
             'autoSelectedPartyId' => $requiresParty && $party ? $party->id : null,
             'autoSelectedPartyLabel' => $requiresParty && $party ? $party->code.' — '.$party->name : null,
             'allowedSettlements' => $head->allowedSettlementCodes(),
-            'moneyLabel' => TransactionTypes::moneyLabel($category),
+            'moneyLabel' => $isTransfer ? 'Pay From' : TransactionTypes::moneyLabel($category),
+            'transferRequired' => $isTransfer,
+            'transferToLabel' => 'Pay To',
+            'paidAmountLocked' => $isTransfer,
             'partyLabel' => TransactionTypes::partyLabel($category),
         ]);
     }
@@ -689,6 +737,19 @@ class TransactionEntryController extends Controller
             'selling_type' => $data['selling_type'] ?? null,
             'lines' => $data['lines'] ?? [],
         ];
+    }
+
+
+    private function isTransferCategory(string $category): bool
+    {
+        $option = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $category)
+            ->first();
+
+        $metadata = is_array($option?->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow($category, $metadata) === TransactionTypes::FLOW_TRANSFER;
     }
 
 

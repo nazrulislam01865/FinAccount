@@ -8,6 +8,7 @@ use App\Models\Feed\FeedBusinessArea;
 use App\Models\Feed\FeedBusinessTrackingUnit;
 use App\Support\CompanyContext;
 use App\Support\SaleSellingTypes;
+use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -82,10 +83,19 @@ class StoreTransactionRequest extends FormRequest
                     ->whereRaw('LOWER(category) = ?', [strtolower($category)])
                     ->where('is_active', true)
                     ->where('code', 'not like', 'SYS-FEED-%')
-                    ->whereNotNull('posting_account_id')),
+                    ->when(! $this->isTransferCategory(), fn ($query) => $query->whereNotNull('posting_account_id'))),
             ],
             'money_account_id' => [
+                Rule::requiredIf(fn (): bool => $this->isTransferCategory()),
                 'nullable', 'integer',
+                Rule::exists('money_accounts', 'id')->where(fn ($query) => $query
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)
+                    ->whereNotNull('chart_of_account_id')),
+            ],
+            'transfer_to_money_account_id' => [
+                Rule::requiredIf(fn (): bool => $this->isTransferCategory()),
+                'nullable', 'integer', 'different:money_account_id',
                 Rule::exists('money_accounts', 'id')->where(fn ($query) => $query
                     ->where('company_id', $companyId)
                     ->where('is_active', true)
@@ -171,11 +181,30 @@ class StoreTransactionRequest extends FormRequest
             && ! SaleSellingTypes::isOthers($sellingType);
     }
 
+    private function isTransferCategory(): bool
+    {
+        $category = (string) $this->input('category');
+        if ($category === '') {
+            return false;
+        }
+
+        $option = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $category)
+            ->first();
+
+        $metadata = is_array($option?->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow($category, $metadata) === TransactionTypes::FLOW_TRANSFER;
+    }
+
     public function attributes(): array
     {
         return [
             'selling_type' => 'what are you selling',
             'tracking_unit_id' => 'location / godown',
+            'money_account_id' => 'pay from account',
+            'transfer_to_money_account_id' => 'pay to account',
             'lines.*.item_name' => 'item',
         ];
     }

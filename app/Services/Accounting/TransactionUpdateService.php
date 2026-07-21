@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Models\AccountingOption;
 use App\Models\AccountingRule;
 use App\Models\Company;
 use App\Models\MoneyAccount;
@@ -57,6 +58,7 @@ class TransactionUpdateService
                 ->findOrFail($transaction->id);
 
             $transactionType = (string) $data['category'];
+            $isTransfer = $this->isTransferTransactionType((int) $user->company_id, $transactionType);
 
             $head = TransactionHead::query()
                 ->with('postingAccount')
@@ -64,70 +66,94 @@ class TransactionUpdateService
                 ->whereRaw('LOWER(category) = ?', [strtolower($transactionType)])
                 ->where('is_active', true)
                 ->where('code', 'not like', 'SYS-FEED-%')
-                ->whereNotNull('posting_account_id')
-                ->whereHas('postingAccount', fn ($query) => $query
-                    ->where('company_id', $user->company_id)
-                    ->where('is_active', true))
+                ->when(! $isTransfer, fn ($query) => $query
+                    ->whereNotNull('posting_account_id')
+                    ->whereHas('postingAccount', fn ($query) => $query
+                        ->where('company_id', $user->company_id)
+                        ->where('is_active', true)))
                 ->findOrFail($data['transaction_head_id']);
 
-            $this->validateHeadNature($head, $transactionType);
+            if (! $isTransfer) {
+                $this->validateHeadNature($head, $transactionType);
+            }
 
             $moneyAccount = filled($data['money_account_id'] ?? null)
-                ? MoneyAccount::query()
-                    ->with('chartOfAccount')
-                    ->where('company_id', $user->company_id)
-                    ->where('is_active', true)
-                    ->whereNotNull('chart_of_account_id')
-                    ->whereHas('chartOfAccount', fn ($query) => $query
-                        ->where('company_id', $user->company_id)
-                        ->where('is_active', true))
-                    ->findOrFail($data['money_account_id'])
+                ? $this->resolveMoneyAccount((int) $user->company_id, (int) $data['money_account_id'])
+                : null;
+            $transferToMoneyAccount = $isTransfer && filled($data['transfer_to_money_account_id'] ?? null)
+                ? $this->resolveMoneyAccount((int) $user->company_id, (int) $data['transfer_to_money_account_id'])
                 : null;
 
             $scale = (int) ($company->currency?->decimal_places ?? 2);
             $amount = $this->decimalAmount->normalize($data['amount'], $scale);
+            if ($isTransfer) {
+                $data['settlement_type'] = TransactionTypes::CASH;
+                $data['paid_amount'] = $amount;
+            }
             $settlement = $this->settlementService->prepare($amount, $data, $scale);
             $settlementType = $settlement['settlement_type'];
 
-            if (! $head->allowsSettlement($settlementType)) {
+            if (! $isTransfer && ! $head->allowsSettlement($settlementType)) {
                 throw ValidationException::withMessages([
                     'paid_amount' => 'The amount entered creates a payment type that is not allowed for this transaction head.',
                 ]);
             }
 
-            $rule = $this->ruleMatcher->match((int) $user->company_id, $transactionType, $settlementType, $head);
-            $requiresMoney = $this->settlementService->requiresMoney($rule);
-            $requiresParty = $this->settlementService->requiresParty($rule);
-            $party = $requiresParty
-                ? $this->partyResolver->resolveRequired(
-                    (int) $user->company_id,
+            $rule = null;
+            $requiresMoney = true;
+            $requiresParty = false;
+            $party = null;
+
+            if ($isTransfer) {
+                if (! $moneyAccount) {
+                    throw ValidationException::withMessages([
+                        'money_account_id' => 'Pay From is required for transfer transactions.',
+                    ]);
+                }
+
+                if (! $transferToMoneyAccount) {
+                    throw ValidationException::withMessages([
+                        'transfer_to_money_account_id' => 'Pay To is required for transfer transactions.',
+                    ]);
+                }
+
+                $lines = $this->journalBuilder->buildTransfer($moneyAccount, $transferToMoneyAccount, $amount);
+            } else {
+                $rule = $this->ruleMatcher->match((int) $user->company_id, $transactionType, $settlementType, $head);
+                $requiresMoney = $this->settlementService->requiresMoney($rule);
+                $requiresParty = $this->settlementService->requiresParty($rule);
+                $party = $requiresParty
+                    ? $this->partyResolver->resolveRequired(
+                        (int) $user->company_id,
+                        $head,
+                        $rule,
+                        $data['party_id'] ?? null,
+                    )
+                    : null;
+
+                if ($requiresMoney && ! $moneyAccount) {
+                    throw ValidationException::withMessages([
+                        'money_account_id' => TransactionTypes::moneyLabel($transactionType).' is required for this payment type.',
+                    ]);
+                }
+
+                $lines = $this->journalBuilder->buildFromRule(
                     $head,
+                    $moneyAccount,
+                    $party,
+                    $amount,
+                    $settlement['paid_amount'],
+                    $settlement['due_amount'],
                     $rule,
-                    $data['party_id'] ?? null,
-                )
-                : null;
-
-            if ($requiresMoney && ! $moneyAccount) {
-                throw ValidationException::withMessages([
-                    'money_account_id' => TransactionTypes::moneyLabel($transactionType).' is required for this payment type.',
-                ]);
+                );
             }
-
-            $lines = $this->journalBuilder->buildFromRule(
-                $head,
-                $moneyAccount,
-                $party,
-                $amount,
-                $settlement['paid_amount'],
-                $settlement['due_amount'],
-                $rule,
-            );
             $narration = filled($data['description'] ?? null) ? $data['description'] : $head->name;
 
             $lockedTransaction->update([
                 'category' => $transactionType,
                 'transaction_head_id' => $head->id,
                 'money_account_id' => $requiresMoney ? $moneyAccount?->id : null,
+                'transfer_to_money_account_id' => $isTransfer ? $transferToMoneyAccount?->id : null,
                 'party_id' => $requiresParty ? $party?->id : null,
                 'selling_type' => SaleSellingTypes::isSaleCategory($transactionType)
                     ? ($data['selling_type'] ?? null)
@@ -162,9 +188,9 @@ class TransactionUpdateService
                 $journalEntry->lines()->create([
                     'company_id' => $user->company_id,
                     'chart_of_account_id' => $line['account']->id,
-                    'money_account_id' => $line['source'] === AccountingRule::SOURCE_SELECTED_MONEY
+                    'money_account_id' => $line['money_account']->id ?? ($line['source'] === AccountingRule::SOURCE_SELECTED_MONEY
                         ? $moneyAccount?->id
-                        : null,
+                        : null),
                     'party_id' => in_array($line['source'], [
                         AccountingRule::SOURCE_PARTY_RECEIVABLE,
                         AccountingRule::SOURCE_PARTY_PAYABLE,
@@ -179,10 +205,35 @@ class TransactionUpdateService
             $this->salesInvoiceService->syncForTransaction($lockedTransaction, $company);
 
             return $lockedTransaction->fresh([
-                'transactionHead', 'moneyAccount', 'party',
+                'transactionHead', 'moneyAccount', 'transferToMoneyAccount', 'party',
                 'journalEntry.lines.chartOfAccount', 'salesInvoice',
             ]);
         }, attempts: 5);
+    }
+
+    private function resolveMoneyAccount(int $companyId, int $moneyAccountId): MoneyAccount
+    {
+        return MoneyAccount::query()
+            ->with('chartOfAccount')
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNotNull('chart_of_account_id')
+            ->whereHas('chartOfAccount', fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->where('is_active', true))
+            ->findOrFail($moneyAccountId);
+    }
+
+    private function isTransferTransactionType(int $companyId, string $transactionType): bool
+    {
+        $option = AccountingOption::query()
+            ->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY)
+            ->where('value', $transactionType)
+            ->first();
+
+        $metadata = is_array($option?->metadata) ? $option->metadata : [];
+
+        return TransactionTypes::flow($transactionType, $metadata) === TransactionTypes::FLOW_TRANSFER;
     }
 
     private function validateHeadNature(TransactionHead $head, string $transactionType): void

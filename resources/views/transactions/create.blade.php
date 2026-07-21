@@ -19,10 +19,11 @@
     $activeTransactionDirection = $activeTransactionDirection
         ?? ($transactionCategoryDirections[$category] ?? null);
     $transactionTypeLabel = $transactionTypeDefinition['label'] ?? ($categoryOption?->label ?? $category ?: 'Transaction');
+    $isTransferTransaction = ($transactionTypeDefinition['flow'] ?? null) === \App\Support\TransactionTypes::FLOW_TRANSFER;
     $pageTransactionLabel = filled($category)
         ? ($category === \App\Support\TransactionTypes::SALE ? 'Sales' : $transactionTypeLabel)
         : 'Transaction';
-    $moneyLabel = $transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account';
+    $moneyLabel = $isTransferTransaction ? 'Pay From' : ($transactionTypeDefinition['money_label'] ?? 'Cash / Bank / Mobile Account');
     $partyLabel = $transactionTypeDefinition['party_label'] ?? 'Party';
     $showTransactionTypeSelection = $showTransactionTypeSelection ?? ($isEditing || $isDueSettlement || request()->filled('direction') || request()->filled('category'));
     $hasSelectedTransactionDirection = $isEditing || $isDueSettlement || filled($activeTransactionDirection);
@@ -49,6 +50,7 @@
     $saleFeedItems = $saleFeedItems ?? collect();
     $saleStockBalances = $saleStockBalances ?? collect();
     $selectedSalePartyId = old('party_id', $isEditing ? $transaction->party_id : ($dueSettlementContext['party_id'] ?? ''));
+    $selectedTransferToMoneyAccountId = old('transfer_to_money_account_id', $isEditing ? $transaction->transfer_to_money_account_id : '');
     $selectedSaleOtherCharges = old('other_charges', 0);
     $defaultSaleBusinessItem = $saleBusinessItemsForJs
         ->first(fn ($item) => ($item['businessArea'] ?? null) === $selectedSellingType)
@@ -136,7 +138,7 @@
     @else
     <div class="hg-grid hg-grid-2 hg-entry-grid" data-transaction-entry>
         <section class="hg-card">
-            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid hg-transaction-entry-form" data-transaction-form data-default-allowed-settlements='@json($isDueSettlement ? [\App\Support\TransactionTypes::CASH] : ($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS))' data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null && ! $isDueSettlement) ? '1' : '0' }}" data-due-settlement="{{ $isDueSettlement ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
+            <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="hg-form-grid hg-transaction-entry-form" data-transaction-form data-default-allowed-settlements='@json($isDueSettlement ? [\App\Support\TransactionTypes::CASH] : ($transactionTypeDefinition['allowed_settlements'] ?? \App\Support\TransactionTypes::ALL_SETTLEMENTS))' data-transaction-flow="{{ $transactionTypeDefinition['flow'] ?? '' }}" data-auto-sync-paid="{{ (! $isEditing && old('paid_amount') === null && ! $isDueSettlement) ? '1' : '0' }}" data-due-settlement="{{ $isDueSettlement ? '1' : '0' }}" data-draft-form data-draft-key="{{ $isEditing ? 'transactions.edit.'.$transaction->id : 'transactions.create.'.\Illuminate\Support\Str::slug((string) $category, '_') }}" data-draft-title="{{ $isEditing ? 'Edit Transaction' : 'New '.($categoryOption?->label ?? $category).' Transaction' }}">
                 @csrf
                 @if ($isEditing) @method('PUT') @else <input type="hidden" name="request_token" value="{{ $requestToken }}"> @endif
                 <input type="hidden" name="category" value="{{ $category }}" data-transaction-category-input>
@@ -237,7 +239,7 @@
                     </select>
                     @error('transaction_head_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                     @if($transactionHeads->isEmpty() && ! $isDueSettlement)
-                        <small class="hg-field-error">{{ $transactionHeadsAreUnfiltered ? 'No active Transaction Head is available. Activate or create at least one head with an active posting account.' : 'No active Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching head with an active posting account.' }}</small>
+                        <small class="hg-field-error">{{ $isTransferTransaction ? 'No active Transfer Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching transfer head.' : ($transactionHeadsAreUnfiltered ? 'No active Transaction Head is available. Activate or create at least one head with an active posting account.' : 'No active Transaction Head is linked to '.$transactionTypeLabel.'. Activate or create a matching head with an active posting account.') }}</small>
                     @elseif($transactionHeadsAreUnfiltered)
                         <small class="hg-field-help">No transaction direction is selected, so all active transaction heads are shown. Selecting a direction or transaction type above will filter this list.</small>
                     @elseif($transactionHeadsAreDirectionFiltered)
@@ -393,6 +395,31 @@
                         @endforeach
                     </select>
                     @error('money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
+                </div>
+
+                <div class="hg-field hidden" id="transfer-to-field">
+                    <label for="transfer_to_money_account_id"><span id="transfer-to-label">Pay To</span> <span class="hg-required">*</span></label>
+                    <select
+                        id="transfer_to_money_account_id"
+                        name="transfer_to_money_account_id"
+                        data-hg-searchable
+                        data-hg-search-placeholder="Search destination cash, bank or mobile account..."
+                        data-hg-search-empty="No matching destination account found"
+                    >
+                        <option value="">{{ $moneyAccounts->isEmpty() ? 'No active money account available' : 'Select destination account' }}</option>
+                        @foreach ($moneyAccounts as $moneyAccount)
+                            <option
+                                value="{{ $moneyAccount->id }}"
+                                data-title="{{ $moneyAccount->name }}"
+                                data-meta="{{ $moneyAccount->chartOfAccount?->code }}{{ $moneyAccount->chartOfAccount ? ' — '.$moneyAccount->chartOfAccount->name : '' }}"
+                                data-status="{{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}"
+                                data-search-keywords="{{ $moneyAccount->kind }}"
+                                @selected((string) $selectedTransferToMoneyAccountId === (string) $moneyAccount->id)
+                            >{{ $moneyAccount->name }} — {{ $moneyKindLabels[$moneyAccount->kind] ?? $moneyAccount->kind }}</option>
+                        @endforeach
+                    </select>
+                    <small class="hg-field-help">Transfer entry will debit Pay To and credit Pay From.</small>
+                    @error('transfer_to_money_account_id')<small class="hg-field-error">{{ $message }}</small>@enderror
                 </div>
 
 

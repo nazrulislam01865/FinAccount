@@ -35,11 +35,13 @@ if (page) {
     const categoryInput = form?.querySelector('[data-transaction-category-input]');
     const settlement = document.getElementById('settlement_type');
     const money = document.getElementById('money_account_id');
+    const transferToMoney = document.getElementById('transfer_to_money_account_id');
     const party = document.getElementById('party_id');
     const amount = document.getElementById('amount');
     const paidAmount = document.getElementById('paid_amount');
     const dueAmountPreview = document.getElementById('due_amount_preview');
     const moneyField = document.getElementById('money-field');
+    const transferToField = document.getElementById('transfer-to-field');
     const partyField = document.getElementById('party-field');
     const autoPartyNotice = document.getElementById('auto-party-notice');
     const autoPartyLabel = document.getElementById('auto-party-label');
@@ -47,6 +49,7 @@ if (page) {
     const paidAmountField = document.getElementById('paid-amount-field');
     const dueAmountField = document.getElementById('due-amount-field');
     const moneyLabel = document.getElementById('money-label');
+    const transferToLabel = document.getElementById('transfer-to-label');
     const partyLabel = document.getElementById('party-label');
     const paidAmountLabel = document.getElementById('paid-amount-label');
     const paidAmountHelp = document.getElementById('paid-amount-help');
@@ -77,9 +80,13 @@ if (page) {
     let refreshSaleBusinessItems = () => {};
 
     const isCurrentSaleCategory = () => String(categoryInput?.value || '').toUpperCase() === 'SALE';
+    const currentTransactionFlow = () => head?.selectedOptions[0]?.dataset.direction || form?.dataset.transactionFlow || '';
+    const isTransferMode = () => currentTransactionFlow() === 'transfer';
 
     const syncCategoryFromHead = () => {
         const selectedCategory = head?.selectedOptions[0]?.dataset.category || '';
+        const selectedDirection = head?.selectedOptions[0]?.dataset.direction || '';
+        if (form && selectedDirection) form.dataset.transactionFlow = selectedDirection;
         if (!selectedCategory || !categoryInput || categoryInput.value === selectedCategory) return false;
         categoryInput.value = selectedCategory;
         return true;
@@ -216,6 +223,12 @@ if (page) {
         const allowed = selectedAllowedSettlements();
         const total = numericValue(amount);
 
+        if (isTransferMode()) {
+            if (paidAmount) paidAmount.value = total > 0 ? total.toFixed(amountScale()) : '';
+            if (settlement) settlement.value = 'CASH';
+            return 'CASH';
+        }
+
         if (dueSettlementMode) {
             if (paidAmount) paidAmount.value = total > 0 ? total.toFixed(amountScale()) : '';
             if (settlement) settlement.value = 'CASH';
@@ -258,13 +271,13 @@ if (page) {
         const total = numericValue(amount);
         const paid = numericValue(paidAmount);
         const due = Math.max(total - Math.min(paid, total), 0);
-        const canChoosePaidNow = allowed.length !== 1 || allowed[0] === 'PARTIAL';
-        const hasDue = type === 'CREDIT' || type === 'PARTIAL';
+        const canChoosePaidNow = !isTransferMode() && (allowed.length !== 1 || allowed[0] === 'PARTIAL');
+        const hasDue = !isTransferMode() && (type === 'CREDIT' || type === 'PARTIAL');
 
-        paidAmountField?.classList.toggle('hidden', dueSettlementMode || !canChoosePaidNow);
+        paidAmountField?.classList.toggle('hidden', dueSettlementMode || isTransferMode() || !canChoosePaidNow);
         if (paidAmount) {
-            paidAmount.required = !dueSettlementMode && canChoosePaidNow;
-            paidAmount.readOnly = dueSettlementMode || !canChoosePaidNow;
+            paidAmount.required = !dueSettlementMode && !isTransferMode() && canChoosePaidNow;
+            paidAmount.readOnly = dueSettlementMode || isTransferMode() || !canChoosePaidNow;
             paidAmount.max = amount?.value || '';
         }
 
@@ -353,14 +366,36 @@ if (page) {
 
         if (dueSettlementMode) {
             moneyField?.classList.toggle('hidden', !hasSelectedHead);
+            transferToField?.classList.add('hidden');
             if (money) money.required = hasSelectedHead;
+            if (transferToMoney) transferToMoney.required = false;
             partyField?.classList.add('hidden');
             autoPartyNotice?.classList.add('hidden');
             if (party) party.required = false;
             refreshSearchable(money);
+            refreshSearchable(transferToMoney);
             refreshSearchable(party);
             return;
         }
+
+        if (isTransferMode()) {
+            moneyField?.classList.toggle('hidden', !hasSelectedHead);
+            transferToField?.classList.toggle('hidden', !hasSelectedHead);
+            if (money) money.required = hasSelectedHead;
+            if (transferToMoney) transferToMoney.required = hasSelectedHead;
+            if (moneyLabel) moneyLabel.textContent = 'Pay From';
+            if (transferToLabel) transferToLabel.textContent = 'Pay To';
+            partyField?.classList.add('hidden');
+            autoPartyNotice?.classList.add('hidden');
+            if (party) party.required = false;
+            refreshSearchable(money);
+            refreshSearchable(transferToMoney);
+            refreshSearchable(party);
+            return;
+        }
+
+        transferToField?.classList.add('hidden');
+        if (transferToMoney) transferToMoney.required = false;
 
         // Show Receive In / Pay From as soon as a selected head can use a
         // paid amount. Once an amount is entered, the inferred settlement
@@ -394,6 +429,7 @@ if (page) {
             settlement_type: settlement.value,
             transaction_head_id: head.value,
             money_account_id: money?.value || '',
+            transfer_to_money_account_id: transferToMoney?.value || '',
             party_id: party?.value || '',
             amount: amount?.value || '0',
             paid_amount: paidAmount?.value || '',
@@ -420,13 +456,18 @@ if (page) {
             const showMoneyBeforeAmount = Boolean(head?.value)
                 && !totalEntered
                 && (allowed.includes('CASH') || allowed.includes('PARTIAL'));
-            const moneyRequired = Boolean(data.moneyRequired || showMoneyBeforeAmount);
+            const transferRequired = Boolean(data.transferRequired);
+            const moneyRequired = Boolean(data.moneyRequired || showMoneyBeforeAmount || transferRequired);
 
             moneyField?.classList.toggle('hidden', !moneyRequired);
+            transferToField?.classList.toggle('hidden', !transferRequired);
             if (money) money.required = moneyRequired;
+            if (transferToMoney) transferToMoney.required = transferRequired;
             if (moneyLabel && data.moneyLabel) moneyLabel.textContent = data.moneyLabel;
+            if (transferToLabel && data.transferToLabel) transferToLabel.textContent = data.transferToLabel;
             if (partyLabel && data.partyLabel) partyLabel.textContent = data.partyLabel;
             refreshSearchable(money);
+            refreshSearchable(transferToMoney);
             refreshSearchable(party);
             updatePaidAmountCopy();
 
@@ -435,7 +476,7 @@ if (page) {
                 refreshSearchable(party);
             }
 
-            if (dueSettlementMode) {
+            if (dueSettlementMode || transferRequired) {
                 partyField?.classList.add('hidden');
                 autoPartyNotice?.classList.add('hidden');
                 if (party) party.required = false;
@@ -461,6 +502,7 @@ if (page) {
         refreshPreview();
     });
     money?.addEventListener('change', refreshPreview);
+    transferToMoney?.addEventListener('change', refreshPreview);
     party?.addEventListener('change', refreshPreview);
     amount?.addEventListener('input', () => {
         syncAmountFields();
@@ -687,6 +729,14 @@ if (page) {
 
         calculateSaleFeed();
     };
+
+    form?.addEventListener('submit', (event) => {
+        if (!isTransferMode()) return;
+        if (money?.value && transferToMoney?.value && money.value === transferToMoney.value) {
+            event.preventDefault();
+            window.alert('Pay From and Pay To must be different accounts.');
+        }
+    });
 
     syncCategoryFromHead();
     initTransactionSaleFeed();

@@ -67,7 +67,7 @@ class TransactionRegisterController extends Controller
             return redirect()->route('feed.inventory.index')->with('error', 'Feed purchases and sales cannot be edited from the generic Transaction Entry page because stock and COGS must remain synchronized. Delete the latest feed movement and repost it instead.');
         }
 
-        $transaction->load(['transactionHead.postingAccount', 'moneyAccount', 'party', 'attachments.uploader']);
+        $transaction->load(['transactionHead.postingAccount', 'moneyAccount', 'transferToMoneyAccount', 'party', 'attachments.uploader']);
         $company = $request->user()->company;
         abort_unless($company, 404);
         $companyId = $company->id;
@@ -280,6 +280,7 @@ class TransactionRegisterController extends Controller
                 'Category',
                 'Head',
                 'Money',
+                'Transfer To',
                 'Party',
                 'Reference',
                 'Description',
@@ -299,6 +300,7 @@ class TransactionRegisterController extends Controller
                     $transaction->category,
                     $transaction->transactionHead?->name,
                     $transaction->moneyAccount?->name,
+                    $transaction->transferToMoneyAccount?->name,
                     $transaction->party?->name,
                     $transaction->reference,
                     $transaction->description,
@@ -333,7 +335,7 @@ class TransactionRegisterController extends Controller
         $category = $this->validatedCategoryFilter($request);
 
         return Transaction::query()
-            ->with(['transactionHead.postingAccount', 'moneyAccount', 'party', 'attachments', 'salesInvoice'])
+            ->with(['transactionHead.postingAccount', 'moneyAccount', 'transferToMoneyAccount', 'party', 'attachments', 'salesInvoice'])
             ->where('company_id', $companyId)
             ->when($category !== '', fn (Builder $query) => $query->where('category', $category))
             ->when($search !== '', function (Builder $query) use ($search): void {
@@ -344,7 +346,8 @@ class TransactionRegisterController extends Controller
                         ->orWhere('description', 'like', "%{$search}%")
                         ->orWhereHas('transactionHead', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('party', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('moneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"));
+                        ->orWhereHas('moneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('transferToMoneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"));
                 });
             });
     }
