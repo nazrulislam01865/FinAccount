@@ -39,6 +39,16 @@
             </div>
         @endif
 
+        @if(session('receipt_download_url'))
+            <div class="hg-notice hg-notice-success">
+                Receipt download should start automatically.
+                @if(session('receipt_show_url'))
+                    <a href="{{ session('receipt_show_url') }}">Open receipt</a>
+                @endif
+            </div>
+            <iframe src="{{ session('receipt_download_url') }}" style="display:none" title="Receipt download"></iframe>
+        @endif
+
         <div class="hg-grid hg-grid-3 hg-report-summary">
             <section class="hg-card hg-metric"><span class="label">Total Receivable</span><div class="value">{{ \App\Support\CompanyContext::money($report['total_receivable']) }}</div></section>
             <section class="hg-card hg-metric"><span class="label">Total Payable</span><div class="value">{{ \App\Support\CompanyContext::money($report['total_payable']) }}</div></section>

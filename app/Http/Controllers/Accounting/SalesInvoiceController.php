@@ -27,6 +27,9 @@ class SalesInvoiceController extends Controller
             'transaction.transactionHead',
             'transaction.moneyAccount',
             'transaction.party',
+            'transaction.saleLines',
+            'transaction.feedDocument.lines.item',
+            'transaction.feedDocument.warehouse',
             'company',
         ]);
 
@@ -44,6 +47,8 @@ class SalesInvoiceController extends Controller
             'transaction.moneyAccount',
             'transaction.party',
             'transaction.saleLines',
+            'transaction.feedDocument.lines.item',
+            'transaction.feedDocument.warehouse',
             'company',
             'party',
         ]);
@@ -68,11 +73,11 @@ class SalesInvoiceController extends Controller
         $invoice = $this->salesInvoiceService->syncForTransaction($transaction, $company);
 
         if (! $invoice) {
-            return back()->with('error', 'Invoice was not generated because this is not a posted sale transaction.');
+            return back()->with('error', 'Invoice was not generated because this is not a posted sale or purchase transaction.');
         }
 
         return back()
-            ->with('success', 'Sales invoice '.$invoice->invoice_no.' generated and download started.')
+            ->with('success', $invoice->title.' '.$invoice->invoice_no.' generated and download started.')
             ->with('invoice_download_url', route('sales-invoices.download', $invoice))
             ->with('invoice_show_url', route('sales-invoices.show', $invoice));
     }

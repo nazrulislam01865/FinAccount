@@ -522,11 +522,14 @@ class TransactionEntryController extends Controller
             $request->user(),
         );
 
-        $transaction->loadMissing('salesInvoice');
+        $transaction->loadMissing(['salesInvoice', 'paymentReceipt']);
 
         $message = 'Transaction '.$transaction->voucher_no.' posted successfully.';
         if ($transaction->salesInvoice) {
-            $message .= ' Sales invoice '.$transaction->salesInvoice->invoice_no.' generated and download started.';
+            $message .= ' '.$transaction->salesInvoice->title.' '.$transaction->salesInvoice->invoice_no.' generated and download started.';
+        }
+        if ($transaction->paymentReceipt) {
+            $message .= ' Receipt '.$transaction->paymentReceipt->receipt_no.' generated and download started.';
         }
 
         return $this->redirectAfterStore($request, $transaction, $message);
@@ -541,6 +544,12 @@ class TransactionEntryController extends Controller
                 $redirect
                     ->with('invoice_download_url', route('sales-invoices.download', $transaction->salesInvoice))
                     ->with('invoice_show_url', route('sales-invoices.show', $transaction->salesInvoice));
+            }
+
+            if ($transaction->paymentReceipt) {
+                $redirect
+                    ->with('receipt_download_url', route('payment-receipts.download', $transaction->paymentReceipt))
+                    ->with('receipt_show_url', route('payment-receipts.show', $transaction->paymentReceipt));
             }
 
             return $redirect;

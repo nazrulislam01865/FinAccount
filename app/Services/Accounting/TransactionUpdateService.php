@@ -23,6 +23,7 @@ class TransactionUpdateService
         private readonly TransactionSettlementService $settlementService,
         private readonly RuleMatcher $ruleMatcher,
         private readonly SalesInvoiceService $salesInvoiceService,
+        private readonly PaymentReceiptService $paymentReceiptService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
         private readonly TransactionPartyResolver $partyResolver,
     ) {}
@@ -204,10 +205,11 @@ class TransactionUpdateService
             }
 
             $this->salesInvoiceService->syncForTransaction($lockedTransaction, $company);
+            $this->paymentReceiptService->syncForTransaction($lockedTransaction, $company);
 
             return $lockedTransaction->fresh([
                 'transactionHead', 'moneyAccount', 'transferToMoneyAccount', 'party',
-                'journalEntry.lines.chartOfAccount', 'salesInvoice',
+                'journalEntry.lines.chartOfAccount', 'salesInvoice', 'paymentReceipt',
             ]);
         }, attempts: 5);
     }

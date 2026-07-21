@@ -28,6 +28,16 @@
         <iframe src="{{ session('invoice_download_url') }}" style="display:none" title="Invoice download"></iframe>
     @endif
 
+    @if(session('receipt_download_url'))
+        <div class="hg-notice hg-notice-success">
+            Receipt download should start automatically.
+            @if(session('receipt_show_url'))
+                <a href="{{ session('receipt_show_url') }}">Open receipt</a>
+            @endif
+        </div>
+        <iframe src="{{ session('receipt_download_url') }}" style="display:none" title="Receipt download"></iframe>
+    @endif
+
     <form method="GET" action="{{ route('transactions.index') }}" class="hg-toolbar" id="transaction-filter-form">
         <input
             class="hg-search"
@@ -121,16 +131,28 @@
                                 @if($transaction->salesInvoice)
                                     <br><small class="hg-muted">Invoice: {{ ucfirst($transaction->salesInvoice->status) }}</small>
                                 @endif
+                                @if($transaction->paymentReceipt)
+                                    <br><small class="hg-muted">Receipt: {{ $transaction->paymentReceipt->receipt_no }}</small>
+                                @endif
                             </td>
                             <td>
                                 <div class="hg-actions">
                                     @if($transaction->salesInvoice)
                                         <a class="hg-btn hg-btn-small hg-btn-soft" href="{{ route('sales-invoices.show', $transaction->salesInvoice) }}">Invoice</a>
                                         <a class="hg-btn hg-btn-small" href="{{ route('sales-invoices.download', $transaction->salesInvoice) }}">Download</a>
-                                    @elseif($canManageTransactions && $transaction->category === \App\Support\TransactionTypes::SALE)
+                                    @elseif($canManageTransactions && in_array($transaction->category, [\App\Support\TransactionTypes::SALE, \App\Support\TransactionTypes::PURCHASE, \App\Support\TransactionTypes::ASSET_PURCHASE], true))
                                         <form method="POST" action="{{ route('transactions.invoice.generate', $transaction) }}">
                                             @csrf
                                             <button class="hg-btn hg-btn-small hg-btn-soft" type="submit">Generate Invoice</button>
+                                        </form>
+                                    @endif
+                                    @if($transaction->paymentReceipt)
+                                        <a class="hg-btn hg-btn-small hg-btn-soft" href="{{ route('payment-receipts.show', $transaction->paymentReceipt) }}">Receipt</a>
+                                        <a class="hg-btn hg-btn-small" href="{{ route('payment-receipts.download', $transaction->paymentReceipt) }}">Receipt PDF</a>
+                                    @elseif($canManageTransactions && in_array($transaction->category, [\App\Support\TransactionTypes::CUSTOMER_COLLECTION, \App\Support\TransactionTypes::SUPPLIER_PAYMENT], true))
+                                        <form method="POST" action="{{ route('transactions.receipt.generate', $transaction) }}">
+                                            @csrf
+                                            <button class="hg-btn hg-btn-small hg-btn-soft" type="submit">Generate Receipt</button>
                                         </form>
                                     @endif
                                     @if($canManageTransactions)

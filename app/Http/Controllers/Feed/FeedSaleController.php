@@ -101,9 +101,18 @@ class FeedSaleController extends Controller
             $request->user(),
         );
 
-        return redirect()->route('feed.inventory.index')->with(
+        $document->load('transaction.salesInvoice');
+
+        $redirect = redirect()->route('feed.inventory.index')->with(
             'success',
-            'Feed sale '.$document->transaction->voucher_no.' posted. Stock, sales income, receivable/payment, and cost of goods sold were updated together.',
+            'Feed sale '.$document->transaction->voucher_no.' posted. Stock, sales income, receivable/payment, and cost of goods sold were updated together.'.($document->transaction->salesInvoice ? ' Invoice '.$document->transaction->salesInvoice->invoice_no.' generated and download started.' : ''),
         );
+
+        if ($document->transaction->salesInvoice) {
+            $redirect->with('invoice_download_url', route('sales-invoices.download', $document->transaction->salesInvoice))
+                ->with('invoice_show_url', route('sales-invoices.show', $document->transaction->salesInvoice));
+        }
+
+        return $redirect;
     }
 }

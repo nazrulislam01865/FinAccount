@@ -92,9 +92,22 @@ class FeedPurchaseController extends Controller
             $request->user(),
         );
 
-        return redirect()->route('feed.inventory.index')
-            ->with('success', 'Feed purchase '.$document->transaction->voucher_no.' posted. Stock and the accounting journal were updated together.')
+        $document->load('transaction.salesInvoice');
+
+        $redirect = redirect()->route('feed.inventory.index')
+            ->with(
+                'success',
+                'Feed purchase '.$document->transaction->voucher_no.' posted. Stock and the accounting journal were updated together.'
+                    .($document->transaction->salesInvoice ? ' Invoice '.$document->transaction->salesInvoice->invoice_no.' generated and download started.' : ''),
+            )
             ->with('feed_receipt_url', route('feed.purchases.receipt', $document));
+
+        if ($document->transaction->salesInvoice) {
+            $redirect->with('invoice_download_url', route('sales-invoices.download', $document->transaction->salesInvoice))
+                ->with('invoice_show_url', route('sales-invoices.show', $document->transaction->salesInvoice));
+        }
+
+        return $redirect;
     }
 
     public function receipt(Request $request, FeedDocument $feedDocument): View
@@ -114,6 +127,7 @@ class FeedPurchaseController extends Controller
 
         return view('feed.purchases.receipt', [
             'document' => $feedDocument,
+            'company' => $request->user()->company,
         ]);
     }
 }

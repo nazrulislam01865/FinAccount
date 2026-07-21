@@ -26,6 +26,7 @@ class TransactionPostingService
         private readonly TransactionSettlementService $settlementService,
         private readonly RuleMatcher $ruleMatcher,
         private readonly SalesInvoiceService $salesInvoiceService,
+        private readonly PaymentReceiptService $paymentReceiptService,
         private readonly CompanyAccountingPeriodService $accountingPeriodService,
         private readonly TransactionPartyResolver $partyResolver,
     ) {}
@@ -262,10 +263,11 @@ class TransactionPostingService
             }
 
             $this->salesInvoiceService->syncForTransaction($transaction, $company);
+            $this->paymentReceiptService->syncForTransaction($transaction, $company);
 
             return $transaction->load([
                 'transactionHead', 'moneyAccount', 'transferToMoneyAccount', 'party',
-                'journalEntry.lines.chartOfAccount', 'salesInvoice',
+                'journalEntry.lines.chartOfAccount', 'salesInvoice', 'paymentReceipt',
             ]);
         }, attempts: 5);
     }
@@ -317,7 +319,7 @@ class TransactionPostingService
 
         return $transaction->load([
             'transactionHead', 'moneyAccount', 'transferToMoneyAccount', 'party',
-            'journalEntry.lines.chartOfAccount', 'salesInvoice',
+            'journalEntry.lines.chartOfAccount', 'salesInvoice', 'paymentReceipt',
         ]);
     }
 

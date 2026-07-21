@@ -13,7 +13,7 @@ class SalesInvoiceService
     public function syncForTransaction(Transaction $transaction, Company $company): ?SalesInvoice
     {
         $transaction->loadMissing([
-            'transactionHead',
+            'transactionHead.accountingRule',
             'moneyAccount',
             'party',
             'salesInvoice',
@@ -35,7 +35,7 @@ class SalesInvoiceService
             'transaction_id' => $transaction->id,
             'party_id' => $transaction->party_id,
             'invoice_no' => $invoiceNo,
-            'title' => 'Sales Invoice',
+            'title' => $this->invoiceTitle($transaction),
             'invoice_date' => $transaction->transaction_date,
             'due_date' => $transaction->due_date,
             'subtotal' => $totalAmount,
@@ -65,8 +65,12 @@ class SalesInvoiceService
 
     public function shouldGenerate(Transaction $transaction): bool
     {
-        return $transaction->category === TransactionTypes::SALE
-            && $transaction->status === 'posted';
+        return $transaction->status === 'posted'
+            && in_array($transaction->category, [
+                TransactionTypes::SALE,
+                TransactionTypes::PURCHASE,
+                TransactionTypes::ASSET_PURCHASE,
+            ], true);
     }
 
     /** @return array{0:string,1:string} */
@@ -97,11 +101,30 @@ class SalesInvoiceService
         };
     }
 
+
+    private function invoiceTitle(Transaction $transaction): string
+    {
+        $ruleTitle = trim((string) ($transaction->transactionHead?->accountingRule?->invoice_title ?? ''));
+        if ($ruleTitle !== '') {
+            return $ruleTitle;
+        }
+
+        return match ($transaction->category) {
+            TransactionTypes::PURCHASE, TransactionTypes::ASSET_PURCHASE => 'Purchase Invoice',
+            default => 'Sales Invoice',
+        };
+    }
+
     private function invoiceNo(Transaction $transaction): string
     {
         $voucherNo = preg_replace('/[^A-Za-z0-9\-]/', '-', (string) $transaction->voucher_no);
 
-        return 'INV-'.$voucherNo;
+        $prefix = match ($transaction->category) {
+            TransactionTypes::PURCHASE, TransactionTypes::ASSET_PURCHASE => 'PINV',
+            default => 'INV',
+        };
+
+        return $prefix.'-'.$voucherNo;
     }
 
     /** @return array<string, mixed>|null */
@@ -109,9 +132,12 @@ class SalesInvoiceService
     {
         if (! $transaction->party) {
             return [
-                'name' => 'Cash Customer',
+                'name' => $transaction->category === TransactionTypes::SALE ? 'Cash Customer' : 'Supplier',
                 'code' => null,
                 'type' => null,
+                'phone' => null,
+                'email' => null,
+                'address' => null,
             ];
         }
 
@@ -119,6 +145,9 @@ class SalesInvoiceService
             'name' => $transaction->party->name,
             'code' => $transaction->party->code,
             'type' => $transaction->party->type,
+            'phone' => $transaction->party->phone,
+            'email' => $transaction->party->email,
+            'address' => $transaction->party->address,
         ];
     }
 

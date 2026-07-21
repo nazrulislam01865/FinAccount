@@ -225,11 +225,14 @@ class TransactionRegisterController extends Controller
             $request->user(),
         );
 
-        $updated->loadMissing('salesInvoice');
+        $updated->loadMissing(['salesInvoice', 'paymentReceipt']);
 
         $message = 'Transaction '.$updated->voucher_no.' updated successfully.';
         if ($updated->salesInvoice) {
-            $message .= ' Sales invoice '.$updated->salesInvoice->invoice_no.' updated and download started.';
+            $message .= ' '.$updated->salesInvoice->title.' '.$updated->salesInvoice->invoice_no.' updated and download started.';
+        }
+        if ($updated->paymentReceipt) {
+            $message .= ' Receipt '.$updated->paymentReceipt->receipt_no.' updated and download started.';
         }
 
         if ($request->user()->canAccounting('transactions.view')) {
@@ -239,6 +242,12 @@ class TransactionRegisterController extends Controller
                 $redirect
                     ->with('invoice_download_url', route('sales-invoices.download', $updated->salesInvoice))
                     ->with('invoice_show_url', route('sales-invoices.show', $updated->salesInvoice));
+            }
+
+            if ($updated->paymentReceipt) {
+                $redirect
+                    ->with('receipt_download_url', route('payment-receipts.download', $updated->paymentReceipt))
+                    ->with('receipt_show_url', route('payment-receipts.show', $updated->paymentReceipt));
             }
 
             return $redirect;
@@ -295,6 +304,7 @@ class TransactionRegisterController extends Controller
                 'Due Date',
                 'Invoice No',
                 'Invoice Status',
+                'Receipt No',
             ]);
 
             foreach ($transactions as $transaction) {
@@ -315,6 +325,7 @@ class TransactionRegisterController extends Controller
                     $transaction->due_date?->format('Y-m-d'),
                     $transaction->salesInvoice?->invoice_no,
                     $transaction->salesInvoice?->status,
+                    $transaction->paymentReceipt?->receipt_no,
                 ]);
             }
 
@@ -339,7 +350,7 @@ class TransactionRegisterController extends Controller
         $category = $this->validatedCategoryFilter($request);
 
         return Transaction::query()
-            ->with(['transactionHead.postingAccount', 'moneyAccount', 'transferToMoneyAccount', 'party', 'attachments', 'salesInvoice'])
+            ->with(['transactionHead.postingAccount', 'moneyAccount', 'transferToMoneyAccount', 'party', 'attachments', 'salesInvoice', 'paymentReceipt'])
             ->where('company_id', $companyId)
             ->when($category !== '', fn (Builder $query) => $query->where('category', $category))
             ->when($search !== '', function (Builder $query) use ($search): void {

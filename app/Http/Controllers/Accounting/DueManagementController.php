@@ -155,9 +155,19 @@ class DueManagementController extends Controller
             'request_token' => (string) Str::uuid(),
         ], $request->user());
 
-        return redirect()
+        $transaction->loadMissing('paymentReceipt');
+
+        $redirect = redirect()
             ->route('reports.due-management', $request->only(['as_of_date', 'search', 'due_type']))
-            ->with('success', ($dueType === 'Receivable' ? 'Customer payment collected' : 'Supplier payment posted').' as voucher '.$transaction->voucher_no.'.');
+            ->with('success', ($dueType === 'Receivable' ? 'Customer payment collected' : 'Supplier payment posted').' as voucher '.$transaction->voucher_no.'.'.($transaction->paymentReceipt ? ' Receipt '.$transaction->paymentReceipt->receipt_no.' generated and download started.' : ''));
+
+        if ($transaction->paymentReceipt) {
+            $redirect
+                ->with('receipt_download_url', route('payment-receipts.download', $transaction->paymentReceipt))
+                ->with('receipt_show_url', route('payment-receipts.show', $transaction->paymentReceipt));
+        }
+
+        return $redirect;
     }
 
     private function validatePartyAccountMapping(Party $party, ChartOfAccount $account, string $dueType): void

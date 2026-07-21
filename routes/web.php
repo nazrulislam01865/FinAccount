@@ -17,6 +17,7 @@ use App\Http\Controllers\Accounting\MasterDataController;
 use App\Http\Controllers\Accounting\MoneyAccountController;
 use App\Http\Controllers\Accounting\NotificationController;
 use App\Http\Controllers\Accounting\OpeningBalanceController;
+use App\Http\Controllers\Accounting\PaymentReceiptController;
 use App\Http\Controllers\Accounting\ProfileController;
 use App\Http\Controllers\Accounting\PartyController;
 use App\Http\Controllers\Accounting\SalesInvoiceController;
@@ -130,8 +131,14 @@ Route::middleware(['session.timeout', 'auth', 'verified', 'account.active', 'com
         ->middleware('accounting.permission:transactions.view')->name('sales-invoices.show');
     Route::get('/sales-invoices/{salesInvoice}/download', [SalesInvoiceController::class, 'download'])
         ->middleware('accounting.permission:transactions.view')->name('sales-invoices.download');
+    Route::get('/payment-receipts/{paymentReceipt}', [PaymentReceiptController::class, 'show'])
+        ->middleware('accounting.permission:transactions.view')->name('payment-receipts.show');
+    Route::get('/payment-receipts/{paymentReceipt}/download', [PaymentReceiptController::class, 'download'])
+        ->middleware('accounting.permission:transactions.view')->name('payment-receipts.download');
     Route::post('/transactions/{transaction}/invoice', [SalesInvoiceController::class, 'generate'])
         ->middleware(['accounting.permission:transactions.view', 'accounting.permission:transactions.manage'])->name('transactions.invoice.generate');
+    Route::post('/transactions/{transaction}/receipt', [PaymentReceiptController::class, 'generate'])
+        ->middleware(['accounting.permission:transactions.view', 'accounting.permission:transactions.manage'])->name('transactions.receipt.generate');
     Route::delete('/transactions/{transaction}/attachments/{attachment}', [TransactionAttachmentController::class, 'destroy'])
         ->middleware(['accounting.permission:transactions.view', 'accounting.permission:transactions.manage'])->name('transactions.attachments.destroy');
 
