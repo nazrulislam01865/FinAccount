@@ -143,7 +143,9 @@ class UnifiedDocumentPdfService
             );
         }
 
-        return $this->buildPdf($pageContents, $fontRegular, $fontBold, $fontItalic, $logoObject);
+        $websiteUrl = $this->normalizeWebsiteUrl((string) ($company['website_url'] ?? $company['website'] ?? ''));
+
+        return $this->buildPdf($pageContents, $fontRegular, $fontBold, $fontItalic, $logoObject, $websiteUrl);
     }
 
     /**
@@ -484,13 +486,27 @@ class UnifiedDocumentPdfService
     }
 
     /** @param array<int,string> $pageContents */
-    private function buildPdf(array $pageContents, int $fontRegular, int $fontBold, int $fontItalic, ?int $logoObject): string
+    private function buildPdf(array $pageContents, int $fontRegular, int $fontBold, int $fontItalic, ?int $logoObject, string $websiteUrl = ''): string
     {
         $xObject = $logoObject ? ' /XObject << /Logo '.$logoObject.' 0 R >>' : '';
+        $websiteAnnotation = null;
+        if ($websiteUrl !== '') {
+            // The printed website sits on the third company-detail line. Add a
+            // real PDF URI annotation so Chrome/Adobe do not rely on automatic
+            // text detection or follow the www redirect first.
+            $websiteAnnotation = $this->addObject(
+                '<< /Type /Annot /Subtype /Link /Rect [152 704 321 722] /Border [0 0 0] '
+                .'/A << /S /URI /URI ('.$this->escape($websiteUrl).') >> >>'
+            );
+        }
+
         $pageObjects = [];
-        foreach ($pageContents as $pageContent) {
+        foreach ($pageContents as $pageIndex => $pageContent) {
             $contentObject = $this->addStreamObject($pageContent, '<<');
-            $pageObjects[] = $this->addObject('<< /Type /Page /Parent __PAGES__ 0 R /MediaBox [0 0 '.self::PAGE_WIDTH.' '.self::PAGE_HEIGHT.'] /Resources << /Font << /F1 '.$fontRegular.' 0 R /F2 '.$fontBold.' 0 R /F3 '.$fontItalic.' 0 R >>'.$xObject.' >> /Contents '.$contentObject.' 0 R >>');
+            $annots = $pageIndex === 0 && $websiteAnnotation
+                ? ' /Annots ['.$websiteAnnotation.' 0 R]'
+                : '';
+            $pageObjects[] = $this->addObject('<< /Type /Page /Parent __PAGES__ 0 R /MediaBox [0 0 '.self::PAGE_WIDTH.' '.self::PAGE_HEIGHT.'] /Resources << /Font << /F1 '.$fontRegular.' 0 R /F2 '.$fontBold.' 0 R /F3 '.$fontItalic.' 0 R >>'.$xObject.' >> /Contents '.$contentObject.' 0 R'.$annots.' >>');
         }
         $kids = implode(' ', array_map(static fn (int $id): string => $id.' 0 R', $pageObjects));
         $pagesObject = $this->addObject('<< /Type /Pages /Kids ['.$kids.'] /Count '.count($pageObjects).' >>');
@@ -725,6 +741,20 @@ class UnifiedDocumentPdfService
         $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT//IGNORE', $text);
 
         return $converted === false ? preg_replace('/[^\x20-\x7E]/', '', $text) ?: '' : $converted;
+    }
+
+    private function normalizeWebsiteUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+
+        if (! preg_match('#^https?://#i', $url)) {
+            $url = 'https://'.ltrim($url, '/');
+        }
+
+        return $url;
     }
 
     private function num(float|int $value): string

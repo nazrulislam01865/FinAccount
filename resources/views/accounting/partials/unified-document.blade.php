@@ -28,7 +28,14 @@
                 <h2>{{ $company['name'] ?? 'BASHIR AGRO' }}</h2>
                 @if(!empty($company['address']))<p>{{ $company['address'] }}</p>@endif
                 @if(!empty($company['phone']))<p>Phone: {{ $company['phone'] }}</p>@endif
-                @if(!empty($company['website']))<p>{{ $company['website'] }}</p>@endif
+                @if(!empty($company['website']))
+                    <p>
+                        <a class="ba-u-website-link"
+                           href="{{ $company['website_url'] ?? $company['website'] }}"
+                           target="_blank"
+                           rel="noopener noreferrer">{{ $company['website'] }}</a>
+                    </p>
+                @endif
             </div>
         </div>
 

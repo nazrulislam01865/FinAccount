@@ -19,10 +19,25 @@ class PrintedDocumentBrand
             // Company email is intentionally excluded from printed documents.
             'email' => null,
             'website' => (string) ($fixed['website'] ?? ''),
+            'website_url' => self::normalizeWebsiteUrl((string) ($fixed['website_url'] ?? $fixed['website'] ?? '')),
             // Use the bundled Bashir Agro logo on every printed document so cloud
             // storage paths, stale company uploads, or missing symlinks cannot replace it.
             'logo_path' => (string) ($fixed['logo_path'] ?? 'images/receipts/bashir-agro-favicon.jpg'),
         ]);
+    }
+
+    private static function normalizeWebsiteUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+
+        if (! preg_match('#^https?://#i', $url)) {
+            $url = 'https://'.ltrim($url, '/');
+        }
+
+        return $url;
     }
 
     public static function logoFilePath(mixed $path = null): ?string

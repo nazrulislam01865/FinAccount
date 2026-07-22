@@ -8,7 +8,7 @@
 .ba-u-logo img{display:block;width:100%;height:100%;object-fit:contain}
 .ba-u-logo span{width:80px;height:80px;display:grid;place-items:center;border:4px solid #111;font-size:27px;font-weight:900}
 .ba-u-company-divider{width:1px;height:128px;background:#6b7280}
-.ba-u-company-copy{min-width:0}.ba-u-company-copy h2{margin:6px 0 9px;font-size:25px;line-height:1.06;font-weight:900;text-transform:uppercase;overflow-wrap:anywhere}.ba-u-company-copy p{margin:4px 0;font-size:14px;line-height:1.22;overflow-wrap:anywhere}
+.ba-u-company-copy{min-width:0}.ba-u-website-link{color:inherit;text-decoration:none;overflow-wrap:anywhere}.ba-u-website-link:hover{text-decoration:underline}.ba-u-company-copy h2{margin:6px 0 9px;font-size:25px;line-height:1.06;font-weight:900;text-transform:uppercase;overflow-wrap:anywhere}.ba-u-company-copy p{margin:4px 0;font-size:14px;line-height:1.22;overflow-wrap:anywhere}
 .ba-u-meta{min-width:0;width:100%}.ba-u-meta h1{margin:0 0 24px;font-size:36px;line-height:1;font-weight:900;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap}.ba-u-meta h1.ba-u-title--long{font-size:29px}.ba-u-meta h1.ba-u-title--xlong{font-size:25px;white-space:normal}
 .ba-u-meta-row{display:grid;grid-template-columns:132px 12px minmax(0,1fr);gap:8px;min-height:34px;align-items:end;font-size:15px}.ba-u-meta-row span,.ba-u-meta-row b{font-weight:900;white-space:nowrap}.ba-u-meta-row strong{min-width:0;min-height:24px;padding:0 0 5px;border-bottom:1.5px solid #9ca3af;font-weight:400;white-space:normal;overflow-wrap:anywhere}
 .ba-u-rule{height:1.5px;margin:30px 0 25px;background:#9ca3af;flex:0 0 auto}
