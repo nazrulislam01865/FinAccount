@@ -14,6 +14,7 @@
         <form method="POST" action="{{ route('system.users.store') }}" class="hg-form-grid" data-draft-form data-draft-key="system-users.create" data-draft-title="Create User">
             @csrf
             <div class="hg-field"><label>Name <span class="hg-required">*</span></label><input name="name" value="{{ old('name') }}" required maxlength="255"></div>
+            <div class="hg-field"><label>Position in Company</label><input name="position" value="{{ old('position') }}" maxlength="255" placeholder="Optional"></div>
             <div class="hg-field"><label>Email <span class="hg-required">*</span></label><input name="email" type="email" value="{{ old('email') }}" required maxlength="255"></div>
             <div class="hg-field"><label>Role <span class="hg-required">*</span></label><select name="accounting_role_id" required><option value="">Select role</option>@foreach($roleOptions as $role)<option value="{{ $role->id }}" @selected((string)old('accounting_role_id') === (string)$role->id)>{{ $role->name }}</option>@endforeach</select></div>
             <div class="hg-field"><label>Account Status <span class="hg-required">*</span></label><select name="account_status" required>@foreach($accountStatusOptions as $value => $label)<option value="{{ $value }}" @selected(old('account_status', 'active') === $value)>{{ $label }}</option>@endforeach</select></div>
@@ -33,7 +34,7 @@
                 <tbody>
                 @forelse($users as $user)
                     <tr>
-                        <td><strong>{{ $user->name }}</strong><br><span class="hg-muted">{{ $user->email }}</span></td>
+                        <td><strong>{{ $user->name }}</strong>@if(filled($user->position))<br><span class="hg-muted">{{ $user->position }}</span>@endif<br><span class="hg-muted">{{ $user->email }}</span></td>
                         <td>{{ $user->accountingRole?->name ?? 'No Role' }}</td>
                         <td><span class="hg-badge {{ $user->isAccountActive() ? 'sales' : 'payment' }}">{{ $user->accountStatusLabel() }}</span></td>
                         <td>{{ $user->created_at?->format('d M Y h:i A') }}</td>
@@ -44,6 +45,7 @@
                                     $userEditPayload = [
                                         'id' => $user->id,
                                         'name' => $user->name,
+                                        'position' => $user->position,
                                         'email' => $user->email,
                                         'role' => $user->accounting_role_id,
                                         'status' => $user->accountStatusValue(),
@@ -124,6 +126,7 @@
                         </div>
                         <div class="hg-user-edit-grid">
                             <div class="hg-field"><label for="editUserName">Name <span class="hg-required">*</span></label><input id="editUserName" name="name" required maxlength="255" autocomplete="name"></div>
+                            <div class="hg-field"><label for="editUserPosition">Position in Company</label><input id="editUserPosition" name="position" maxlength="255" placeholder="Optional"></div>
                             <div class="hg-field"><label for="editUserEmail">Email <span class="hg-required">*</span></label><input id="editUserEmail" name="email" type="email" required maxlength="255" autocomplete="email"></div>
                         </div>
                     </div>
@@ -173,6 +176,7 @@
             form.reset();
             form.action = data.url || '';
             document.getElementById('editUserName').value = data.name || '';
+            document.getElementById('editUserPosition').value = data.position || '';
             document.getElementById('editUserEmail').value = data.email || '';
             const role = document.getElementById('editUserRole');
             const status = document.getElementById('editUserStatus');

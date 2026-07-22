@@ -4,6 +4,7 @@ namespace App\Services\Accounting;
 
 use App\Models\PaymentReceipt;
 use App\Support\TransactionTypes;
+use Carbon\CarbonInterface;
 
 class PaymentReceiptPdfService
 {
@@ -11,7 +12,7 @@ class PaymentReceiptPdfService
         private readonly UnifiedDocumentPdfService $renderer,
     ) {}
 
-    public function render(PaymentReceipt $receipt): string
+    public function render(PaymentReceipt $receipt, ?CarbonInterface $downloadedAt = null): string
     {
         $receipt->loadMissing([
             'transaction.transactionHead',
@@ -31,7 +32,7 @@ class PaymentReceiptPdfService
         $amount = (float) $receipt->amount;
         $currency = strtoupper((string) ($company['currency_code'] ?: 'TK'));
         $currency = $currency === 'BDT' ? 'TK' : $currency;
-        $receiptDate = $receipt->receipt_date?->format('M d, Y') ?: '-';
+        $receiptDate = ($downloadedAt ?: now())->format('M d, Y');
 
         $paymentNames = $transaction?->payments?->pluck('moneyAccount.name')->filter()->unique()->values() ?? collect();
         $paymentMethod = $paymentNames->isNotEmpty()
@@ -40,11 +41,12 @@ class PaymentReceiptPdfService
 
         $reference = (string) ($transaction?->reference ?: ($transaction?->voucher_no ?: '-'));
         $purpose = (string) ($transaction?->description ?: ($isCollection ? 'Customer due collected' : 'Supplier due paid'));
-        $remarks = trim(implode(' | ', array_filter([
-            $transaction?->displayHeadName('-'),
+        $remarkLines = array_values(array_filter([
+            $transaction?->displayHeadName($isCollection ? 'Customer Due Collection' : 'Supplier Due Payment'),
             $receipt->previous_due_amount !== null ? 'Previous Due: '.number_format((float) $receipt->previous_due_amount, 2) : null,
             $receipt->remaining_due_amount !== null ? 'Remaining Due: '.number_format((float) $receipt->remaining_due_amount, 2) : null,
-        ]))) ?: '-';
+        ], static fn ($value) => filled($value)));
+        $remarks = $remarkLines !== [] ? implode("\n", $remarkLines) : '-';
 
         return $this->renderer->render([
             'title' => 'MONEY RECEIPT',
@@ -61,6 +63,7 @@ class PaymentReceiptPdfService
             'lines' => [[
                 'description' => $isCollection ? 'Due collection received from customer' : 'Due payment made to supplier',
                 'remarks' => $remarks,
+                'remarks_lines' => $remarkLines,
                 'amount' => $amount,
             ]],
             'currency_label' => $currency,
@@ -74,9 +77,8 @@ class PaymentReceiptPdfService
             'amount_words' => $this->amountWords($amount),
             'notes' => 'Thank you for your business.',
             'prepared_name' => (string) ($transaction?->creator?->name ?: 'System User'),
-            'prepared_position' => 'Accounts Executive',
+            'prepared_position' => (string) ($transaction?->creator?->position ?: ''),
             'prepared_date' => $receiptDate,
-            'prepared_email' => (string) ($transaction?->creator?->email ?: ($company['email'] ?? '')),
             'footer' => 'This receipt is electronically generated and may not require a physical signature.',
         ]);
     }

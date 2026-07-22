@@ -26,7 +26,9 @@ class PaymentReceiptController extends Controller
         $paymentReceipt->load([
             'transaction.transactionHead',
             'transaction.moneyAccount',
+            'transaction.payments.moneyAccount',
             'transaction.party',
+            'transaction.creator',
             'company',
             'party',
         ]);
@@ -63,12 +65,14 @@ class PaymentReceiptController extends Controller
         $paymentReceipt->load([
             'transaction.transactionHead',
             'transaction.moneyAccount',
+            'transaction.payments.moneyAccount',
             'transaction.party',
+            'transaction.creator',
             'company',
             'party',
         ]);
 
-        $pdf = $this->paymentReceiptPdfService->render($paymentReceipt);
+        $pdf = $this->paymentReceiptPdfService->render($paymentReceipt, now());
         $filename = preg_replace('/[^A-Za-z0-9_\-]/', '-', $paymentReceipt->receipt_no).'.pdf';
 
         return response($pdf, 200, [

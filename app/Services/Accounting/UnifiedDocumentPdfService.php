@@ -2,7 +2,7 @@
 
 namespace App\Services\Accounting;
 
-use Illuminate\Support\Facades\Storage;
+use App\Support\PrintedDocumentBrand;
 
 class UnifiedDocumentPdfService
 {
@@ -26,29 +26,14 @@ class UnifiedDocumentPdfService
      *   amount_words:string,
      *   notes:string,
      *   prepared_name:string,
-     *   prepared_position:string,
+     *   prepared_position?:string,
      *   prepared_date:string,
-     *   prepared_email?:string,
      *   footer?:string
      * } $document
      */
     public function render(array $document): string
     {
-        $company = (array) ($document['company'] ?? []);
-
-        // Use one fixed company header for every generated PDF. The logo path
-        // remains supplied by the current company, while all printed letters
-        // are controlled from config/document_company.php.
-        $printedCompany = (array) config('document_company', []);
-        $company = array_merge($company, array_filter([
-            'name' => $printedCompany['name'] ?? 'BASHIR AGRO',
-            'short_name' => $printedCompany['short_name'] ?? 'BA',
-            'address' => $printedCompany['address'] ?? 'Mymensingh, Bangladesh',
-            'phone' => $printedCompany['phone'] ?? '+8801700000000',
-            'email' => $printedCompany['email'] ?? 'info@bashiragro.com',
-            'website' => $printedCompany['website'] ?? 'www.Bashiragro.com',
-        ], static fn ($value): bool => $value !== null && $value !== ''));
-
+        $company = PrintedDocumentBrand::company((array) ($document['company'] ?? []));
         $logo = $this->logoData($company['logo_path'] ?? null);
 
         $this->objects = [];
@@ -103,7 +88,6 @@ class UnifiedDocumentPdfService
         $companyLines = array_values(array_filter([
             trim((string) ($company['address'] ?? '')),
             trim((string) ($company['phone'] ?? '')) !== '' ? 'Phone: '.trim((string) $company['phone']) : '',
-            trim((string) ($company['email'] ?? '')) !== '' ? 'Email: '.trim((string) $company['email']) : '',
             trim((string) ($company['website'] ?? '')),
         ], static fn (string $value): bool => $value !== ''));
         $companyY = 738.0;
@@ -178,8 +162,8 @@ class UnifiedDocumentPdfService
         $rowCount = max(4, count($lines));
         $tableTop = 505.0;
         $headerH = 24.0;
-        $rowBudget = 164.0;
-        $rowH = max(13.0, min(28.0, floor($rowBudget / $rowCount)));
+        $rowBudget = 192.0;
+        $rowH = max(13.0, min(48.0, floor($rowBudget / $rowCount)));
         $tableBottom = $tableTop - $headerH - ($rowCount * $rowH);
         $tableX = $left;
         $tableW = $right - $left;
@@ -205,13 +189,29 @@ class UnifiedDocumentPdfService
         }
 
         $lineFont = $rowH <= 15 ? 6 : ($rowH <= 19 ? 7 : 8);
+        $lineLeading = $lineFont + 2;
+        $maxTextLines = max(1, min(4, (int) floor(($rowH - 6) / $lineLeading)));
         foreach ($lines as $index => $line) {
-            $baseline = $tableTop - $headerH - ($index * $rowH) - min($rowH - 4, 16);
+            $rowTop = $tableTop - $headerH - ($index * $rowH);
             $description = (string) ($line['description'] ?? '-');
-            $remarks = (string) ($line['remarks'] ?? '-');
+            $rawRemarks = $line['remarks_lines'] ?? ($line['remarks'] ?? '-');
+            $logicalRemarkLines = $this->normaliseTextLines($rawRemarks);
             $amount = (float) ($line['amount'] ?? 0);
-            $content[] = $this->text($tableX + 10, $baseline, $this->truncateByWidth($description, $col1 - 20, $lineFont, 0.5), $lineFont, 'F1');
-            $content[] = $this->text($tableX + $col1 + 10, $baseline, $this->truncateByWidth($remarks, $col2 - 20, $lineFont, 0.5), $lineFont, 'F1');
+            $descriptionLines = $this->wrapTextByWidth($description, $col1 - 20, $lineFont, 0.5, $maxTextLines);
+            $remarksLines = [];
+            foreach ($logicalRemarkLines as $logicalRemarkLine) {
+                foreach ($this->wrapTextByWidth($logicalRemarkLine, $col2 - 20, $lineFont, 0.5, $maxTextLines) as $wrappedRemarkLine) {
+                    $remarksLines[] = $wrappedRemarkLine;
+                }
+            }
+            $remarksLines = array_slice($remarksLines ?: ['-'], 0, $maxTextLines);
+            $baseline = $rowTop - $lineLeading - 3;
+            foreach ($descriptionLines as $lineIndex => $textLine) {
+                $content[] = $this->text($tableX + 10, $baseline - ($lineIndex * $lineLeading), $textLine, $lineFont, 'F1');
+            }
+            foreach ($remarksLines as $lineIndex => $textLine) {
+                $content[] = $this->text($tableX + $col1 + 10, $baseline - ($lineIndex * $lineLeading), $textLine, $lineFont, 'F1');
+            }
             $content[] = $this->textRight($right - 10, $baseline, number_format($amount, 2, '.', ','), $lineFont, 'F1');
         }
 
@@ -267,26 +267,30 @@ class UnifiedDocumentPdfService
         $dividerX = 330.0;
         $content[] = '[2 2] 0 d 0.72 0.74 0.78 RG '.$dividerX.' '.($lowerTop + 4).' m '.$dividerX.' 78 l S [] 0 d';
         $preparedX = 350.0;
+        $preparedName = trim((string) ($document['prepared_name'] ?? 'System User')) ?: 'System User';
+        $preparedPosition = trim((string) ($document['prepared_position'] ?? ''));
         $content[] = $this->text($preparedX, $lowerTop, 'PREPARED BY', 10, 'F2');
         $preparedY = $lowerTop - 25.0;
-        foreach ([
-            'Name' => (string) ($document['prepared_name'] ?? 'System User'),
-            'Position' => (string) ($document['prepared_position'] ?? 'Accounts Executive'),
-            'Date' => (string) ($document['prepared_date'] ?? '-'),
-        ] as $label => $value) {
+        $preparedRows = ['Name' => $preparedName];
+        if ($preparedPosition !== '') {
+            $preparedRows['Position'] = $preparedPosition;
+        }
+        $preparedRows['Date'] = (string) ($document['prepared_date'] ?? '-');
+        foreach ($preparedRows as $label => $value) {
             $content[] = $this->text($preparedX, $preparedY, $label, 9, 'F1');
             $content[] = $this->text($preparedX + 55, $preparedY, ':', 9, 'F1');
             $content[] = $this->text($preparedX + 69, $preparedY, $this->truncateByWidth($value, $right - ($preparedX + 69), 9, 0.5), 9, 'F1');
             $preparedY -= 20.0;
         }
 
-        $signatureLineY = max(86.0, min(112.0, $preparedY - 22.0));
+        // Signature order: signer name, horizontal line, then the DIGITAL SIGNATURE label.
+        // The reserved footer begins at y=58, so y=80 keeps all three elements clear.
+        $signatureLineY = 80.0;
+        $signatureName = $this->truncateByWidth($preparedName, $right - $preparedX - 16, 8, 0.5);
+        $signatureCenterX = $preparedX + (($right - $preparedX) / 2);
+        $content[] = $this->textCenter($signatureCenterX, $signatureLineY + 10, $signatureName, 8, 'F3');
         $content[] = '0.07 0.07 0.07 RG '.$preparedX.' '.$signatureLineY.' m '.$right.' '.$signatureLineY.' l S';
-        $content[] = $this->text($preparedX + 38, $signatureLineY - 14, 'DIGITAL SIGNATURE', 9, 'F2');
-        $preparedEmail = trim((string) ($document['prepared_email'] ?? ''));
-        if ($preparedEmail !== '' && $signatureLineY >= 100) {
-            $content[] = $this->text($preparedX + 30, $signatureLineY - 27, $this->truncateByWidth($preparedEmail, $right - ($preparedX + 30), 7, 0.5), 7, 'F3');
-        }
+        $content[] = $this->textCenter($signatureCenterX, $signatureLineY - 14, 'DIGITAL SIGNATURE', 9, 'F2');
 
         // Footer has its own reserved strip.
         $footerRuleY = 58.0;
@@ -301,17 +305,8 @@ class UnifiedDocumentPdfService
     /** @return array{stream:string,width:int,height:int}|null */
     private function logoData(mixed $path): ?array
     {
-        if (! is_string($path) || trim($path) === '') {
-            return null;
-        }
-
-        try {
-            $fullPath = Storage::disk('public')->path($path);
-        } catch (\Throwable) {
-            $fullPath = storage_path('app/public/'.ltrim($path, '/'));
-        }
-
-        if (! is_file($fullPath)) {
+        $fullPath = PrintedDocumentBrand::logoFilePath($path);
+        if (! $fullPath) {
             return null;
         }
 
@@ -432,6 +427,13 @@ class UnifiedDocumentPdfService
         return 'BT '.$color.' rg /'.$font.' '.$size.' Tf '.$this->num($x).' '.$this->num($y).' Td ('.$this->escape($text).') Tj ET';
     }
 
+    private function textCenter(float $centerX, float $y, string $text, int $size = 10, string $font = 'F1', string $color = '0 0 0', float $factor = 0.48): string
+    {
+        $width = strlen($this->pdfText($text)) * $size * $factor;
+
+        return $this->text($centerX - ($width / 2), $y, $text, $size, $font, $color);
+    }
+
     private function textRight(float $rightX, float $y, string $text, int $size = 10, string $font = 'F1', string $color = '0 0 0', float $factor = 0.48): string
     {
         $width = strlen($this->pdfText($text)) * $size * $factor;
@@ -456,6 +458,74 @@ class UnifiedDocumentPdfService
         $maxChars = max(3, (int) floor($maxWidth / max(1, $size * $factor)));
 
         return $this->truncate($text, $maxChars);
+    }
+
+    /** @return array<int,string> */
+    private function normaliseTextLines(mixed $value): array
+    {
+        $values = is_array($value) ? $value : [$value];
+        $lines = [];
+
+        foreach ($values as $item) {
+            if (is_array($item)) {
+                foreach ($this->normaliseTextLines($item) as $nestedLine) {
+                    $lines[] = $nestedLine;
+                }
+                continue;
+            }
+
+            $text = str_replace(["\r\n", "\r"], "\n", trim((string) $item));
+            foreach (preg_split('/\n+|\s*\|\s*/', $text) ?: [] as $line) {
+                $line = trim(preg_replace('/[ \t]+/', ' ', $line) ?? $line);
+                if ($line !== '') {
+                    $lines[] = $line;
+                }
+            }
+        }
+
+        return $lines ?: ['-'];
+    }
+
+    /** @return array<int,string> */
+    private function wrapTextByWidth(string $text, float $maxWidth, int $size, float $factor, int $maxLines): array
+    {
+        $maxChars = max(4, (int) floor($maxWidth / max(1, $size * $factor)));
+        $text = str_replace(["\r\n", "\r"], "\n", trim($text));
+        $paragraphs = preg_split('/\n+/', $text) ?: [];
+        $lines = [];
+
+        foreach ($paragraphs as $paragraph) {
+            $paragraph = trim(preg_replace('/[ \t]+/', ' ', $paragraph) ?? $paragraph);
+            if ($paragraph === '') {
+                continue;
+            }
+
+            $wrapped = wordwrap($paragraph, $maxChars, "\n", true);
+            foreach (explode("\n", $wrapped) as $wrappedLine) {
+                $wrappedLine = trim($wrappedLine);
+                if ($wrappedLine !== '') {
+                    $lines[] = $wrappedLine;
+                }
+            }
+        }
+
+        if ($lines === []) {
+            return ['-'];
+        }
+
+        // Receipt remarks are deliberately allowed to use the second, third and
+        // fourth lines. Never add an ellipsis when the complete text fits there.
+        if (count($lines) <= $maxLines) {
+            return $lines;
+        }
+
+        // As a last resort, re-wrap more tightly before clipping. This keeps the
+        // full due information visible for normal receipt remarks.
+        $compactChars = max($maxChars, (int) ceil(array_sum(array_map('mb_strlen', $lines)) / max(1, $maxLines)));
+        $compact = wordwrap(implode(' ', $lines), $compactChars, "\n", true);
+        $compactLines = array_values(array_filter(array_map('trim', explode("\n", $compact))));
+
+        return array_slice($compactLines, 0, $maxLines);
     }
 
     /** @return array<int,string> */

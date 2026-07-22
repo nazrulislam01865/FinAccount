@@ -45,11 +45,12 @@
     $descriptionTitle = $isCollection ? 'Due collection received from customer' : 'Due payment made to supplier';
     $purpose = $transaction?->description ?: ($isCollection ? 'Customer due collected' : 'Supplier due paid');
     $referenceNo = $transaction?->reference ?: ($transaction?->voucher_no ?: '-');
-    $remarks = trim(implode(' | ', array_filter([
-        $transaction?->displayHeadName('-'),
+    $remarkLines = array_values(array_filter([
+        $transaction?->displayHeadName($isCollection ? 'Customer Due Collection' : 'Supplier Due Payment'),
         $previousDue !== null ? 'Previous Due: '.number_format($previousDue, 2) : null,
         $remainingDue !== null ? 'Remaining Due: '.number_format($remainingDue, 2) : null,
-    ]))) ?: '-';
+    ], static fn ($value) => filled($value)));
+    $remarks = $remarkLines !== [] ? implode("\n", $remarkLines) : '-';
 
     $currencyLabel = strtoupper((string) ($company['currency_code'] ?: 'TK'));
     $currencyLabel = $currencyLabel === 'BDT' ? 'TK' : $currencyLabel;
@@ -58,8 +59,9 @@
     $tax = 0.0;
     $total = $amount + $commission - $discount + $tax;
     $phoneEmail = trim(($party['phone'] ?: '').(($party['phone'] && $party['email']) ? ' / ' : '').($party['email'] ?: ''));
-    $preparedByName = auth()->user()?->name ?: 'System User';
-    $preparedByEmail = auth()->user()?->email ?: ($company['email'] ?? '');
+    $preparedUser = $transaction?->creator ?: auth()->user();
+    $preparedByName = $preparedUser?->name ?: 'System User';
+    $preparedByPosition = trim((string) ($preparedUser?->position ?? ''));
 
     $numberToWords = function (int $number) use (&$numberToWords): string {
         $dictionary = [
@@ -94,6 +96,7 @@
     $documentLines = [[
         'description' => $descriptionTitle,
         'remarks' => $remarks,
+        'remarks_lines' => $remarkLines,
         'amount' => $amount,
     ]];
     $summaryRows = [
@@ -134,8 +137,7 @@
         'amountInWords' => $amountInWords,
         'notes' => 'Thank you for your business.',
         'preparedByName' => $preparedByName,
-        'preparedByPosition' => 'Accounts Executive',
+        'preparedByPosition' => $preparedByPosition,
         'preparedDate' => $receiptDate,
-        'preparedByEmail' => $preparedByEmail,
     ])
 </x-layouts::accounting>

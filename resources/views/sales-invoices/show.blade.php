@@ -44,8 +44,9 @@
     $phoneEmail = trim(($party['phone'] ?: '').(($party['phone'] && $party['email']) ? ' / ' : '').($party['email'] ?: ''));
     $documentTitle = strtoupper((string) ($invoice->title ?: ($isPurchase ? 'Purchase Invoice' : 'Sales Invoice')));
     $purpose = $transaction?->description ?: ($isPurchase ? 'Purchase transaction' : 'Sales transaction');
-    $preparedByName = auth()->user()?->name ?: 'System User';
-    $preparedByEmail = auth()->user()?->email ?: ($company['email'] ?? '');
+    $preparedUser = $transaction?->creator ?: auth()->user();
+    $preparedByName = $preparedUser?->name ?: 'System User';
+    $preparedByPosition = trim((string) ($preparedUser?->position ?? ''));
 
     $documentLines = [];
     if ($feedDocument?->lines?->isNotEmpty()) {
@@ -53,24 +54,39 @@
             $qty = rtrim(rtrim(number_format((float) $line->quantity, 4, '.', ''), '0'), '.');
             $documentLines[] = [
                 'description' => $line->item?->name ?: ($isPurchase ? 'Feed purchase' : 'Feed sale'),
-                'remarks' => 'Qty: '.$qty.' '.$line->unit.' | Rate: '.number_format((float) $line->rate, 2),
+                'remarks' => 'Quantity: '.$qty.' '.$line->unit."\n".'Rate: '.number_format((float) $line->rate, 2),
+                'remarks_lines' => [
+                    'Quantity: '.$qty.' '.$line->unit,
+                    'Rate: '.number_format((float) $line->rate, 2),
+                ],
                 'amount' => (float) $line->line_total,
             ];
         }
     } elseif ($transaction?->saleLines?->isNotEmpty()) {
         foreach ($transaction->saleLines as $line) {
             $qty = $line->quantity === null ? null : rtrim(rtrim(number_format((float) $line->quantity, 4, '.', ''), '0'), '.');
+            $lineRemarkLines = array_values(array_filter([
+                $qty !== null ? 'Quantity: '.$qty.($line->unit ? ' '.$line->unit : '') : null,
+                $line->rate !== null ? 'Rate: '.number_format((float) $line->rate, 2) : null,
+            ], static fn ($value) => filled($value)));
             $documentLines[] = [
                 'description' => $line->item_name ?: ($isPurchase ? 'Purchase' : 'Sale'),
-                'remarks' => trim(implode(' | ', array_filter([$qty !== null ? 'Qty: '.$qty : null, $line->unit ? 'Unit: '.$line->unit : null]))),
+                'remarks' => $lineRemarkLines !== [] ? implode("\n", $lineRemarkLines) : '-',
+                'remarks_lines' => $lineRemarkLines,
                 'amount' => (float) $line->line_total,
             ];
         }
     }
     if ($documentLines === []) {
+        $fallbackRemarkLines = array_values(array_filter([
+            $purpose,
+            $paymentMethod !== '-' ? 'Payment Method: '.$paymentMethod : null,
+            'Paid: '.number_format((float) $invoice->paid_amount, 2).' / Due: '.number_format((float) $invoice->due_amount, 2),
+        ], static fn ($value) => filled($value)));
         $documentLines[] = [
             'description' => $transaction?->displayHeadName($isPurchase ? 'Purchase' : 'Sales') ?? ($isPurchase ? 'Purchase' : 'Sales'),
-            'remarks' => $purpose,
+            'remarks' => implode("\n", $fallbackRemarkLines),
+            'remarks_lines' => $fallbackRemarkLines,
             'amount' => (float) $invoice->subtotal,
         ];
     }
@@ -144,8 +160,7 @@
         'amountInWords' => $amountInWords,
         'notes' => 'Thank you for your business.',
         'preparedByName' => $preparedByName,
-        'preparedByPosition' => 'Accounts Executive',
+        'preparedByPosition' => $preparedByPosition,
         'preparedDate' => $invoiceDate,
-        'preparedByEmail' => $preparedByEmail,
     ])
 </x-layouts::accounting>

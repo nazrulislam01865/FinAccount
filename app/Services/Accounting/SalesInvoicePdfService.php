@@ -48,7 +48,11 @@ class SalesInvoicePdfService
                 $qty = rtrim(rtrim(number_format((float) $line->quantity, 4, '.', ''), '0'), '.');
                 $lines[] = [
                     'description' => (string) ($line->item?->name ?: ($isPurchase ? 'Feed purchase' : 'Feed sale')),
-                    'remarks' => 'Qty: '.$qty.' '.$line->unit.' | Rate: '.number_format((float) $line->rate, 2),
+                    'remarks' => 'Quantity: '.$qty.' '.$line->unit."\n".'Rate: '.number_format((float) $line->rate, 2),
+                    'remarks_lines' => [
+                        'Quantity: '.$qty.' '.$line->unit,
+                        'Rate: '.number_format((float) $line->rate, 2),
+                    ],
                     'amount' => (float) $line->line_total,
                 ];
             }
@@ -60,17 +64,29 @@ class SalesInvoicePdfService
                     $line->unit ? 'Unit: '.$line->unit : null,
                     $line->rate !== null ? 'Rate: '.number_format((float) $line->rate, 2) : null,
                 ])));
+                $remarkLines = array_values(array_filter([
+                    $qty !== null ? 'Quantity: '.$qty.($line->unit ? ' '.$line->unit : '') : null,
+                    $line->rate !== null ? 'Rate: '.number_format((float) $line->rate, 2) : null,
+                ], static fn ($value) => filled($value)));
                 $lines[] = [
                     'description' => (string) ($line->item_name ?: ($isPurchase ? 'Purchase' : 'Sale')),
-                    'remarks' => $remarks ?: '-',
+                    'remarks' => $remarkLines !== [] ? implode("\n", $remarkLines) : ($remarks ?: '-'),
+                    'remarks_lines' => $remarkLines,
                     'amount' => (float) $line->line_total,
                 ];
             }
         }
         if ($lines === []) {
+            $fallbackPurpose = (string) ($transaction?->description ?: ($isPurchase ? 'Purchase transaction' : 'Sales transaction'));
+            $fallbackRemarkLines = array_values(array_filter([
+                $fallbackPurpose,
+                $paymentMethod !== '-' ? 'Payment Method: '.$paymentMethod : null,
+                'Paid: '.number_format((float) $invoice->paid_amount, 2).' / Due: '.number_format((float) $invoice->due_amount, 2),
+            ], static fn ($value) => filled($value)));
             $lines[] = [
                 'description' => (string) ($transaction?->displayHeadName($isPurchase ? 'Purchase' : 'Sale') ?: ($isPurchase ? 'Purchase' : 'Sale')),
-                'remarks' => (string) ($transaction?->description ?: ($isPurchase ? 'Purchase transaction' : 'Sales transaction')),
+                'remarks' => implode("\n", $fallbackRemarkLines),
+                'remarks_lines' => $fallbackRemarkLines,
                 'amount' => (float) $invoice->subtotal,
             ];
         }
@@ -121,9 +137,8 @@ class SalesInvoicePdfService
                 ? 'Transportation cost and commission are deductions from the feed purchase total.'
                 : 'Thank you for your business.',
             'prepared_name' => (string) ($transaction?->creator?->name ?: 'System User'),
-            'prepared_position' => 'Accounts Executive',
+            'prepared_position' => (string) ($transaction?->creator?->position ?: ''),
             'prepared_date' => $invoiceDate,
-            'prepared_email' => (string) ($transaction?->creator?->email ?: ($company['email'] ?? '')),
             'footer' => 'This invoice is electronically generated and may not require a physical signature.',
         ]);
     }

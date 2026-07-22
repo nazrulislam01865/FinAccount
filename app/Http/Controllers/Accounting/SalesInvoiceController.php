@@ -26,7 +26,9 @@ class SalesInvoiceController extends Controller
         $salesInvoice->load([
             'transaction.transactionHead',
             'transaction.moneyAccount',
+            'transaction.payments.moneyAccount',
             'transaction.party',
+            'transaction.creator',
             'transaction.saleLines',
             'transaction.feedDocument.lines.item',
             'transaction.feedDocument.warehouse',
@@ -45,7 +47,9 @@ class SalesInvoiceController extends Controller
         $salesInvoice->load([
             'transaction.transactionHead',
             'transaction.moneyAccount',
+            'transaction.payments.moneyAccount',
             'transaction.party',
+            'transaction.creator',
             'transaction.saleLines',
             'transaction.feedDocument.lines.item',
             'transaction.feedDocument.warehouse',

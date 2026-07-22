@@ -1,15 +1,7 @@
 @php
-    // Keep one fixed company header across every receipt and invoice.
-    // Edit config/document_company.php to change these printed values.
-    $printedCompany = (array) config('document_company', []);
-    $company = array_merge((array) ($company ?? []), array_filter([
-        'name' => $printedCompany['name'] ?? 'BASHIR AGRO',
-        'short_name' => $printedCompany['short_name'] ?? 'BA',
-        'address' => $printedCompany['address'] ?? 'Mymensingh, Bangladesh',
-        'phone' => $printedCompany['phone'] ?? '+8801700000000',
-        'email' => $printedCompany['email'] ?? 'info@bashiragro.com',
-        'website' => $printedCompany['website'] ?? 'www.Bashiragro.com',
-    ], static fn ($value) => $value !== null && $value !== ''));
+    $company = \App\Support\PrintedDocumentBrand::company((array) ($company ?? []));
+    $resolvedLogoUrl = \App\Support\PrintedDocumentBrand::logoDataUri($company['logo_path'] ?? null)
+        ?: ($logoUrl ?? null);
 
     $documentLines = collect($documentLines ?? []);
     $lineCount = $documentLines->count();
@@ -17,24 +9,26 @@
     $blankRows = max(0, min(4, 4 - $lineCount));
     $titleLength = function_exists('mb_strlen') ? mb_strlen((string) $documentTitle) : strlen((string) $documentTitle);
     $titleClass = $titleLength > 22 ? 'ba-u-title--xlong' : ($titleLength > 16 ? 'ba-u-title--long' : '');
+    $preparedPosition = trim((string) ($preparedByPosition ?? ''));
 @endphp
+
+@include('accounting.partials.unified-document-styles')
 
 <section class="ba-u-doc {{ $densityClass }}" aria-label="{{ $documentTitle }}">
     <header class="ba-u-header">
         <div class="ba-u-company">
             <div class="ba-u-logo">
-                @if(!empty($logoUrl))
-                    <img src="{{ $logoUrl }}" alt="{{ $company['name'] ?? 'Company' }} logo">
+                @if(!empty($resolvedLogoUrl))
+                    <img src="{{ $resolvedLogoUrl }}" alt="{{ $company['name'] ?? 'Company' }} logo">
                 @else
                     <span>{{ strtoupper(substr((string) ($company['short_name'] ?? $company['name'] ?? 'BA'), 0, 2)) }}</span>
                 @endif
             </div>
             <div class="ba-u-company-divider" aria-hidden="true"></div>
             <div class="ba-u-company-copy">
-                <h2>{{ $company['name'] ?? 'Bashir Agro' }}</h2>
+                <h2>{{ $company['name'] ?? 'BASHIR AGRO' }}</h2>
                 @if(!empty($company['address']))<p>{{ $company['address'] }}</p>@endif
                 @if(!empty($company['phone']))<p>Phone: {{ $company['phone'] }}</p>@endif
-                @if(!empty($company['email']))<p>Email: {{ $company['email'] }}</p>@endif
                 @if(!empty($company['website']))<p>{{ $company['website'] }}</p>@endif
             </div>
         </div>
@@ -76,9 +70,28 @@
         </thead>
         <tbody>
             @foreach($documentLines as $line)
+                @php
+                    $rawRemarkLines = $line['remarks_lines'] ?? null;
+                    if (!is_array($rawRemarkLines)) {
+                        $remarksText = str_replace(["\r\n", "\r"], "\n", trim((string) ($line['remarks'] ?? '-')));
+                        $rawRemarkLines = preg_split('/\n+|\s*\|\s*/', $remarksText) ?: [];
+                    }
+                    $remarksLines = collect($rawRemarkLines)
+                        ->flatten()
+                        ->map(static fn ($value) => trim((string) $value))
+                        ->filter(static fn ($value) => $value !== '')
+                        ->values();
+                    if ($remarksLines->isEmpty()) {
+                        $remarksLines = collect(['-']);
+                    }
+                @endphp
                 <tr>
                     <td>{{ $line['description'] ?? '-' }}</td>
-                    <td>{{ $line['remarks'] ?? '-' }}</td>
+                    <td class="ba-u-remarks">
+                        @foreach($remarksLines as $remarkLine)
+                            <div class="ba-u-remark-line">{{ $remarkLine }}</div>
+                        @endforeach
+                    </td>
                     <td class="ba-u-right">{{ number_format((float) ($line['amount'] ?? 0), 2) }}</td>
                 </tr>
             @endforeach
@@ -110,11 +123,15 @@
             <div class="ba-u-prepared">
                 <h3>PREPARED BY</h3>
                 <div class="ba-u-prep-row"><span>Name</span><b>:</b><p>{{ $preparedByName }}</p></div>
-                <div class="ba-u-prep-row"><span>Position</span><b>:</b><p>{{ $preparedByPosition ?? 'Accounts Executive' }}</p></div>
+                @if($preparedPosition !== '')
+                    <div class="ba-u-prep-row"><span>Position</span><b>:</b><p>{{ $preparedPosition }}</p></div>
+                @endif
                 <div class="ba-u-prep-row"><span>Date</span><b>:</b><p>{{ $preparedDate }}</p></div>
-                <div class="ba-u-sign-line"></div>
-                <strong>DIGITAL SIGNATURE</strong>
-                @if(!empty($preparedByEmail))<em>{{ $preparedByEmail }}</em>@endif
+                <div class="ba-u-sign-area">
+                    <span class="ba-u-sign-name">{{ $preparedByName }}</span>
+                    <div class="ba-u-sign-line"></div>
+                    <strong>DIGITAL SIGNATURE</strong>
+                </div>
             </div>
         </div>
     </section>

@@ -47,6 +47,7 @@ class UserManagementController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'position' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'accounting_role_id' => ['required', 'integer', Rule::in($roleIds)],
@@ -62,6 +63,7 @@ class UserManagementController extends Controller
                 'role' => $role->isSuperAdmin() ? User::ROLE_SYSTEM_ADMIN : User::ROLE_ACCOUNTING_USER,
                 'account_status' => $validated['account_status'],
                 'name' => $validated['name'],
+                'position' => $validated['position'] ?? null,
                 'email' => $validated['email'],
                 'email_verified_at' => now(),
                 'password' => $validated['password'],
@@ -82,6 +84,7 @@ class UserManagementController extends Controller
         $roleIds = $this->assignableRoles($actor, $user)->pluck('id')->map(fn ($id) => (int) $id)->all();
         $rules = [
             'name' => ['required', 'string', 'max:255'],
+            'position' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'accounting_role_id' => ['required', 'integer', Rule::in($roleIds)],
             'account_status' => ['required', Rule::in(array_keys(User::accountStatusOptions()))],
@@ -106,6 +109,7 @@ class UserManagementController extends Controller
 
             $attributes = [
                 'name' => $validated['name'],
+                'position' => $validated['position'] ?? null,
                 'email' => $validated['email'],
                 'accounting_role_id' => $newRole->id,
                 'role' => $newRole->isSuperAdmin() ? User::ROLE_SYSTEM_ADMIN : User::ROLE_ACCOUNTING_USER,

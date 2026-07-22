@@ -40,7 +40,11 @@
         $qty = rtrim(rtrim(number_format((float) $line->quantity, 4, '.', ''), '0'), '.');
         $documentLines[] = [
             'description' => $line->item?->name ?: 'Feed item',
-            'remarks' => 'Qty: '.$qty.' '.$line->unit.' | Rate: '.number_format((float) $line->rate, 2),
+            'remarks' => 'Quantity: '.$qty.' '.$line->unit."\n".'Rate: '.number_format((float) $line->rate, 2),
+            'remarks_lines' => [
+                'Quantity: '.$qty.' '.$line->unit,
+                'Rate: '.number_format((float) $line->rate, 2),
+            ],
             'amount' => (float) $line->line_total,
         ];
     }
@@ -73,8 +77,9 @@
     $wordAmount = (float) $document->total_amount;
     $decimalAmount = round(($wordAmount - floor($wordAmount)) * 100);
     $amountInWords = $numberToWords((int) floor($wordAmount)).' Taka'.($decimalAmount > 0 ? ' and '.$numberToWords((int) $decimalAmount).' Paisa' : '').' Only';
-    $preparedByName = $document->creator?->name ?: auth()->user()?->name ?: 'System User';
-    $preparedByEmail = $document->creator?->email ?: auth()->user()?->email ?: ($companyData['email'] ?? '');
+    $preparedUser = $document->creator ?: auth()->user();
+    $preparedByName = $preparedUser?->name ?: 'System User';
+    $preparedByPosition = trim((string) ($preparedUser?->position ?? ''));
 @endphp
 
 <x-layouts::accounting title="Feed Purchase Invoice">
@@ -104,8 +109,7 @@
         'amountInWords' => $amountInWords,
         'notes' => 'Transportation cost and commission are deductions from the feed purchase total.',
         'preparedByName' => $preparedByName,
-        'preparedByPosition' => 'Accounts Executive',
+        'preparedByPosition' => $preparedByPosition,
         'preparedDate' => $documentDate,
-        'preparedByEmail' => $preparedByEmail,
     ])
 </x-layouts::accounting>
