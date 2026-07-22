@@ -6,7 +6,6 @@
     $documentLines = collect($documentLines ?? []);
     $lineCount = $documentLines->count();
     $densityClass = $lineCount > 10 ? 'ba-u-doc--compact' : ($lineCount > 6 ? 'ba-u-doc--dense' : '');
-    $blankRows = max(0, min(4, 4 - $lineCount));
     $titleLength = function_exists('mb_strlen') ? mb_strlen((string) $documentTitle) : strlen((string) $documentTitle);
     $titleClass = $titleLength > 22 ? 'ba-u-title--xlong' : ($titleLength > 16 ? 'ba-u-title--long' : '');
     $preparedPosition = trim((string) ($preparedByPosition ?? ''));
@@ -95,9 +94,6 @@
                     <td class="ba-u-right">{{ number_format((float) ($line['amount'] ?? 0), 2) }}</td>
                 </tr>
             @endforeach
-            @for($i = 0; $i < $blankRows; $i++)
-                <tr class="ba-u-empty"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-            @endfor
         </tbody>
     </table>
 
@@ -137,7 +133,7 @@
     </section>
 
     <footer class="ba-u-footer">
-        <span class="ba-u-shield" aria-hidden="true"><svg viewBox="0 0 24 28" fill="none"><path d="M12 2.2 21 5.8v7.4c0 5.55-3.75 10.15-9 12.65-5.25-2.5-9-7.1-9-12.65V5.8L12 2.2Z"></path><path d="m7.9 14.25 2.45 2.55 5.85-6.05"></path></svg></span>
+        <span class="ba-u-check" aria-hidden="true">✓</span>
         <em>This document is electronically generated and may not require a physical signature.</em>
     </footer>
 </section>
