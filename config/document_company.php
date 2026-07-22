@@ -12,9 +12,7 @@ return [
     |
     */
     'name' => 'BASHIR AGRO',
-    'short_name' => 'BA',
-    'address' => 'Mymensingh, Bangladesh',
-    'phone' => '+8801700000000',
-    'email' => 'info@bashiragro.com',
-    'website' => 'www.Bashiragro.com',
+    'address' => "Bashir Master's Palace, Narsingdi, Dhaka",
+    'phone' => '+880 1779-501104',
+    'website' => 'https://www.bashiragro.com',
 ];
