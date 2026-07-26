@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Accounting;
 
+use App\Http\Requests\Concerns\ValidatesBackdatedTransactionDate;
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
 use App\Models\Feed\FeedBusinessArea;
@@ -11,10 +12,12 @@ use App\Support\SaleSellingTypes;
 use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreTransactionRequest extends FormRequest
 {
     use ValidatesAccountingOptions;
+    use ValidatesBackdatedTransactionDate;
 
     public function authorize(): bool
     {
@@ -76,6 +79,7 @@ class StoreTransactionRequest extends FormRequest
             ],
             'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
+            'is_backdated' => $this->backdatedEntryRules(),
             'transaction_head_id' => [
                 Rule::requiredIf(fn (): bool => ! $this->isTransferCategory()),
                 'nullable', 'integer',
@@ -173,6 +177,12 @@ class StoreTransactionRequest extends FormRequest
     }
 
 
+    public function withValidator(Validator $validator): void
+    {
+        $this->addBackdatedEntryValidation($validator);
+    }
+
+
     private function isFeedSaleSelected(): bool
     {
         $sellingType = SaleSellingTypes::normalize($this->input('selling_type'));
@@ -249,6 +259,7 @@ class StoreTransactionRequest extends FormRequest
                 ? strtoupper(trim((string) $this->input('settlement_type')))
                 : null,
             'due_settlement' => $this->boolean('due_settlement'),
+            'is_backdated' => $this->normalizedBackdatedEntryFlag(),
             'due_type' => match ($dueType) {
                 'receivable' => 'Receivable',
                 'payable' => 'Payable',

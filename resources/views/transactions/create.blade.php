@@ -5,7 +5,8 @@
     $isDueSettlement = (bool) ($dueSettlementContext['active'] ?? false);
     $formAction = $isEditing ? route('transactions.update', $transaction) : route('transactions.store');
     $categoryRepairRequired = $categoryRepairRequired ?? false;
-    $transactionDateContext = $transactionDateContext ?? ['min' => null, 'max' => null, 'default' => now()->toDateString(), 'label' => null];
+    $transactionDateContext = $transactionDateContext ?? ['min' => null, 'max' => null, 'default' => now()->toDateString(), 'label' => null, 'today' => now()->toDateString(), 'backdated_enabled' => false, 'ranges' => []];
+    $backdatedEntryRequested = $backdatedEntryRequested ?? request()->boolean('backdated');
     $selectedHeadId = old('transaction_head_id', $isEditing ? $transaction->transaction_head_id : ($dueSettlementContext['transaction_head_id'] ?? ''));
     $selectedSettlement = old('settlement_type', $isEditing ? ($transaction->settlement_type ?: \App\Support\TransactionTypes::CASH) : \App\Support\TransactionTypes::CASH);
     $selectedAmount = old('amount', $isEditing ? $transaction->amount : ($dueSettlementContext['amount'] ?? ''));
@@ -73,8 +74,8 @@
         </div>
         @if(! $isEditing && ! $isDueSettlement && auth()->user()?->canAccounting('transactions.manage'))
             <div class="hg-actions">
-                <a class="hg-btn" href="{{ route('feed.purchases.create') }}">🛒 Feed Purchase</a>
-                <a class="hg-btn" href="{{ route('feed.sales.create') }}">🧾 Feed Sale</a>
+                <a class="hg-btn" href="{{ route('feed.purchases.create', ['backdated' => $backdatedEntryRequested ? 1 : null]) }}">🛒 Feed Purchase</a>
+                <a class="hg-btn" href="{{ route('feed.sales.create', ['backdated' => $backdatedEntryRequested ? 1 : null]) }}">🧾 Feed Sale</a>
             </div>
         @endif
     </div>
@@ -85,7 +86,7 @@
             <div class="hg-tabs hg-transaction-direction-tabs" aria-label="Transaction Direction">
                 @foreach ($transactionDirectionOptions as $directionValue => $directionLabel)
                     <a
-                        href="{{ $isEditing ? route('transactions.edit', [$transaction, 'direction' => $directionValue]) : route('transactions.create', ['direction' => $directionValue]) }}"
+                        href="{{ $isEditing ? route('transactions.edit', [$transaction, 'direction' => $directionValue]) : route('transactions.create', ['direction' => $directionValue, 'backdated' => $backdatedEntryRequested ? 1 : null]) }}"
                         class="{{ $highlightTransactionDirection && $activeTransactionDirection === $directionValue ? 'active' : '' }}"
                         data-transaction-direction-tab
                         data-direction="{{ $directionValue }}"
@@ -110,7 +111,7 @@
                                 $definition = \App\Support\TransactionTypes::definition($categoryTab->value);
                             @endphp
                             <a
-                                href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['direction' => $activeTransactionDirection, 'category' => $categoryTab->value]) }}"
+                                href="{{ $isEditing ? route('transactions.edit', [$transaction, 'category' => $categoryTab->value]) : route('transactions.create', ['direction' => $activeTransactionDirection, 'category' => $categoryTab->value, 'backdated' => $backdatedEntryRequested ? 1 : null]) }}"
                                 class="{{ strcasecmp((string) $category, (string) $categoryTab->value) === 0 ? 'active' : '' }}"
                                 data-transaction-category-tab
                                 data-direction="{{ $transactionCategoryDirections[$categoryTab->value] ?? $activeTransactionDirection }}"
@@ -172,12 +173,11 @@
                     </div>
                 @endif
 
-                <div class="hg-field">
-                    <label for="transaction_date">Date <span class="hg-required">*</span></label>
-                    <input id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $isEditing ? $transaction->transaction_date->format('Y-m-d') : ($dueSettlementContext['as_of_date'] ?? $transactionDateContext['default'])) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
-                    @if($transactionDateContext['label'])<small class="hg-field-help">Open period: {{ $transactionDateContext['label'] }}</small>@endif
-                    @error('transaction_date')<small class="hg-field-error">{{ $message }}</small>@enderror
-                </div>
+                <x-accounting.backdated-date-field
+                    :context="$transactionDateContext"
+                    :value="$isEditing ? $transaction->transaction_date->format('Y-m-d') : ($dueSettlementContext['as_of_date'] ?? $transactionDateContext['default'])"
+                    :backdated="$backdatedEntryRequested ?? false"
+                />
 
                 @if($isSalesTransaction && ! $isDueSettlement)
                     <div class="hg-field full">
@@ -561,7 +561,7 @@
 
                 <div class="hg-field full">
                     <x-accounting.form-actions :submit-label="$isDueSettlement ? (($dueSettlementContext['due_type'] ?? '') === 'Receivable' ? 'Post Collection' : 'Post Payment') : ($isEditing ? 'Update Transaction' : 'Post Transaction')">
-                        <button type="button" class="hg-btn" data-draft-clear data-draft-clear-url="{{ $isDueSettlement ? route('reports.due-management', ['as_of_date' => $dueSettlementContext['as_of_date'] ?? null, 'due_type' => strtolower((string) ($dueSettlementContext['due_type'] ?? 'all'))]) : route('transactions.create', ['category' => $category]) }}">Clear</button>
+                        <button type="button" class="hg-btn" data-draft-clear data-draft-clear-url="{{ $isDueSettlement ? route('reports.due-management', ['as_of_date' => $dueSettlementContext['as_of_date'] ?? null, 'due_type' => strtolower((string) ($dueSettlementContext['due_type'] ?? 'all'))]) : route('transactions.create', ['category' => $category, 'backdated' => $backdatedEntryRequested ? 1 : null]) }}">Clear</button>
                     </x-accounting.form-actions>
                 </div>
             </form>

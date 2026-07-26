@@ -11,6 +11,7 @@
         <div class="hg-actions">
             <a class="hg-btn" href="{{ route('transactions.export', array_filter(['search' => $search, 'category' => $category])) }}">Export CSV</a>
             @if($canManageTransactions)
+                <a class="hg-btn" href="{{ route('transactions.create', ['backdated' => 1]) }}">+ Backdated Entry</a>
                 <a class="hg-btn hg-btn-primary" href="{{ route('transactions.create') }}">+ Add Transaction</a>
             @endif
         </div>
@@ -86,6 +87,9 @@
                             <td>
                                 <strong>{{ $transaction->voucher_no }}</strong><br>
                                 <span class="hg-muted">{{ $transaction->transaction_date->format('Y-m-d') }}</span>
+                                @if($transaction->created_at && $transaction->transaction_date->toDateString() < $transaction->created_at->toDateString())
+                                    <br><span class="hg-badge hg-badge-backdated">Backdated</span>
+                                @endif
                             </td>
                             <td>
                                 <span class="hg-badge {{ strtolower($transaction->category ?? '') }}">

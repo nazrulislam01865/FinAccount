@@ -223,6 +223,7 @@ class TransactionEntryController extends Controller
             'partyTypeLabels' => $this->optionService->labels(AccountingOption::GROUP_PARTY_TYPE),
             'requestToken' => old('request_token', (string) Str::uuid()),
             'transactionDateContext' => $this->accountingPeriodService->transactionDateContext($company),
+            'backdatedEntryRequested' => $request->boolean('backdated'),
             'transactionTypeDefinition' => TransactionTypes::configuredDefinition(
                 $category,
                 $categoryMetadata,

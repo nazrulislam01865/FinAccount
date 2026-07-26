@@ -1,6 +1,7 @@
 import './pages/accounting-navigation';
 import './pages/searchable-select';
 import './pages/transaction-entry';
+import './pages/backdated-entry';
 import './pages/chart-of-accounts';
 import './pages/setup-modals';
 import './pages/auto-code';

@@ -808,7 +808,18 @@ class FinancialReportService
 
     private function normalBalanceAmount(ChartOfAccount $account, float $debitLessCredit): float
     {
-        return round($account->normal_balance === 'Credit' ? -$debitLessCredit : $debitLessCredit, 2);
+        // Financial statements must orient amounts by account type. Relying on the
+        // editable normal_balance field can invert an entire statement when an
+        // Income, Liability, or Equity account was imported or configured as Debit.
+        // Contra accounts still work correctly because their opposite-side journal
+        // movement appears as a negative amount within the account-type orientation.
+        $creditOriented = in_array(
+            mb_strtolower(trim((string) $account->type)),
+            ['liability', 'equity', 'income'],
+            true,
+        );
+
+        return round($creditOriented ? -$debitLessCredit : $debitLessCredit, 2);
     }
 
     private function date(?string $value, string $fallback): string

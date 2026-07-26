@@ -194,6 +194,7 @@ class TransactionRegisterController extends Controller
                 $company,
                 $transaction->transaction_date?->toDateString(),
             ),
+            'backdatedEntryRequested' => $transaction->transaction_date?->lt(now()->startOfDay()) ?? false,
             'saleSellingTypeOptions' => $saleSellingTypeOptions,
             'saleBusinessAreas' => $saleBusinessAreas,
             'saleWarehouses' => $saleWarehouses,

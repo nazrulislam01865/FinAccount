@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Feed;
 
+use App\Http\Requests\Concerns\ValidatesBackdatedTransactionDate;
 use App\Support\CompanyContext;
 use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
@@ -10,6 +11,8 @@ use Illuminate\Validation\Validator;
 
 class StoreFeedSaleRequest extends FormRequest
 {
+    use ValidatesBackdatedTransactionDate;
+
     public function authorize(): bool
     {
         return $this->user()?->canAccounting('transactions.manage') ?? false;
@@ -22,6 +25,7 @@ class StoreFeedSaleRequest extends FormRequest
 
         return [
             'transaction_date' => ['required', 'date'],
+            'is_backdated' => $this->backdatedEntryRules(),
             'transaction_head_id' => [
                 'required', 'integer',
                 Rule::exists('transaction_heads', 'id')->where(fn ($query) => $query
@@ -84,6 +88,7 @@ class StoreFeedSaleRequest extends FormRequest
         $payments = $this->normalizedPayments();
 
         $this->merge([
+            'is_backdated' => $this->normalizedBackdatedEntryFlag(),
             'reference' => $this->filled('reference') ? trim((string) $this->input('reference')) : null,
             'description' => $this->filled('description') ? trim((string) $this->input('description')) : null,
             'overall_discount' => $this->sanitizePercentageInput($this->input('overall_discount', 0)),
@@ -97,6 +102,8 @@ class StoreFeedSaleRequest extends FormRequest
 
     public function withValidator(Validator $validator): void
     {
+        $this->addBackdatedEntryValidation($validator);
+
         $validator->after(function ($validator): void {
             $accountIds = [];
 

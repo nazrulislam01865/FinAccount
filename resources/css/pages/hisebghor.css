@@ -863,17 +863,26 @@
 }
 
 .hg-dashboard-kpi {
+    min-width: 0;
     min-height: 128px;
     padding: 18px;
+    overflow: hidden;
+    container-type: inline-size;
 }
 
 .hg-dashboard-kpi-title {
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     color: #51617a;
     font-size: 13px;
+}
+
+.hg-dashboard-kpi-title > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .hg-dashboard-kpi-icon {
@@ -892,11 +901,16 @@
 .hg-dashboard-kpi-icon.soft-purple { background: #f5f3ff; }
 
 .hg-dashboard-value {
+    max-width: 100%;
+    min-width: 0;
     margin: 14px 0 8px;
-    font-size: clamp(23px, 2.15vw, 28px);
+    font-size: clamp(20px, 1.65vw, 28px);
+    font-size: clamp(18px, 8.2cqi, 28px);
     line-height: 1.1;
     font-weight: 900;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -.035em;
+    overflow-wrap: anywhere;
 }
 
 .hg-dashboard-sub {
@@ -1162,8 +1176,16 @@
     line-height: 1.5;
 }
 
+@media (max-width: 1536px) {
+    .hg-dashboard-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .hg-dashboard-kpis > * { grid-column: span 2; }
+    .hg-dashboard-kpis > :nth-last-child(-n + 2) { grid-column: span 3; }
+}
+
 @media (max-width: 1280px) {
     .hg-dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hg-dashboard-kpis > *,
+    .hg-dashboard-kpis > :nth-last-child(-n + 2) { grid-column: auto; }
     .hg-dashboard-kpis > :last-child { grid-column: span 2; }
     .hg-dashboard-two-col,
     .hg-dashboard-three-col { grid-template-columns: 1fr; }
@@ -1183,6 +1205,8 @@
     .hg-dashboard-hero { display: block; }
     .hg-dashboard-actions { margin-top: 14px; }
     .hg-dashboard-kpis { grid-template-columns: 1fr; }
+    .hg-dashboard-kpis > *,
+    .hg-dashboard-kpis > :nth-last-child(-n + 2),
     .hg-dashboard-kpis > :last-child { grid-column: auto; }
     .hg-dashboard-two-col,
     .hg-dashboard-three-col { grid-template-columns: 1fr; }
@@ -4572,4 +4596,81 @@ button.is-executing, input.is-executing { pointer-events: none; }
     .ba-ledger-signature { padding-left: 5mm !important; }
     .ba-ledger-hand-sign { min-height: 10mm !important; margin-top: 4mm !important; font-size: 16pt !important; }
     .ba-ledger-footer { margin-top: 6mm !important; padding-top: 3mm !important; font-size: 9pt !important; }
+}
+
+/* Explicit, period-safe backdated transaction entry. */
+.hg-backdated-date-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.hg-backdated-date-header > label:first-child {
+    margin-bottom: 0;
+}
+
+.hg-backdated-toggle {
+    flex: 0 0 auto;
+    margin: 0 !important;
+    padding: 5px 9px;
+    border: 1px solid var(--hg-border);
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #475467 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+.hg-backdated-toggle input[type="checkbox"] {
+    width: auto !important;
+    margin: 0;
+}
+
+.hg-backdated-toggle:has(input:checked) {
+    border-color: #f79009;
+    background: #fffaeb;
+    color: #b54708 !important;
+}
+
+.hg-backdated-toggle:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: .55;
+}
+
+.hg-backdated-date-field.is-backdated input[type="date"] {
+    border-color: #f79009;
+    background: #fffcf5;
+}
+
+.hg-badge-backdated {
+    margin-top: 4px;
+    color: #b54708;
+    background: #fffaeb;
+}
+
+@media (max-width: 520px) {
+    .hg-backdated-date-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 7px;
+    }
+}
+
+/* Keep the transaction date fixed until Backdated Entry is explicitly enabled. */
+.hg-backdated-date-field.is-date-locked input[type="date"] {
+    cursor: not-allowed;
+    border-color: var(--hg-border);
+    background: #f8fafc;
+    color: #667085;
+}
+
+.hg-backdated-date-field.is-date-locked input[type="date"]::-webkit-calendar-picker-indicator {
+    pointer-events: none;
+    opacity: .35;
+}
+
+.hg-backdated-date-field.is-backdated input[type="date"] {
+    cursor: pointer;
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Accounting;
 
+use App\Http\Requests\Concerns\ValidatesBackdatedTransactionDate;
 use App\Http\Requests\Accounting\Concerns\ValidatesAccountingOptions;
 use App\Models\AccountingOption;
 use App\Models\Feed\FeedBusinessArea;
@@ -12,10 +13,12 @@ use App\Support\SaleSellingTypes;
 use App\Support\TransactionTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateTransactionRequest extends FormRequest
 {
     use ValidatesAccountingOptions;
+    use ValidatesBackdatedTransactionDate;
 
     public function authorize(): bool
     {
@@ -96,6 +99,7 @@ class UpdateTransactionRequest extends FormRequest
             ],
             'settlement_type' => ['nullable', $this->activeAccountingOption(AccountingOption::GROUP_SETTLEMENT_TYPE)],
             'transaction_date' => ['required', 'date'],
+            'is_backdated' => $this->backdatedEntryRules(),
             'transaction_head_id' => [
                 Rule::requiredIf(fn (): bool => ! $this->isTransferCategory()),
                 'nullable', 'integer',
@@ -142,6 +146,12 @@ class UpdateTransactionRequest extends FormRequest
             'transaction_attachments.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,csv,txt'],
         ];
     }
+
+    public function withValidator(Validator $validator): void
+    {
+        $this->addBackdatedEntryValidation($validator);
+    }
+
 
     private function isTransferCategory(): bool
     {
@@ -199,6 +209,7 @@ class UpdateTransactionRequest extends FormRequest
 
         $payload = [
             'category' => $category,
+            'is_backdated' => $this->normalizedBackdatedEntryFlag(),
             'selling_type' => SaleSellingTypes::isSaleCategory($category) ? $sellingType : null,
             'tracking_unit_id' => $locationRequired && filled($this->input('tracking_unit_id'))
                 ? $this->input('tracking_unit_id')

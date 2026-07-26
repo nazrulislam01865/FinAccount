@@ -82,11 +82,12 @@
                             <div class="feed-help">This head decides the accounting rule and inventory account for this feed purchase.</div>
                             @if($transactionHeads->isEmpty())<div class="feed-warning-text">Add an active Purchase transaction head linked with a level-3 Asset account before posting.</div>@endif
                         </div>
-                        <div class="feed-field">
-                            <label for="transaction_date">Date <span class="feed-req">*</span></label>
-                            <input class="feed-control" id="transaction_date" name="transaction_date" type="date" value="{{ old('transaction_date', $transactionDateContext['default']) }}" @if($transactionDateContext['min']) min="{{ $transactionDateContext['min'] }}" @endif @if($transactionDateContext['max']) max="{{ $transactionDateContext['max'] }}" @endif required>
-                            @if($transactionDateContext['label'])<div class="feed-help">Open period: {{ $transactionDateContext['label'] }}</div>@endif
-                        </div>
+                        <x-accounting.backdated-date-field
+                            :context="$transactionDateContext"
+                            :value="$transactionDateContext['default']"
+                            variant="feed"
+                            :backdated="request()->boolean('backdated')"
+                        />
                         <div class="feed-field">
                             <label for="party_id">Supplier <span class="feed-req">*</span></label>
                             <select class="feed-control" id="party_id" name="party_id" required data-hg-searchable-ignore>
