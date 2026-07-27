@@ -13,6 +13,9 @@ class BalanceController extends Controller
 
     public function index(Request $request): View
     {
-        return view('balances.index', $this->service->pageData($request->user()->company_id));
+        return view('balances.index', $this->service->pageData(
+            (int) $request->user()->company_id,
+            $request->string('party_search')->toString(),
+        ));
     }
 }

@@ -4674,3 +4674,129 @@ button.is-executing, input.is-executing { pointer-events: none; }
 .hg-backdated-date-field.is-backdated input[type="date"] {
     cursor: pointer;
 }
+
+/* Transaction Register filter alignment and reusable server-side pagination */
+.hg-transaction-register-filters {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.7fr) minmax(220px, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.hg-transaction-register-filters .hg-search,
+.hg-transaction-register-filters .hg-filter-select {
+    width: 100%;
+    min-width: 0;
+}
+
+.hg-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--hg-border);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.hg-pagination-summary {
+    color: var(--hg-muted);
+    font-size: 13px;
+}
+
+.hg-pagination-links {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.hg-pagination-link,
+.hg-pagination-ellipsis {
+    display: inline-flex;
+    min-width: 38px;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 11px;
+    border: 1px solid var(--hg-border);
+    border-radius: 9px;
+    color: var(--hg-text);
+    background: #fff;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.hg-pagination-link:hover {
+    border-color: var(--hg-primary);
+    color: var(--hg-primary);
+    background: #eff6ff;
+}
+
+.hg-pagination-link.is-active {
+    border-color: var(--hg-primary);
+    color: #fff;
+    background: var(--hg-primary);
+    cursor: default;
+}
+
+.hg-pagination-link.is-disabled {
+    color: #98a2b3;
+    background: #f8fafc;
+    cursor: not-allowed;
+}
+
+.hg-pagination-ellipsis {
+    min-width: 28px;
+    padding-inline: 4px;
+    border-color: transparent;
+    color: var(--hg-muted);
+}
+
+.feed-ui .hg-pagination {
+    margin: 16px 0 0;
+    border-color: var(--feed-line);
+    box-shadow: none;
+}
+
+@media (max-width: 760px) {
+    .hg-transaction-register-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .hg-transaction-register-filters .hg-btn,
+    .hg-pagination,
+    .hg-pagination-links {
+        width: 100%;
+    }
+
+    .hg-pagination {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .hg-pagination-links {
+        justify-content: flex-start;
+    }
+}
+
+
+/* Balances page: stacked sections, searchable parties and transaction drill-down links */
+.hg-balance-stack { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.hg-balance-section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hg-balance-section-header .hg-card-title { margin-bottom: 5px; }
+.hg-balance-party-search { margin: 14px 0; }
+.hg-balance-party-search .hg-search { flex: 1 1 420px; width: auto; max-width: 680px; }
+.hg-balance-link { color: #145f96; font-weight: 700; text-decoration: none; }
+.hg-balance-link:hover, .hg-balance-link:focus-visible { color: #0b4774; text-decoration: underline; text-underline-offset: 3px; }
+.hg-balance-amount { display: inline-block; min-width: 100%; white-space: nowrap; text-align: right; }
+.hg-active-party-filter { margin-bottom: 14px; }
+.hg-active-party-filter a { margin-left: 6px; color: #145f96; font-weight: 700; }
+@media (max-width: 760px) {
+    .hg-balance-party-search .hg-search { max-width: none; }
+}

@@ -57,13 +57,20 @@ class FeedInventoryController extends Controller
             ];
         })->when(in_array($status, ['in', 'low', 'out'], true), fn ($collection) => $collection->where('status', $status))->values();
 
-        $recentMovements = FeedStockMovement::query()
+        $movementQuery = FeedStockMovement::query()
             ->with(['item', 'warehouse', 'transaction.party', 'document'])
             ->where('company_id', $companyId)
-            ->when($warehouseId > 0, fn (Builder $query) => $query->where('tracking_unit_id', $warehouseId))
+            ->when($warehouseId > 0, fn (Builder $query) => $query->where('tracking_unit_id', $warehouseId));
+
+        $recentMovementCards = (clone $movementQuery)
             ->latest('id')
-            ->limit(100)
+            ->limit(8)
             ->get();
+
+        $recentMovements = $movementQuery
+            ->latest('id')
+            ->paginate(25, ['*'], 'ledger_page')
+            ->withQueryString();
 
         $warehouses = FeedWarehouse::query()
             ->where('company_id', $companyId)
@@ -81,7 +88,7 @@ class FeedInventoryController extends Controller
         ];
 
         return view('feed.inventory.index', compact(
-            'rows', 'recentMovements', 'warehouses', 'metrics', 'search', 'warehouseId', 'status',
+            'rows', 'recentMovements', 'recentMovementCards', 'warehouses', 'metrics', 'search', 'warehouseId', 'status',
         ));
     }
 }

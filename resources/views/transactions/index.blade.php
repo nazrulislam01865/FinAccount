@@ -1,5 +1,8 @@
 @php
     $draftRows = \App\Support\VisibleFormDrafts::forBase('transactions');
+    $visibleDraftRows = $search === '' && $category === '' && empty($partyId) && $transactions->currentPage() === 1
+        ? $draftRows
+        : collect();
     $canManageTransactions = auth()->user()?->canAccounting('transactions.manage') ?? false;
 @endphp
 
@@ -9,7 +12,7 @@
             <h1>Transaction Register</h1>
         </div>
         <div class="hg-actions">
-            <a class="hg-btn" href="{{ route('transactions.export', array_filter(['search' => $search, 'category' => $category])) }}">Export CSV</a>
+            <a class="hg-btn" href="{{ route('transactions.export', array_filter(['search' => $search, 'category' => $category, 'party_id' => $partyId ?? null])) }}">Export CSV</a>
             @if($canManageTransactions)
                 <a class="hg-btn" href="{{ route('transactions.create', ['backdated' => 1]) }}">+ Backdated Entry</a>
                 <a class="hg-btn hg-btn-primary" href="{{ route('transactions.create') }}">+ Add Transaction</a>
@@ -39,25 +42,42 @@
         <iframe src="{{ session('receipt_download_url') }}" style="display:none" title="Receipt download"></iframe>
     @endif
 
-    <form method="GET" action="{{ route('transactions.index') }}" class="hg-toolbar" id="transaction-filter-form">
+    <form method="GET" action="{{ route('transactions.index') }}" class="hg-toolbar hg-transaction-register-filters" id="transaction-filter-form">
+        @if(! empty($partyId))
+            <input type="hidden" name="party_id" value="{{ $partyId }}">
+        @endif
         <input
             class="hg-search"
             type="search"
             name="search"
             value="{{ $search }}"
-            placeholder="Search voucher, head, party or description..."
+            placeholder="Search voucher, head, party, posted by or description..."
             aria-label="Search transactions"
         >
 
-        <select name="category" class="hg-filter-select" aria-label="Filter transaction category" onchange="this.form.submit()">
+        <select name="category" class="hg-filter-select" aria-label="Filter transaction category" data-hg-searchable-ignore>
             <option value="">All categories</option>
             @foreach ($transactionCategories as $categoryOption)
                 <option value="{{ $categoryOption->value }}" @selected($category === $categoryOption->value)>{{ $categoryOption->label }}</option>
             @endforeach
         </select>
+
+        <button class="hg-btn hg-btn-primary" type="submit">Search</button>
+
+        @if($search !== '' || $category !== '' || ! empty($partyId))
+            <a class="hg-btn" href="{{ route('transactions.index') }}">Clear</a>
+        @endif
     </form>
 
-    @if ($transactions->isEmpty() && $draftRows->isEmpty())
+
+    @if(! empty($partyId) && $selectedParty)
+        <div class="hg-info hg-active-party-filter">
+            Showing all transactions for <strong>{{ $selectedParty->code }} — {{ $selectedParty->name }}</strong>.
+            <a href="{{ route('transactions.index', array_filter(['search' => $search, 'category' => $category])) }}">Remove party filter</a>
+        </div>
+    @endif
+
+    @if ($transactions->isEmpty() && $visibleDraftRows->isEmpty())
         <div class="hg-empty">No records found.</div>
     @else
         <div class="hg-table-wrap">
@@ -72,6 +92,7 @@
                         <th>Ref</th>
                         <th>Attachment</th>
                         <th class="right">Amount</th>
+                        <th>Posted By</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -130,6 +151,7 @@
                                     </small>
                                 @endif
                             </td>
+                            <td>{{ $transaction->creator?->name ?? 'System' }}</td>
                             <td>
                                 <span class="hg-badge {{ $transaction->status === 'posted' ? 'on' : 'incomplete' }}">{{ ucfirst($transaction->status) }}</span>
                                 @if($transaction->salesInvoice)
@@ -175,7 +197,7 @@
                         </tr>
                     @endforeach
 
-                    @foreach ($draftRows as $draft)
+                    @foreach ($visibleDraftRows as $draft)
                         @php
                             $fields = \App\Support\VisibleFormDrafts::fields($draft);
                             $isEditDraft = \App\Support\VisibleFormDrafts::isEdit($draft);
@@ -201,6 +223,7 @@
                                     <br><small class="hg-muted">Partial draft</small>
                                 @endif
                             </td>
+                            <td><span class="hg-muted">Not posted</span></td>
                             <td><span class="hg-badge draft">Draft</span><br><small>{{ $draft->updated_at?->diffForHumans() }}</small></td>
                             <td>
                                 <div class="hg-actions">
@@ -223,5 +246,7 @@
                 </tbody>
             </table>
         </div>
+
+        <x-accounting.pagination :paginator="$transactions" item-label="transactions" />
     @endif
 </x-layouts::accounting>

@@ -19,7 +19,7 @@ class JournalEntryController extends Controller
     public function index(Request $request): View
     {
         return view('journal-entries.index', [
-            'journalLines' => $this->service->linesForCompany($request->user()->company_id),
+            'journalEntries' => $this->service->entriesForCompany($request->user()->company_id),
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
         ]);
     }

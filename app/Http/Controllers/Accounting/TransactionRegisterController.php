@@ -45,9 +45,12 @@ class TransactionRegisterController extends Controller
 
     public function index(Request $request): View
     {
+        $partyId = $this->validatedPartyId($request);
+
         $transactions = $this->filteredQuery($request)
             ->latest('id')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         return view('transactions.index', [
             'transactions' => $transactions,
@@ -56,6 +59,10 @@ class TransactionRegisterController extends Controller
             'transactionCategories' => $this->optionService->forGroup(AccountingOption::GROUP_TRANSACTION_CATEGORY),
             'categoryLabels' => $this->optionService->labels(AccountingOption::GROUP_TRANSACTION_CATEGORY),
             'settlementLabels' => $this->optionService->labels(AccountingOption::GROUP_SETTLEMENT_TYPE),
+            'partyId' => $partyId,
+            'selectedParty' => $partyId
+                ? Party::query()->where('company_id', $request->user()->company_id)->find($partyId)
+                : null,
         ]);
     }
 
@@ -303,6 +310,7 @@ class TransactionRegisterController extends Controller
                 'Paid Amount',
                 'Due Amount',
                 'Due Date',
+                'Posted By',
                 'Invoice No',
                 'Invoice Status',
                 'Receipt No',
@@ -324,6 +332,7 @@ class TransactionRegisterController extends Controller
                     $transaction->paid_amount,
                     $transaction->due_amount,
                     $transaction->due_date?->format('Y-m-d'),
+                    $transaction->creator?->name ?? 'System',
                     $transaction->salesInvoice?->invoice_no,
                     $transaction->salesInvoice?->status,
                     $transaction->paymentReceipt?->receipt_no,
@@ -349,11 +358,13 @@ class TransactionRegisterController extends Controller
         $companyId = $request->user()->company_id;
         $search = trim($request->string('search')->toString());
         $category = $this->validatedCategoryFilter($request);
+        $partyId = $this->validatedPartyId($request);
 
         return Transaction::query()
-            ->with(['transactionHead.postingAccount', 'moneyAccount', 'transferToMoneyAccount', 'party', 'attachments', 'salesInvoice', 'paymentReceipt'])
+            ->with(['transactionHead.postingAccount', 'moneyAccount', 'transferToMoneyAccount', 'party', 'creator', 'attachments', 'salesInvoice', 'paymentReceipt'])
             ->where('company_id', $companyId)
             ->when($category !== '', fn (Builder $query) => $query->where('category', $category))
+            ->when($partyId !== null, fn (Builder $query) => $query->where('party_id', $partyId))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('voucher_no', 'like', "%{$search}%")
@@ -362,6 +373,10 @@ class TransactionRegisterController extends Controller
                         ->orWhere('description', 'like', "%{$search}%")
                         ->orWhereHas('transactionHead', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('party', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('creator', function (Builder $query) use ($search): void {
+                            $query->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        })
                         ->orWhereHas('moneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('transferToMoneyAccount', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"));
 
@@ -370,6 +385,20 @@ class TransactionRegisterController extends Controller
                     }
                 });
             });
+    }
+
+    private function validatedPartyId(Request $request): ?int
+    {
+        $partyId = $request->integer('party_id');
+
+        if ($partyId <= 0) {
+            return null;
+        }
+
+        return Party::query()
+            ->where('company_id', $request->user()->company_id)
+            ->whereKey($partyId)
+            ->value('id');
     }
 
     private function validatedCategoryFilter(Request $request): string

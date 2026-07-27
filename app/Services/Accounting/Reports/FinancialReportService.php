@@ -320,14 +320,15 @@ class FinancialReportService
 
         $accounts = ChartOfAccount::query()
             ->where('company_id', $companyId)
-            ->where('is_posting', true)
             ->orderBy('sort_order')
             ->orderBy('code')
             ->get();
 
         $selectedAccount = $accountId
             ? $accounts->firstWhere('id', $accountId)
-            : $accounts->firstWhere('is_active', true) ?? $accounts->first();
+            : $accounts->first(fn (ChartOfAccount $account): bool => $account->is_active && $account->is_posting)
+                ?? $accounts->firstWhere('is_active', true)
+                ?? $accounts->first();
 
         $parties = Party::query()
             ->where('company_id', $companyId)
@@ -358,7 +359,8 @@ class FinancialReportService
             ];
         }
 
-        $openingNet = $this->ledgerOpeningNet($companyId, (int) $selectedAccount->id, $fromDate, $selectedParty?->id);
+        $ledgerAccountIds = $this->ledgerAccountIds($accounts, $selectedAccount);
+        $openingNet = $this->ledgerOpeningNet($companyId, $ledgerAccountIds, $fromDate, $selectedParty?->id);
         $runningNet = $openingNet;
 
         $query = JournalLine::query()
@@ -367,7 +369,7 @@ class FinancialReportService
             ->where('journal_lines.company_id', $companyId)
             ->where('journal_entries.company_id', $companyId)
             ->where('journal_entries.status', 'posted')
-            ->where('journal_lines.chart_of_account_id', $selectedAccount->id)
+            ->whereIn('journal_lines.chart_of_account_id', $ledgerAccountIds)
             ->whereBetween('journal_entries.entry_date', [$fromDate, $toDate])
             ->when($selectedParty, fn ($query) => $query->where('journal_lines.party_id', $selectedParty->id))
             ->when($search !== '', function ($query) use ($search): void {
@@ -587,18 +589,57 @@ class FinancialReportService
             ->all();
     }
 
-    private function ledgerOpeningNet(int $companyId, int $accountId, string $fromDate, ?int $partyId = null): float
+    /** @param Collection<int, ChartOfAccount> $accounts @return array<int, int> */
+    private function ledgerAccountIds(Collection $accounts, ChartOfAccount $selectedAccount): array
     {
+        $ids = collect([(int) $selectedAccount->id]);
+        $pending = collect([(int) $selectedAccount->id]);
+
+        while ($pending->isNotEmpty()) {
+            $children = $accounts
+                ->whereIn('parent_id', $pending->all())
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->diff($ids)
+                ->values();
+
+            if ($children->isEmpty()) {
+                break;
+            }
+
+            $ids = $ids->merge($children)->unique()->values();
+            $pending = $children;
+        }
+
+        return $ids->all();
+    }
+
+    /** @param array<int, int> $accountIds */
+    private function ledgerOpeningNet(int $companyId, array $accountIds, string $fromDate, ?int $partyId = null): float
+    {
+        $accountIds = collect($accountIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($accountIds === []) {
+            return 0.0;
+        }
+
         if ($partyId === null) {
             $map = $this->openingNetMap($companyId, $fromDate);
 
-            return round((float) ($map[$accountId] ?? 0), 2);
+            return round((float) collect($accountIds)->sum(
+                fn (int $accountId): float => (float) ($map[$accountId] ?? 0),
+            ), 2);
         }
 
         $opening = OpeningBalance::query()
             ->where('company_id', $companyId)
             ->where('status', OpeningBalance::STATUS_POSTED)
-            ->where('chart_of_account_id', $accountId)
+            ->whereIn('chart_of_account_id', $accountIds)
             ->where('party_id', $partyId)
             ->whereDate('balance_date', '<=', $fromDate)
             ->selectRaw('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS net')
@@ -609,13 +650,13 @@ class FinancialReportService
             ->where('journal_lines.company_id', $companyId)
             ->where('journal_entries.company_id', $companyId)
             ->where('journal_entries.status', 'posted')
-            ->where('journal_lines.chart_of_account_id', $accountId)
+            ->whereIn('journal_lines.chart_of_account_id', $accountIds)
             ->where('journal_lines.party_id', $partyId)
             ->whereDate('journal_entries.entry_date', '<', $fromDate)
             ->selectRaw('COALESCE(SUM(journal_lines.debit), 0) - COALESCE(SUM(journal_lines.credit), 0) AS net')
             ->value('net');
 
-        return round($opening + (float) $journalNet, 2);
+        return round((float) $opening + (float) $journalNet, 2);
     }
 
     /** @return array{income: float, expense: float} */

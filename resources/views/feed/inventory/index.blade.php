@@ -1,6 +1,5 @@
 @php
     $alertRows = $rows->whereIn('status', ['low', 'out'])->values();
-    $recentMovementCards = $recentMovements->take(8);
 @endphp
 
 <x-layouts::accounting title="Feed Inventory">
@@ -254,6 +253,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <x-accounting.pagination :paginator="$recentMovements" item-label="stock movements" />
                 @endif
             </div>
         </section>
