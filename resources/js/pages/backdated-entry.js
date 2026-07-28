@@ -36,7 +36,6 @@ const latestAllowedBackdatedDate = (ranges, today) => ranges
 document.querySelectorAll('[data-backdated-entry]').forEach((container) => {
     const input = container.querySelector('[data-backdated-date]');
     const toggle = container.querySelector('[data-backdated-toggle]');
-    const help = container.querySelector('[data-backdated-help]');
 
     if (!input || !toggle) return;
 
@@ -47,7 +46,6 @@ document.querySelectorAll('[data-backdated-entry]').forEach((container) => {
     const backdatedMax = input.dataset.backdatedMax || earlierDate(openMax, today);
     const ranges = parseRanges(input);
     const latestBackdatedDate = latestAllowedBackdatedDate(ranges, today);
-    const baseHelp = help?.textContent?.trim() || '';
 
     const validateDate = () => {
         const value = input.value;
@@ -68,7 +66,7 @@ document.querySelectorAll('[data-backdated-entry]').forEach((container) => {
         }
 
         if (!dateInsideRanges(value, ranges)) {
-            input.setCustomValidity('Select a date inside an active open financial year and after its lock date.');
+            input.setCustomValidity('Select a date inside the allowed three-year window and an active open financial year after its lock date.');
             return;
         }
 
@@ -103,12 +101,6 @@ document.querySelectorAll('[data-backdated-entry]').forEach((container) => {
             }
         }
 
-        if (help) {
-            help.textContent = backdatedMode
-                ? `Backdated mode enabled. You can now change the complete transaction date. ${baseHelp}`
-                : `Date is locked. Enable Backdated Entry to change it. ${baseHelp}`;
-        }
-
         validateDate();
 
         if (openPicker && backdatedMode) {
@@ -125,6 +117,7 @@ document.querySelectorAll('[data-backdated-entry]').forEach((container) => {
     };
 
     toggle.addEventListener('change', () => applyMode(true, toggle.checked));
+
     input.addEventListener('change', validateDate);
     input.addEventListener('input', validateDate);
 

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Currency;
 use App\Models\FinancialYear;
 use App\Models\TimeZone;
+use App\Support\BackdatedTransactionWindow;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -60,17 +61,42 @@ class CompanySetupDefaultsService
                 );
             }
 
-            $year = (int) now()->format('Y');
-            $financialYear = FinancialYear::query()->firstOrCreate(
-                ['company_id' => $company->id, 'name' => 'FY '.$year],
-                [
-                    'start_date' => $year.'-01-01',
-                    'end_date' => $year.'-12-31',
+            $currentYear = (int) now()->format('Y');
+            $financialYear = null;
+
+            foreach (array_reverse(BackdatedTransactionWindow::years()) as $year) {
+                $yearStart = $year.'-01-01';
+                $yearEnd = $year.'-12-31';
+                $existingYear = FinancialYear::query()
+                    ->forCompany($company->id)
+                    ->whereDate('start_date', '<=', $yearEnd)
+                    ->whereDate('end_date', '>=', $yearStart)
+                    ->orderByDesc('is_current')
+                    ->first();
+
+                $yearRecord = $existingYear ?: FinancialYear::query()->create([
+                    'company_id' => $company->id,
+                    'name' => 'FY '.$year,
+                    'start_date' => $yearStart,
+                    'end_date' => $yearEnd,
                     'is_active' => true,
-                    'is_current' => true,
+                    'is_current' => $year === $currentYear
+                        && ! FinancialYear::query()->forCompany($company->id)->where('is_current', true)->exists(),
                     'status' => FinancialYear::STATUS_OPEN,
-                ],
-            );
+                ]);
+
+                if ($year === $currentYear) {
+                    $financialYear = $yearRecord;
+                }
+            }
+
+            $financialYear ??= FinancialYear::query()
+                ->forCompany($company->id)
+                ->active()
+                ->where('status', FinancialYear::STATUS_OPEN)
+                ->orderByDesc('is_current')
+                ->orderByDesc('start_date')
+                ->firstOrFail();
 
             $businessType = BusinessType::query()->forCompany($company->id)->where('code', 'OTHER')->first();
             $currency = Currency::query()->forCompany($company->id)->where('code', $company->currency_code ?: 'BDT')->first()

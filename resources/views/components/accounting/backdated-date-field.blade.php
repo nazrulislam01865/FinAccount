@@ -12,7 +12,6 @@
     $fieldClass = $isFeed ? 'feed-field' : 'hg-field';
     $controlClass = $isFeed ? 'feed-control' : '';
     $requiredClass = $isFeed ? 'feed-req' : 'hg-required';
-    $helpClass = $isFeed ? 'feed-help' : 'hg-field-help';
     $errorClass = $isFeed ? 'feed-warning-text' : 'hg-field-error';
     $today = (string) ($context['today'] ?? now()->toDateString());
     $normalDate = (string) ($context['default'] ?? $today);
@@ -20,9 +19,6 @@
     $selectedIsPast = $selectedDate !== '' && $selectedDate < $today;
     $backdatedChecked = (bool) old('is_backdated', $backdated || $selectedIsPast);
     $ranges = $context['ranges'] ?? [];
-    $rangeSummary = collect($ranges)
-        ->map(fn (array $range): string => ($range['name'] ?? 'Open period').' ('.$range['start'].' to '.$range['end'].')')
-        ->implode(', ');
     $toggleId = $inputId.'_backdated';
     $openMin = (string) ($context['min'] ?? '');
     $openMax = (string) ($context['max'] ?? '');
@@ -71,13 +67,7 @@
         required
     >
 
-    <div class="{{ $helpClass }}" data-backdated-help>
-        @if($rangeSummary !== '')
-            Available open periods: {{ $rangeSummary }}.
-        @else
-            No active open financial year is available for posting.
-        @endif
-    </div>
+
     @error('transaction_date')<div class="{{ $errorClass }}">{{ $message }}</div>@enderror
     @error('is_backdated')<div class="{{ $errorClass }}">{{ $message }}</div>@enderror
 </div>

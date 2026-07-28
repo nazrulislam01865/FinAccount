@@ -4,6 +4,7 @@ namespace App\Services\Company;
 
 use App\Models\Company;
 use App\Models\FinancialYear;
+use App\Support\BackdatedTransactionWindow;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -55,6 +56,20 @@ class CompanyAccountingPeriodService
             ]);
         }
 
+        $transactionDate = CarbonImmutable::parse($date)->startOfDay();
+
+        if ($transactionDate->gt(BackdatedTransactionWindow::end())) {
+            throw ValidationException::withMessages([
+                'transaction_date' => 'Future transaction dates are not allowed.',
+            ]);
+        }
+
+        if ($transactionDate->lt(BackdatedTransactionWindow::start())) {
+            throw ValidationException::withMessages([
+                'transaction_date' => BackdatedTransactionWindow::validationMessage(),
+            ]);
+        }
+
         $financialYear = $this->forDate($company, $date);
 
         if (! $financialYear) {
@@ -63,7 +78,6 @@ class CompanyAccountingPeriodService
             ]);
         }
 
-        $transactionDate = CarbonImmutable::parse($date)->startOfDay();
         if ($financialYear->lock_date && $transactionDate->lte($financialYear->lock_date->startOfDay())) {
             throw ValidationException::withMessages([
                 'transaction_date' => 'This accounting period is locked through '.$financialYear->lock_date->format('d M Y').'.',
@@ -81,13 +95,16 @@ class CompanyAccountingPeriodService
      *     label:?string,
      *     today:string,
      *     backdated_enabled:bool,
+     *     years:array<int, array{value:int,label:string,is_current:bool}>,
      *     ranges:array<int, array{id:int,name:string,start:string,end:string}>
      * }
      */
     public function transactionDateContext(Company $company, ?string $selectedDate = null): array
     {
-        $today = now()->toDateString();
-        $ranges = $this->postingRanges($company);
+        $today = BackdatedTransactionWindow::end()->toDateString();
+        $windowStart = BackdatedTransactionWindow::start()->toDateString();
+        $ranges = $this->postingRanges($company, $windowStart, $today);
+        $years = $this->availableYears($ranges, $today);
 
         if ($ranges->isEmpty()) {
             return [
@@ -97,6 +114,7 @@ class CompanyAccountingPeriodService
                 'label' => null,
                 'today' => $today,
                 'backdated_enabled' => false,
+                'years' => [],
                 'ranges' => [],
             ];
         }
@@ -125,12 +143,13 @@ class CompanyAccountingPeriodService
                 : $ranges->count().' open financial years',
             'today' => $today,
             'backdated_enabled' => $ranges->contains(fn (array $range): bool => $range['start'] < $today),
+            'years' => $years,
             'ranges' => $ranges->values()->all(),
         ];
     }
 
     /** @return Collection<int, array{id:int,name:string,start:string,end:string}> */
-    private function postingRanges(Company $company): Collection
+    private function postingRanges(Company $company, string $windowStart, string $windowEnd): Collection
     {
         return FinancialYear::query()
             ->forCompany($company->id)
@@ -138,9 +157,11 @@ class CompanyAccountingPeriodService
             ->where('status', FinancialYear::STATUS_OPEN)
             ->orderBy('start_date')
             ->get()
-            ->map(function (FinancialYear $year): ?array {
-                $start = CarbonImmutable::parse($year->start_date)->startOfDay();
-                $end = CarbonImmutable::parse($year->end_date)->startOfDay();
+            ->map(function (FinancialYear $year) use ($windowStart, $windowEnd): ?array {
+                $start = CarbonImmutable::parse($year->start_date)->startOfDay()
+                    ->max(CarbonImmutable::parse($windowStart)->startOfDay());
+                $end = CarbonImmutable::parse($year->end_date)->startOfDay()
+                    ->min(CarbonImmutable::parse($windowEnd)->startOfDay());
 
                 if ($year->lock_date) {
                     $firstUnlockedDate = CarbonImmutable::parse($year->lock_date)->startOfDay()->addDay();
@@ -163,4 +184,30 @@ class CompanyAccountingPeriodService
             ->filter()
             ->values();
     }
+    /**
+     * @param Collection<int, array{id:int,name:string,start:string,end:string}> $ranges
+     * @return array<int, array{value:int,label:string,is_current:bool}>
+     */
+    private function availableYears(Collection $ranges, string $today): array
+    {
+        $currentYear = (int) substr($today, 0, 4);
+
+        return collect(BackdatedTransactionWindow::years())
+            ->filter(function (int $year) use ($ranges): bool {
+                $start = $year.'-01-01';
+                $end = $year.'-12-31';
+
+                return $ranges->contains(
+                    fn (array $range): bool => $range['start'] <= $end && $range['end'] >= $start,
+                );
+            })
+            ->map(fn (int $year): array => [
+                'value' => $year,
+                'label' => $year === $currentYear ? $year.' (Current)' : (string) $year,
+                'is_current' => $year === $currentYear,
+            ])
+            ->values()
+            ->all();
+    }
+
 }

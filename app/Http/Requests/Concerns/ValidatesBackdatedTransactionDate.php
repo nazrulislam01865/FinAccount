@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Concerns;
 
+use App\Support\BackdatedTransactionWindow;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\Validator;
 
@@ -39,6 +40,15 @@ trait ValidatesBackdatedTransactionDate
                 $validator->errors()->add(
                     'transaction_date',
                     'Future transaction dates are not allowed.',
+                );
+
+                return;
+            }
+
+            if ($transactionDate->lt(BackdatedTransactionWindow::start())) {
+                $validator->errors()->add(
+                    'transaction_date',
+                    BackdatedTransactionWindow::validationMessage(),
                 );
 
                 return;

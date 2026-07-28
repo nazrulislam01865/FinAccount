@@ -4800,3 +4800,9 @@ button.is-executing, input.is-executing { pointer-events: none; }
 @media (max-width: 760px) {
     .hg-balance-party-search .hg-search { max-width: none; }
 }
+
+/* Single three-year date picker shared by all transaction forms. */
+.hg-backdated-date-field > input[type="date"] {
+    width: 100%;
+    min-width: 0;
+}
